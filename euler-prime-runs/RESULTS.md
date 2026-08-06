@@ -1,0 +1,53 @@
+# RESULTS — euler-prime-runs
+
+All finds verified by the three-way protocol (engine Miller–Rabin chain,
+sympy BPSW chain, alternate-alignment re-sieve) plus a factor witness
+for the run-breaking composite. Evidence JSONs in `evidence/`.
+
+## A164926(17) = 348,284,517,256,411,907
+
+Found 2026-08-05, ~45 minutes into the production run, at p ≈ 3.48×10¹⁷.
+
+- x² + x + p is prime for x = 0..16 (seventeen consecutive primes).
+- The run breaks at x = 17: 348,284,517,256,412,213 = **89** ×
+  3,913,309,182,656,317.
+- Least-claim basis: ascending exhaustive sweep from 0 (oracle-covered
+  low range, gated sieve above, contiguous checkpoints, in-stream canary
+  rediscoveries of a(14) and a(15)).
+- **First new term of A164926 since 2009.** Model quantile of the find:
+  0.69 (median predicted 2.6×10¹⁷).
+- Evidence: `evidence/euler_hit_run17_p348284517256411907.json`
+
+## Second run-17 prime: 813,562,753,109,918,417
+
+Same night, p ≈ 8.14×10¹⁷. Not a sequence term (a(17) was already
+settled by the smaller find) — the second known prime with run exactly
+17. Breaker at x = 17 factors as 71 × 103 × 137 × 1097 × 6653 × 111263.
+Model note: the expected-count gap between find #1 and find #2 was 0.72,
+against a theoretical median inter-arrival of ln 2 ≈ 0.69.
+
+- Evidence: `evidence/euler_hit_run17_p813562753109918417.json`
+
+## Near-miss census (new objects in their own right)
+
+The sweep also produced, as far as we can determine, the first known
+primes with these exact runs beyond Euler's lucky numbers:
+
+- **run 15**: p = 8,002,271,580,759,497 (≈ 8.0×10¹⁵)
+- **run 16**: p = 270,630,760,510,761,377 (≈ 2.7×10¹⁷) — whose breaker's
+  smallest factor is 237,313, just above the engine's 65,536 sieve
+  bound: it survived the sieve and fell only to Miller–Rabin.
+
+The running census of all run-13+ survivors is appended to
+`evidence/euler_nearmiss.jsonl` as the hunt proceeds.
+
+## In progress
+
+The production run continues toward the 64-bit-safe cap 1.8×10¹⁹
+(cumulative model probability: a(18) 78%, a(19) 18%, a(20) 3%). This
+file and the evidence directory will be updated when the run completes.
+Planned afterwards: one consolidated OEIS update (new terms + the new
+exhaustive search bound superseding the entry's 2009 comment), and
+optionally a 128-bit "phase 2" engine for the a(19)/a(20) range beyond
+the 64-bit ceiling — which would also settle whether the known run-21
+value 234,505,015,943,235,329,417 is in fact a(21).
