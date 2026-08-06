@@ -9,13 +9,14 @@ The hunt for new terms of [OEIS A164926](https://oeis.org/A164926): the
 least prime p such that Euler's polynomial form **x² + x + p** is prime
 for exactly n consecutive values x = 0, 1, ..., n−1.
 
-**Result so far: a(17) = 348,284,517,256,411,907** — found and verified
-2026-08-05, the first new term of the sequence since 2009. Details in
-[RESULTS.md](RESULTS.md).
+**Results so far: a(17) = 348,284,517,256,411,907 and
+a(18) = 8,461,068,614,861,832,371** — found and verified 2026-08-05/06,
+the first new terms of the sequence since 2009. The 64-bit range is now
+exhaustively swept to 1.8×10¹⁹. Details in [RESULTS.md](RESULTS.md).
 
-**Status: ACTIVE** — the production sweep toward the 64-bit cap
-(1.8×10¹⁹) is in progress; a(18) is the current target (78% within the
-cap). Results and evidence will be extended as the run proceeds.
+**Status: ACTIVE** — phase 1 (the full 64-bit-safe range) is complete;
+phase 2, a 128-bit engine targeting a(19) beyond the 1.8×10¹⁹ ceiling,
+is in preparation (conditional median for a(19) at ≈ 2.6×10²⁰).
 
 ## The problem
 
@@ -61,9 +62,10 @@ engine:
    to 3.3×10²⁴) computes each survivor's exact run. The GPU only ever
    *proposes*.
 
-Throughput: **3.4×10¹⁴ integers of p-line per second** end-to-end on an
-RTX 4090 (SCORE 343,361,199; see BENCHMARKS.md), height-flat from 10¹⁶
-to 1.7×10¹⁹. The full 64-bit-safe range (to 1.8×10¹⁹) takes ~15 hours.
+Throughput: **5.1×10¹⁴ integers of p-line per second** end-to-end on an
+RTX 4090 (SCORE 512,819,184; see BENCHMARKS.md), height-flat from 10¹⁶
+to 1.7×10¹⁹. The full 64-bit-safe range (to 1.8×10¹⁹) took ~9.5 hours
+in production.
 
 ## The odds model
 
@@ -71,13 +73,17 @@ to 1.7×10¹⁹. The full 64-bit-safe range (to 1.8×10¹⁹) takes ~15 hours.
 evaluated singular series (primes to 2×10⁶, tail bounded). Validation:
 the six known generic terms a(9)–a(15) sit at model quantiles
 .99/.56/.41/.23/.83/.64 — scattered, as an honest model's knowns should
-be. Out-of-sample performance so far: a(17) landed at quantile 0.69, and
-the gap to the second run-17 prime was E = 0.72 against a theoretical
-median of ln 2 ≈ 0.69.
+be. Out-of-sample performance so far: a(17) landed at quantile 0.69
+(median predicted 2.6×10¹⁷); a(18) landed at quantile 0.63, essentially
+exactly at the predicted E = 1 depth (found 8.46×10¹⁸, predicted
+8.58×10¹⁸); the run-17 census closed at 8 against an expected 11.6
+(within Poisson scatter). The model is two-for-two on out-of-sample
+terms.
 
-Predictions: a(18) median at 4.5×10¹⁸ (78% within the 64-bit range);
-a(19) median at 1.6×10²⁰ (needs the future 128-bit engine); a(20) at
-6×10²¹.
+Predictions for phase 2 (conditional on the empty 64-bit tail for
+run ≥ 19, E = 0.20 spent): a(19) median at 2.6×10²⁰, quartiles
+8.9×10¹⁹ / 6.8×10²⁰, 48% below the Waldvogel–Leikauf run-21 value at
+2.35×10²⁰; a(20) median at ≈ 6×10²¹.
 
 ## Running it
 

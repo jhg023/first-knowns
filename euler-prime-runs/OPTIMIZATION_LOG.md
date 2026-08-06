@@ -12,8 +12,11 @@ CuPy 14.1.1. Rates are end-to-end (kernel + survivor readback).
 | 4 | shared masks at block 512/1024 | 1.69e14 / 1.02e14 | worse | rejected |
 | 5 | v4: multi-period threads (T=2048 periods/thread), first-16 stage-1 residues stepped incrementally (r += M mod q, cond. subtract; one Barrett per prime per T periods), Barrett fallback for the ~0.3% passing all 16 | 3.43e14 | 2.5x same-day (1.8x vs frozen v3 SCORE; see note) | KEPT, gated |
 
-Frozen at v4: **3.43e14 p/s median** (SCORE 343,361,199). Height-flat
-(3.40e14 at 1e18, 3.43e14 at 1.7e19; fingerprint window 1e16).
+Frozen at v4: **5.13e14 p/s median on an idle GPU** (SCORE
+512,819,184; first captured under ambient desktop load as 3.43e14 /
+SCORE 343,361,199 -- see the variance note in BENCHMARKS.md).
+Height-flat (0.8% spread across 1e16 / 1e18 / 1.7e19), confirmed in
+production by the phase-1 sweep average (~5.0e14 over 9 h).
 
 Note on the v4 ratio: interleaved same-day A/B gave v3 = 1.36e14 and
 v4 = 3.42e14 (2.5x) under identical ambient desktop GPU load; the
@@ -22,11 +25,11 @@ frozen v3 SCORE (1.90e14) was taken uncontended, so the ledger ratio
 under the ambient load and is, if anything, conservative: the
 restarted production hunt sustained 5.0e14 p/s at p ~ 2e18 during a
 quiet-desktop window (~2.6x uncontended v3), matching the v3
-contention discount (1.36/1.90 = 0.72) applied in reverse. A
-same-night re-freeze attempt (hunt stopped, full battery green)
-reproduced 3.44e14 with the desktop workload active -- the discount
-is display contention, not drift; the frozen entry stands as the
-loaded-desktop floor.
+contention discount (1.36/1.90 = 0.72) applied in reverse. After the
+phase-1 sweep completed, an idle-GPU window allowed a clean capture:
+5.13e14 (SCORE 512,819,184), now the frozen entry; the loaded-desktop
+readings (3.43-3.47e14) are documented in BENCHMARKS.md's variance
+note.
 
 v4 sweep (all parity-clean vs the v3 stream, bench + 1.7e19 windows):
 rate rises with T and plateaus at T=1024..4096 (T=32: 2.16x, T=128:
