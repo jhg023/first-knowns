@@ -39,8 +39,8 @@ Cost accounting at v4: ~5.9e10 candidates/s of wheel survivors
 (3.1e-4 of p-space), ~2.5 expected stage-1 tests per candidate before
 kill -- now an add + compare-subtract + L2 bitmask load each, with the
 Barrett multiply amortized to once per prime per 2048 periods. Host-side
-MR load is negligible (~3.6e-13 of p-space reaches MR; ~6.5k survivors
-per 1.8e19).
+MR load is negligible (~3.6e-13 of p-space reaches MR; ~6.5M survivors
+per 1.8e19, confirmed by the live campaign counter: 8.4e5 at 2.4e18).
 
 ## TODOs (unpriced, try only with gates green)
 
