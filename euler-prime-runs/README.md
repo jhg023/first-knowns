@@ -47,19 +47,23 @@ engine:
 
 1. **Wheel**: p is generated only in residues mod 29# = 6,469,693,230
    that survive all wheel primes 2..29 — 3.1×10⁻⁴ of the line.
-2. **Stage 1**: survivors are tested against primes 31..1024 by Barrett
-   magic-multiply modulo (no hardware 64-bit division; see
-   `../huntlib/gpu.py`) with forbidden-residue bitmasks in L2 cache.
-   Early exit kills most candidates in ~2–3 tests.
+2. **Stage 1**: survivors are tested against primes 31..1024 with
+   forbidden-residue bitmasks in L2 cache. Each GPU thread owns one
+   wheel offset across 2048 consecutive periods, stepping its residues
+   mod the first 16 primes incrementally (r += M mod q, conditional
+   subtract) — the Barrett magic-multiply modulo (no hardware 64-bit
+   division; see `../huntlib/gpu.py`) is paid once per prime per 2048
+   periods, and again only for the ~0.3% of candidates that survive all
+   16. Early exit kills most candidates in ~2–3 tests.
 3. **Stage 2**: primes 1024..65536 via direct 17-value divisibility.
 4. **Host classification**: the ~3.6×10⁻¹³ of the line that survives is
    handed to the CPU, where a deterministic 7-base Miller–Rabin (valid
    to 3.3×10²⁴) computes each survivor's exact run. The GPU only ever
    *proposes*.
 
-Throughput: **1.9×10¹⁴ integers of p-line per second** end-to-end on an
-RTX 4090 (SCORE 189,738,385; see BENCHMARKS.md), height-flat from 10¹⁶
-to 10¹⁸. The full 64-bit-safe range (to 1.8×10¹⁹) takes ~26 hours.
+Throughput: **3.4×10¹⁴ integers of p-line per second** end-to-end on an
+RTX 4090 (SCORE 343,361,199; see BENCHMARKS.md), height-flat from 10¹⁶
+to 1.7×10¹⁹. The full 64-bit-safe range (to 1.8×10¹⁹) takes ~15 hours.
 
 ## The odds model
 
