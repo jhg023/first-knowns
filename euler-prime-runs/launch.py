@@ -321,8 +321,10 @@ def hunt(args):
                         record_discovery(ev, label)
                         nc = c.setdefault("near_counts", {})
                         nc[str(r)] = nc.get(str(r), 0) + 1
+                        tail = ("  -- ONE value short of a(%d)!" % target_run
+                                if r == FRONTIER_RUN else "")
                         log("NEAR", f"run {r} at p = {p}  ({label}; "
-                            "verified 3-way, evidence written)")
+                            f"verified 3-way, evidence written){tail}")
                         if r > c["best_near"]:
                             c["best_near"], c["best_near_p"] = r, p
                 elif r >= 13:
@@ -331,9 +333,8 @@ def hunt(args):
                     with open(os.path.join("evidence", "euler_nearmiss.jsonl"), "a") as fh:
                         fh.write(json.dumps({"p": int(p), "run": int(r),
                                              "t": time.time()}) + "\n")
-                    tail = "  -- ONE value short!" if r == n - 1 else ""
                     log("NEAR", f"run {r} at p = {p}  "
-                        f"(run-{r} #{nc[str(r)]} of the campaign){tail}")
+                        f"(run-{r} #{nc[str(r)]} of the campaign)")
                     if r > c["best_near"]:
                         c["best_near"], c["best_near_p"] = r, p
             c["next_k"] = k1
