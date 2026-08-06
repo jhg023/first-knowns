@@ -11,7 +11,7 @@
 # against it.  Frozen literature values below were read from the local
 # OEIS clone (A164926 edit #28, 2026-04-22) on 2026-08-05.
 #
-# ASCII only (Windows cp1252 consoles).
+# ASCII only (legacy console code pages).
 
 from sympy import isprime
 

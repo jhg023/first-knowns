@@ -11,7 +11,11 @@ for exactly n consecutive values x = 0, 1, ..., n−1.
 
 **Result so far: a(17) = 348,284,517,256,411,907** — found and verified
 2026-08-05, the first new term of the sequence since 2009. Details in
-[RESULTS.md](RESULTS.md). The hunt for a(18)–a(20) continues.
+[RESULTS.md](RESULTS.md).
+
+**Status: ACTIVE** — the production sweep toward the 64-bit cap
+(1.8×10¹⁹) is in progress; a(18) is the current target (78% within the
+cap). Results and evidence will be extended as the run proceeds.
 
 ## The problem
 

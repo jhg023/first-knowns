@@ -1,6 +1,6 @@
 """Timestamped, tagged event logging -- the shared log voice of every hunt.
 
-Tag taxonomy (used by all projects; keep lines ASCII for Windows consoles):
+Tag taxonomy (used by all projects; keep log lines plain ASCII):
 
     STAGE        a phase of the campaign begins or ends
     STATUS       periodic heartbeat (position, rate, live odds, ETA)

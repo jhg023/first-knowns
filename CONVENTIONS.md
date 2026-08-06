@@ -77,3 +77,47 @@ State every ceiling (64-bit value caps, primality-test validity bounds)
 as an enforced constant, not an assumption. Parity-gate at the ceiling.
 Raising a ceiling is a new engine version: new gates, new fingerprint,
 log entry.
+
+## Documentation template (binding for every project)
+
+Four documents per project, with fixed section order, so a reader who
+has read one project can navigate all of them.
+
+**`README.md`** — sections in this order:
+
+1. *Authorship disclaimer* (blockquote, first thing on the page): all
+   code authored by Claude at the repository owner's direction.
+2. *One-paragraph headline*: what is being hunted, and the standing
+   result if there is one.
+3. *Status line*: one of
+   - `Status: ACTIVE` — the hunt is running; expect updates.
+   - `Status: COMPLETE` — the stated range is exhausted; results final.
+   - `Status: PAUSED — open to others` — not currently running; anyone
+     is welcome to extend it (say exactly where the frontier stands).
+4. *The problem* — definition, history, why it is open, prior frontier
+   with attribution.
+5. *The mathematics of the engine* — how the search actually works.
+6. *The odds model* — predictions stated BEFORE the run, validation
+   evidence, and (once results exist) how the finds scored against it.
+7. *Running it* — exact commands and requirements.
+8. *Trust* — pointer to this file plus anything project-specific.
+
+**`RESULTS.md`** — every verified find in discovery order: the exact
+integers, the verification performed, the factor witness, the evidence
+file path, and the least-claim basis. Near-miss/census data and its
+caveats. Ends with an "In progress" or "Final state" section.
+
+**`BENCHMARKS.md`** — the SCORE ledger (frozen fingerprint stated) and
+wall-clock tables at the scored rate.
+
+**`OPTIMIZATION_LOG.md`** — every optimization attempt: change,
+measurement, kept/rejected. Failures included; they are the record that
+stops the next person from retrying them.
+
+The top-level README carries one table row per project:
+`| project | problem (one line, linked OEIS/reference) | status + headline result |`.
+Keep the row's status word identical to the project README's status line.
+
+Repo-wide hygiene: no personal or machine-specific information (names,
+paths, hardware serials, local configuration) anywhere; hardware model
+names used for performance context are fine.

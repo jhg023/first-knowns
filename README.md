@@ -22,7 +22,14 @@ survive before it is recorded.
 
 | project | problem | status |
 |---------|---------|--------|
-| [euler-prime-runs](euler-prime-runs/) | [A164926](https://oeis.org/A164926): the least prime p whose Euler-form polynomial x²+x+p is prime for exactly n consecutive x — extending the direct lineage of Euler's famous x²+x+41 | **a(17) = 348,284,517,256,411,907 found & verified** (first new term since 2009); hunt for a(18) in progress |
+| [euler-prime-runs](euler-prime-runs/) | [A164926](https://oeis.org/A164926): the least prime p whose Euler-form polynomial x²+x+p is prime for exactly n consecutive x — extending the direct lineage of Euler's famous x²+x+41 | **ACTIVE** — a(17) = 348,284,517,256,411,907 found & verified (first new term since 2009); hunt for a(18) in progress |
+
+Project documentation follows a fixed template (see
+[CONVENTIONS.md](CONVENTIONS.md) § Documentation template): every
+project README opens with the authorship disclaimer, then headline,
+status (`ACTIVE` / `COMPLETE` / `PAUSED — open to others`), problem,
+engine mathematics, odds model, usage, and trust; verified finds live
+in each project's RESULTS.md with evidence files alongside.
 
 More hunts will land here as they conclude. The pipeline behind them
 (problem selection, odds modeling, engine construction) produces

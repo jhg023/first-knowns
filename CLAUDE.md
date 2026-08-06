@@ -31,8 +31,26 @@ each README stays.
    infrastructure, keep all mathematics in-project, and add a row to the
    top-level README's project table. Only projects with verified
    results get published here.
-7. ASCII-only log output (Windows consoles); LF line endings in the
-   repo; no references to unpublished work.
+
+   Checklist when adding a project (all binding):
+   - [ ] five-file skeleton per CONVENTIONS.md; huntlib for
+         infrastructure only; oracle stays sympy-pure
+   - [ ] README/RESULTS/BENCHMARKS/OPTIMIZATION_LOG following the
+         Documentation template section of CONVENTIONS.md EXACTLY
+         (disclaimer first, then headline, status, problem, engine,
+         model, usage, trust)
+   - [ ] status word (ACTIVE / COMPLETE / PAUSED — open to others)
+         identical in the project README and the top-level table row
+   - [ ] evidence/ directory with verifiable JSONs (exact integers +
+         factor witnesses); runtime checkpoints gitignored
+   - [ ] self-contained: no references to unpublished work, no personal
+         or machine-specific information (scan before committing:
+         usernames, local paths, emails, OS details)
+   - [ ] full gate battery green and benchmark fingerprint reproduced
+         in the published copy before the first push
+7. ASCII-only log output (legacy console code pages exist); LF line
+   endings in the repo; no references to unpublished work and no
+   personal or machine-specific information anywhere in the repo.
 
 ## Quick commands (any project directory)
 
