@@ -13,6 +13,11 @@
 # Correctness floor: sieve assumes every value x^2+x+p > Q2, so the engine
 # refuses p < P_FLOOR; [2, P_FLOOR) belongs to the oracle low-pass.
 #
+# Phase 2 adds CpuEngine128 (exact-int windows above the u64 cap, to
+# P128_CEIL = 1e24) with gates G9 (bit-for-bit overlap parity vs the
+# proven u64 engine) and G10 (direct big-int trial-division parity on
+# above-cap mini-windows + Waldvogel-Leikauf run-21 rediscovery).
+#
 # ASCII only.
 
 import numpy as np
@@ -23,7 +28,7 @@ import pathlib as _pathlib
 _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
 from huntlib.primes import MR_BASES, mr_is_prime as mr_is_prime_u64  # noqa: E402
 
-from euler_reference import KNOWN, run_length
+from euler_reference import A21_UPPER, KNOWN, run_length
 
 WHEEL_PRIMES = [2, 3, 5, 7, 11, 13, 17, 19, 23]
 WHEEL_PRIMES_29 = WHEEL_PRIMES + [29]
@@ -125,6 +130,100 @@ class CpuEngine:
         return out
 
 
+# ---------------------- phase 2: 128-bit value path ------------------------
+#
+# Above the u64 cap, p itself no longer fits numpy's u64.  The engines
+# never materialize it: every candidate is carried as the pair (k, off)
+# with p = k*M + off, off < M, and every sieve test needs only
+#     p mod q = ((k mod q) * (M mod q) + (off mod q)) mod q
+# which is u64-safe for any p below the ceiling (k < 2^48, products
+# < 2^32).  Exact p values exist only as host-side Python ints.  The
+# proven u64 engines above are untouched; parity gates pin the 128 path
+# against them on their common range.
+
+P128_CEIL = 10**24
+# Enforced value ceiling of the 128-bit path.  Everything the engines
+# and the MR chain touch (values x^2+x+p <= p + 10100 at run cap 100)
+# stays a factor >3 below huntlib's deterministic-MR validity bound
+# 3.317e24 (Sorenson-Webster 7-base).  Raising this is a new engine
+# version: new gates, new fingerprint, log entry.
+
+
+class CpuEngine128:
+    """Phase-2 CPU engine: streams pre-MR survivors of [lo, hi) with
+    lo/hi/survivors as exact Python ints, valid up to P128_CEIL.
+
+    Same mathematics as CpuEngine, third implementation of the residue
+    arithmetic (plain numpy `%` on (k, off) pairs -- the GPU twin uses
+    Barrett; the two must never share code).  Yields sorted lists of
+    Python ints."""
+
+    def __init__(self, n, wheel_primes=None):
+        self.n = n
+        self.wheel_primes = wheel_primes or WHEEL_PRIMES_29
+        self.offs, self.M = build_wheel(n, self.wheel_primes)
+        self.s1, self.s2 = stage_primes(after=self.wheel_primes[-1])
+        self.luts = {}
+        for q in self.s1:
+            lut = np.zeros(int(q), dtype=bool)
+            lut[list(forbidden(int(q), n))] = True
+            self.luts[int(q)] = lut
+        self.xx = [x * x + x for x in range(n)]
+
+    def survivors_pre_mr(self, lo, hi, chunk_periods=16):
+        """Yield sorted lists of survivor p (Python ints) in [lo, hi)."""
+        lo, hi = int(lo), int(hi)
+        if lo < P_FLOOR:
+            raise ValueError("128 engine floor is %d" % P_FLOOR)
+        if hi > P128_CEIL:
+            raise ValueError("128 engine ceiling is %d" % P128_CEIL)
+        M = int(self.M)
+        k0, k1 = lo // M, hi // M + 1
+        s_lo = lo - k0 * M            # p >= lo  <=>  k > k0 or off >= s_lo
+        kh, s_hi = hi // M, hi % M    # p < hi   <=>  k < kh or (k == kh and off < s_hi)
+        for kc in range(k0, k1, chunk_periods):
+            ks = np.arange(kc, min(kc + chunk_periods, k1), dtype=np.uint64)
+            K = np.repeat(ks, self.offs.size)
+            O = np.tile(self.offs, ks.size)
+            keep = (((K < np.uint64(kh)) | ((K == np.uint64(kh)) & (O < np.uint64(s_hi))))
+                    & ((K > np.uint64(k0)) | (O >= np.uint64(s_lo))))
+            K, O = K[keep], O[keep]
+            # stage 1: compress after each prime
+            for q in self.s1:
+                qq = np.uint64(q)
+                Mq = np.uint64(M % int(q))
+                r = ((K % qq) * Mq + (O % qq)) % qq
+                dead = self.luts[int(q)][r.astype(np.int64)]
+                K, O = K[~dead], O[~dead]
+                if K.size == 0:
+                    break
+            if K.size == 0:
+                continue
+            # stage 2: exact divisibility of the n values
+            alive = np.ones(K.size, dtype=bool)
+            for q in self.s2:
+                qq = np.uint64(q)
+                Mq = np.uint64(M % int(q))
+                r = ((K % qq) * Mq + (O % qq)) % qq
+                dead = np.zeros(K.size, dtype=bool)
+                for xx in self.xx:
+                    dead |= (r + np.uint64(xx)) % qq == 0
+                alive &= ~dead
+            K, O = K[alive], O[alive]
+            if K.size:
+                yield sorted(int(k) * M + int(o)
+                             for k, o in zip(K.tolist(), O.tolist()))
+
+    def hunt(self, lo, hi, cap=100):
+        """All (p, exact_run) with run >= n in [lo, hi), ascending."""
+        out = []
+        for chunk in self.survivors_pre_mr(lo, hi):
+            for p in chunk:
+                if all(mr_is_prime_u64(p + xx) for xx in self.xx):
+                    out.append((p, mr_run_length(p, cap=cap)))
+        return out
+
+
 # ------------------------------- gates -------------------------------------
 
 def g3_wheel_property(trials=4000, seed=1):
@@ -168,8 +267,84 @@ def g5_rediscover(ns=(9, 11, 12)):
     return True, f"G5 ok: a(n) rediscovered for n={ns}"
 
 
+def g9_128_overlap():
+    """CPU-128 survivor stream == the PROVEN CPU-u64 stream, bit-for-bit,
+    on populated windows across the u64 range (both engines can run
+    there; the 128 path inherits the u64 path's evidence)."""
+    cases = [(5, 10**5, 4 * 10**5, 20), (9, 10**6, 6 * 10**7, 2),
+             (13, 10**5, 8_900_000_000, 1),
+             (17, 10**15, 10**15 + 3 * 10**12, 1)]
+    counts = []
+    for n, lo, hi, min_surv in cases:
+        u64 = np.concatenate(
+            [a for a in CpuEngine(n, wheel_primes=WHEEL_PRIMES_29)
+             .survivors_pre_mr(lo, hi)] or [np.array([], dtype=np.uint64)])
+        u64_list = sorted(int(v) for v in u64.tolist())
+        p128 = sorted(p for chunk in
+                      CpuEngine128(n).survivors_pre_mr(lo, hi)
+                      for p in chunk)
+        if len(u64_list) < min_surv:
+            return False, f"G9 FAIL n={n}: window under-populated ({len(u64_list)})"
+        if u64_list != p128:
+            return False, (f"G9 FAIL n={n} [{lo},{hi}): u64 {len(u64_list)}"
+                           f" vs 128 {len(p128)}")
+        counts.append(len(u64_list))
+    return True, f"G9 ok: CPU-128 == CPU-u64 on 4 overlap windows, sizes {counts}"
+
+
+def _direct_survivors(lo, hi, n):
+    """Fourth implementation for mini-windows: wheel-admissible p tested
+    by DIRECT big-int trial division over every prime in (29, Q2), pure
+    Python, no numpy, no residue tricks.  Slow; tiny ranges only."""
+    from sympy import primerange as _pr
+    qs = [int(q) for q in _pr(30, Q2)]
+    offs, M = build_wheel(n, WHEEL_PRIMES_29)
+    out = []
+    k0, k1 = lo // M, hi // M + 1
+    for k in range(k0, k1):
+        base = k * M
+        for off in offs.tolist():
+            p = base + int(off)
+            if not (lo <= p < hi):
+                continue
+            alive = True
+            for q in qs:
+                if any((p + x * x + x) % q == 0 for x in range(n)):
+                    alive = False
+                    break
+            if alive:
+                out.append(p)
+    return sorted(out)
+
+
+def g10_128_above_cap():
+    """Above the u64 cap the 128 path is pinned two independent ways:
+    (a) mini-window parity against direct big-int trial division at
+    2.35e20 and at the P128_CEIL zone; (b) end-to-end rediscovery of the
+    Waldvogel-Leikauf run-21 literature value at 2.345e20."""
+    for lo, span in ((235 * 10**18, 6 * 10**6),
+                     (P128_CEIL - 6 * 10**6, 6 * 10**6)):
+        hi = lo + span
+        direct = _direct_survivors(lo, hi, 17)
+        eng = sorted(p for chunk in
+                     CpuEngine128(17).survivors_pre_mr(lo, hi)
+                     for p in chunk)
+        if direct != eng:
+            return False, (f"G10 FAIL [{lo},{hi}): direct {len(direct)}"
+                           f" vs engine {len(eng)}")
+    lo, hi = A21_UPPER - 10**7, A21_UPPER + 10**7
+    hits = CpuEngine128(17).hunt(lo, hi)
+    good = [(p, r) for p, r in hits if p == A21_UPPER and r == 21]
+    if not good:
+        return False, f"G10 FAIL: A21 upper value not rediscovered ({hits})"
+    return True, ("G10 ok: 128-path == direct trial division on 2 mini-windows"
+                  " (2.35e20, ceil); Waldvogel-Leikauf run-21 value"
+                  " rediscovered end-to-end above the u64 cap")
+
+
 def selftest(fast=False):
-    gates = [g3_wheel_property, g4_engine_vs_oracle, g5_rediscover]
+    gates = [g3_wheel_property, g4_engine_vs_oracle, g5_rediscover,
+             g9_128_overlap, g10_128_above_cap]
     ok = True
     for g in gates:
         good, msg = g()

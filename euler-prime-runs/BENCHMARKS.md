@@ -11,6 +11,8 @@ fingerprint (survivor count 178, xor checksum 120489734542316 on
 | 2026-08-05 | v3 (frozen) | 189,738,385 | Barrett + 29# wheel + 2D grid + L2 masks |
 | 2026-08-06 | v4 | 343,361,199 | multi-period threads + incremental first-16 stage-1 residues; measured under ambient desktop GPU load (see variance note) |
 | 2026-08-06 | v4 (re-frozen, idle GPU) | **512,819,184** | same engine, quiet-GPU capture; matches the 9-hour production average (~5.0e14 p/s) and interleaved harness runs (5.12e14) |
+| 2026-08-06 | v1-128 | 248,019,330 | phase-2 128-bit path, one-kernel design, window [2.3e20, +5e14), fingerprint 178 survivors / checksum 133625321009290; captured under desktop load (u64 SCORE read 323,531,367 in the same battery). Paired A/B: 0.77x the u64 kernel |
+| 2026-08-06 | v2-128 (frozen) | **362,319,437** | two-phase compaction (stage-1a hot kernel + queued cold kernel; see OPTIMIZATION_LOG). Same fingerprint, bit-identical stream. Same-battery pair: SCORE128 362,319,437 vs u64 SCORE 323,394,817 -- **the 128 path is now 1.13x the proven u64 engine** (paired A/B median 1.135, min 1.111 over 12 rounds) |
 
 Wall-clock at SCORE (n=17 production, v4, idle GPU):
 
@@ -25,6 +27,12 @@ Height-flatness: 1e16 / 1e18 / 1.7e19 windows agree within 0.8%.
 
 Model milestones at this rate: E(a17)=1 at 2.6e17 (~8 min in),
 P(a17) = 88% by ~33 min, ~100% by cap; P(a18) = 78% by cap.
+
+Phase-2 wall-clock (v2-128, from the 1.8e19 cap): the default depth
+3.2e20 -- past the Waldvogel-Leikauf zone and the run>=19 E=1 point --
+takes ~6.1 days at the idle-projected 5.7e14 p/s (~9.7 days at the
+loaded-desktop 3.6e14 measured in production). Conditional a(19)
+median depth 2.6e20 is ~4.8 days idle.
 
 Note (2026-08-06): after the public-repo refactor (shared code moved to
 ../huntlib), the full gate battery re-ran green and the benchmark

@@ -54,6 +54,60 @@ per 1.8e19, confirmed by the live campaign counter: 8.4e5 at 2.4e18).
   expected small).
 - Batch MR on GPU (Montgomery 64-bit): only relevant if Q2 is lowered
   or a wider survivor stream is wanted (e.g. n=16 census mode).
-- 128-bit value path for p > 1.8e19 (phase 2 -- a(19)/a(20) tails and
-  the Waldvogel-Leikauf zone at 2.3e20). Requires new G6 ceiling
-  windows and a 128-bit MR (or 3-limb) host path.
+
+## Phase 2 (2026-08-06): 128-bit value path -- implemented
+
+The last TODO of phase 1 (128-bit path for p > 1.8e19) landed as a new
+engine version per the numeric-hygiene rule: kernel `ladder_filter128`
++ `GpuEngine128` / `CpuEngine128`, ceiling P128_CEIL = 1e24 (enforced;
+values stay >3x under the 3.317e24 MR validity bound), gates G9-G12
+(overlap parity vs the proven u64 engines, direct trial-division
+parity on mini-windows at 2.35e20 and the ceiling, a(18) +
+Waldvogel-Leikauf run-21 end-to-end rediscoveries), own frozen
+fingerprint (SCORE128, window [2.3e20, +5e14), 178 survivors).
+
+The v4 insight carried over for free: the incremental stage-1a
+residues never depended on p's magnitude, so the hot loop is
+unchanged; the cold fallback pays 3 Barretts per prime (k mod q,
+off mod q, recombine) instead of 1.
+
+### v1-128 -> v2-128: closing the 23% gap (same day)
+
+The one-kernel v1-128 measured 0.77x the u64 kernel (paired
+interleaved A/B). The hunt for the missing 23% is a lesson in
+measuring before believing:
+
+| attempt | result | verdict |
+|---------|--------|---------|
+| hoist (k, off) window bounds out of the period loop (per-thread t-range; interior has NO bounds checks) | 0.784x | kept (right thing, wrong bottleneck) |
+| NINC sweep 10/12/14/16 on the 128 kernel | 16 best | no change |
+| `__launch_bounds__(256,4)`: regs 72 -> 64, zero spill (matches v4's 4 blocks/SM) | 0.815x | kept, still not it |
+| `#pragma unroll 4` / compile-time loop bound | no effect | rejected |
+| STRIPPED experiment: both kernels with the cold path deleted | both run 2.7e15 p/s, EQUAL | the smoking gun |
+
+The stripped run showed the hot loops were never the problem: the
+cold path (stage 1b + stage 2) consumed ~80% of runtime in BOTH
+kernels through warp serialization -- one lane survives stage 1a and
+31 lanes idle while it grinds up to ~6.5k primes; the 128 path's
+3-Barrett cold arithmetic just stretched that serial section 1.3x,
+which is exactly the observed ratio.
+
+v2-128 therefore splits the work (two-phase compaction): the hot
+kernel does stage 1a only and enqueues surviving (offset, period)
+pairs (packed u64, 512 MB queue, ~5.2e7 per 8192-period launch); a
+second kernel processes the queue one candidate per thread with every
+lane busy. Survivor set bit-identical (SCORE128 fingerprint
+reproduced; boundary torture windows vs CPU-128 all equal). Paired
+A/B after: **1.13x the u64 kernel** (median 1.135, min 1.111, 12
+rounds) -- the 128-bit path is now FASTER than the proven u64 engine.
+Cold kernel: 30 regs. Certified by the full battery: same-battery
+pair SCORE 323,394,817 / SCORE128 362,319,437 (ambient desktop load;
+the ratio, not the absolute rates, is the stable quantity).
+
+Phase-2 TODO (optimize under SCORE128, gates green):
+- The same compaction restructure would lift the u64 engine too (its
+  cold path is the same 80%); that is a v5 u64-engine candidate, kept
+  out of scope while phase 2 runs.
+- Cold-kernel tail: sort/partition the queue by kill depth or stage
+  the s1/s2 tables through shared memory; the cold phase still costs
+  ~2.5 ns per queued candidate.

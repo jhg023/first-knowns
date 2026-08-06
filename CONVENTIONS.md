@@ -53,6 +53,16 @@ an engine bug by definition and halts the campaign (exit 2). Discoveries
 are never announced from inside the pipeline — a human reviews the
 evidence first.
 
+**The stop-on-discovery convention (repo-wide).** Every launcher
+accepts `--stop-on-discovery`: once the discovery protocol confirms a
+*frontier-extending* find — a value strictly beyond every previously
+recorded one — the campaign checkpoints, writes the evidence, logs a
+`[STAGE]` line, and exits cleanly so a human can react before more GPU
+time is spent. What counts as the frontier is a named constant in the
+launcher. Rediscoveries of known values (canaries), and census-grade
+repeats of run lengths the campaign has already settled, are still
+fully verified and evidenced but never trigger the stop.
+
 ## The odds model
 
 Every hunt ships a quantitative expectation model (typically

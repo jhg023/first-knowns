@@ -1,4 +1,5 @@
 __pycache__/
 *.pyc
 ladder_checkpoint.json
+ladder128_checkpoint.json
 *.tmp

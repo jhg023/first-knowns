@@ -16,7 +16,8 @@ exhaustively swept to 1.8×10¹⁹. Details in [RESULTS.md](RESULTS.md).
 
 **Status: ACTIVE** — phase 1 (the full 64-bit-safe range) is complete;
 phase 2, a 128-bit engine targeting a(19) beyond the 1.8×10¹⁹ ceiling,
-is in preparation (conditional median for a(19) at ≈ 2.6×10²⁰).
+is gated and hunting (`--engine gpu128`; conditional median for a(19)
+at ≈ 2.6×10²⁰, about a week of GPU time).
 
 ## The problem
 
@@ -62,6 +63,25 @@ engine:
    to 3.3×10²⁴) computes each survivor's exact run. The GPU only ever
    *proposes*.
 
+**Phase 2 (beyond the 64-bit ceiling).** Above 1.8×10¹⁹ the candidate p
+no longer fits a 64-bit word — but the engines never need it to. Every
+candidate is carried as the pair (k, off) with p = k·29# + off, and
+every sieve test reduces to
+`((k mod q)·(29# mod q) + off mod q) mod q`, which stays 64-bit-safe all
+the way to the enforced ceiling 10²⁴ (a factor >3 under the Miller–Rabin
+validity bound). The incremental stage-1 residue stepping is unchanged —
+it never depended on p's magnitude — and the 128-bit path splits hot and
+cold work into two kernels (stage-1a compaction queue + one-candidate-
+per-thread cold pass), making it **1.13x faster than the u64 engine
+itself** (SCORE128 vs SCORE, same battery). Exact integers exist only on the
+host as Python ints. The proven u64 engines are untouched; the 128 path
+is pinned against them bit-for-bit on the fingerprint window (G9, G11),
+against direct big-integer trial division on mini-windows at 2.35×10²⁰
+and the 10²⁴ ceiling (G10), and end-to-end against a(18) and the
+Waldvogel–Leikauf run-21 value 234,505,015,943,235,329,417 — the latter
+rediscovered *above* the 64-bit cap (G10, G12, and the launcher's
+phase-2 canary prelude).
+
 Throughput: **5.1×10¹⁴ integers of p-line per second** end-to-end on an
 RTX 4090 (SCORE 512,819,184; see BENCHMARKS.md), height-flat from 10¹⁶
 to 1.7×10¹⁹. The full 64-bit-safe range (to 1.8×10¹⁹) took ~9.5 hours
@@ -88,12 +108,22 @@ run ≥ 19, E = 0.20 spent): a(19) median at 2.6×10²⁰, quartiles
 ## Running it
 
 ```
-python launch.py --selftest    # full gate battery + drills (~10 min)
-python launch.py               # THE HUNT (checkpointed; resumes)
-python launch.py --status      # scoreboard
-python score.py                # gates x fingerprinted benchmark
+python launch.py --selftest    # full gate battery + drills (~15 min)
+python launch.py               # phase-1 hunt (u64 range; complete)
+python launch.py --engine gpu128 --stop-on-discovery
+                               # PHASE 2: the a(19) hunt beyond the u64
+                               # cap (default depth 3.2e20; halts after
+                               # a frontier-extending find)
+python launch.py --status      # scoreboard (both phases)
+python score.py                # gates x fingerprinted benchmarks (u64 + 128)
 python euler_model.py          # rebuild the odds model + its gates
 ```
+
+`--stop-on-discovery` follows the repo-wide convention (CONVENTIONS.md):
+only a run beyond the campaign frontier (currently ≥ 19) halts the hunt;
+run-17/18 repeats are verified, evidenced, and counted as census
+(`near13-18` in the status line), and the known run-21 value at
+2.345×10²⁰ is treated as an in-flight canary, not a discovery.
 
 Requires Python 3.12+, numpy, sympy, CuPy + CUDA GPU (or `--engine cpu`).
 

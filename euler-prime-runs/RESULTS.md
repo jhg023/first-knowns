@@ -89,8 +89,19 @@ gave 18% odds within the cap; E = 0.20 was spent, so the a(19) search
 resumes from here with conditional median at ≈ 2.6×10²⁰).
 
 Planned next: one consolidated OEIS update (new terms + the new
-exhaustive search bound superseding the entry's 2009 comment), and the
-128-bit "phase 2" engine for the range beyond the 64-bit ceiling —
-targeting a(19), with the Waldvogel–Leikauf run-21 value
-234,505,015,943,235,329,417 at 2.35×10²⁰ as both an in-stream canary
-and a milestone: sweeping past it settles whether it is in fact a(21).
+exhaustive search bound superseding the entry's 2009 comment).
+
+## Phase 2 — in progress
+
+The 128-bit engine (see README § phase 2, gates G9–G12) is running the
+range beyond the 64-bit ceiling, targeting a(19) (conditional median
+≈ 2.6×10²⁰, quartiles 8.9×10¹⁹ / 6.8×10²⁰). All exact runs ≥ 13 are
+census-tracked (`near13-18` plus full verification and evidence for
+run-17/18 repeats), and any run > 18 is a frontier discovery under the
+repo's stop-on-discovery convention. The Waldvogel–Leikauf run-21
+value 234,505,015,943,235,329,417 at 2.35×10²⁰ serves as an in-stream
+canary and a milestone: sweeping past it either finds a smaller
+run-21 (model odds ~1%) or settles it as a(21). First phase-2 census
+entry so far: a run-15 near-miss at p = 18,112,559,695,577,229,557,
+the first recorded just above the 64-bit cap. This section will be
+rewritten as results arrive.
