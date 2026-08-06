@@ -19,7 +19,14 @@ Note on the v4 ratio: interleaved same-day A/B gave v3 = 1.36e14 and
 v4 = 3.42e14 (2.5x) under identical ambient desktop GPU load; the
 frozen v3 SCORE (1.90e14) was taken uncontended, so the ledger ratio
 (1.8x) understates the kernel change. The v4 SCORE above was recorded
-under the ambient load and is, if anything, conservative.
+under the ambient load and is, if anything, conservative: the
+restarted production hunt sustained 5.0e14 p/s at p ~ 2e18 during a
+quiet-desktop window (~2.6x uncontended v3), matching the v3
+contention discount (1.36/1.90 = 0.72) applied in reverse. A
+same-night re-freeze attempt (hunt stopped, full battery green)
+reproduced 3.44e14 with the desktop workload active -- the discount
+is display contention, not drift; the frozen entry stands as the
+loaded-desktop floor.
 
 v4 sweep (all parity-clean vs the v3 stream, bench + 1.7e19 windows):
 rate rises with T and plateaus at T=1024..4096 (T=32: 2.16x, T=128:

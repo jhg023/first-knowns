@@ -31,3 +31,16 @@ fingerprint (survivors 178, checksum 120489734542316) reproduced
 exactly. The timing measured during that verification (9.8e13 p/s) was
 taken while a production hunt shared the GPU and is not a SCORE entry;
 the frozen SCORE stands from the uncontended pre-hunt measurement.
+
+Note (2026-08-06, v4 hunt restart): production at p ~ 2e18 sustained
+5.0e14 p/s during a quiet-desktop window -- on an idle GPU the v4
+kernel is ~2.6x uncontended v3, and the full u64 range takes ~10 h,
+not ~15 h. A same-night re-freeze attempt with the hunt stopped ran
+the full battery green and reproduced the benchmark at 3.44e14 /
+3.47e14 (SCORE 343,767,063 / 346,636,064) while a concurrent
+desktop/display workload held ~25-30% GPU utilization: the ~0.7x
+discount against quiet-GPU rates is display contention, not
+benchmark drift (the frozen v3 engine shows the same discount:
+1.36e14 measured vs its 1.90e14 uncontended SCORE). The frozen v4
+SCORE line stands as the reproducible loaded-desktop floor;
+production rates are never SCORE entries.
