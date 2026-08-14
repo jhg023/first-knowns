@@ -91,17 +91,47 @@ resumes from here with conditional median at ≈ 2.6×10²⁰).
 Planned next: one consolidated OEIS update (new terms + the new
 exhaustive search bound superseding the entry's 2009 comment).
 
+## A164926(21) = 234,505,015,943,235,329,417 — settled
+
+On 2026-08-12 the phase-2 sweep crossed the Waldvogel–Leikauf run-21
+prime at 2.345×10²⁰ and rediscovered it in-stream: the pipeline
+flagged its planted canary, and the full verification protocol
+confirmed run exactly 21.
+
+- x² + x + p is prime for x = 0..20 (twenty-one consecutive primes).
+- The run breaks at x = 21: 234,505,015,943,235,329,879 = **101** ×
+  2,321,831,841,022,131,979.
+- The value was previously known only as an *upper bound* for a(21):
+  it came from a construction-style search, which cannot rule out a
+  smaller example. The ascending exhaustive sweep can — contiguous
+  coverage from 0 through 2.345×10²⁰ (phase 1 to the 64-bit cap,
+  phase 2 from the cap with the seam re-covered) contains no other
+  prime with run ≥ 19. The bound is the least, and **a(21) is
+  settled** — the third term of A164926 resolved by this campaign,
+  and the first settled by confirming a known candidate rather than
+  finding a new prime.
+- The model had put ~1% odds on a smaller run-21 below the known
+  value, so the settlement itself is the expected outcome. The
+  sharper corollary: a(19) and a(20), still unknown, are now both
+  provably **larger** than a(21) — the sequence is not monotonic in
+  this stretch.
+- Evidence: `evidence/euler_hit_run21_p234505015943235329417.json`
+
 ## Phase 2 — in progress
 
 The 128-bit engine (see README § phase 2, gates G9–G12) is running the
-range beyond the 64-bit ceiling, targeting a(19) (conditional median
-≈ 2.6×10²⁰, quartiles 8.9×10¹⁹ / 6.8×10²⁰). All exact runs ≥ 13 are
-census-tracked (`near13-18` plus full verification and evidence for
-run-17/18 repeats), and any run > 18 is a frontier discovery under the
-repo's stop-on-discovery convention. The Waldvogel–Leikauf run-21
-value 234,505,015,943,235,329,417 at 2.35×10²⁰ serves as an in-stream
-canary and a milestone: sweeping past it either finds a smaller
-run-21 (model odds ~1%) or settles it as a(21). First phase-2 census
-entry so far: a run-15 near-miss at p = 18,112,559,695,577,229,557,
-the first recorded just above the 64-bit cap. This section will be
-rewritten as results arrive.
+range beyond the 64-bit ceiling, targeting a(19). Frontier as of
+2026-08-13: k = 44,549,831,585 on the 29# wheel, p ≈ 2.88×10²⁰ — just
+past the conditional median for a(19) (2.6×10²⁰), where the model gave
+roughly even odds of the find, so the empty net so far is
+unremarkable (third quartile 6.8×10²⁰). With a(21) settled and no
+other run ≥ 19 below the frontier, a(19) and a(20) both exceed
+2.88×10²⁰.
+
+Census above the 64-bit cap so far: **45 run-17 primes and 5 run-18
+primes**, each fully verified with its own evidence JSON, plus
+near-miss counts runs 13/14/15/16 = 861/408/157/74. All exact runs
+≥ 13 remain census-tracked in `evidence/euler_nearmiss.jsonl`, and
+any run > 18 is a frontier discovery under the repo's
+stop-on-discovery convention. This section will be rewritten as
+results arrive.

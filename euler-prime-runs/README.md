@@ -9,15 +9,19 @@ The hunt for new terms of [OEIS A164926](https://oeis.org/A164926): the
 least prime p such that Euler's polynomial form **x² + x + p** is prime
 for exactly n consecutive values x = 0, 1, ..., n−1.
 
-**Results so far: a(17) = 348,284,517,256,411,907 and
-a(18) = 8,461,068,614,861,832,371** — found and verified 2026-08-05/06,
-the first new terms of the sequence since 2009. The 64-bit range is now
-exhaustively swept to 1.8×10¹⁹. Details in [RESULTS.md](RESULTS.md).
+**Results so far: a(17) = 348,284,517,256,411,907,
+a(18) = 8,461,068,614,861,832,371, and
+a(21) = 234,505,015,943,235,329,417.** a(17) and a(18) were found and
+verified 2026-08-05/06, the first new terms of the sequence since
+2009; a(21) was settled 2026-08-12 when the exhaustive sweep passed
+the known Waldvogel–Leikauf upper bound at 2.35×10²⁰ without finding
+a smaller run ≥ 19. Details in [RESULTS.md](RESULTS.md).
 
 **Status: ACTIVE** — phase 1 (the full 64-bit-safe range) is complete;
 phase 2, a 128-bit engine targeting a(19) beyond the 1.8×10¹⁹ ceiling,
-is gated and hunting (`--engine gpu128`; conditional median for a(19)
-at ≈ 2.6×10²⁰, about a week of GPU time).
+is gated and hunting (`--engine gpu128`). The sweep is contiguous from
+0 to ≈ 2.9×10²⁰, just past the conditional median for a(19)
+(≈ 2.6×10²⁰; third quartile 6.8×10²⁰).
 
 ## The problem
 
@@ -122,8 +126,9 @@ python euler_model.py          # rebuild the odds model + its gates
 `--stop-on-discovery` follows the repo-wide convention (CONVENTIONS.md):
 only a run beyond the campaign frontier (currently ≥ 19) halts the hunt;
 run-17/18 repeats are verified, evidenced, and counted as census
-(`near13-18` in the status line), and the known run-21 value at
-2.345×10²⁰ is treated as an in-flight canary, not a discovery.
+(`near13-18` in the status line). The known run-21 value at 2.345×10²⁰
+was treated as an in-flight canary, not a discovery — rediscovered on
+schedule 2026-08-12 and thereby settled as a(21) (see RESULTS.md).
 
 Requires Python 3.12+, numpy, sympy, CuPy + CUDA GPU (or `--engine cpu`).
 
