@@ -58,9 +58,11 @@ EXPECTED_KNOWN = {41: 40}                      # low-range positive control
 CAMPAIGN_FOUND = {17: 348_284_517_256_411_907,
                   18: 8_461_068_614_861_832_371}
 FRONTIER_RUN = max(CAMPAIGN_FOUND)             # discovery = run > FRONTIER_RUN
-P2_DEFAULT_TO = 320 * 10**18                   # 3.2e20: past the E=1 depth for
-                                               # run>=19 (3.1e20) and the
-                                               # Waldvogel-Leikauf zone
+P2_DEFAULT_TO = 1000 * 10**18                  # 1e21: leg 2 of the a(19) hunt.
+                                               # Leg 1 (to 3.2e20) came back
+                                               # empty with E=1.02 spent; this
+                                               # leg crosses the conditional
+                                               # median 7.8e20 (P(find) ~ 62%)
 
 
 class CorruptEngineError(RuntimeError):

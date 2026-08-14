@@ -116,8 +116,9 @@ python launch.py --selftest    # full gate battery + drills (~15 min)
 python launch.py               # phase-1 hunt (u64 range; complete)
 python launch.py --engine gpu128 --stop-on-discovery
                                # PHASE 2: the a(19) hunt beyond the u64
-                               # cap (default depth 3.2e20; halts after
-                               # a frontier-extending find)
+                               # cap (leg 1 to 3.2e20 complete; default
+                               # depth now 1e21; halts after a
+                               # frontier-extending find)
 python launch.py --status      # scoreboard (both phases)
 python score.py                # gates x fingerprinted benchmarks (u64 + 128)
 python euler_model.py          # rebuild the odds model + its gates

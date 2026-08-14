@@ -28,11 +28,12 @@ Height-flatness: 1e16 / 1e18 / 1.7e19 windows agree within 0.8%.
 Model milestones at this rate: E(a17)=1 at 2.6e17 (~8 min in),
 P(a17) = 88% by ~33 min, ~100% by cap; P(a18) = 78% by cap.
 
-Phase-2 wall-clock (v2-128, from the 1.8e19 cap): the default depth
+Phase-2 wall-clock (v2-128, from the 1.8e19 cap): the leg-1 depth
 3.2e20 -- past the Waldvogel-Leikauf zone and the run>=19 E=1 point --
-takes ~6.1 days at the idle-projected 5.7e14 p/s (~9.7 days at the
-loaded-desktop 3.6e14 measured in production). Conditional a(19)
-median depth 2.6e20 is ~4.8 days idle.
+was projected at ~6.1 days at the idle 5.7e14 p/s and completed
+2026-08-14 in 152.1 h (~6.3 days), a realized production average of
+5.5e14 p/s across the whole leg. Leg 2 (3.2e20 to the new default
+depth 1e21) is ~14.3 days at that rate.
 
 Note (2026-08-06): after the public-repo refactor (shared code moved to
 ../huntlib), the full gate battery re-ran green and the benchmark

@@ -117,21 +117,32 @@ confirmed run exactly 21.
   this stretch.
 - Evidence: `evidence/euler_hit_run21_p234505015943235329417.json`
 
-## Phase 2 — in progress
+## Phase 2, leg 1 complete: no run ≥ 19 below 3.2×10²⁰
 
-The 128-bit engine (see README § phase 2, gates G9–G12) is running the
-range beyond the 64-bit ceiling, targeting a(19). Frontier as of
-2026-08-13: k = 44,549,831,585 on the 29# wheel, p ≈ 2.88×10²⁰ — just
-past the conditional median for a(19) (2.6×10²⁰), where the model gave
-roughly even odds of the find, so the empty net so far is
-unremarkable (third quartile 6.8×10²⁰). With a(21) settled and no
-other run ≥ 19 below the frontier, a(19) and a(20) both exceed
-2.88×10²⁰.
+The 128-bit engine (see README § phase 2, gates G9–G12) finished its
+first leg 2026-08-14: contiguous coverage from the 64-bit cap (seam
+re-covered) to the leg's depth cap **3.2×10²⁰** — exactly, at wheel
+period k = 49,461,386,905 — in 152.1 wall-hours (realized rate
+5.5×10¹⁴ p/s), classifying 108,175,079 pre-MR survivors. No prime
+with run ≥ 19 exists below 3.2×10²⁰: combined with the phase-1
+result, **a(19) and a(20) both exceed 3.2×10²⁰**, and the exhaustive
+bound behind the a(21) settlement (above) extends to the same depth.
 
-Census above the 64-bit cap so far: **45 run-17 primes and 5 run-18
-primes**, each fully verified with its own evidence JSON, plus
-near-miss counts runs 13/14/15/16 = 861/408/157/74. All exact runs
-≥ 13 remain census-tracked in `evidence/euler_nearmiss.jsonl`, and
-any run > 18 is a frontier discovery under the repo's
-stop-on-discovery convention. This section will be rewritten as
-results arrive.
+The empty net is within normal scatter: the leg spent E = 1.02
+expected run-19 finds, so a zero had probability e^(−1.02) ≈ 36%.
+Conditional on it, the model now puts the a(19) median at 7.8×10²⁰
+(quartiles 4.9×10²⁰ / 1.4×10²¹).
+
+Census above the 64-bit cap, final for the leg: **46 run-17 primes
+and 6 run-18 primes** (campaign totals 54 and 7), each fully verified
+with its own evidence JSON, plus near-miss counts runs 13/14/15/16 =
+939/449/177/78. All exact runs ≥ 13 remain census-tracked in
+`evidence/euler_nearmiss.jsonl`.
+
+## Phase 2, leg 2 — in progress
+
+Leg 2 resumes from the checkpoint at 3.2×10²⁰ with the default depth
+raised to **1×10²¹** — past the conditional median, giving ~62% odds
+of the a(19) find within the leg (~14 days at the realized rate). Any
+run > 18 halts the hunt under the stop-on-discovery convention. This
+section will be rewritten as results arrive.
