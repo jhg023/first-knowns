@@ -131,26 +131,54 @@ def three_way_verify(p, claimed_run, n_filter):
 
 # ------------------------------ checkpoint ---------------------------------
 
-def ckpt_key(n):
-    from euler_search import best_wheel
-    return CONFIG_KEY.format(n=n, wheel=best_wheel(n)[-1])
+def ckpt_key(n, eng):
+    """Cursor key, derived from THE ENGINE's actual wheel.
+
+    Never recompute the wheel here independently of the engine.  Doing that
+    once let the key claim 31# while the engine ran 29#, so the key check
+    passed and next_k -- a count of wheel PERIODS -- was read against a
+    period 31x too short.  The engine owns the wheel; everything else asks
+    it.
+    """
+    return CONFIG_KEY.format(n=n, wheel=eng.wheel_primes[-1])
 
 
-def load_ckpt(n):
-    return _ckpt.load(CKPT, ckpt_key(n), warn=lambda m: log("WARN", m))
+def load_ckpt(n, eng):
+    return _ckpt.load(CKPT, ckpt_key(n, eng), warn=lambda m: log("WARN", m))
 
 
 def save_ckpt(c):
     _ckpt.save(CKPT, c)
 
 
-def fresh_ckpt(n):
+def fresh_ckpt(n, eng):
     # One engine spans the whole range, so a fresh campaign starts at zero:
     # there is no cap to start above and no seam to re-cover.
-    return {"key": ckpt_key(n), "M": 6469693230, "next_k": 0,
+    return {"key": ckpt_key(n, eng), "M": int(eng.M), "next_k": 0,
             "canaries_done": False, "survivors": 0, "events": [],
             "best_near": 0, "best_near_p": 0, "near_counts": {}, "hits": 0,
             "wall_s": 0.0, "started": time.time()}
+
+
+def check_cursor(c, eng):
+    """Refuse a cursor whose period does not match the engine's.
+
+    The key already pins the wheel, but this is the assertion that does not
+    depend on anyone having derived the key correctly: next_k counts periods
+    of c["M"], so if that disagrees with the engine's M the position is
+    wrong by their ratio -- silently, and in the direction that can put a
+    GAP in the coverage claim.  Cheap, and it turns the worst class of bug
+    here into a refusal to start.
+    """
+    have, want = int(c.get("M", 0)), int(eng.M)
+    if have != want:
+        raise CorruptEngineError(
+            "cursor period mismatch: next_k=%d counts periods of M=%d, but "
+            "this engine's wheel gives M=%d (ratio %.4g).  Resuming would "
+            "misplace the frontier by that factor.  Convert the cursor "
+            "deliberately (see RESULTS.md on the 31# conversion) rather "
+            "than resuming." % (c.get("next_k", -1), have, want,
+                                (want / have) if have else float("inf")))
 
 
 # ------------------------------- canaries ----------------------------------
@@ -231,12 +259,17 @@ def hunt(args):
     else:
         from euler_gpu import GpuEngine as Eng
 
-    c = None if args.fresh else load_ckpt(n)
-    if c is None:
-        c = fresh_ckpt(n)
-
     def make_engine(m):
-        return Eng(m, wheel_primes=WHEEL_PRIMES_29)
+        # no wheel override: the engine picks the largest wheel that fits,
+        # and is then the single source of truth for the period the cursor
+        # is denominated in
+        return Eng(m)
+
+    eng = make_engine(n)
+    c = None if args.fresh else load_ckpt(n, eng)
+    if c is None:
+        c = fresh_ckpt(n, eng)
+    check_cursor(c, eng)
 
     if not c["canaries_done"]:
         log("STAGE", "canary prelude: oracle low-pass + a(14)/a(15)/a(18) "
@@ -255,7 +288,6 @@ def hunt(args):
         c["canaries_done"] = True
         save_ckpt(c)
 
-    eng = make_engine(n)
     target_run = FRONTIER_RUN + 1
     logc_next = None
     try:
@@ -482,7 +514,9 @@ def status():
         with open(path) as f:
             c = json.load(f)
         print(f"key       : {c['key']}")
-        print(f"position  : p ~ {c['next_k']*c.get('M', 6469693230):.4e}")
+        print(f"period M  : {c['M']}")
+        print(f"position  : p ~ {c['next_k']*c['M']:.4e}  "
+              f"(next_k = {c['next_k']:,})")
         print(f"survivors : {c['survivors']}")
         print(f"best near : run {c['best_near']} at p = {c['best_near_p']}")
         print(f"wall      : {c['wall_s']:.0f}s")

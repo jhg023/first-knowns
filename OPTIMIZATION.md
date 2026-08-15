@@ -453,7 +453,35 @@ from 24 to 28 primes recovered it: **1.212x**. This is Rule 1's corollary
 biting for the third time in one session — a wheel change is a structural
 change, and every constant tuned around it was stale the moment it landed.
 
-### 2.9 Things that did not pay (measured, in this codebase)
+### 2.9 Resumable state must assert its own configuration
+
+**Recognise it when:** a checkpoint stores a *position* whose meaning depends
+on a tuning parameter — a period count, a block index, a chunk number.
+
+A wheel change in the case study made the period 31x longer, so a cursor
+counting periods meant something 31x different. The key string named the
+wheel, which felt like enough. It was not: the wheel was computed in two
+places (the launcher pinned one, the key derived another), they disagreed,
+the key check *passed*, and the position was read against the wrong period.
+The sweep restarted 31x too low, and the cursor then advanced in the wrong
+units — which, resumed after a fix, would have skipped ~4e19 of unswept
+range and put a silent gap in an exhaustive-coverage claim.
+
+Two rules fall out, both cheap:
+
+- **Derive configuration in exactly one place** and have everything else ask
+  that object for it. Two independent derivations of the same quantity are a
+  disagreement waiting for its second implementation to exist.
+- **Store the unit next to the number, and assert it on load.** A key that
+  *describes* the configuration is documentation; `stored_period ==
+  engine_period or refuse` is an assertion. Only the second one stops the
+  failure, because it does not depend on the description being right.
+
+Worth doing before you need it: the check is three lines, and the class of
+bug it catches is the one that silently invalidates results rather than
+crashing.
+
+### 2.10 Things that did not pay (measured, in this codebase)
 
 | attempt | result | why it was tempting |
 |---------|--------|---------------------|

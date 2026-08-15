@@ -233,6 +233,56 @@ misinterpreted (next_k is denominated in periods, and the period changed by
 up to one period (1.75e11 of p-line, 0.063 expected survivors) rather than
 risking a gap, following the same convention as the old u64 seam.
 
+### Incident: the wheel change shipped with a cursor desync (2026-08-15)
+
+The first production start after the 31# wheel landed began at 1.168e19
+instead of the 3.62e20 frontier, and had to be stopped. Root cause, and it
+is embarrassing in a useful way: **two places computed the wheel
+independently.**
+
+- `launch.py`'s engine factory still pinned `wheel_primes=WHEEL_PRIMES_29`,
+  left over from when the wheel was fixed. So production ran the 29# wheel.
+- `ckpt_key()` derived the wheel from `best_wheel(n)` -- 31#.
+
+The key therefore MATCHED and the cursor loaded, but `next_k` counts wheel
+PERIODS, and 1,804,941,739 periods of 31# got read as periods of 29#:
+1,804,941,739 x 6.47e9 = 1.168e19. Exactly where it started.
+
+The wasted sweep was the cheap part. The dangerous part was that `next_k`
+then advanced in 29# units inside a file whose `M` field said 31#: after
+three minutes it read as 4.06e20, PAST the true 3.62e20 frontier. Resuming
+after fixing the wheel would have skipped ~4.4e19 of never-swept range and
+put a silent GAP in the exhaustive-coverage claim -- the one thing this
+whole apparatus exists to prevent.
+
+Fixes, in order of value:
+
+1. `check_cursor()`: the cursor's `M` must equal the engine's `M`, or the
+   campaign refuses to start. This does not depend on anyone having derived
+   the key correctly, which is precisely why it is the fix that matters --
+   it converts the worst failure class here into a refusal to run. Verified
+   against the exact bad state.
+2. The engine is now the single source of truth for the wheel: no override
+   in the launcher, and `ckpt_key`/`fresh_ckpt` take the engine and read
+   `eng.wheel_primes` / `eng.M` off it. `fresh_ckpt` had a hardcoded
+   `M = 6469693230` too, and `status()` a hardcoded fallback -- both were
+   the same latent bug waiting for a second wheel to exist.
+3. `status()` now prints the period and `next_k` alongside the position, so
+   a desync is visible rather than inferred.
+
+Cleanup: 15 duplicate near-miss entries (runs 13/14/15/16 = 10/3/1/1) were
+removed from the census -- the re-swept band lies below the old frontier, so
+every sighting in it was a second recording of a phase-1 find. Counters and
+the survivor total were restored to the pre-incident values, the cursor was
+reset to 3.62e20 in 31# periods, and `canaries_done` was cleared because the
+prelude had run on the wrong wheel. No run-17/18 fell in the band, so no
+evidence JSON was duplicated; coverage never had a gap, only an overlap.
+
+The generalisable lesson, now in ../OPTIMIZATION.md: a derived quantity
+computed in two places will eventually disagree, and a checkpoint key that
+*describes* the configuration is not the same as an assertion that the
+configuration MATCHES. Write the assertion.
+
 ### Why the original decline was wrong (kept as the record)
 
 The original entry read: "not implemented because the offset table is
