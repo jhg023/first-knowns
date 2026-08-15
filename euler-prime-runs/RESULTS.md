@@ -141,8 +141,62 @@ with its own evidence JSON, plus near-miss counts runs 13/14/15/16 =
 
 ## Phase 2, leg 2 — in progress
 
-Leg 2 resumes from the checkpoint at 3.2×10²⁰ with the default depth
-raised to **1×10²¹** — past the conditional median, giving ~62% odds
-of the a(19) find within the leg (~14 days at the realized rate). Any
-run > 18 halts the hunt under the stop-on-discovery convention. This
+Leg 2 resumed from the leg-1 checkpoint at 3.2×10²⁰ and swept to
+**3.6004×10²⁰** (wheel period k = 55,650,475,673) before being paused on
+2026-08-15 for an engine upgrade. Census additions during that stretch:
+five more run-17 primes (campaign total 59), each verified three ways
+with its own evidence JSON.
+
+### Engine upgrade mid-leg: v3-128 (bit-sieve)
+
+The sweep was paused because it was worth pausing: profiling showed
+stage 1a was 83% of GPU time, and restructuring it as a bit-sieve —
+plus compaction rounds through stage 1b — made the phase-2 engine
+**~14x faster sustained** (SCORE128 362,319,437 → 6,341,803,579; see
+BENCHMARKS.md, OPTIMIZATION_LOG.md).
+
+What matters for the results in this file is that **nothing about the
+search changed except its speed**:
+
+- The survivor stream is **bit-identical** to the v2-128 engine that
+  swept the first 3.6×10²⁰. Gate **G13** pins v3 against v2 across 280
+  windows and 59,992 survivors — pattern-word, per-thread and launch
+  boundaries, unaligned and sub-period windows, four heights up to the
+  10²⁴ ceiling, and the split-equals-whole resume property. Gate **G14**
+  pins the new pattern tables directly against big-integer divisibility
+  of the actual values, with no engine in the loop. Both frozen
+  benchmark fingerprints reproduce exactly.
+- The mathematical configuration — n = 17 filter, 29# wheel, Q1 = 1024,
+  Q2 = 65536, ceiling 10²⁴ — is **unchanged**, so the checkpoint's
+  `next_k` stays meaningful, the resume re-covers nothing, and the
+  near-miss/census counts are not double-counted. The exhaustive
+  coverage claim from 0 to 3.6004×10²⁰ carries over untouched.
+- Because the engine version changed, the checkpoint's canary flag was
+  cleared: before any production segment runs, the launcher must
+  re-prove through the *new* engine that it rediscovers a(18) and the
+  Waldvogel–Leikauf run-21 value in flight. A new engine does not
+  inherit the old one's canary clearance.
+
+### Standing result and remaining plan
+
+**a(19) and a(20) both exceed 3.6004×10²⁰.** Conditional on the empty
+sweep so far (E = 1.09 spent for run ≥ 19), the model puts a(19) at
+median 8.34×10²⁰, quartiles 5.38×10²⁰ / 1.45×10²¹.
+
+The leg's default depth is raised from 1×10²¹ to **5×10²¹**. At the old
+rate 1×10²¹ was ~14 days and a sensible stopping point; at the v3 rate
+it is under a day, and stopping there would abandon the hunt at 59%
+odds. 5×10²¹ carries the conditional odds to ~98% for ~6.8 days of
+sweeping — the a(19) median now sits about **17 hours** away.
+
+| depth | P(a(19) found by then) |
+|-------|------------------------|
+| 5.38×10²⁰ (Q1) | 25% |
+| 8.34×10²⁰ (median) | 50% |
+| 1×10²¹ | 59% |
+| 1.45×10²¹ (Q3) | 75% |
+| 2×10²¹ | 85% |
+| 5×10²¹ (leg cap) | 98% |
+
+Any run > 18 halts the hunt under the stop-on-discovery convention. This
 section will be rewritten as results arrive.

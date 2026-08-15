@@ -12,6 +12,14 @@
 # FINGERPRINT frozen from the gated v2 engine (v3 must match bit-for-bit).
 # Phase-2 shape (2026-08-06): same span via the 128 path at [2.3e20,
 # +5e14) -- SCORE128, own fingerprint, frozen from the gated 128 engine.
+#
+# Shape amendment (2026-08-15, v3-128): the 128 benchmark takes the engine's
+# default launch size, which the bit-sieve engine raised from 8192 to 131072
+# periods -- so the window (77,285 periods) is now covered by ONE launch and
+# SCORE128 no longer includes multi-launch overhead.  The WORK is unchanged:
+# both fingerprints below still reproduce bit-for-bit, which is what makes
+# the score un-gameable.  Cross-generation SCORE128 comparisons therefore
+# quote the paired ratio measured in one battery, per BENCHMARKS.md.
 
 import argparse
 import sys

@@ -111,3 +111,122 @@ Phase-2 TODO (optimize under SCORE128, gates green):
 - Cold-kernel tail: sort/partition the queue by kill depth or stage
   the s1/s2 tables through shared memory; the cold phase still costs
   ~2.5 ns per queued candidate.
+
+## Phase 2 v3-128 (2026-08-15): the bit-sieve, and a stale cost model
+
+Baseline for this session, one battery, ambient desktop load:
+SCORE 352,982,740 / SCORE128 422,725,375. Final, full battery green:
+SCORE 305,864,144 / **SCORE128 6,341,803,579**. The controlled
+decomposition (v2 and v3 measured back to back at the same 8192-period
+launch shape) is **10.29x from the engine**, 1.395x more from the launch
+size in steady state, so **~14x sustained**; the frozen window shows
+18.31x only because it collapses to one launch. See BENCHMARKS.md.
+
+### The cost model was wrong, and cheap to check
+
+The note above -- "the cold phase costs ~2.5 ns per queued candidate" --
+is arithmetically impossible against production wall-clock: 5.1e7 queued
+candidates per launch x 2.5 ns = 127 ms, but a whole 8192-period launch
+took 96 ms. The 80%-cold finding it descends from describes the
+**one-kernel v1-128**, which is exactly what the v2 compaction split
+fixed; nobody re-measured the split afterwards. CUDA events around the
+two kernels on the SCORE128 window settled it in two minutes:
+
+| phase | ms | share |
+|-------|----|-------|
+| hot stage-1a (`ladder_stage1_128`) | 1103.6 | **83.4%** |
+| host sync gap between the kernels | 2.7 | 0.2% |
+| cold stage-1b + stage-2 (`ladder_cold_128`) | 217.3 | 16.4% |
+
+So the hot kernel, not the cold one, was the target -- and an
+instruction count explains it. Per warp-period (32 candidates, one
+period) the measured budget is ~241 warp-instruction slots, of which 48
+go to stepping all MP_NINC residues *unconditionally* even though the
+average candidate dies at test 2.2, and the early-exit mask chain costs
+9.20 warp-iterations (mean 2.20 per lane: a 4.2x warp-divergence tax),
+each carrying a 32-way scattered L1 gather.
+
+### The ledger
+
+| # | change | vs prev | verdict |
+|---|--------|---------|---------|
+| 6 | **v3-128 bit-sieve stage 1a**: per prime, OR one precomputed W-bit kill pattern per W periods and read survivors out of the complement with `__ffsll`, instead of stepping residues and testing candidates one at a time | SCORE128 422.7M -> 1,889.8M = **4.47x**; hot kernel 1103.6 -> 45.7 ms (**24x**), flipping the split to 16/83 hot/cold | KEPT, gated (G13) |
+| 7 | launch size, steady-state A/B over [2.3e20, +2e15) (38 -> 3 launches): ppl 8192/16384/32768/65536/131072 | 1.000 / 1.162 / 1.280 / 1.353 / **1.395** | KEPT: PPL=131072 |
+| 8 | **iterated compaction over stage 1b**: rounds of R primes, survivors forwarded to a second queue, counts kept on the device. ROUND 0/4/8/16/32 | 1.000 / 1.568 / **1.684** / 1.638 / 1.531 | KEPT: ROUND=8 |
+| 9 | NINC re-sweep after (8): 16/20/24/28 | 1.000 / 1.126 / **1.143** / 1.095; 24 beats 28 by 1.058x at production ppl | KEPT: NINC 28 -> 24 |
+| 10 | pattern width W=128 / W=256 (multi-word accumulator, one 16 B `ulonglong2` gather instead of two 8 B) | **0.252x / 0.314x** | REJECTED |
+| 11 | warp-aggregated queue atomic | diagnostic first: replacing the push with a register counter made the sieve 94.95 -> 85.20 ms, so the whole push is **10%** of the sieve. Not worth hand-rolled ballot/popc aggregation | REJECTED (now priced) |
+| 12 | removing the two per-launch blocking `.get()` syncs | measured at 0.2% of GPU time | REJECTED (now priced) |
+
+Interior optima and how they moved: an extra sieve prime costs one OR
+plus one stepped residue per W periods and multiplies the cold queue by
+(q-17)/q, so NINC has an interior optimum -- and it is not stable across
+the other changes. Against the single-shot cold path NINC=28 won
+(16/24/26/28/32 -> 1.000/1.363/1.387/1.434/1.349); the compaction rounds
+then made that path ~3.5x cheaper and the optimum fell to 24. Anything
+tuned before (8) had to be re-swept after it.
+
+Why W=128 lost, since the prediction was the opposite: the multi-word
+accumulator turns `acc` into an array whose extraction loop carries
+data-dependent control flow, and the win from halving the gather count
+is not worth whatever that costs (register pressure or a local-memory
+spill). Recorded rather than explained -- the point of this ledger.
+
+Why stage 2 is NOT split into its own compacted kernel, despite being
+24% of the cold phase and 109 tests deep per entering lane: it is
+entered by 5.69e-3 of the queue, so at most one lane per warp is ever in
+it. Per-warp cost is 19.3 iterations against 32 x 0.62 = 19.8 for the
+same work perfectly packed -- there is no divergence waste to recover.
+Stage 1b is the opposite case (mean 13.85 tests per lane, warp-max 80.4,
+5.8x waste), which is why (8) pays there and only there.
+
+### Final split (NINC=24, ROUND=8, W=64, PPL=131072)
+
+| phase | share |
+|-------|-------|
+| bit-sieve stage 1a | 64.3% |
+| stage-1b compaction rounds | 17.3% |
+| cold kernel (stage 2) | 18.4% |
+
+The sieve is dominant again and is ~90% pattern work (per #11), so the
+next real lever is generating fewer candidates, i.e. a wider wheel.
+
+### Not attempted: the 31# wheel (priced, ~1.45x)
+
+Folding 31 into the wheel generates 2.07x fewer candidates for a
+mathematically identical survivor set (the union of tested primes is
+unchanged, so the frozen fingerprint still applies), which would cut the
+64% sieve share roughly in half. It is not implemented because the
+offset table is n-dependent and explodes for the small n the gate
+battery runs on: n=17 gives a fine 2.99e7 offsets (240 MB), but n=5
+gives 5.4e8 (4.3 GB). Production would then run a wheel that G6/G11/G13
+cannot exercise at their working n, which trades a factor of 1.45 for a
+hole in the parity gates. It also needs a checkpoint migration, since
+`next_k` is denominated in M. Revisit only with a per-n wheel budget and
+gates that run 31# at n=17.
+
+### Two robustness bugs the gates caught (both mine, both in tuning paths)
+
+- Changing the class attribute `T` after construction desynced the
+  compiled kernel (T is a literal) from the launch geometry (`gy`). The
+  frozen fingerprint failed instantly: count 43 instead of 178. The
+  engine now snapshots NINC/T/PPL/ROUND onto the instance in `__init__`.
+- The second ping-pong queue was allocated only when the *mutable*
+  round schedule was non-empty, so sizing the queues while the schedule
+  happened to be empty left a later round writing to a null pointer
+  (`cudaErrorIllegalAddress`). Allocation is now keyed off the ROUND
+  snapshot, with an explicit guard on the mismatch.
+
+Both were introduced by A/B harness scaffolding rather than by the
+kernels, which is its own lesson: the tuning knobs need the same
+discipline as the arithmetic.
+
+### Note on measurement method
+
+One sequential (non-interleaved) NINC sweep reported 3.57e15 p/s at
+NINC=26 against 2.72e15 at NINC=27 -- a 31% "cliff" that does not exist.
+Interleaved rounds put 26 at 1.387x and 28 at 1.434x. Ambient desktop
+GPU load moves the absolute rate by up to ~30% minute to minute (see
+BENCHMARKS.md), so every number in the ledger above is a per-candidate
+median over interleaved rounds, and every measurement re-checks the
+frozen fingerprint before it counts as a data point.

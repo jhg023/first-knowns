@@ -58,11 +58,21 @@ EXPECTED_KNOWN = {41: 40}                      # low-range positive control
 CAMPAIGN_FOUND = {17: 348_284_517_256_411_907,
                   18: 8_461_068_614_861_832_371}
 FRONTIER_RUN = max(CAMPAIGN_FOUND)             # discovery = run > FRONTIER_RUN
-P2_DEFAULT_TO = 1000 * 10**18                  # 1e21: leg 2 of the a(19) hunt.
+P2_DEFAULT_TO = 5000 * 10**18                  # 5e21: leg 2 of the a(19) hunt.
                                                # Leg 1 (to 3.2e20) came back
-                                               # empty with E=1.02 spent; this
-                                               # leg crosses the conditional
-                                               # median 7.8e20 (P(find) ~ 62%)
+                                               # empty with E=1.02 spent.  The
+                                               # cap was 1e21 (the conditional
+                                               # median, ~62%) when a leg cost
+                                               # ~14 days; the v3-128 engine
+                                               # made the sweep ~14x faster, so
+                                               # 1e21 is now under a day and
+                                               # would stop the hunt at 59%
+                                               # odds.  5e21 carries the
+                                               # conditional odds to ~98% and
+                                               # still costs only ~6 days.
+                                               # --to overrides; stop-on-
+                                               # discovery means the cap only
+                                               # matters if nothing is found.
 
 
 class CorruptEngineError(RuntimeError):

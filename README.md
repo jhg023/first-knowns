@@ -22,7 +22,7 @@ survive before it is recorded.
 
 | project | problem | status |
 |---------|---------|--------|
-| [euler-prime-runs](euler-prime-runs/) | [A164926](https://oeis.org/A164926): the least prime p whose Euler-form polynomial x²+x+p is prime for exactly n consecutive x — extending the direct lineage of Euler's famous x²+x+41 | **ACTIVE** — a(17) = 348,284,517,256,411,907 and a(18) = 8,461,068,614,861,832,371 found & verified (first new terms since 2009); a(21) = 234,505,015,943,235,329,417 settled by exhaustive sweep past the known bound; phase 2 hunting a(19), contiguous to 3.2×10²⁰ with no run ≥ 19 (leg 2 running to 10²¹) |
+| [euler-prime-runs](euler-prime-runs/) | [A164926](https://oeis.org/A164926): the least prime p whose Euler-form polynomial x²+x+p is prime for exactly n consecutive x — extending the direct lineage of Euler's famous x²+x+41 | **ACTIVE** — a(17) = 348,284,517,256,411,907 and a(18) = 8,461,068,614,861,832,371 found & verified (first new terms since 2009); a(21) = 234,505,015,943,235,329,417 settled by exhaustive sweep past the known bound; phase 2 hunting a(19), contiguous to 3.6004×10²⁰ with no run ≥ 19 (leg 2 running to 5×10²¹, ~98% of the conditional a(19) distribution) |
 
 Project documentation follows a fixed template (see
 [CONVENTIONS.md](CONVENTIONS.md) § Documentation template): every

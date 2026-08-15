@@ -20,8 +20,12 @@ a smaller run ≥ 19. Details in [RESULTS.md](RESULTS.md).
 **Status: ACTIVE** — phase 1 (the full 64-bit-safe range) is complete;
 phase 2, a 128-bit engine targeting a(19) beyond the 1.8×10¹⁹ ceiling,
 is gated and hunting (`--engine gpu128`). The sweep is contiguous from
-0 to ≈ 2.9×10²⁰, just past the conditional median for a(19)
-(≈ 2.6×10²⁰; third quartile 6.8×10²⁰).
+0 to **3.6004×10²⁰**, so a(19) and a(20) both exceed that. Conditional
+on the empty sweep so far, the model puts a(19) at median 8.34×10²⁰
+(quartiles 5.38×10²⁰ / 1.45×10²¹); the current leg runs to 5×10²¹, ~98%
+of the conditional distribution. The phase-2 engine was rebuilt
+2026-08-15 (v3-128, bit-sieve stage 1a) and is **~14x** faster with a
+bit-identical survivor stream — gates G13/G14, unchanged fingerprints.
 
 ## The problem
 
@@ -76,8 +80,7 @@ the way to the enforced ceiling 10²⁴ (a factor >3 under the Miller–Rabin
 validity bound). The incremental stage-1 residue stepping is unchanged —
 it never depended on p's magnitude — and the 128-bit path splits hot and
 cold work into two kernels (stage-1a compaction queue + one-candidate-
-per-thread cold pass), making it **1.13x faster than the u64 engine
-itself** (SCORE128 vs SCORE, same battery). Exact integers exist only on the
+per-thread cold pass). Exact integers exist only on the
 host as Python ints. The proven u64 engines are untouched; the 128 path
 is pinned against them bit-for-bit on the fingerprint window (G9, G11),
 against direct big-integer trial division on mini-windows at 2.35×10²⁰
@@ -86,10 +89,53 @@ Waldvogel–Leikauf run-21 value 234,505,015,943,235,329,417 — the latter
 rediscovered *above* the 64-bit cap (G10, G12, and the launcher's
 phase-2 canary prelude).
 
-Throughput: **5.1×10¹⁴ integers of p-line per second** end-to-end on an
-RTX 4090 (SCORE 512,819,184; see BENCHMARKS.md), height-flat from 10¹⁶
-to 1.7×10¹⁹. The full 64-bit-safe range (to 1.8×10¹⁹) took ~9.5 hours
-in production.
+**Phase 2 v3: the bit-sieve.** Everything above tests *one candidate at
+a time*, which is what made stage 1a 83% of GPU time: per period it
+stepped all 16 tracked residues whether or not they were needed (the
+average candidate dies at test 2.2) and then walked a chain of scattered
+bitmask lookups whose early exit only helps a lane, not its warp — the
+warp runs until its **last** lane dies, a 4.2x tax. The v3 engine
+inverts the loop. For prime q, if a block of 64 consecutive periods
+starts at residue r, then period offset u is killed by q exactly when
+`(r + u·(29# mod q)) mod q` is a forbidden residue of q — a function of
+(q, r) alone. So the host precomputes `pat[q][r]`, a 64-bit kill
+pattern, and the kernel ORs **one word per prime per 64 periods** and
+reads the survivors straight out of the complement with `__ffsll`. Per
+period that is 64x less residue stepping, ~29x fewer gathers, and no
+divergence at all, because the inner loop no longer branches per
+candidate. The same idea then fixes the other end: stage 1b's early-exit
+chain has mean depth 13.9 but warp-max 80.4, so its primes are processed
+in **compaction rounds** of 8 — survivors forwarded to a second queue,
+counts kept on the device — and every round restarts with all 32 lanes
+alive. Stage 2 is deliberately left alone: only 5.7×10⁻³ of the queue
+reaches it, so at most one lane per warp is ever inside and there is no
+divergence to recover.
+
+Net effect **~14x sustained** (10.29x from the engine at an unchanged
+launch shape, 1.395x more from raising the launch size; the frozen
+benchmark window shows 18.3x because it collapses to a single launch —
+see BENCHMARKS.md, which reports both). The survivor stream is
+bit-identical to the engine that swept the first 3.6×10²⁰: gate **G13**
+pins v3 against v2
+across 280 windows and 59,992 survivors, exercising the pattern-word,
+per-thread and launch boundaries, unaligned and sub-period windows, four
+heights up to the 10²⁴ ceiling, and the split-equals-whole resume
+property. Both frozen benchmark fingerprints still reproduce exactly,
+which is the real claim: the engine got faster without the work
+changing. Tuning constants are all measured, and they interact — the
+sieve depth optimum moved from 28 primes to 24 once the compaction
+rounds made the cold path cheaper, and a wider 128-bit pattern word
+*lost* 4x. See OPTIMIZATION_LOG.md, including what was rejected.
+
+Throughput on an RTX 4090 (see BENCHMARKS.md). The u64 engine runs
+**5.1×10¹⁴ integers of p-line per second** end-to-end (SCORE
+512,819,184), height-flat from 10¹⁶ to 1.7×10¹⁹; the full 64-bit-safe
+range (to 1.8×10¹⁹) took ~9.5 hours in production. The phase-2 v3-128
+engine runs **6.3×10¹⁵ p/s** on its frozen window (SCORE128
+6,341,803,579, captured in the same battery as u64 SCORE 305,864,144 —
+20.7x), for a projected **7.9×10¹⁵ p/s sustained** in production. At
+that rate re-sweeping everything from 0 to 5×10²¹ costs about a week,
+and the engine's enforced 10²⁴ ceiling is ~4 years of single-GPU wall.
 
 ## The odds model
 
@@ -104,10 +150,19 @@ exactly at the predicted E = 1 depth (found 8.46×10¹⁸, predicted
 (within Poisson scatter). The model is two-for-two on out-of-sample
 terms.
 
-Predictions for phase 2 (conditional on the empty 64-bit tail for
-run ≥ 19, E = 0.20 spent): a(19) median at 2.6×10²⁰, quartiles
-8.9×10¹⁹ / 6.8×10²⁰, 48% below the Waldvogel–Leikauf run-21 value at
-2.35×10²⁰; a(20) median at ≈ 6×10²¹.
+Predictions for phase 2, restated as the sweep consumes them. Stated
+before leg 1 (conditional on the empty 64-bit tail, E = 0.20 spent):
+a(19) median 2.6×10²⁰, quartiles 8.9×10¹⁹ / 6.8×10²⁰, and 48% odds of
+landing below the Waldvogel–Leikauf run-21 value at 2.35×10²⁰. Leg 1
+then came back empty to 3.2×10²⁰, which is a 36% outcome on its own
+terms (E = 1.02 spent) and is also what settled a(21).
+
+Conditional on the sweep now being empty to 3.6004×10²⁰ (E = 1.09 spent
+for run ≥ 19): **a(19) median 8.34×10²⁰, quartiles 5.38×10²⁰ /
+1.45×10²¹**, 98% by the current leg cap of 5×10²¹. a(20) is far deeper —
+median ≈ 8×10²¹ conditionally, unconditional E = 1 at 1.1×10²² — so the
+two open terms are not comparable targets, and both are already known to
+exceed a(21).
 
 ## Running it
 
@@ -116,8 +171,9 @@ python launch.py --selftest    # full gate battery + drills (~15 min)
 python launch.py               # phase-1 hunt (u64 range; complete)
 python launch.py --engine gpu128 --stop-on-discovery
                                # PHASE 2: the a(19) hunt beyond the u64
-                               # cap (leg 1 to 3.2e20 complete; default
-                               # depth now 1e21; halts after a
+                               # cap (contiguous to 3.6004e20; default
+                               # depth 5e21, ~98% of the conditional
+                               # a(19) distribution; halts after a
                                # frontier-extending find)
 python launch.py --status      # scoreboard (both phases)
 python score.py                # gates x fingerprinted benchmarks (u64 + 128)
