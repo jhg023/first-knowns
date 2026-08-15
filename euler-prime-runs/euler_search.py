@@ -41,28 +41,67 @@ from euler_reference import A21_UPPER, KNOWN, run_length
 
 WHEEL_PRIMES = [2, 3, 5, 7, 11, 13, 17, 19, 23]
 WHEEL_PRIMES_29 = WHEEL_PRIMES + [29]
+WHEEL_PRIMES_31 = WHEEL_PRIMES_29 + [31]
 M_WHEEL = 223092870                     # product of WHEEL_PRIMES
 M_WHEEL_29 = 6469693230                 # product incl. 29
+M_WHEEL_31 = 200560490130               # product incl. 31
 Q1 = 1024                               # stage-1 prime bound
 Q2 = 65536                              # stage-2 prime bound
 P_FLOOR = 100_000                       # engine floor (> Q2 guard is at 65536;
                                         # floor at 1e5 keeps a safety margin)
+
+# Offset-table budget for automatic wheel selection.  Folding one more prime q
+# into the wheel generates a factor ~q/(q-r_q) fewer candidates for a
+# MATHEMATICALLY IDENTICAL survivor set -- the wheel only decides which primes
+# are tested by generation rather than by sieving, so the union of tested
+# primes, and therefore the result, is unchanged.  What stops it is memory:
+# the table is n-dependent and grows fast as n shrinks (at n=17 the 31# table
+# is 2.99e7 offsets / 240 MB; at n=5 it is 5.4e8 / 4.3 GB).  So pick the
+# largest wheel that fits and let small n fall back, rather than capping
+# everything at the smallest common denominator.
+WHEEL_BUDGET_OFFS = 50_000_000          # ~400 MB as u64
 
 def forbidden(q, n):
     """Residues r mod q killed: q | x^2+x+p for some x < n when p = r."""
     return {(-(x * x + x)) % q for x in range(n)}
 
 
-def build_wheel(n, wheel_primes=None):
-    """Admissible offsets mod prod(wheel_primes) via CRT lifting (numpy)."""
+def wheel_offset_count(n, wheel_primes):
+    """Exact admissible-offset count, without building the table."""
+    cnt = 1
+    for q in wheel_primes:
+        cnt *= q - len(forbidden(q, n))
+    return cnt
+
+
+def best_wheel(n, budget=WHEEL_BUDGET_OFFS):
+    """The largest wheel whose offset table fits `budget` entries."""
+    for wp in (WHEEL_PRIMES_31, WHEEL_PRIMES_29, WHEEL_PRIMES):
+        if wheel_offset_count(n, wp) <= budget:
+            return wp
+    return WHEEL_PRIMES
+
+
+def build_wheel(n, wheel_primes=None, chunk_bytes=1 << 26):
+    """Admissible offsets mod prod(wheel_primes) via CRT lifting (numpy).
+
+    Lifting is chunked over the new prime's residue classes so peak memory
+    stays near chunk_bytes instead of q * len(offs) * 8; the result is the
+    same set, built in pieces, and is sorted at the end either way.
+    """
     wheel_primes = wheel_primes or WHEEL_PRIMES
     offs = np.array([0], dtype=np.uint64)
     m = 1
     for q in wheel_primes:
-        F = forbidden(q, n)
-        lift = (offs[None, :] + (np.arange(q, dtype=np.uint64) * m)[:, None]).ravel()
-        keep = ~np.isin((lift % q).astype(np.int64), np.fromiter(F, dtype=np.int64))
-        offs = lift[keep]
+        F = np.fromiter(sorted(forbidden(q, n)), dtype=np.int64)
+        per = max(1, int(chunk_bytes // max(offs.nbytes, 1)))
+        parts = []
+        for j0 in range(0, q, per):
+            j = np.arange(j0, min(j0 + per, q), dtype=np.uint64)
+            lift = (offs[None, :] + (j * np.uint64(m))[:, None]).ravel()
+            keep = ~np.isin((lift % np.uint64(q)).astype(np.int64), F)
+            parts.append(lift[keep])
+        offs = parts[0] if len(parts) == 1 else np.concatenate(parts)
         m *= q
     offs.sort()
     return offs, m

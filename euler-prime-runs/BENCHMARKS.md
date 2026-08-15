@@ -15,13 +15,33 @@ standing proof that the current engine still agrees with it there. Ledger rows d
 on the low shape and are kept as history; do not read them as the same
 quantity as current SCORE values.
 
-A useful side effect: the two shapes are the same span swept by the same
-engine four orders of magnitude apart, so SCORE vs SCORE128 is now a
-**height-flatness measurement**.  Two captures: 6.716e15 vs 6.715e15
-(0.01% apart) and 6.331e15 vs 6.545e15 (3.4% apart).  The honest reading is
-flat to within a few percent, with the spread being ambient load rather than
-height -- a single capture agreeing to 0.01% was luck, not precision, and
-quoting it alone would have overstated the result.
+A side effect worth *less* than it first appeared: the two shapes are the
+same span swept by the same engine four orders of magnitude apart, so SCORE
+vs SCORE128 looks like a **height-flatness measurement**.  It is, but only
+to the precision this machine can resolve, which is poor.  Captures of the
+same code on the same shapes:
+
+| SCORE (1e16) | SCORE128 (2.3e20) | gap |
+|--------------|-------------------|-----|
+| 6.716e15 | 6.715e15 | 0.01% |
+| 6.331e15 | 6.545e15 | 3.4% |
+| 1.044e16 | 1.062e16 | 1.7% |
+| 7.674e15 | 1.252e16 | 63% (harness artifact, fixed -- see below) |
+| 7.694e15 | 8.253e15 | 7.3% |
+
+Run-to-run variance on ONE configuration spans 6.5e15 to 1.25e16, which is
+larger than any gap in the table, so **these numbers do not resolve a height
+effect at all** -- they are consistent with flat and could not detect a 20%
+tilt.  The earlier claim of "flat to 0.01%" was a single lucky capture quoted
+as precision.  The u64 engine's height-flatness (0.8% across three heights)
+was established differently, by interleaved A/B on one engine.
+
+The 63% outlier was a real defect in the harness, not load: the warmup swept
+a token 1e12 window, so the engine's multi-GB queue allocation landed inside
+the *timed* region of whichever benchmark ran first, while the second found
+the blocks already pooled.  The warmup now covers the measured window.  The
+work and both fingerprints are unchanged; only an allocation moved out of the
+stopwatch.
 
 | date | engine | SCORE | notes |
 |------|--------|-------|-------|
@@ -31,6 +51,7 @@ quoting it alone would have overstated the result.
 | 2026-08-06 | v4 (re-frozen, idle GPU) | **512,819,184** | same engine, quiet-GPU capture; matches the 9-hour production average (~5.0e14 p/s) and interleaved harness runs (5.12e14) |
 | 2026-08-06 | v1-128 | 248,019,330 | phase-2 128-bit path, one-kernel design, window [2.3e20, +5e14), fingerprint 178 survivors / checksum 133625321009290; captured under desktop load (u64 SCORE read 323,531,367 in the same battery). Paired A/B: 0.77x the u64 kernel |
 | 2026-08-06 | v2-128 (frozen) | **362,319,437** | two-phase compaction (stage-1a hot kernel + queued cold kernel; see OPTIMIZATION_LOG). Same fingerprint, bit-identical stream. Same-battery pair: SCORE128 362,319,437 vs u64 SCORE 323,394,817 -- **the 128 path is now 1.13x the proven u64 engine** (paired A/B median 1.135, min 1.111 over 12 rounds) |
+| 2026-08-15 | v4: 31# wheel, sieve depth 28, round size 16 | SCORE **7,694,248,260** / SCORE128 **8,252,670,019** | folding 31 into the wheel: 2.07x fewer candidates for an identical survivor set, both frozen fingerprints reproduced, 12 gates green. **The load-bearing number is the paired ratio 1.374x, not any comparison of these absolutes against the rows below** -- run-to-run variance here is ~2x on identical code (see the table above), so cross-row absolute arithmetic is exactly what Rule 3 in ../OPTIMIZATION.md warns against. Composition: the wheel alone was 1.121x, sieve depth re-swept 24 -> 28 took it to 1.212x, and the round size then had to move 8 -> 16 for a further 1.134x |
 | 2026-08-15 | v3-128, single-engine tree | SCORE **6,330,661,788** / SCORE128 **6,544,948,396** | retired engines deleted; both frozen shapes now measured with the one production engine, both fingerprints reproduced, 12 gates green. Engine mathematics identical to the row below -- this row differs only in what the tree contains and which engine the SCORE column refers to |
 | 2026-08-15 | v3-128 (frozen) | **6,341,803,579** | bit-sieve stage 1a + stage-1b compaction rounds; NINC=24, ROUND=8, W=64, PPL=131072. Same fingerprint (178 / 133625321009290), bit-identical stream (G13, G14). Full battery green; same-battery u64 SCORE 305,864,144, so the 128 path is now **20.7x the u64 engine**. Shape note: SCORE128 takes the engine's default launch size, raised 8192 -> 131072, so the 77,285-period window is now ONE launch (see score.py header) |
 
@@ -60,6 +81,7 @@ OPTIMIZATION_LOG.md). Ratios, each from one battery:
 
 | change | ratio | note |
 |--------|-------|------|
+| 31# wheel + sieve depth 24 -> 28 + round size 8 -> 16 | **1.374x** | 2.07x fewer candidates for an identical survivor set. Only 1.121x on the wheel alone: folding 31 into the wheel takes it OUT of the sieve, costing the sieve its strongest killer (31 kills 52% of candidates, its replacement 149 only 11%), so the queue per unit p-line grew 1.41x until the depth came back up. The round size then moved because the wheel shifted work into stage 1b, 17% -> 35% of GPU time |
 | bit-sieve stage 1a replaces per-candidate testing | **4.47x** | hot kernel 1103.6 -> 45.7 ms; split flips to 16/83 hot/cold |
 | launch size 8192 -> 131072 periods | **1.395x** | steady-state, 38 -> 3 launches, identical streams |
 | stage-1b compaction rounds, R=8 | **1.684x** | R = 0/4/8/16/32 -> 1.000/1.568/1.684/1.638/1.531 |
@@ -107,18 +129,22 @@ reported 76.0-79.2e14 p/s across eight steady-state heartbeats, median
 and 98% of the 7.9e15 predicted from the paired benchmark ratio. The
 sustained decomposition above therefore holds in production.
 
-| target | P(a(19) by then) | v3 | was (v2) |
-|--------|------------------|----|----------|
-| 5.40e20 (a19 Q1) | 25% | 6 h | 3.7 days |
-| 8.37e20 (a19 median) | 50% | **17 h** | 10.0 days |
-| 1e21 | 59% | 0.95 days | 13.5 days |
-| 1.46e21 (a19 Q3) | 75% | 1.6 days | 23.0 days |
-| 2e21 | 85% | 2.4 days | 34.5 days |
-| 5e21 (leg cap) | 98% | **6.9 days** | 97.6 days |
+v4 applies the measured 1.374x ratio to that 7.76e15, projecting
+**1.07e16 p/s**; to be replaced by a realized average once the leg runs.
 
-For scale: re-sweeping the entire range from 0 to 5e21 now costs ~7.5
-days, and the engine's enforced 1e24 ceiling is ~4 years of single-GPU
-wall (it was ~58 years).
+| target | P(a(19) by then) | v4 (proj.) | v3 (measured) | leg-1 engine |
+|--------|------------------|-----------|---------------|--------------|
+| 5.40e20 (a19 Q1) | 25% | 4.6 h | 6 h | 3.7 days |
+| 8.37e20 (a19 median) | 50% | **12.4 h** | 17 h | 10.0 days |
+| 1e21 | 59% | 0.69 days | 0.95 days | 13.5 days |
+| 1.46e21 (a19 Q3) | 75% | 1.19 days | 1.6 days | 23.0 days |
+| 2e21 | 85% | 1.78 days | 2.4 days | 34.5 days |
+| 5e21 (leg cap) | 98% | **5.0 days** | 6.9 days | 97.6 days |
+
+Cumulative **19.4x** over the engine that swept leg 1 (5.5e14 -> 1.07e16).
+For scale: re-sweeping the entire range from 0 to 5e21 now costs ~5.4
+days, and the enforced 1e24 ceiling is ~3.0 years of single-GPU wall (it
+was ~58 years).
 
 Note (2026-08-06): after the public-repo refactor (shared code moved to
 ../huntlib), the full gate battery re-ran green and the benchmark

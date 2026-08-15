@@ -22,10 +22,10 @@ a smaller run ≥ 19. Details in [RESULTS.md](RESULTS.md).
 on the empty sweep so far, the model puts a(19) at median 8.37×10²⁰
 (quartiles 5.40×10²⁰ / 1.46×10²¹); the current leg runs to 5×10²¹, ~98%
 of the conditional distribution. The phase-2 engine was rebuilt
-2026-08-15 (v3-128, bit-sieve stage 1a) and is **14.1x** faster in
-production with a bit-identical survivor stream — proven against the
-engine it replaced before that engine was retired, and still pinned by
-G6/G13/G14 and the unchanged fingerprints. That puts the a(19) median ~17 hours out.
+2026-08-15 (bit-sieve stage 1a, then a 31# wheel) and is **~19x** faster
+with a bit-identical survivor stream — proven against the engine it
+replaced before that engine was retired, and still pinned by G6/G13/G14
+and the unchanged fingerprints. That puts the a(19) median ~12 hours out.
 
 ## The problem
 
@@ -56,20 +56,26 @@ residues of p are −(x²+x) mod q — about min(17, (q+1)/2) classes. One
 engine covers the whole range:
 
 **0. Representation.** p is never held in a machine word. Every candidate
-is the pair (k, off) with p = k·29# + off, so every sieve test reduces to
-`((k mod q)·(29# mod q) + off mod q) mod q`, which stays 64-bit-safe to
+is the pair (k, off) with p = k·31# + off, so every sieve test reduces to
+`((k mod q)·(31# mod q) + off mod q) mod q`, which stays 64-bit-safe to
 the enforced ceiling 10²⁴ — a factor >3 under the Miller–Rabin validity
 bound. There is no 2⁶⁴ boundary in the search: the same code sweeps 10⁵
 and 10²³, and exact integers exist only on the host as Python ints.
 
-**1. Wheel.** p is generated only in residues mod 29# = 6,469,693,230
-that survive all wheel primes 2..29 — 3.1×10⁻⁴ of the line.
+**1. Wheel.** p is generated only in residues mod 31# = 200,560,490,130
+that survive all wheel primes 2..31 — 1.5×10⁻⁴ of the line. The wheel is
+chosen per n as the largest whose offset table fits a memory budget
+(2.99×10⁷ offsets at n = 17; the same table would be 5.4×10⁸ at n = 5, so
+the small-n gate cases fall back to 29#). Folding a prime into the wheel
+generates ~2x fewer candidates for a *mathematically identical* survivor
+set — the wheel only decides which primes are tested by generation rather
+than by sieving — which is why both frozen fingerprints still reproduce.
 
 **2. Stage 1a, the bit-sieve.** For prime q, if a block of 64 consecutive
 wheel periods starts at residue r, then period offset u is killed by q
-exactly when `(r + u·(29# mod q)) mod q` is forbidden — a function of
+exactly when `(r + u·(31# mod q)) mod q` is forbidden — a function of
 (q, r) alone. So the host precomputes `pat[q][r]`, a 64-bit kill pattern,
-and the kernel ORs **one word per prime per 64 periods** for the first 24
+and the kernel ORs **one word per prime per 64 periods** for the first 28
 stage-1 primes, then reads survivors straight out of the complement with
 `__ffsll`. Nothing is tested per candidate, so there is no per-candidate
 state to step and no early-exit branch to diverge on — which is the point:
@@ -78,7 +84,7 @@ instructions maintaining state for primes the average candidate never
 reaches, and a warp runs until its *last* lane dies.
 
 **3. Stage 1b, compaction rounds.** The remaining stage-1 primes (to
-1024) are tested 8 at a time, with survivors forwarded to a second queue
+1024) are tested 16 at a time, with survivors forwarded to a second queue
 between rounds and counts kept on the device. Its exit depth averages
 13.9 but maxes at 80.4 across a 32-lane warp, so restarting each round
 with every lane alive recovers most of that 5.8x.
@@ -106,25 +112,30 @@ and the pipeline rediscovers a(13), a(18) and the Waldvogel–Leikauf
 run-21 value end-to-end (G8, G12, and the launcher's canary prelude).
 
 This shape was reached by measurement, not design intuition, and the
-constants interact: the sieve depth optimum moved from 28 primes to 24
-once the compaction rounds made stage 1b cheaper, and a wider 128-bit
-pattern word *lost* 4x. Net **~14x sustained** over the previous engine
-(10.29x from the restructure at an unchanged launch shape, 1.395x more
-from raising the launch size), with both frozen fingerprints reproducing
-bit-for-bit — the engine got faster without the work changing. See
+constants interact: four of them **moved during one session** — the sieve
+depth went 28 → 24 once compaction rounds made stage 1b cheaper, then back
+to 28 once the wider wheel shifted the sieve's prime range upward, and the
+round size went 8 → 16 once that same wheel moved a third of the runtime
+into stage 1b — while a wider 128-bit pattern word *lost* 4x. Net **~19x**
+over the previous engine (10.29x from the restructure at an unchanged
+launch shape, ×1.395 from the launch size, ×1.374 from the wheel together
+with the two constants it invalidated), with both frozen fingerprints
+reproducing bit-for-bit — the engine got faster without the work
+changing. See
 [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) for every attempt including
 the rejects, and [../OPTIMIZATION.md](../OPTIMIZATION.md) for the process.
 
-Throughput on an RTX 4090 (see BENCHMARKS.md). The u64 engine runs
-**5.1×10¹⁴ integers of p-line per second** end-to-end (SCORE
-512,819,184), height-flat from 10¹⁶ to 1.7×10¹⁹; the full 64-bit-safe
-range (to 1.8×10¹⁹) took ~9.5 hours in production. The phase-2 v3-128
-engine runs **6.3×10¹⁵ p/s** on its frozen window (SCORE128
-6,341,803,579, captured in the same battery as u64 SCORE 305,864,144 —
-20.7x), and **7.76×10¹⁵ p/s measured in production** — 14.1x the
-5.5×10¹⁴ its predecessor averaged over leg 1. At that rate re-sweeping
-everything from 0 to 5×10²¹ costs about a week, and the engine's
-enforced 10²⁴ ceiling is ~4 years of single-GPU wall (was ~58).
+Throughput on an RTX 4090 (see BENCHMARKS.md). The engine scores **SCORE
+7,694,248,260** and **SCORE128 8,252,670,019** on its two frozen windows —
+but absolute scores on this machine swing by ~2x between captures of
+identical code, so BENCHMARKS.md quotes paired ratios and so should you.
+Its immediate predecessor was measured at **7.76×10¹⁵ p/s in
+production**; applying the paired 1.374x ratio projects **1.07×10¹⁶ p/s**,
+i.e. **19.4x** the 5.5×10¹⁴ the leg-1 engine averaged. At that rate re-sweeping everything from 0 to
+5×10²¹ costs ~5.4 days, and the enforced 10²⁴ ceiling is ~3.0 years of
+single-GPU wall (it was ~58). For historical reference the retired
+u64-only kernel scored 512,819,184 (5.1×10¹⁴ p/s) and took ~9.5 hours to
+cover the 64-bit-safe range.
 
 ## The odds model
 

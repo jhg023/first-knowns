@@ -155,8 +155,12 @@ resumed; the last 2×10¹⁷ was swept by the new engine at 7.76×10¹⁵ p/s.
 The sweep was paused because it was worth pausing: profiling showed
 stage 1a was 83% of GPU time, and restructuring it as a bit-sieve —
 plus compaction rounds through stage 1b — made the phase-2 engine
-**~14x faster sustained** (SCORE128 362,319,437 → 6,341,803,579; see
-BENCHMARKS.md, OPTIMIZATION_LOG.md).
+**~19x faster** (SCORE128 362,319,437 → 8,252,670,019 — absolute scores
+swing ~2x between captures on this machine, so see BENCHMARKS.md for the
+paired ratios that carry the claim; see
+BENCHMARKS.md, OPTIMIZATION_LOG.md) — 14.1x from the bit-sieve
+restructure, measured in production, and a further 1.374x from folding 31
+into the wheel plus re-sweeping the two constants that invalidated.
 
 What matters for the results in this file is that **nothing about the
 search changed except its speed**:
@@ -198,20 +202,33 @@ median 8.37×10²⁰, quartiles 5.40×10²⁰ / 1.46×10²¹.
 The leg's default depth is raised from 1×10²¹ to **5×10²¹**. At the old
 rate 1×10²¹ was ~14 days and a sensible stopping point; at the v3 rate
 it is under a day, and stopping there would abandon the hunt at 59%
-odds. 5×10²¹ carries the conditional odds to ~98% for ~6.8 days of
-sweeping — the a(19) median now sits about **17 hours** away.
+odds. 5×10²¹ carries the conditional odds to ~98% for ~5.0 days of
+sweeping — the a(19) median now sits about **12 hours** away.
 
 | depth | P(a(19) found by then) | wall-clock from 3.62×10²⁰ |
 |-------|------------------------|---------------------------|
-| 5.40×10²⁰ (Q1) | 25% | 6 h |
-| 8.37×10²⁰ (median) | 50% | 17 h |
-| 1×10²¹ | 59% | 0.95 days |
-| 1.46×10²¹ (Q3) | 75% | 1.6 days |
-| 2×10²¹ | 85% | 2.4 days |
-| 5×10²¹ (leg cap) | 98% | 6.9 days |
+| 5.40×10²⁰ (Q1) | 25% | 4.6 h |
+| 8.37×10²⁰ (median) | 50% | 12.4 h |
+| 1×10²¹ | 59% | 0.69 days |
+| 1.46×10²¹ (Q3) | 75% | 1.19 days |
+| 2×10²¹ | 85% | 1.78 days |
+| 5×10²¹ (leg cap) | 98% | 5.0 days |
 
-(at the measured 7.76×10¹⁵ p/s; the same table at the leg-1 rate ran
-3.7 days / 10 days / 13.5 days / 23 days / 34.5 days / 97.6 days)
+(at a projected 1.07×10¹⁶ p/s — the measured 7.76×10¹⁵ scaled by the
+paired 1.374x ratio; the same table at the leg-1 rate ran 3.7 days /
+10 days / 13.5 days / 23 days / 34.5 days / 97.6 days)
+
+### Cursor conversion for the wider wheel
+
+`next_k` counts wheel periods, and the 31# period is 31x longer than the
+29# one, so the cursor could not simply carry over. It was converted —
+3.62×10²⁰ → `next_k` = 1,804,941,739 — and the config key now embeds the
+wheel, so a cursor from a different wheel is **rejected** by the key check
+rather than silently misread. The conversion floors, so the seam
+**overlaps** by up to one period (1.75×10¹¹ of p-line, 0.063 expected
+survivors) rather than risking a gap, following the same convention as the
+old 2⁶⁴ seam. Canaries were reset so the new wheel must re-prove the
+in-flight rediscoveries before production resumes.
 
 Any run > 18 halts the hunt under the stop-on-discovery convention. This
 section will be rewritten as results arrive.

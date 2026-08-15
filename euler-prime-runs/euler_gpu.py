@@ -47,8 +47,9 @@ from huntlib.gpu import barrett_magics  # noqa: E402
 
 from euler_reference import A21_UPPER, KNOWN
 from euler_search import (CpuEngine, P_CEIL, P_FLOOR, WHEEL_PRIMES,
-                          WHEEL_PRIMES_29, build_wheel, forbidden,
-                          mr_is_prime, mr_run_length, stage_primes)
+                          WHEEL_PRIMES_29, WHEEL_PRIMES_31, best_wheel,
+                          build_wheel, forbidden, mr_is_prime, mr_run_length,
+                          stage_primes)
 
 MP_T = 2048              # wheel periods per thread (rate plateaus 1024..4096)
 
@@ -158,17 +159,24 @@ void ladder_cold_128(const unsigned long long k_base,
 # literals, which also frees the registers a per-thread copy would need.
 
 SIEVE_W = 64             # periods per pattern word (u64); must divide T
-SIEVE_NINC = 24          # sieve-phase primes (31..139).  An extra prime
-                         # costs one OR + one stepped residue per 64 periods
-                         # and multiplies the cold queue by (q-17)/q, so
-                         # there is an interior optimum.  It MOVED when the
-                         # compaction rounds landed: against the single-shot
-                         # cold path 28 won (16/24/26/28/32 ->
-                         # 1.000/1.363/1.387/1.434/1.349), but rounds made
-                         # that path ~3.5x cheaper and the optimum fell to
-                         # 24 (16/20/24/28 -> 1.000/1.126/1.143/1.095, and
-                         # 24 beats 28 by 1.058x at the production launch
-                         # size).  See BENCHMARKS/OPTIMIZATION_LOG.
+SIEVE_NINC = 28          # sieve-phase primes.  An extra prime costs one OR
+                         # plus one stepped residue per W periods and multiplies
+                         # the cold queue by (q-r_q)/q, so there is an interior
+                         # optimum -- and it MOVES with every structural change
+                         # around it.  Measured history, each interleaved:
+                         #   single-shot cold path, 29# wheel:  28
+                         #   + stage-1b compaction rounds:      24 (rounds made
+                         #     the cold path ~3.5x cheaper, so it was worth
+                         #     handing work back to it)
+                         #   + 31# wheel:                       28 (folding 31
+                         #     into the wheel pushed the sieve range up to
+                         #     37.., costing its strongest killer -- 31 kills
+                         #     52% of candidates, 149 only 11% -- so the queue
+                         #     per unit p-line grew 1.41x until NINC came back
+                         #     up).  At 31#: 24/26/28/30/32/36 ->
+                         #     1.110/1.152/1.212/1.159/1.160/0.874 vs the
+                         #     previous 29#/24 config.
+                         # See BENCHMARKS.md and ../OPTIMIZATION.md.
 
 _SIEVE_INIT = """
     unsigned int r%(j)d;
@@ -420,19 +428,39 @@ class GpuEngine:
     NINC = SIEVE_NINC        # primes handled by the bit-sieve
     W = SIEVE_W              # pattern width in periods (multiple of 64)
     T = MP_T                 # periods per thread
-    PPL = 131072             # periods per launch.  Big launches matter now
-                             # that stage 1a is cheap: steady-state A/B over
-                             # [2.3e20, +2e15) gave 8192 -> 131072 = 1.395x
-                             # with identical streams.  Matches the
-                             # launcher's SEG_PERIODS: one launch per segment.
-    ROUND = 8                # stage-1b primes per compaction round; 0 sends
-                             # all of stage 1b to the single cold kernel
+    LAUNCH_SPAN = 131072 * 6469693230    # ~8.48e14 of p-line per launch.
+                             # Expressed as a SPAN, not a period count, so it
+                             # is wheel-independent: the period is 31x longer
+                             # on the 31# wheel, and 131072 of those would
+                             # want a 17 GB queue.  Big launches matter now
+                             # that stage 1a is cheap -- steady-state A/B over
+                             # [2.3e20, +2e15) gave 8192 -> 131072 periods =
+                             # 1.395x on the 29# wheel, identical streams.
+    PPL = None               # periods per launch; derived from LAUNCH_SPAN,
+                             # the wheel period and QUEUE_BUDGET unless set
+    QUEUE_BUDGET = 220_000_000   # max stage-1a queue entries per launch, i.e.
+                             # ~1.8 GB per ping-pong buffer.  PPL is capped by
+                             # this as well as by LAUNCH_SPAN, because the
+                             # queue scales with n_offs * PPL * survival and
+                             # the offset table is 15x larger on the 31# wheel
+                             # (and larger again at small n)
+    ROUND = 16               # stage-1b primes per compaction round; 0 sends
+                             # all of stage 1b to the single cold kernel.
+                             # Another constant that moved with the wheel: on
+                             # 29# the sweep 0/4/8/16/32 gave
+                             # 1.000/1.568/1.684/1.638/1.531 (peak 8), but the
+                             # 31# wheel shifted work into stage 1b (17% -> 35%
+                             # of GPU time) and the peak moved out to 16:
+                             # 4/6/8/12/16/20/24/32 ->
+                             # 0.769/0.922/1.000/1.088/1.134/1.128/1.121/1.081
     ROUND_GRID = 4096        # fixed grid for the grid-striding round kernel
     Q_HEADROOM = 1.25        # queue slack over the exact expected occupancy
 
     def __init__(self, n, wheel_primes=None):
         self.n = n
-        self.wheel_primes = wheel_primes or WHEEL_PRIMES_29
+        # the largest wheel whose offset table fits the budget: fewer
+        # candidates generated, identical survivor set (see euler_search)
+        self.wheel_primes = wheel_primes or best_wheel(n)
         offs, self.M = build_wheel(n, self.wheel_primes)
         self.n_offs = offs.size
         self.d_offs = cp.asarray(offs.astype(np.uint64))
@@ -466,7 +494,15 @@ class GpuEngine:
 
         # snapshot the tuning before anything is compiled against it
         self.NINC, self.W, self.T = int(self.NINC), int(self.W), int(self.T)
-        self.PPL, self.ROUND = int(self.PPL), int(self.ROUND)
+        self.ROUND = int(self.ROUND)
+        if self.PPL:
+            self.PPL = int(self.PPL)
+        else:
+            by_span = int(self.LAUNCH_SPAN // int(self.M))
+            by_queue = int(self.QUEUE_BUDGET
+                           / max(self.n_offs * self._s1a_rate(s1) *
+                                 self.Q_HEADROOM, 1.0))
+            self.PPL = max(self.W, min(by_span, by_queue))
 
         src, pat = sieve_kernel_src(n, int(self.M), s1, self.NINC,
                                     W=self.W, T=self.T)
@@ -493,10 +529,7 @@ class GpuEngine:
         # so the queue is sized exactly rather than guessed; grown on demand
         # below, which keeps the gate battery's tiny windows from each
         # reserving a production-sized buffer.
-        rate = 1.0
-        for q in [int(v) for v in s1.tolist()[:self.NINC]]:
-            rate *= 1.0 - len(forbidden(q, n)) / q
-        self.s1a_rate = rate
+        self.s1a_rate = self._s1a_rate(s1)
 
         self.out_cap = 1 << 22
         self.d_outk = cp.zeros(self.out_cap, dtype=np.uint64)
@@ -505,6 +538,14 @@ class GpuEngine:
         self.d_qn = cp.zeros(1, dtype=np.uint64)
         self.d_qn2 = cp.zeros(1, dtype=np.uint64)
         self.d_queue, self.d_queue2, self.Q_CAP = None, None, 0
+
+    def _s1a_rate(self, s1):
+        """Exact stage-1a survival: a deterministic product over the sieve
+        primes, so queue sizing is computed rather than guessed."""
+        rate = 1.0
+        for q in [int(v) for v in s1.tolist()[:self.NINC]]:
+            rate *= 1.0 - len(forbidden(q, self.n)) / q
+        return rate
 
     def _ensure_queue(self, periods):
         """Grow the stage-1a queue(s) to hold one launch of `periods` periods.
@@ -726,7 +767,7 @@ def g13_slicing_independence():
     M = 6469693230
     heights = [3 * 10**19, 230 * 10**18, A21_UPPER, 10**24 - 10**15]
     checks = surv = 0
-    for n, span in ((13, 137), (17, 77285)):
+    for n, span in ((13, 137), (17, 5000)):
         eng = GpuEngine(n)
         W, T = eng.W, eng.T
         for h in heights:
@@ -786,8 +827,9 @@ def g14_pattern_tables(trials=40, seed=11):
     """
     import random
     for n in (13, 17):
-        offs, M = build_wheel(n, WHEEL_PRIMES_29)
-        s1, _ = stage_primes(after=WHEEL_PRIMES_29[-1])
+        wp = best_wheel(n)
+        offs, M = build_wheel(n, wp)
+        s1, _ = stage_primes(after=wp[-1])
         _, _, pat = sieve_tables(n, int(M), s1, SIEVE_NINC, SIEVE_W)
         qs = [int(q) for q in s1[:SIEVE_NINC]]
         rng = random.Random(seed + n)

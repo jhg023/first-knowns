@@ -61,7 +61,11 @@ def benchmark(runs=3):
     import cupy as cp
     from euler_gpu import GpuEngine
     e = GpuEngine(17)
-    e.survivors_pre_mr(BENCH_LO, BENCH_LO + 10**12)     # warmup
+    e.survivors_pre_mr(BENCH_LO, BENCH_LO + BENCH_SPAN)   # warmup on the
+    #                                                    # MEASURED window:
+    # the engine sizes its queues on first use, and letting a multi-GB
+    # allocation land inside the timed region penalises whichever
+    # benchmark runs first (the second finds the blocks pooled).
     cp.cuda.Device().synchronize()
     rates, surv = [], None
     for _ in range(runs):
@@ -80,7 +84,7 @@ def benchmark128(runs=3):
     import cupy as cp
     from euler_gpu import GpuEngine
     e = GpuEngine(17)
-    e.survivors_pre_mr(BENCH128_LO, BENCH128_LO + 10**12)   # warmup
+    e.survivors_pre_mr(BENCH128_LO, BENCH128_LO + BENCH128_SPAN)  # ditto
     cp.cuda.Device().synchronize()
     rates, surv = [], None
     for _ in range(runs):

@@ -15,10 +15,12 @@ This file is the companion to that: the *process* for optimizing a hunt,
 and a catalogue of the optimizations that have actually paid, with the
 measured numbers and — just as important — the ones that did not.
 
-Case study throughout: `euler-prime-runs`, whose phase-2 engine went from
-5.5×10¹⁴ to 7.76×10¹⁵ p/s (**14.1x**, measured in production) with a
-survivor stream that is bit-identical to the engine it replaced. See that
-project's `OPTIMIZATION_LOG.md` for the full ledger.
+Case study throughout: `euler-prime-runs`, whose engine went from 5.5×10¹⁴
+to ~1.07×10¹⁶ p/s — **~19x**, of which 14.1x was measured in production
+from the restructure and ×1.374 came from a wider wheel *plus the two
+tuning constants that change invalidated* — with a survivor stream that is
+bit-identical to the engine it replaced. See that project's
+`OPTIMIZATION_LOG.md` for the full ledger.
 
 > **Read this first.** The recurring failure here is not a bad
 > optimization — it is a review that **stops too early** and reports "not
@@ -90,11 +92,20 @@ Practical form: wrap each phase in timers, print the percentages, and check
 that the phases sum to the wall-clock. If they don't, you don't understand
 the pipeline yet.
 
-**Corollary — re-measure after every accepted change.** Optima move. In the
-case study, the sieve-depth optimum was 28 primes against one cold-path
-design and 24 against the next, because the second design made the thing it
-was trading against ~3.5x cheaper. Any constant tuned before a structural
-change is suspect after it.
+**Corollary — re-measure after every accepted change.** Optima move, and in
+the case study they moved **four times in one session**:
+
+| constant | moved | why |
+|----------|-------|-----|
+| sieve depth | 28 | original balance |
+| | -> 24 | compaction rounds made stage 1b ~3.5x cheaper, so it was worth handing work back to it |
+| | -> 28 | a wider wheel pushed the sieve's prime range up, costing it its strongest killer |
+| round size | 8 -> 16 | the wheel shifted work into stage 1b (17% -> 35% of GPU time) |
+
+Three of the four were worth 1.06x–1.13x each and two moved in the direction
+opposite to the obvious guess. Individually they look like rounding error;
+together they are **1.3x**, and every one of them is pure loss if nobody
+re-sweeps. Any constant tuned before a structural change is stale after it.
 
 ### Rule 2: build a cost model, then let it be wrong
 
@@ -227,12 +238,30 @@ So: enumerate every candidate with a price and a risk, recommend an order,
 and let the owner decide what to spend. "Probably not worth it" is a
 recommendation, never a reason to leave an item out of the list.
 
-Genuine stopping *is* legitimate — but only against evidence, and stated as
-such. The one real stop in the case study reads: the wider wheel is worth
-~1.45x, it is declined because the offset table is 4.3 GB at the parameters
-the gate battery runs, so production would use a configuration the parity
-gates cannot exercise. That is a priced item with a named blocker, not an
-absence of ideas.
+Genuine stopping *is* legitimate — but only against **evidence**, and the
+bar is higher than it looks. The stop I originally offered as the good
+example in this very section was: "the wider wheel is worth ~1.45x, declined
+because the offset table is 4.3 GB at the parameters the gate battery runs,
+so production would use a configuration the parity gates cannot exercise."
+
+It was wrong, and it was later implemented for 1.212x (§2.8). The blocker
+was real at exactly one parameter and dissolved into a dozen lines of budget
+logic; the rest of the reason did not survive re-reading. So the cautionary
+tale and the worked example are the same item.
+
+What a genuine decline looks like, from the same session:
+
+- **the wider pattern word: measured 0.25x.** A number, from running it.
+- **warp-aggregating the queue atomic: the whole push is 10% of the
+  kernel**, established by compiling a variant with the push deleted and
+  timing it. Priced in five minutes, declined on the price.
+- **compacting the rare-and-deep final stage: ~0 by construction**, because
+  its per-warp cost already equals the perfectly-packed cost.
+
+The pattern: a real decline cites a measurement or a structural argument,
+not a projection and not an obstacle you have not tried to remove. If your
+reason is "it would be hard" or "it might break X", that is a task, not a
+verdict.
 
 ### Rule 6: write down what failed
 
@@ -374,9 +403,11 @@ the capped engine. The (k, off) representation was valid from the beginning.
 enforce it as a constant, and gate at it.
 
 Unifying afterwards is worth doing anyway, and it pays twice. Measuring the
-same span at two heights becomes a free height-flatness check (flat to
-within a few percent across four orders of magnitude here — two captures
-gave 0.01% and 3.4%, the spread being ambient load). And the verification leg gets *stronger*
+same span at two heights becomes a free height-flatness check — though in
+the case study that check turned out to be much weaker than it first looked:
+run-to-run variance on one configuration exceeded every gap between the two
+heights, so it could not have detected a 20% tilt. The tight-looking first
+capture was luck quoted as precision (BENCHMARKS.md carries the correction). And the verification leg gets *stronger*
 rather than weaker: the alternate-alignment re-sieve had been running a
 different wheel only below the old cap, because that happened to be the
 engine available there; with one engine it runs a different wheel at every
@@ -395,12 +426,32 @@ Folding one more prime q into the wheel generates a factor of ~q/(q−r)
 fewer candidates for a mathematically identical result set — so the frozen
 fingerprint still applies, which makes it unusually safe.
 
-The limit is memory and, less obviously, **gate coverage**: the offset table
-size depends on the search parameters, and in the case study the table that
-was a comfortable 240 MB at the production parameter was 4.3 GB at the small
-parameters the gate battery runs on. Production would then have used a wheel
-the parity gates could not exercise. Declined for that reason, at ~1.45x —
-a good example of a real optimization that the correctness structure vetoes.
+The limit is memory: the offset table size depends on the search parameters,
+and in the case study the table that is a comfortable 240 MB at the
+production parameter is 4.3 GB at the smallest parameter the gate battery
+runs on. The fix is a **budget**, not a veto — select the largest wheel whose
+table fits, per parameter, so production gets the big wheel and the small-n
+gates fall back. Worth **1.212x** here, once the sieve depth was re-tuned
+(below).
+
+I first declined this at "~1.45x, blocked by gate coverage", reasoning that
+production would run a wheel the parity gates could not exercise. That was
+wrong twice over, and both errors are instructive. The gates *do* exercise
+the production wheel — the parity gate runs four cases at the production
+parameter — and two other gates already ran a *different* wheel than
+production on purpose. So the blocker was memory at one parameter, which a
+budget solves. **A decline is only as good as its stated reason, and stated
+reasons need re-examining, not inheriting.**
+
+The second error was the estimate. 2.07x fewer candidates predicted ~1.45x;
+the measured result was **1.121x** until the sieve depth was re-swept.
+Folding a prime into the wheel *removes it from the sieve*, so the sieve's
+range shifts upward and it loses its strongest killer — here 31, which kills
+52% of candidates, replaced at the top end by 149, which kills 11%. The queue
+per unit of work grew 1.41x and ate most of the win. Raising the sieve depth
+from 24 to 28 primes recovered it: **1.212x**. This is Rule 1's corollary
+biting for the third time in one session — a wheel change is a structural
+change, and every constant tuned around it was stale the moment it landed.
 
 ### 2.9 Things that did not pay (measured, in this codebase)
 
@@ -445,10 +496,21 @@ Worked example — the case study's final state, which is what let it stop:
 
 | phase | share | verdict |
 |-------|-------|---------|
-| bit-sieve stage 1a | 64.3% | ~90% pattern work by ablation (deleting the queue push moved it only 10%); next lever is generating fewer candidates, priced at 1.45x and declined for a named gate-coverage reason |
-| stage-1b compaction rounds | 17.3% | divergence recovered 5.8x -> ~1x; round size swept 4/8/16/32 |
-| cold stage-2 kernel | 18.4% | structurally optimal: rare-and-deep, per-warp cost equals packed cost |
+| bit-sieve stage 1a | 48.1% | ~90% pattern work by ablation (deleting the queue push moved it only 10%); the candidate-count lever was taken (§2.8, 1.212x), and the next wheel prime (37) needs a 6.0e8-offset table, ~16x over budget |
+| stage-1b compaction rounds | 34.6% | divergence recovered 5.8x -> ~1x. Grew from 17.3% when the wheel moved work here, so the round size was re-swept against the new balance: peak moved 8 -> 16, worth **1.134x**. That factor was found *because this row visibly grew* — nothing looked broken, the engine was simply leaving 13% on the floor |
+| cold stage-2 kernel | 17.3% | structurally optimal: rare-and-deep, so at most one lane per warp is active and the per-warp cost already equals the perfectly-packed cost |
 | host + syncs | <1% | measured 0.2%, priced and declined |
+
+The table earned its keep immediately: filling in the rounds row exposed a
+1.134x that no amount of staring at the code would have suggested, because
+the code was not wrong — it was tuned for a balance that no longer existed.
+That is the whole argument for a per-phase verdict over a judgement call.
+
+And note what the table still does *not* say: "done". The shares above are
+from the profile *before* the round-size change, so they have already moved
+again, and the next re-profile is the next round's first action. The table's
+job is to keep remaining work **visible and priced**, not to certify
+completion.
 
 ### 3.2 Every catalogue entry has been applied to every phase
 

@@ -54,11 +54,15 @@ from euler_search import (CpuEngine, P_CEIL, P_FLOOR, WHEEL_PRIMES,
 CKPT = "campaign_checkpoint.json"              # the single campaign cursor
 DISC = os.path.join("evidence", "euler_discoveries.json")
 SEG_PERIODS = 131_072                          # 29-wheel periods per checkpoint segment
-# The cursor is denominated in wheel periods, so the key pins every part of
-# the configuration that would change their meaning.  It is deliberately
-# UNCHANGED from the phase-2 key: the bit-sieve engine sweeps the identical
-# survivor stream (G13), so the 3.62e20 already covered stays valid.
-CONFIG_KEY = "euler-prime-runs/v3-128/n={n}/wheel=29#/Q1=1024/Q2=65536/ceil=1e24"
+# The cursor is denominated in WHEEL PERIODS, so the key pins every part of
+# the configuration that would change their meaning -- including the wheel
+# itself, which is filled in from the engine's actual choice rather than
+# hardcoded.  A wheel change makes the period 31x longer, so a cursor from a
+# different wheel is meaningless and must be REJECTED rather than reused;
+# deriving the key this way makes that automatic instead of a thing to
+# remember.
+CONFIG_KEY = ("euler-prime-runs/v4/n={n}/wheel={wheel}#"
+              "/Q1=1024/Q2=65536/ceil=1e24")
 
 EXPECTED_KNOWN = {41: 40}                      # low-range positive control
 
@@ -128,7 +132,8 @@ def three_way_verify(p, claimed_run, n_filter):
 # ------------------------------ checkpoint ---------------------------------
 
 def ckpt_key(n):
-    return CONFIG_KEY.format(n=n)
+    from euler_search import best_wheel
+    return CONFIG_KEY.format(n=n, wheel=best_wheel(n)[-1])
 
 
 def load_ckpt(n):

@@ -191,19 +191,66 @@ Stage 1b is the opposite case (mean 13.85 tests per lane, warp-max 80.4,
 The sieve is dominant again and is ~90% pattern work (per #11), so the
 next real lever is generating fewer candidates, i.e. a wider wheel.
 
-### Not attempted: the 31# wheel (priced, ~1.45x)
+### The 31# wheel: attempted after all, 1.212x (and the decline was wrong)
 
-Folding 31 into the wheel generates 2.07x fewer candidates for a
-mathematically identical survivor set (the union of tested primes is
-unchanged, so the frozen fingerprint still applies), which would cut the
-64% sieve share roughly in half. It is not implemented because the
-offset table is n-dependent and explodes for the small n the gate
-battery runs on: n=17 gives a fine 2.99e7 offsets (240 MB), but n=5
-gives 5.4e8 (4.3 GB). Production would then run a wheel that G6/G13
-cannot exercise at their working n, which trades a factor of 1.45 for a
-hole in the parity gates. It also needs a checkpoint migration, since
-`next_k` is denominated in M. Revisit only with a per-n wheel budget and
-gates that run 31# at n=17.
+Folding 31 into the wheel generates **2.07x fewer candidates** for a
+mathematically identical survivor set -- the union of tested primes is
+unchanged, so both frozen fingerprints still reproduce bit-for-bit, which
+makes this an unusually safe change to a hot path.
+
+| step | result |
+|------|--------|
+| 31# wheel, sieve depth left at 24 | **1.121x** -- most of the 2.07x eaten |
+| diagnosis: sieve range shifts 31..139 -> 37..149, losing its strongest killer (31 kills 52%, 149 kills 11%); queue per unit p-line grew 1.41x | -- |
+| re-sweep sieve depth on the new wheel: 24/26/28/30/32/36 | 1.110 / 1.152 / **1.212** / 1.159 / 1.160 / 0.874 |
+| KEPT: 31# wheel + NINC 24 -> 28 | **1.212x**, both fingerprints exact, streams identical |
+
+**Then the round size moved too.** The wheel shifted work into stage 1b
+(17.3% -> 34.6% of GPU time), so the compaction round size tuned against the
+old balance was stale by construction. Re-swept: 4/6/8/12/16/20/24/32 ->
+0.769/0.922/1.000/1.088/**1.134**/1.128/1.121/1.081, peak moving 8 -> 16.
+Worth another **1.134x**, for **1.374x** from this round of work and
+**19.4x** cumulative over the engine that swept leg 1.
+
+That one was found only because the termination table in ../OPTIMIZATION.md
+requires a verdict per phase: the rounds row had visibly grown, which is what
+prompted the re-sweep. Without the table it would have been invisible --
+nothing looked broken, the engine was simply leaving 13% on the floor.
+
+Mechanics: `best_wheel(n)` picks the largest wheel whose offset table fits a
+budget (50M offsets), so n=13/17 get 31# and n=5/9 fall back to 29# --
+the table is 2.99e7 offsets at n=17 but 5.4e8 at n=5.  `build_wheel` is now
+chunked over the new prime's residue classes so peak memory stays bounded
+(verified byte-identical to the previous builder at n=5,6,7,9,13,17 on both
+existing wheels).  The launch size became a **span** rather than a period
+count, since the 31# period is 31x longer and 131072 of them would want a
+17 GB queue; PPL is derived from that span and capped by a queue budget.
+
+The cursor was converted, not reused: the config key now carries the wheel,
+so a cursor from a different wheel is rejected rather than silently
+misinterpreted (next_k is denominated in periods, and the period changed by
+31x).  New next_k = floor(old_depth / M_31) -- floor, so the seam OVERLAPS by
+up to one period (1.75e11 of p-line, 0.063 expected survivors) rather than
+risking a gap, following the same convention as the old u64 seam.
+
+### Why the original decline was wrong (kept as the record)
+
+The original entry read: "not implemented because the offset table is
+n-dependent and explodes for the small n the gate battery runs on ...
+production would then run a wheel that G6/G13 cannot exercise at their
+working n, which trades a factor of 1.45 for a hole in the parity gates."
+
+Both halves were wrong. G6 runs **four cases at n=17**, so it does exercise
+the production wheel; and G4/G5 already run a different wheel from production
+deliberately, so "production uses a wheel some gates don't" was never the
+hole it was described as. The real constraint was memory at one parameter,
+which a per-n budget solves in a dozen lines. The estimate was wrong too:
+1.45x predicted, 1.121x delivered until the sieve depth was re-swept, then
+1.212x.
+
+Left here in full because a wrong decline is the most expensive kind of log
+entry -- it stops the next person from looking. A decline needs a reason that
+survives re-reading, and this one did not.
 
 ### Two robustness bugs the gates caught (both mine, both in tuning paths)
 
