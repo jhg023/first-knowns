@@ -161,14 +161,22 @@ BENCHMARKS.md, OPTIMIZATION_LOG.md).
 What matters for the results in this file is that **nothing about the
 search changed except its speed**:
 
-- The survivor stream is **bit-identical** to the v2-128 engine that
-  swept the first 3.6×10²⁰. Gate **G13** pins v3 against v2 across 280
-  windows and 59,992 survivors — pattern-word, per-thread and launch
-  boundaries, unaligned and sub-period windows, four heights up to the
-  10²⁴ ceiling, and the split-equals-whole resume property. Gate **G14**
-  pins the new pattern tables directly against big-integer divisibility
-  of the actual values, with no engine in the loop. Both frozen
-  benchmark fingerprints reproduce exactly.
+- The survivor stream is **bit-identical** to the engine that swept the
+  first 3.6×10²⁰. That was verified before the old engine was retired: a
+  parity gate compared the two streams across 280 windows and 59,992
+  survivors — pattern-word, per-thread and launch boundaries, unaligned
+  and sub-period windows, four heights to the 10²⁴ ceiling, and
+  split-equals-whole — and the gate ran green in the commit that
+  introduced the new engine. The old engines were then deleted, so the
+  tree holds one code path; the equivalence evidence is in the history.
+- Standing coverage after the retirement: **G6** pins the stream
+  bit-for-bit against the independent numpy engine on populated windows
+  at seven heights to the ceiling, **G13** proves the stream does not
+  depend on how work is sliced (five launch geometries, splits on
+  word/thread/launch boundaries), and **G14** pins the pattern tables
+  directly against big-integer divisibility of the actual values with no
+  engine in the loop. Both frozen benchmark fingerprints reproduce
+  exactly.
 - The mathematical configuration — n = 17 filter, 29# wheel, Q1 = 1024,
   Q2 = 65536, ceiling 10²⁴ — is **unchanged**, so the checkpoint's
   `next_k` stays meaningful, the resume re-covers nothing, and the

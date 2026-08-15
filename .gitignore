@@ -1,5 +1,4 @@
 __pycache__/
 *.pyc
-ladder_checkpoint.json
-ladder128_checkpoint.json
+campaign_checkpoint.json
 *.tmp

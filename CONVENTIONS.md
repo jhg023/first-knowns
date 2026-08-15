@@ -20,6 +20,18 @@ Plus documentation: `README.md` (problem, mathematics, model, usage),
 (score ledger), `OPTIMIZATION_LOG.md` (every attempt → measurement →
 kept/rejected, including the failures).
 
+**Making it fast is a separate discipline with its own document.** See
+[OPTIMIZATION.md](OPTIMIZATION.md) for the process (measure the phase
+split before touching code; interleaved paired A/B or the numbers are
+noise; separate engine changes from benchmark-shape changes; price what
+you decline) and for the catalogue of optimizations that have paid here,
+with measured numbers and the rejected attempts. Two of its design rules
+belong at the *start* of a project rather than the end: carry candidates
+as `(k, off)` pairs so one engine spans the whole range instead of
+growing a second engine at the machine-word boundary, and choose the
+wheel that fits at every parameter the gate battery runs, not just the
+production one.
+
 ## The gate discipline
 
 - All gates green **before and after every change**. No exceptions for

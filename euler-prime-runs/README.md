@@ -17,16 +17,15 @@ verified 2026-08-05/06, the first new terms of the sequence since
 the known Waldvogel–Leikauf upper bound at 2.35×10²⁰ without finding
 a smaller run ≥ 19. Details in [RESULTS.md](RESULTS.md).
 
-**Status: ACTIVE** — phase 1 (the full 64-bit-safe range) is complete;
-phase 2, a 128-bit engine targeting a(19) beyond the 1.8×10¹⁹ ceiling,
-is gated and hunting (`--engine gpu128`). The sweep is contiguous from
+**Status: ACTIVE** — hunting a(19). The sweep is contiguous from
 0 to **3.62×10²⁰**, so a(19) and a(20) both exceed that. Conditional
 on the empty sweep so far, the model puts a(19) at median 8.37×10²⁰
 (quartiles 5.40×10²⁰ / 1.46×10²¹); the current leg runs to 5×10²¹, ~98%
 of the conditional distribution. The phase-2 engine was rebuilt
 2026-08-15 (v3-128, bit-sieve stage 1a) and is **14.1x** faster in
-production with a bit-identical survivor stream — gates G13/G14,
-unchanged fingerprints. That puts the a(19) median ~17 hours out.
+production with a bit-identical survivor stream — proven against the
+engine it replaced before that engine was retired, and still pinned by
+G6/G13/G14 and the unchanged fingerprints. That puts the a(19) median ~17 hours out.
 
 ## The problem
 
@@ -53,80 +52,68 @@ sweep could contain the find. That is what makes it a hunt.
 
 A prime p has run ≥ 17 only if none of the 17 values x² + x + p
 (x = 0..16) has a small prime factor. For each prime q, the forbidden
-residues of p are −(x²+x) mod q — about min(17, (q+1)/2) classes. The
-engine:
+residues of p are −(x²+x) mod q — about min(17, (q+1)/2) classes. One
+engine covers the whole range:
 
-1. **Wheel**: p is generated only in residues mod 29# = 6,469,693,230
-   that survive all wheel primes 2..29 — 3.1×10⁻⁴ of the line.
-2. **Stage 1**: survivors are tested against primes 31..1024 with
-   forbidden-residue bitmasks in L2 cache. Each GPU thread owns one
-   wheel offset across 2048 consecutive periods, stepping its residues
-   mod the first 16 primes incrementally (r += M mod q, conditional
-   subtract) — the Barrett magic-multiply modulo (no hardware 64-bit
-   division; see `../huntlib/gpu.py`) is paid once per prime per 2048
-   periods, and again only for the ~0.3% of candidates that survive all
-   16. Early exit kills most candidates in ~2–3 tests.
-3. **Stage 2**: primes 1024..65536 via direct 17-value divisibility.
-4. **Host classification**: the ~3.6×10⁻¹³ of the line that survives is
-   handed to the CPU, where a deterministic 7-base Miller–Rabin (valid
-   to 3.3×10²⁴) computes each survivor's exact run. The GPU only ever
-   *proposes*.
+**0. Representation.** p is never held in a machine word. Every candidate
+is the pair (k, off) with p = k·29# + off, so every sieve test reduces to
+`((k mod q)·(29# mod q) + off mod q) mod q`, which stays 64-bit-safe to
+the enforced ceiling 10²⁴ — a factor >3 under the Miller–Rabin validity
+bound. There is no 2⁶⁴ boundary in the search: the same code sweeps 10⁵
+and 10²³, and exact integers exist only on the host as Python ints.
 
-**Phase 2 (beyond the 64-bit ceiling).** Above 1.8×10¹⁹ the candidate p
-no longer fits a 64-bit word — but the engines never need it to. Every
-candidate is carried as the pair (k, off) with p = k·29# + off, and
-every sieve test reduces to
-`((k mod q)·(29# mod q) + off mod q) mod q`, which stays 64-bit-safe all
-the way to the enforced ceiling 10²⁴ (a factor >3 under the Miller–Rabin
-validity bound). The incremental stage-1 residue stepping is unchanged —
-it never depended on p's magnitude — and the 128-bit path splits hot and
-cold work into two kernels (stage-1a compaction queue + one-candidate-
-per-thread cold pass). Exact integers exist only on the
-host as Python ints. The proven u64 engines are untouched; the 128 path
-is pinned against them bit-for-bit on the fingerprint window (G9, G11),
-against direct big-integer trial division on mini-windows at 2.35×10²⁰
-and the 10²⁴ ceiling (G10), and end-to-end against a(18) and the
-Waldvogel–Leikauf run-21 value 234,505,015,943,235,329,417 — the latter
-rediscovered *above* the 64-bit cap (G10, G12, and the launcher's
-phase-2 canary prelude).
+**1. Wheel.** p is generated only in residues mod 29# = 6,469,693,230
+that survive all wheel primes 2..29 — 3.1×10⁻⁴ of the line.
 
-**Phase 2 v3: the bit-sieve.** Everything above tests *one candidate at
-a time*, which is what made stage 1a 83% of GPU time: per period it
-stepped all 16 tracked residues whether or not they were needed (the
-average candidate dies at test 2.2) and then walked a chain of scattered
-bitmask lookups whose early exit only helps a lane, not its warp — the
-warp runs until its **last** lane dies, a 4.2x tax. The v3 engine
-inverts the loop. For prime q, if a block of 64 consecutive periods
-starts at residue r, then period offset u is killed by q exactly when
-`(r + u·(29# mod q)) mod q` is a forbidden residue of q — a function of
-(q, r) alone. So the host precomputes `pat[q][r]`, a 64-bit kill
-pattern, and the kernel ORs **one word per prime per 64 periods** and
-reads the survivors straight out of the complement with `__ffsll`. Per
-period that is 64x less residue stepping, ~29x fewer gathers, and no
-divergence at all, because the inner loop no longer branches per
-candidate. The same idea then fixes the other end: stage 1b's early-exit
-chain has mean depth 13.9 but warp-max 80.4, so its primes are processed
-in **compaction rounds** of 8 — survivors forwarded to a second queue,
-counts kept on the device — and every round restarts with all 32 lanes
-alive. Stage 2 is deliberately left alone: only 5.7×10⁻³ of the queue
-reaches it, so at most one lane per warp is ever inside and there is no
-divergence to recover.
+**2. Stage 1a, the bit-sieve.** For prime q, if a block of 64 consecutive
+wheel periods starts at residue r, then period offset u is killed by q
+exactly when `(r + u·(29# mod q)) mod q` is forbidden — a function of
+(q, r) alone. So the host precomputes `pat[q][r]`, a 64-bit kill pattern,
+and the kernel ORs **one word per prime per 64 periods** for the first 24
+stage-1 primes, then reads survivors straight out of the complement with
+`__ffsll`. Nothing is tested per candidate, so there is no per-candidate
+state to step and no early-exit branch to diverge on — which is the point:
+the obvious "test each candidate, exit early" loop spends most of its
+instructions maintaining state for primes the average candidate never
+reaches, and a warp runs until its *last* lane dies.
 
-Net effect **~14x sustained** (10.29x from the engine at an unchanged
-launch shape, 1.395x more from raising the launch size; the frozen
-benchmark window shows 18.3x because it collapses to a single launch —
-see BENCHMARKS.md, which reports both). The survivor stream is
-bit-identical to the engine that swept the first 3.6×10²⁰: gate **G13**
-pins v3 against v2
-across 280 windows and 59,992 survivors, exercising the pattern-word,
-per-thread and launch boundaries, unaligned and sub-period windows, four
-heights up to the 10²⁴ ceiling, and the split-equals-whole resume
-property. Both frozen benchmark fingerprints still reproduce exactly,
-which is the real claim: the engine got faster without the work
-changing. Tuning constants are all measured, and they interact — the
-sieve depth optimum moved from 28 primes to 24 once the compaction
-rounds made the cold path cheaper, and a wider 128-bit pattern word
-*lost* 4x. See OPTIMIZATION_LOG.md, including what was rejected.
+**3. Stage 1b, compaction rounds.** The remaining stage-1 primes (to
+1024) are tested 8 at a time, with survivors forwarded to a second queue
+between rounds and counts kept on the device. Its exit depth averages
+13.9 but maxes at 80.4 across a 32-lane warp, so restarting each round
+with every lane alive recovers most of that 5.8x.
+
+**4. Stage 2.** Primes 1024..65536 by direct 17-value divisibility, one
+thread per surviving candidate. Deliberately *not* compacted: only
+5.7×10⁻³ of the queue reaches it, so at most one lane per warp is ever
+inside and there is no divergence to recover.
+
+**5. Host classification.** The ~3.6×10⁻¹³ of the line that survives goes
+to the host, where a deterministic 7-base Miller–Rabin (valid to
+3.3×10²⁴) computes each survivor's exact run. The GPU only ever
+*proposes*.
+
+Arithmetic is Barrett magic-multiply throughout (no hardware 64-bit
+division; see `../huntlib/gpu.py`), and its exactness is never assumed:
+gate **G6** pins the whole GPU stream bit-for-bit against an independent
+numpy-`%` engine on populated windows at seven heights up to the ceiling.
+That engine is itself pinned against direct big-integer trial division on
+mini-windows (G10) and against the sympy oracle on small windows (G4);
+**G13** proves the stream does not depend on how work is sliced into
+pattern words, threads or launches; **G14** pins the sieve's pattern
+tables directly against big-integer divisibility of the actual values;
+and the pipeline rediscovers a(13), a(18) and the Waldvogel–Leikauf
+run-21 value end-to-end (G8, G12, and the launcher's canary prelude).
+
+This shape was reached by measurement, not design intuition, and the
+constants interact: the sieve depth optimum moved from 28 primes to 24
+once the compaction rounds made stage 1b cheaper, and a wider 128-bit
+pattern word *lost* 4x. Net **~14x sustained** over the previous engine
+(10.29x from the restructure at an unchanged launch shape, 1.395x more
+from raising the launch size), with both frozen fingerprints reproducing
+bit-for-bit — the engine got faster without the work changing. See
+[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) for every attempt including
+the rejects, and [../OPTIMIZATION.md](../OPTIMIZATION.md) for the process.
 
 Throughput on an RTX 4090 (see BENCHMARKS.md). The u64 engine runs
 **5.1×10¹⁴ integers of p-line per second** end-to-end (SCORE
@@ -170,17 +157,35 @@ exceed a(21).
 
 ```
 python launch.py --selftest    # full gate battery + drills (~15 min)
-python launch.py               # phase-1 hunt (u64 range; complete)
-python launch.py --engine gpu128 --stop-on-discovery
-                               # PHASE 2: the a(19) hunt beyond the u64
-                               # cap (contiguous to 3.6004e20; default
-                               # depth 5e21, ~98% of the conditional
-                               # a(19) distribution; halts after a
-                               # frontier-extending find)
-python launch.py --status      # scoreboard (both phases)
-python score.py                # gates x fingerprinted benchmarks (u64 + 128)
+python launch.py --stop-on-discovery
+                               # THE HUNT: resumes at the frontier
+                               # (3.62e20), runs to 5e21 (~98% of the
+                               # conditional a(19) distribution), halts
+                               # after a frontier-extending find
+python launch.py --status      # scoreboard
+python score.py                # gates x fingerprinted benchmarks
 python euler_model.py          # rebuild the odds model + its gates
 ```
+
+**One engine, one cursor, no flags.** Every candidate is carried as the
+pair (k, off) with p = k·29# + off, which is as valid at 10⁵ as at 10²³,
+so a single sweep runs from the oracle floor to the enforced ceiling
+10²⁴ with no seam at 2⁶⁴ and nothing to select. The GPU is always used.
+`--engine cpu` selects the numpy reference engine, which exists for
+verification and gating — it is orders of magnitude slower and would
+never finish a production leg.
+
+The superseded engines — the u64-only kernel and the pre-bit-sieve 128
+path — have been **deleted**, not parked. They existed to prove the
+replacement produced an identical stream; that gate ran green and was
+committed, so the proof lives in the git history rather than in a module
+nothing calls. The tree is the answer to "what runs if you start this
+from zero", and that question has one answer.
+
+What is permanent is the *independent* reference: `euler_search.py`'s
+numpy engine, which the GPU is pinned against by G6 on populated windows
+at seven heights up to the ceiling. That is not an old version, it is the
+other half of the parity gate.
 
 `--stop-on-discovery` follows the repo-wide convention (CONVENTIONS.md):
 only a run beyond the campaign frontier (currently ≥ 19) halts the hunt;

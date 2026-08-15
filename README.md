@@ -44,6 +44,14 @@ The projects share a skeleton and a library:
   follows: oracle / CPU engine / GPU engine / checkpointed launcher /
   fingerprinted benchmark, the gate discipline, and the discovery
   protocol.
+- [`OPTIMIZATION.md`](OPTIMIZATION.md) — how to make a hunt fast without
+  making it wrong: the measurement process (measure the phase split
+  first, interleave every A/B, separate engine changes from
+  benchmark-shape changes, price what you decline) and the catalogue of
+  optimizations that have paid, with numbers — plus the ones that
+  didn't. A hunt's frontier is set by throughput, so this is not
+  optional polish; two of its rules are design decisions best made
+  before the first engine is written.
 - [`huntlib/`](huntlib/) — the shared code: deterministic Miller-Rabin,
   Barrett reciprocal helpers for CUDA kernels, atomic checkpoints,
   tagged logging, and the un-gameable SCORE runner.

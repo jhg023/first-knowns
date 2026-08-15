@@ -2,13 +2,24 @@
 # canary-alarmed, no-false-discovery.  Follows the repo-wide project
 # conventions (see ../CONVENTIONS.md).
 #
-#   python launch.py              # phase-1 hunt (n=17 filter, u64 cap; done)
-#   python launch.py --engine gpu128 --stop-on-discovery
-#                                 # phase-2 hunt beyond the u64 cap (a(19));
-#                                 # halts after a frontier-extending find
+#   python launch.py              # THE HUNT (GPU, whole range, resumable)
 #   python launch.py --selftest   # full gate battery + resume + planted drills
-#   python launch.py --status     # scoreboard from checkpoints (both phases)
-#   python launch.py --to 1e18 --engine gpu --fresh
+#   python launch.py --status     # scoreboard
+#   python launch.py --to 1e18 --fresh
+#
+# ONE ENGINE, ONE CURSOR.  There is no 64-bit/128-bit split to manage any
+# more: the production engine carries every candidate as the pair (k, off)
+# with p = k*29# + off, which is exactly as valid at 10^5 as at 10^23, so a
+# single sweep runs from the oracle floor to the enforced ceiling 10^24
+# without a seam and without an engine flag.  The GPU is always used.
+#
+# --engine cpu selects the numpy reference engine.  It exists for
+# verification and gating, not for hunting: it is ~4 orders of magnitude
+# slower and would never finish a production leg.  There is nothing else to
+# select: superseded engine versions are not kept in the tree, so the code
+# here is the code that would run a campaign from zero.  Their streams were
+# verified bit-for-bit against this one before they were removed; that
+# evidence lives in the git history, not in a dead module.
 #
 # Discovery protocol: pre-filter survivor -> host MR run classification ->
 # run >= 17 => THREE-WAY verification (own MR chain / sympy chain / fresh
@@ -37,16 +48,17 @@ from huntlib.hlog import log  # noqa: E402
 from huntlib.primes import factor_witness  # noqa: E402
 
 from euler_reference import A21_UPPER, KNOWN, OPEN_N, run_length as oracle_run
-from euler_search import (CpuEngine, CpuEngine128, P128_CEIL, P_FLOOR,
-                          WHEEL_PRIMES_29, mr_is_prime_u64, mr_run_length)
+from euler_search import (CpuEngine, P_CEIL, P_FLOOR, WHEEL_PRIMES,
+                          WHEEL_PRIMES_29, mr_run_length)
 
-CKPT = "ladder_checkpoint.json"
-CKPT128 = "ladder128_checkpoint.json"
+CKPT = "campaign_checkpoint.json"              # the single campaign cursor
 DISC = os.path.join("evidence", "euler_discoveries.json")
-U64_CAP = 18_000_000_000_000_000_000          # < 2^64 - 272, u64-safe
 SEG_PERIODS = 131_072                          # 29-wheel periods per checkpoint segment
-CONFIG_KEY = "euler-prime-runs/v2/n={n}/wheel=29#/Q1=1024/Q2=65536"
-CONFIG_KEY128 = "euler-prime-runs/v3-128/n={n}/wheel=29#/Q1=1024/Q2=65536/ceil=1e24"
+# The cursor is denominated in wheel periods, so the key pins every part of
+# the configuration that would change their meaning.  It is deliberately
+# UNCHANGED from the phase-2 key: the bit-sieve engine sweeps the identical
+# survivor stream (G13), so the 3.62e20 already covered stays valid.
+CONFIG_KEY = "euler-prime-runs/v3-128/n={n}/wheel=29#/Q1=1024/Q2=65536/ceil=1e24"
 
 EXPECTED_KNOWN = {41: 40}                      # low-range positive control
 
@@ -58,7 +70,7 @@ EXPECTED_KNOWN = {41: 40}                      # low-range positive control
 CAMPAIGN_FOUND = {17: 348_284_517_256_411_907,
                   18: 8_461_068_614_861_832_371}
 FRONTIER_RUN = max(CAMPAIGN_FOUND)             # discovery = run > FRONTIER_RUN
-P2_DEFAULT_TO = 5000 * 10**18                  # 5e21: leg 2 of the a(19) hunt.
+DEFAULT_TO = 5000 * 10**18                      # 5e21: leg 2 of the a(19) hunt.
                                                # Leg 1 (to 3.2e20) came back
                                                # empty with E=1.02 spent.  The
                                                # cap was 1e21 (the conditional
@@ -87,19 +99,20 @@ def three_way_verify(p, claimed_run, n_filter):
     r_sym = oracle_run(p, cap=claimed_run + 40)
     if not (r_own == r_sym == claimed_run):
         return None, f"run disagreement own={r_own} sympy={r_sym} claimed={claimed_run}"
-    # alternate-alignment re-sieve: a fresh CPU engine window around p
-    # must reproduce p as a pre-MR survivor (only meaningful above floor).
-    # Above the u64 cap the exact-int CPU-128 engine takes over (gated
-    # G9/G10 against the u64 engine and direct trial division).
+    # Alternate-alignment re-sieve: a fresh window around p, swept by
+    # DIFFERENT machinery, must reproduce p as a pre-MR survivor.  Different
+    # on two axes at once -- the reference engine is numpy `%` rather than
+    # the GPU's Barrett arithmetic, and it runs on the 23# wheel rather than
+    # production's 29#, so p sits at a different offset in a different
+    # period.  (Before unification this only held below the u64 cap, where a
+    # 23#-wheel engine happened to be the one available; it now holds at
+    # every height.)  Gated end-to-end by G9/G10.
     if p >= P_FLOOR:
         lo = max(P_FLOOR, p - 10**6)
         seen = []
-        if p + 10**6 < U64_CAP:
-            for arr in CpuEngine(n_filter).survivors_pre_mr(lo, p + 10**6):
-                seen.extend(int(v) for v in arr.tolist())
-        else:
-            for chunk in CpuEngine128(n_filter).survivors_pre_mr(lo, p + 10**6):
-                seen.extend(chunk)
+        for chunk in CpuEngine(n_filter, wheel_primes=WHEEL_PRIMES
+                                  ).survivors_pre_mr(lo, p + 10**6):
+            seen.extend(chunk)
         if p not in seen:
             return None, "alternate-alignment re-sieve did not reproduce p"
     breaker = claimed_run * claimed_run + claimed_run + p
@@ -114,29 +127,22 @@ def three_way_verify(p, claimed_run, n_filter):
 
 # ------------------------------ checkpoint ---------------------------------
 
-def ckpt_key(n, is128=False):
-    return (CONFIG_KEY128 if is128 else CONFIG_KEY).format(n=n)
+def ckpt_key(n):
+    return CONFIG_KEY.format(n=n)
 
 
-def ckpt_file(is128=False):
-    return CKPT128 if is128 else CKPT
+def load_ckpt(n):
+    return _ckpt.load(CKPT, ckpt_key(n), warn=lambda m: log("WARN", m))
 
 
-def load_ckpt(n, is128=False):
-    return _ckpt.load(ckpt_file(is128), ckpt_key(n, is128),
-                      warn=lambda m: log("WARN", m))
+def save_ckpt(c):
+    _ckpt.save(CKPT, c)
 
 
-def save_ckpt(c, is128=False):
-    _ckpt.save(ckpt_file(is128), c)
-
-
-def fresh_ckpt(n, is128=False):
-    # phase 2 starts at the last u64-covered period boundary: the sliver
-    # [ (U64_CAP//M)*M, U64_CAP ) is re-covered on purpose (seam overlap,
-    # no gap risk); phase 1 owns everything below.
-    start_k = (U64_CAP // 6469693230) if is128 else 0
-    return {"key": ckpt_key(n, is128), "M": 6469693230, "next_k": start_k,
+def fresh_ckpt(n):
+    # One engine spans the whole range, so a fresh campaign starts at zero:
+    # there is no cap to start above and no seam to re-cover.
+    return {"key": ckpt_key(n), "M": 6469693230, "next_k": 0,
             "canaries_done": False, "survivors": 0, "events": [],
             "best_near": 0, "best_near_p": 0, "near_counts": {}, "hits": 0,
             "wall_s": 0.0, "started": time.time()}
@@ -162,7 +168,17 @@ def low_pass(n):
 
 
 def canary_prelude(engine_factory, n):
-    """n=14 and n=15 mini-hunts MUST rediscover a(14), a(15) exactly."""
+    """Every canary, at every scale, through the production engine.
+
+    One engine spans the range, so one prelude covers it: a(14)/a(15) are
+    rediscovered as the FIRST run-exactly-n prime above the floor (a
+    least-claim drill, not just a hit), and a(18) plus the
+    Waldvogel-Leikauf run-21 value are rediscovered in local windows --
+    the first tying this engine to the phase-1 record below the old u64
+    cap, the second landing above it.  Spanning both sides of 2^64 in one
+    prelude is the point: that boundary is no longer special, and the
+    prelude is what proves it before production runs.
+    """
     for cn in (14, 15):
         target = KNOWN[cn]
         t0 = time.time()
@@ -174,23 +190,16 @@ def canary_prelude(engine_factory, n):
                 f" expected {target})")
         log("CANARY-GOLD", f"a({cn}) = {target} rediscovered end-to-end "
             f"({time.time()-t0:.0f}s)")
-
-
-def canary_prelude128(engine_factory, n):
-    """Phase-2 prelude: the production 128 engine must rediscover a(18)
-    (below the u64 cap, tying it to the phase-1 record) and the
-    Waldvogel-Leikauf run-21 value (above the cap, in the zone it will
-    hunt) before any production segment runs."""
     eng = engine_factory(n)
     for target, run in ((CAMPAIGN_FOUND[18], 18), (A21_UPPER, 21)):
         t0 = time.time()
         hits = eng.hunt(target - 5 * 10**9, target + 10**6)
         if (target, run) not in hits:
             raise CorruptEngineError(
-                f"CANARY ALARM: 128-path rediscovery of run-{run} value "
+                f"CANARY ALARM: rediscovery of run-{run} value "
                 f"{target} failed (got {hits})")
         log("CANARY-GOLD", f"run-{run} value {target} rediscovered "
-            f"end-to-end via 128 path ({time.time()-t0:.0f}s)")
+            f"end-to-end ({time.time()-t0:.0f}s)")
 
 
 # ------------------------------- the hunt ----------------------------------
@@ -210,43 +219,36 @@ def record_discovery(ev, label):
 
 def hunt(args):
     n = args.n
-    is128 = args.engine in ("cpu128", "gpu128")
     if args.engine == "cpu":
-        from euler_search import CpuEngine as Eng
-    elif args.engine == "cpu128":
-        Eng = CpuEngine128
-    elif args.engine == "gpu128":
-        from euler_gpu import GpuEngine128 as Eng
+        Eng = CpuEngine
+        log("WARN", "the numpy reference engine is for verification, not "
+                    "hunting -- production legs need the GPU")
     else:
         from euler_gpu import GpuEngine as Eng
 
-    c = None if args.fresh else load_ckpt(n, is128)
+    c = None if args.fresh else load_ckpt(n)
     if c is None:
-        c = fresh_ckpt(n, is128)
+        c = fresh_ckpt(n)
 
     def make_engine(m):
         return Eng(m, wheel_primes=WHEEL_PRIMES_29)
 
     if not c["canaries_done"]:
-        if is128:
-            log("STAGE", "canary prelude (128): a(18) + Waldvogel-Leikauf "
-                "run-21 rediscovery via the production engine")
-            canary_prelude128(make_engine, n)
-        else:
-            log("STAGE", "canary prelude: oracle low-pass + a(14)/a(15) rediscovery")
-            for p, r in low_pass(n):
-                ev, msg = three_way_verify(p, r, n)
-                if ev is None:
-                    raise CorruptEngineError(f"low-range verify failed at {p}: {msg}")
-                if p in EXPECTED_KNOWN and EXPECTED_KNOWN[p] == r:
-                    log("CANARY-GOLD", f"p={p} run={r} (Euler!) verified 3-way -- "
-                        "positive control of the full discovery protocol")
-                else:
-                    record_discovery(ev, "UNEXPECTED-LOW")
-                    log("DISCOVERY", f"UNEXPECTED low-range run>= {n} at {p}")
-            canary_prelude(make_engine, n)
+        log("STAGE", "canary prelude: oracle low-pass + a(14)/a(15)/a(18) "
+                     "+ run-21 rediscovery via the production engine")
+        for p, r in low_pass(n):
+            ev, msg = three_way_verify(p, r, n)
+            if ev is None:
+                raise CorruptEngineError(f"low-range verify failed at {p}: {msg}")
+            if p in EXPECTED_KNOWN and EXPECTED_KNOWN[p] == r:
+                log("CANARY-GOLD", f"p={p} run={r} (Euler!) verified 3-way -- "
+                    "positive control of the full discovery protocol")
+            else:
+                record_discovery(ev, "UNEXPECTED-LOW")
+                log("DISCOVERY", f"UNEXPECTED low-range run>= {n} at {p}")
+        canary_prelude(make_engine, n)
         c["canaries_done"] = True
-        save_ckpt(c, is128)
+        save_ckpt(c)
 
     eng = make_engine(n)
     target_run = FRONTIER_RUN + 1
@@ -275,16 +277,10 @@ def hunt(args):
                 continue
             t0 = time.time()
             surv = eng.survivors_pre_mr(lo, hi)
-            if isinstance(surv, np.ndarray):         # u64 GPU: one array
-                plist = np.sort(surv).tolist()
-            elif isinstance(surv, list):             # 128 GPU: sorted ints
+            if isinstance(surv, list):               # GPU: one sorted list
                 plist = surv
-            else:                                    # CPU engines yield chunks
-                chunks = list(surv)
-                if chunks and isinstance(chunks[0], np.ndarray):
-                    plist = np.sort(np.concatenate(chunks)).tolist()
-                else:
-                    plist = sorted(p for ch in chunks for p in ch)
+            else:                                    # CPU reference: chunks
+                plist = sorted(p for ch in surv for p in ch)
             for p in plist:
                 c["survivors"] += 1
                 r = mr_run_length(p, cap=100)
@@ -319,7 +315,7 @@ def hunt(args):
                         log("DISCOVERY", "=" * 60)
                         c["hits"] = c.get("hits", 0) + 1
                         if args.stop_on_discovery:
-                            save_ckpt(c, is128)
+                            save_ckpt(c)
                             log("STAGE", "frontier-extending discovery "
                                 "confirmed -- stopping (--stop-on-discovery)")
                             return 0
@@ -375,7 +371,7 @@ def hunt(args):
                     f"run{target_run}+ {c.get('hits', 0)}  "
                     f"{odds}ETA {eta_s/3600.0:.1f}h ({finish})")
                 t_last, p_last = now, pos
-                save_ckpt(c, is128)
+                save_ckpt(c)
             dec = 10 ** int(math.log10(max(k1 * M, 10)))
             if k0 * M < dec <= k1 * M:
                 nc = c.get("near_counts", {})
@@ -384,12 +380,12 @@ def hunt(args):
                 log("MILESTONE", f"passed p = {dec:.0e}  survivors "
                     f"{c['survivors']:,}  near13-{FRONTIER_RUN} {nears}  "
                     f"run{target_run}+ hits {c.get('hits', 0)}")
-        save_ckpt(c, is128)
+        save_ckpt(c)
         log("STAGE", f"cap {cap:.3e} reached; survivors {c['survivors']}; "
             f"best near-miss run {c['best_near']} at {c['best_near_p']}")
         return 0
     except KeyboardInterrupt:
-        save_ckpt(c, is128)
+        save_ckpt(c)
         log("STAGE", "interrupted -- checkpoint saved; rerun to resume")
         return 0
 
@@ -403,19 +399,21 @@ def selftest():
     ok = euler_search.selftest() and ok
     ok = euler_gpu.selftest() and ok
 
-    # resume drill: 2-segment run == uninterrupted run (state parity)
+    # resume drill: 2-segment run == uninterrupted run (state parity).  The
+    # engine-level version of this lives in G13, which sweeps split points on
+    # word/thread/launch boundaries; this one is the campaign-level check,
+    # low in the range where the oracle also has jurisdiction.
     from euler_gpu import GpuEngine
-    n = 13
-    eng = GpuEngine(n)
+    eng = GpuEngine(13)
     a = eng.survivors_pre_mr(P_FLOOR, 2 * 10**9)
-    b1 = eng.survivors_pre_mr(P_FLOOR, 10**9)
-    b2 = eng.survivors_pre_mr(10**9, 2 * 10**9)
-    b = np.sort(np.concatenate([b1, b2]))
-    if not np.array_equal(a, b):
-        print("FAIL resume drill: split != whole")
+    b = sorted(eng.survivors_pre_mr(P_FLOOR, 10**9)
+               + eng.survivors_pre_mr(10**9, 2 * 10**9))
+    if a != b or len(a) < 1:
+        print("FAIL resume drill: split != whole (%d vs %d)" % (len(a), len(b)))
         ok = False
     else:
-        print("PASS resume drill: split-at-1e9 stream == whole stream")
+        print("PASS resume drill: split-at-1e9 stream == whole stream "
+              "(%d survivors)" % len(a))
 
     # planted-discovery drill: a genuine run-13 survivor pushed through the
     # n=17 protocol MUST be rejected
@@ -436,42 +434,43 @@ def selftest():
     else:
         print("PASS positive control: 41 (run 40) verified 3-way")
 
-    # 128 resume drill: split window above the u64 cap == whole window
-    from euler_gpu import GpuEngine128
-    e128 = GpuEngine128(13)
-    lo128, mid128, hi128 = 3 * 10**19, 3 * 10**19 + 47 * 10**9, 3 * 10**19 + 10**11
-    a = e128.survivors_pre_mr(lo128, hi128)
-    b = sorted(e128.survivors_pre_mr(lo128, mid128)
-               + e128.survivors_pre_mr(mid128, hi128))
+    # high-range resume drill: the same property 11 orders of magnitude up,
+    # where p no longer fits a machine word
+    a = eng.survivors_pre_mr(3 * 10**19, 3 * 10**19 + 10**11)
+    b = sorted(eng.survivors_pre_mr(3 * 10**19, 3 * 10**19 + 47 * 10**9)
+               + eng.survivors_pre_mr(3 * 10**19 + 47 * 10**9,
+                                      3 * 10**19 + 10**11))
     if a != b or len(a) < 1:
-        print(f"FAIL 128 resume drill: split != whole ({len(a)} vs {len(b)})")
+        print(f"FAIL high-range resume drill: split != whole "
+              f"({len(a)} vs {len(b)})")
         ok = False
     else:
-        print(f"PASS 128 resume drill: split-above-cap stream == whole "
-              f"({len(a)} survivors)")
+        print(f"PASS high-range resume drill: split stream == whole "
+              f"({len(a)} survivors, p ~ 3e19)")
 
-    # 128 positive control: the Waldvogel-Leikauf value through the full
-    # protocol (exercises the >u64 re-sieve leg of three_way_verify)...
+    # positive control at a height where p exceeds 2^64: the
+    # Waldvogel-Leikauf value through the full protocol, which also
+    # exercises the big-int leg of the alternate-alignment re-sieve...
     ev, msg = three_way_verify(A21_UPPER, 21, 17)
     if ev is None:
-        print(f"FAIL 128 positive control: A21 upper rejected ({msg})")
+        print(f"FAIL positive control: A21 upper rejected ({msg})")
         ok = False
     else:
-        print("PASS 128 positive control: run-21 value verified 3-way above cap")
+        print("PASS positive control: run-21 value verified 3-way at 2.3e20")
     # ...and a planted FALSE claim about it must be rejected
     ev, msg = three_way_verify(A21_UPPER, 22, 17)
     if ev is not None:
-        print("FAIL 128 planted drill: fake run-22 claim ACCEPTED")
+        print("FAIL planted drill: fake run-22 claim ACCEPTED")
         ok = False
     else:
-        print(f"PASS 128 planted drill: fake run-22 claim rejected ({msg})")
+        print(f"PASS planted drill: fake run-22 claim rejected ({msg})")
     print("SELFTEST " + ("ALL GREEN" if ok else "FAILED"))
     return ok
 
 
 def status():
     any_ckpt = False
-    for path in (CKPT, CKPT128):
+    for path in (CKPT,):
         if not os.path.exists(path):
             continue
         any_ckpt = True
@@ -503,33 +502,20 @@ def main():
                          % FRONTIER_RUN)
     ap.add_argument("--n", type=int, default=17)
     ap.add_argument("--to", type=float, default=0.0,
-                    help="depth cap (default: u64 cap, or 3.2e20 for the "
-                         "128 engines)")
-    ap.add_argument("--engine",
-                    choices=["auto", "cpu", "gpu", "cpu128", "gpu128"],
-                    default="auto")
+                    help="depth cap (default %.0e, the current leg; the hard "
+                         "ceiling is %.0e)" % (DEFAULT_TO, P_CEIL))
+    ap.add_argument("--engine", choices=["gpu", "cpu"], default="gpu",
+                    help="gpu (default) is the production engine and spans "
+                         "the whole range; cpu is the numpy reference, for "
+                         "verification only")
     ap.add_argument("--seg-periods", type=int, default=SEG_PERIODS)
     ap.add_argument("--heartbeat", type=float, default=30.0)
     args = ap.parse_args()
-    if args.engine == "auto":
-        try:
-            import cupy  # noqa
-            args.engine = "gpu"
-        except Exception:
-            args.engine = "cpu"
-    if args.engine in ("cpu128", "gpu128"):
-        if args.to <= 0:
-            args.to = float(P2_DEFAULT_TO)
-        if args.to > P128_CEIL:
-            print(f"cap clamped to 128-path ceiling {P128_CEIL:.3e}")
-            args.to = float(P128_CEIL)
-    else:
-        if args.to <= 0:
-            args.to = float(U64_CAP)
-        if args.to > U64_CAP:
-            print(f"cap clamped to u64-safe {U64_CAP:.3e} "
-                  "(use --engine gpu128 to go beyond)")
-            args.to = float(U64_CAP)
+    if args.to <= 0:
+        args.to = float(DEFAULT_TO)
+    if args.to > P_CEIL:
+        print(f"cap clamped to the enforced ceiling {P_CEIL:.3e}")
+        args.to = float(P_CEIL)
     if args.selftest:
         sys.exit(0 if selftest() else 1)
     if args.status:

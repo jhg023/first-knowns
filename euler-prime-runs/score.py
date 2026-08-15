@@ -7,19 +7,21 @@
 #   python score.py            # full battery + benchmark
 #   python score.py --bench-only
 #
-# Frozen benchmark shape v1 (2026-08-05): n=17, 29# wheel, Barrett v3
-# kernel, window [1e16, 1e16 + 5e14), periods_per_launch = 8192.
-# FINGERPRINT frozen from the gated v2 engine (v3 must match bit-for-bit).
-# Phase-2 shape (2026-08-06): same span via the 128 path at [2.3e20,
-# +5e14) -- SCORE128, own fingerprint, frozen from the gated 128 engine.
+# TWO frozen shapes, both n=17 on the 29# wheel, both a 5e14 span, measured
+# with the ONE production engine:
+#   SCORE     [1e16, +5e14)    fingerprint frozen 2026-08-05
+#   SCORE128  [2.3e20, +5e14)  fingerprint frozen 2026-08-06
+# Same span four orders of magnitude apart, so the pair is also a
+# height-flatness check.  Both fingerprints predate the current engine (they
+# were frozen from the u64-only kernel and the first 128 path, both since
+# retired) and both still have to reproduce bit-for-bit -- that is what makes
+# the score un-gameable across engine generations.
 #
-# Shape amendment (2026-08-15, v3-128): the 128 benchmark takes the engine's
-# default launch size, which the bit-sieve engine raised from 8192 to 131072
-# periods -- so the window (77,285 periods) is now covered by ONE launch and
-# SCORE128 no longer includes multi-launch overhead.  The WORK is unchanged:
-# both fingerprints below still reproduce bit-for-bit, which is what makes
-# the score un-gameable.  Cross-generation SCORE128 comparisons therefore
-# quote the paired ratio measured in one battery, per BENCHMARKS.md.
+# Shape amendment (2026-08-15): the benchmarks take the engine's default
+# launch size, raised 8192 -> 131072 periods, so a 77,285-period window is
+# now ONE launch and the scores no longer include multi-launch overhead. The
+# WORK is unchanged. Cross-generation comparisons quote the paired ratio
+# measured in a single battery, per BENCHMARKS.md.
 
 import argparse
 import sys
@@ -46,6 +48,16 @@ FINGERPRINT128_CHECKSUM = 133625321009290
 
 
 def benchmark(runs=3):
+    """The LOW frozen shape, now run by the production engine.
+
+    This window used to belong to the u64-only kernel.  One engine spans
+    the range, so it is measured here too -- and because both shapes are the
+    same span swept by the same engine, SCORE vs SCORE128 doubles as a
+    height-flatness check across four orders of magnitude.  The frozen
+    fingerprint is unchanged and still has to reproduce -- it was frozen from
+    the u64-only kernel that has since been retired, so this window is also
+    the standing check that the current engine still agrees with it.
+    """
     import cupy as cp
     from euler_gpu import GpuEngine
     e = GpuEngine(17)
@@ -58,14 +70,16 @@ def benchmark(runs=3):
         cp.cuda.Device().synchronize()
         rates.append(BENCH_SPAN / (time.time() - t0))
         surv = s
-    checksum = int(np.bitwise_xor.reduce(surv)) if surv.size else 0
-    return float(np.median(rates)), int(surv.size), checksum
+    checksum = 0
+    for p in surv:
+        checksum ^= p
+    return float(np.median(rates)), len(surv), checksum
 
 
 def benchmark128(runs=3):
     import cupy as cp
-    from euler_gpu import GpuEngine128
-    e = GpuEngine128(17)
+    from euler_gpu import GpuEngine
+    e = GpuEngine(17)
     e.survivors_pre_mr(BENCH128_LO, BENCH128_LO + 10**12)   # warmup
     cp.cuda.Device().synchronize()
     rates, surv = [], None

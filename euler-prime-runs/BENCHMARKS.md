@@ -5,6 +5,24 @@ the frozen benchmark shape, ONLY if all gates are green and the work
 fingerprint (survivor count 178, xor checksum 120489734542316 on
 [1e16, 1e16+5e14)) reproduces exactly. Skipped work scores 0.
 
+**Engine unification (2026-08-15).** There is now one production engine
+spanning the whole range, so BOTH frozen shapes are measured with it:
+SCORE on the low window [1e16, +5e14) and SCORE128 on the high window
+[2.3e20, +5e14). The workloads and both fingerprints are unchanged --
+only the engine being measured changed.  The low window's fingerprint was
+frozen from the u64-only kernel, since retired, so reproducing it IS the
+standing proof that the current engine still agrees with it there. Ledger rows dated before 2026-08-15 measured the u64-only kernel
+on the low shape and are kept as history; do not read them as the same
+quantity as current SCORE values.
+
+A useful side effect: the two shapes are the same span swept by the same
+engine four orders of magnitude apart, so SCORE vs SCORE128 is now a
+**height-flatness measurement**.  Two captures: 6.716e15 vs 6.715e15
+(0.01% apart) and 6.331e15 vs 6.545e15 (3.4% apart).  The honest reading is
+flat to within a few percent, with the spread being ambient load rather than
+height -- a single capture agreeing to 0.01% was luck, not precision, and
+quoting it alone would have overstated the result.
+
 | date | engine | SCORE | notes |
 |------|--------|-------|-------|
 | 2026-08-05 | v1 baseline | 44,550,000 (est.) | pre-score.py measurement, 4.46e13 p/s |
@@ -13,6 +31,7 @@ fingerprint (survivor count 178, xor checksum 120489734542316 on
 | 2026-08-06 | v4 (re-frozen, idle GPU) | **512,819,184** | same engine, quiet-GPU capture; matches the 9-hour production average (~5.0e14 p/s) and interleaved harness runs (5.12e14) |
 | 2026-08-06 | v1-128 | 248,019,330 | phase-2 128-bit path, one-kernel design, window [2.3e20, +5e14), fingerprint 178 survivors / checksum 133625321009290; captured under desktop load (u64 SCORE read 323,531,367 in the same battery). Paired A/B: 0.77x the u64 kernel |
 | 2026-08-06 | v2-128 (frozen) | **362,319,437** | two-phase compaction (stage-1a hot kernel + queued cold kernel; see OPTIMIZATION_LOG). Same fingerprint, bit-identical stream. Same-battery pair: SCORE128 362,319,437 vs u64 SCORE 323,394,817 -- **the 128 path is now 1.13x the proven u64 engine** (paired A/B median 1.135, min 1.111 over 12 rounds) |
+| 2026-08-15 | v3-128, single-engine tree | SCORE **6,330,661,788** / SCORE128 **6,544,948,396** | retired engines deleted; both frozen shapes now measured with the one production engine, both fingerprints reproduced, 12 gates green. Engine mathematics identical to the row below -- this row differs only in what the tree contains and which engine the SCORE column refers to |
 | 2026-08-15 | v3-128 (frozen) | **6,341,803,579** | bit-sieve stage 1a + stage-1b compaction rounds; NINC=24, ROUND=8, W=64, PPL=131072. Same fingerprint (178 / 133625321009290), bit-identical stream (G13, G14). Full battery green; same-battery u64 SCORE 305,864,144, so the 128 path is now **20.7x the u64 engine**. Shape note: SCORE128 takes the engine's default launch size, raised 8192 -> 131072, so the 77,285-period window is now ONE launch (see score.py header) |
 
 Decomposing that ledger jump, one battery, all three points measured

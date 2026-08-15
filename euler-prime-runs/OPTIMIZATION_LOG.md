@@ -199,7 +199,7 @@ unchanged, so the frozen fingerprint still applies), which would cut the
 64% sieve share roughly in half. It is not implemented because the
 offset table is n-dependent and explodes for the small n the gate
 battery runs on: n=17 gives a fine 2.99e7 offsets (240 MB), but n=5
-gives 5.4e8 (4.3 GB). Production would then run a wheel that G6/G11/G13
+gives 5.4e8 (4.3 GB). Production would then run a wheel that G6/G13
 cannot exercise at their working n, which trades a factor of 1.45 for a
 hole in the parity gates. It also needs a checkpoint migration, since
 `next_k` is denominated in M. Revisit only with a per-n wheel budget and
@@ -220,6 +220,69 @@ gates that run 31# at n=17.
 Both were introduced by A/B harness scaffolding rather than by the
 kernels, which is its own lesson: the tuning knobs need the same
 discipline as the arithmetic.
+
+### Engine unification (same day): deleting the 64-bit boundary
+
+Not a throughput change -- a complexity change, and the one that should
+have been made at the start of phase 2 rather than after it.
+
+The project had grown two engines and two campaigns: a u64 kernel capped
+at 1.8e19 and a 128-bit path above it, selected by `--engine gpu128`,
+with separate checkpoints, separate canary preludes, a deliberately
+re-covered seam at the cap, and a default `python launch.py` that quietly
+ran the *capped* engine. None of that was ever necessary. The 128 path's
+representation -- carry the candidate as (k, off) with p = k*29# + off and
+reduce every test to ((k mod q)*(M mod q) + off mod q) mod q -- is exactly
+as valid at 1e5 as at 1e23. It was written to survive 2^64 and happens to
+span everything.
+
+So the campaign now has one engine, one cursor, no engine flag, and no
+seam; the GPU is always used. What changed:
+
+- `--engine` defaults to the production GPU engine and spans
+  [1e5, 1e24). The old engine selectors are gone rather than deprecated:
+  a flag that still parses is still a thing to explain.
+- One cursor (`campaign_checkpoint.json`), migrated from the phase-2 file
+  under the SAME config key -- so the migrated cursor still has to pass
+  huntlib's key check, and the 3.62e20 already covered stays valid. A
+  fresh campaign starts at 0, because there is no longer a cap to start
+  above.
+- One canary prelude covering a(14)/a(15)/a(18) and the run-21 value,
+  i.e. spanning both sides of 2^64 in one pass -- the boundary is no
+  longer special and the prelude is what proves it.
+- The verification re-sieve got *stronger*: it now always runs the numpy
+  reference engine on the **23# wheel** while production runs 29#, so the
+  alternate-alignment leg differs in both arithmetic and wheel at every
+  height. Previously that only held below the u64 cap, where a 23# engine
+  happened to be the one available.
+- Both frozen benchmark shapes are now measured with the one engine,
+  which makes SCORE vs SCORE128 a height-flatness check: flat to within a
+  few percent across four orders of magnitude (captures 0.01% and 3.4%
+  apart; the spread is ambient load, so the tighter one was luck and is
+  not the number to quote).
+
+The u64 kernel and the pre-bit-sieve 128 path were first made
+unreachable, then **deleted outright** once their equivalence gate had run
+green and been committed. Keeping them as parked references was the wrong
+call: it left the working tree ambiguous about what would run from zero,
+which is the question the tree has to answer. The equivalence evidence is
+in the git history at the commit where the gate passed, which is where a
+one-time migration proof belongs.
+
+Gates retired with them: G9 (the two CPU engines against each other) and
+G11 (the two GPU engines against each other) had no meaning once one side
+of each pair was gone, and the old G13 (new engine vs old engine) was a
+migration gate by construction. Their coverage was re-pointed before the
+deletion, not dropped: G6 absorbed G11's CPU-vs-GPU cases and now runs
+seven heights to the ceiling, G13 was rebuilt to prove slicing-
+independence (which needs no second engine, because boundary bugs make
+the answer depend on the slicing), and G14 pins the tables to the
+divisibility definition directly. What stays permanently is the
+independent numpy engine -- not a previous version, the other half of the
+parity gate.
+
+Generalized into ../OPTIMIZATION.md as the design rule to apply *before*
+writing an engine, not after (section 2.7).
 
 ### Note on measurement method
 

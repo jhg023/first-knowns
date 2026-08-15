@@ -13,10 +13,19 @@
 # Correctness floor: sieve assumes every value x^2+x+p > Q2, so the engine
 # refuses p < P_FLOOR; [2, P_FLOOR) belongs to the oracle low-pass.
 #
-# Phase 2 adds CpuEngine128 (exact-int windows above the u64 cap, to
-# P128_CEIL = 1e24) with gates G9 (bit-for-bit overlap parity vs the
-# proven u64 engine) and G10 (direct big-int trial-division parity on
-# above-cap mini-windows + Waldvogel-Leikauf run-21 rediscovery).
+# ONE reference engine, spanning the whole range to P_CEIL = 1e24.  It is
+# what the GPU is pinned against (G6, bit-for-bit on populated windows at
+# seven heights), it is checked itself against direct big-integer trial
+# division on mini-windows (G10) and against the oracle on small windows
+# (G4), and it is the third leg of the discovery protocol -- where the
+# launcher runs it on the 23# wheel while production runs 29#, so the
+# re-sieve differs from the GPU in both arithmetic and alignment at every
+# height.
+#
+# It is the SLOW, obviously-correct side of the pair on purpose: plain
+# numpy `%` on (k, off) pairs, never Barrett, never sharing code with the
+# GPU.  That independence is what the parity gate measures, so do not
+# optimize this file.
 #
 # ASCII only.
 
@@ -26,7 +35,7 @@ from sympy import primerange
 import sys as _sys
 import pathlib as _pathlib
 _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
-from huntlib.primes import MR_BASES, mr_is_prime as mr_is_prime_u64  # noqa: E402
+from huntlib.primes import MR_BASES, mr_is_prime  # noqa: E402
 
 from euler_reference import A21_UPPER, KNOWN, run_length
 
@@ -67,96 +76,39 @@ def stage_primes(after=23):
 
 def mr_run_length(p, cap=100):
     x = 0
-    while x < cap and mr_is_prime_u64(x * x + x + p):
+    while x < cap and mr_is_prime(x * x + x + p):
         x += 1
     return x
 
 
-class CpuEngine:
-    """Streams survivors of the run->=n pre-filter over [lo, hi)."""
-
-    def __init__(self, n, wheel_primes=None):
-        self.n = n
-        self.wheel_primes = wheel_primes or WHEEL_PRIMES
-        self.offs, self.M = build_wheel(n, self.wheel_primes)
-        self.s1, self.s2 = stage_primes(after=self.wheel_primes[-1])
-        # stage-1 lookup tables: per prime, bool array of killed residues
-        self.luts = {}
-        for q in self.s1:
-            lut = np.zeros(int(q), dtype=bool)
-            lut[list(forbidden(int(q), n))] = True
-            self.luts[int(q)] = lut
-        self.xx = [x * x + x for x in range(n)]
-
-    def survivors_pre_mr(self, lo, hi, chunk_periods=32):
-        """Yield numpy arrays of p in [lo, hi) surviving wheel+stage1+stage2."""
-        if lo < P_FLOOR:
-            raise ValueError("CPU engine floor is %d; use the oracle below" % P_FLOOR)
-        k0 = lo // self.M
-        k1 = hi // self.M + 1
-        for kc in range(k0, k1, chunk_periods):
-            ks = np.arange(kc, min(kc + chunk_periods, k1), dtype=np.uint64)
-            p = (ks[:, None] * np.uint64(self.M) + self.offs[None, :]).ravel()
-            p = p[(p >= lo) & (p < hi)]
-            # stage 1: compress after each prime
-            for q in self.s1:
-                qi = int(q)
-                p = p[~self.luts[qi][(p % q).astype(np.int64)]]
-                if p.size == 0:
-                    break
-            if p.size == 0:
-                continue
-            # stage 2: exact divisibility of the n values
-            alive = np.ones(p.size, dtype=bool)
-            for q in self.s2:
-                r = p % q
-                dead = np.zeros(p.size, dtype=bool)
-                for xx in self.xx:
-                    dead |= (r + np.uint64(xx)) % q == 0
-                alive &= ~dead
-            p = p[alive]
-            if p.size:
-                yield p
-
-    def hunt(self, lo, hi, cap=100):
-        """All (p, exact_run) with run >= n in [lo, hi), ascending."""
-        out = []
-        for arr in self.survivors_pre_mr(lo, hi):
-            for p in arr.tolist():
-                # cheap first: value at x=0..n-1 must all be prime
-                good = all(mr_is_prime_u64(p + xx) for xx in self.xx)
-                if good:
-                    out.append((p, mr_run_length(p, cap=cap)))
-        return out
-
-
-# ---------------------- phase 2: 128-bit value path ------------------------
+# ------------------------- the (k, off) representation ----------------------
 #
-# Above the u64 cap, p itself no longer fits numpy's u64.  The engines
-# never materialize it: every candidate is carried as the pair (k, off)
-# with p = k*M + off, off < M, and every sieve test needs only
+# p is never materialized in a machine word.  Every candidate is carried as
+# the pair (k, off) with p = k*M + off, off < M, and every sieve test needs
+# only
 #     p mod q = ((k mod q) * (M mod q) + (off mod q)) mod q
-# which is u64-safe for any p below the ceiling (k < 2^48, products
-# < 2^32).  Exact p values exist only as host-side Python ints.  The
-# proven u64 engines above are untouched; parity gates pin the 128 path
-# against them on their common range.
+# which is u64-safe for any p below the ceiling (k < 2^48, products < 2^32).
+# Exact p values exist only as host-side Python ints.  This is why there is
+# no 2^64 boundary anywhere in the search and no second engine to switch to
+# at one -- see ../OPTIMIZATION.md section 2.7.
 
-P128_CEIL = 10**24
-# Enforced value ceiling of the 128-bit path.  Everything the engines
+P_CEIL = 10**24
+# Enforced value ceiling of the search.  Everything the engines
 # and the MR chain touch (values x^2+x+p <= p + 10100 at run cap 100)
 # stays a factor >3 below huntlib's deterministic-MR validity bound
 # 3.317e24 (Sorenson-Webster 7-base).  Raising this is a new engine
 # version: new gates, new fingerprint, log entry.
 
 
-class CpuEngine128:
-    """Phase-2 CPU engine: streams pre-MR survivors of [lo, hi) with
-    lo/hi/survivors as exact Python ints, valid up to P128_CEIL.
+class CpuEngine:
+    """The CPU reference engine: streams pre-MR survivors of [lo, hi) with
+    lo/hi/survivors as exact Python ints, valid up to P_CEIL.
 
-    Same mathematics as CpuEngine, third implementation of the residue
-    arithmetic (plain numpy `%` on (k, off) pairs -- the GPU twin uses
-    Barrett; the two must never share code).  Yields sorted lists of
-    Python ints."""
+    The independent implementation of the residue arithmetic -- plain numpy
+    `%` on (k, off) pairs, where the GPU twin uses Barrett magic-multiply.
+    The two must never share code; G6 compares their output streams, and
+    that comparison is only worth anything because they are written
+    differently.  Yields sorted lists of Python ints."""
 
     def __init__(self, n, wheel_primes=None):
         self.n = n
@@ -174,9 +126,9 @@ class CpuEngine128:
         """Yield sorted lists of survivor p (Python ints) in [lo, hi)."""
         lo, hi = int(lo), int(hi)
         if lo < P_FLOOR:
-            raise ValueError("128 engine floor is %d" % P_FLOOR)
-        if hi > P128_CEIL:
-            raise ValueError("128 engine ceiling is %d" % P128_CEIL)
+            raise ValueError("engine floor is %d" % P_FLOOR)
+        if hi > P_CEIL:
+            raise ValueError("engine ceiling is %d" % P_CEIL)
         M = int(self.M)
         k0, k1 = lo // M, hi // M + 1
         s_lo = lo - k0 * M            # p >= lo  <=>  k > k0 or off >= s_lo
@@ -219,7 +171,7 @@ class CpuEngine128:
         out = []
         for chunk in self.survivors_pre_mr(lo, hi):
             for p in chunk:
-                if all(mr_is_prime_u64(p + xx) for xx in self.xx):
+                if all(mr_is_prime(p + xx) for xx in self.xx):
                     out.append((p, mr_run_length(p, cap=cap)))
         return out
 
@@ -242,10 +194,15 @@ def g3_wheel_property(trials=4000, seed=1):
 
 
 def g4_engine_vs_oracle():
-    """Survivor (p, run) lists match the oracle exactly on windows."""
+    """Survivor (p, run) lists match the oracle exactly on windows.
+
+    Run on the 23# wheel rather than production's 29#: the survivor set is
+    wheel-independent (the wheel only decides which primes are tested where),
+    so this also checks that claim -- and G6 covers the production wheel.
+    """
     from euler_reference import oracle_search
     for n, lo, hi in ((5, 100000, 400000), (6, 100000, 400000), (7, 100000, 1200000)):
-        eng = CpuEngine(n).hunt(lo, hi)
+        eng = CpuEngine(n, wheel_primes=WHEEL_PRIMES).hunt(lo, hi)
         eng_ge = sorted(p for p, r in eng)
         ora = sorted(oracle_search(lo, hi, n, exact=False))
         if eng_ge != ora:
@@ -257,39 +214,18 @@ def g4_engine_vs_oracle():
 
 
 def g5_rediscover(ns=(9, 11, 12)):
-    """Engine re-finds a(n) as the FIRST run-exactly-n survivor above floor."""
+    """Engine re-finds a(n) as the FIRST run-exactly-n survivor above floor.
+
+    A least-claim drill, not just a hit: everything below the known value
+    must classify as a shorter run.  On the 23# wheel, as G4.
+    """
     for n in ns:
         target = KNOWN[n]
-        hits = CpuEngine(n).hunt(P_FLOOR, target + 1000)
+        hits = CpuEngine(n, wheel_primes=WHEEL_PRIMES).hunt(P_FLOOR, target + 1000)
         firsts = [p for p, r in hits if r == n]
         if not firsts or firsts[0] != target:
             return False, f"G5 FAIL n={n}: first={firsts[:1]}, expected {target}"
     return True, f"G5 ok: a(n) rediscovered for n={ns}"
-
-
-def g9_128_overlap():
-    """CPU-128 survivor stream == the PROVEN CPU-u64 stream, bit-for-bit,
-    on populated windows across the u64 range (both engines can run
-    there; the 128 path inherits the u64 path's evidence)."""
-    cases = [(5, 10**5, 4 * 10**5, 20), (9, 10**6, 6 * 10**7, 2),
-             (13, 10**5, 8_900_000_000, 1),
-             (17, 10**15, 10**15 + 3 * 10**12, 1)]
-    counts = []
-    for n, lo, hi, min_surv in cases:
-        u64 = np.concatenate(
-            [a for a in CpuEngine(n, wheel_primes=WHEEL_PRIMES_29)
-             .survivors_pre_mr(lo, hi)] or [np.array([], dtype=np.uint64)])
-        u64_list = sorted(int(v) for v in u64.tolist())
-        p128 = sorted(p for chunk in
-                      CpuEngine128(n).survivors_pre_mr(lo, hi)
-                      for p in chunk)
-        if len(u64_list) < min_surv:
-            return False, f"G9 FAIL n={n}: window under-populated ({len(u64_list)})"
-        if u64_list != p128:
-            return False, (f"G9 FAIL n={n} [{lo},{hi}): u64 {len(u64_list)}"
-                           f" vs 128 {len(p128)}")
-        counts.append(len(u64_list))
-    return True, f"G9 ok: CPU-128 == CPU-u64 on 4 overlap windows, sizes {counts}"
 
 
 def _direct_survivors(lo, hi, n):
@@ -317,34 +253,34 @@ def _direct_survivors(lo, hi, n):
     return sorted(out)
 
 
-def g10_128_above_cap():
-    """Above the u64 cap the 128 path is pinned two independent ways:
+def g10_above_cap():
+    """The reference engine is pinned two further independent ways:
     (a) mini-window parity against direct big-int trial division at
-    2.35e20 and at the P128_CEIL zone; (b) end-to-end rediscovery of the
+    2.35e20 and at the P_CEIL zone; (b) end-to-end rediscovery of the
     Waldvogel-Leikauf run-21 literature value at 2.345e20."""
     for lo, span in ((235 * 10**18, 6 * 10**6),
-                     (P128_CEIL - 6 * 10**6, 6 * 10**6)):
+                     (P_CEIL - 6 * 10**6, 6 * 10**6)):
         hi = lo + span
         direct = _direct_survivors(lo, hi, 17)
         eng = sorted(p for chunk in
-                     CpuEngine128(17).survivors_pre_mr(lo, hi)
+                     CpuEngine(17).survivors_pre_mr(lo, hi)
                      for p in chunk)
         if direct != eng:
             return False, (f"G10 FAIL [{lo},{hi}): direct {len(direct)}"
                            f" vs engine {len(eng)}")
     lo, hi = A21_UPPER - 10**7, A21_UPPER + 10**7
-    hits = CpuEngine128(17).hunt(lo, hi)
+    hits = CpuEngine(17).hunt(lo, hi)
     good = [(p, r) for p, r in hits if p == A21_UPPER and r == 21]
     if not good:
         return False, f"G10 FAIL: A21 upper value not rediscovered ({hits})"
-    return True, ("G10 ok: 128-path == direct trial division on 2 mini-windows"
-                  " (2.35e20, ceil); Waldvogel-Leikauf run-21 value"
-                  " rediscovered end-to-end above the u64 cap")
+    return True, ("G10 ok: reference engine == direct big-int trial division"
+                  " on 2 mini-windows (2.35e20, ceiling); Waldvogel-Leikauf"
+                  " run-21 value rediscovered end-to-end")
 
 
 def selftest(fast=False):
     gates = [g3_wheel_property, g4_engine_vs_oracle, g5_rediscover,
-             g9_128_overlap, g10_128_above_cap]
+             g10_above_cap]
     ok = True
     for g in gates:
         good, msg = g()

@@ -23,6 +23,31 @@ each README stays.
 3. **Never let the two engine implementations converge.** The CPU engine
    uses plain `%`; the GPU engine uses Barrett arithmetic. One must
    never call the other; parity gates depend on their independence.
+   Superseded engine versions stay in the tree as parity references —
+   they are how "the fast engine returns the identical stream" remains a
+   checkable claim — but they must never be reachable from the campaign.
+   One engine hunts; the others only ever appear in gates.
+3a. **Before optimizing anything, read `OPTIMIZATION.md`.** Throughput
+   sets the frontier, so every project here needs it; that file holds the
+   process and the catalogue of what has actually paid, with measured
+   numbers and the rejected attempts. The rules broken most often, stated
+   here so they are unmissable:
+   - **Measure the phase split first.** The one time this was skipped,
+     work was aimed at a stale comment naming the wrong bottleneck (it
+     said 80% cold; it was 83% hot). Two minutes of timers beat it.
+   - **Interleave every A/B and re-check the fingerprint on every run.**
+     Ambient GPU load swings absolute rates ~30%, and sequential sweeps
+     invent cliffs that are not there. The ratio is the stable quantity.
+   - **Re-sweep tuning constants after any structural change** — optima
+     move; a constant tuned against the old design is now wrong.
+   - **Never treat the cost model as evidence.** Use it to generate
+     candidates and to price what you decline. It has mispredicted by 4x
+     in both directions here.
+   - **Do not grow a second engine at the machine-word boundary.** Carry
+     candidates as `(k, off)` from the start so one engine spans the
+     whole range (OPTIMIZATION.md §2.7).
+   - **Price what you decline, and record the failures.** The rejects are
+     what stop the next agent re-running a dead end.
 4. **Oracles stay slow and boring.** sympy only. No optimization, ever.
 5. **Discoveries are records, not announcements.** The pipeline writes
    evidence JSONs; humans decide what happens next. Never auto-submit
