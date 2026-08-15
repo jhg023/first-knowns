@@ -20,12 +20,13 @@ a smaller run ≥ 19. Details in [RESULTS.md](RESULTS.md).
 **Status: ACTIVE** — phase 1 (the full 64-bit-safe range) is complete;
 phase 2, a 128-bit engine targeting a(19) beyond the 1.8×10¹⁹ ceiling,
 is gated and hunting (`--engine gpu128`). The sweep is contiguous from
-0 to **3.6004×10²⁰**, so a(19) and a(20) both exceed that. Conditional
-on the empty sweep so far, the model puts a(19) at median 8.34×10²⁰
-(quartiles 5.38×10²⁰ / 1.45×10²¹); the current leg runs to 5×10²¹, ~98%
+0 to **3.62×10²⁰**, so a(19) and a(20) both exceed that. Conditional
+on the empty sweep so far, the model puts a(19) at median 8.37×10²⁰
+(quartiles 5.40×10²⁰ / 1.46×10²¹); the current leg runs to 5×10²¹, ~98%
 of the conditional distribution. The phase-2 engine was rebuilt
-2026-08-15 (v3-128, bit-sieve stage 1a) and is **~14x** faster with a
-bit-identical survivor stream — gates G13/G14, unchanged fingerprints.
+2026-08-15 (v3-128, bit-sieve stage 1a) and is **14.1x** faster in
+production with a bit-identical survivor stream — gates G13/G14,
+unchanged fingerprints. That puts the a(19) median ~17 hours out.
 
 ## The problem
 
@@ -133,9 +134,10 @@ Throughput on an RTX 4090 (see BENCHMARKS.md). The u64 engine runs
 range (to 1.8×10¹⁹) took ~9.5 hours in production. The phase-2 v3-128
 engine runs **6.3×10¹⁵ p/s** on its frozen window (SCORE128
 6,341,803,579, captured in the same battery as u64 SCORE 305,864,144 —
-20.7x), for a projected **7.9×10¹⁵ p/s sustained** in production. At
-that rate re-sweeping everything from 0 to 5×10²¹ costs about a week,
-and the engine's enforced 10²⁴ ceiling is ~4 years of single-GPU wall.
+20.7x), and **7.76×10¹⁵ p/s measured in production** — 14.1x the
+5.5×10¹⁴ its predecessor averaged over leg 1. At that rate re-sweeping
+everything from 0 to 5×10²¹ costs about a week, and the engine's
+enforced 10²⁴ ceiling is ~4 years of single-GPU wall (was ~58).
 
 ## The odds model
 

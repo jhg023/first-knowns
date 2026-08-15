@@ -81,22 +81,23 @@ was projected at ~6.1 days at the idle 5.7e14 p/s and completed
 2026-08-14 in 152.1 h (~6.3 days), a realized production average of
 5.5e14 p/s across the whole leg.
 
-Phase-2 wall-clock (v3-128, from the 3.6004e20 frontier). Projected at
-5.5e14 x 14.4 = **7.9e15 p/s** sustained -- i.e. the realized v2
-production average scaled by the sustained ratio above, not by the
-benchmark-window ratio. To be replaced by a realized average once the
-leg completes:
+Phase-2 wall-clock (v3-128, from the 3.62e20 frontier). **Measured, not
+projected**: a production run of [3.6004e20, 3.62e20) on 2026-08-15
+reported 76.0-79.2e14 p/s across eight steady-state heartbeats, median
+**7.76e15 p/s** -- 14.1x the 5.5e14 the v2 engine averaged over leg 1,
+and 98% of the 7.9e15 predicted from the paired benchmark ratio. The
+sustained decomposition above therefore holds in production.
 
 | target | P(a(19) by then) | v3 | was (v2) |
 |--------|------------------|----|----------|
-| 5.38e20 (a19 Q1) | 25% | 6 h | 3.7 days |
-| 8.34e20 (a19 median) | 50% | **17 h** | 10.0 days |
-| 1e21 | 59% | 0.9 days | 13.5 days |
-| 1.45e21 (a19 Q3) | 75% | 1.6 days | 23.0 days |
+| 5.40e20 (a19 Q1) | 25% | 6 h | 3.7 days |
+| 8.37e20 (a19 median) | 50% | **17 h** | 10.0 days |
+| 1e21 | 59% | 0.95 days | 13.5 days |
+| 1.46e21 (a19 Q3) | 75% | 1.6 days | 23.0 days |
 | 2e21 | 85% | 2.4 days | 34.5 days |
-| 5e21 (leg cap) | 98% | **6.8 days** | 97.6 days |
+| 5e21 (leg cap) | 98% | **6.9 days** | 97.6 days |
 
-For scale: re-sweeping the entire range from 0 to 5e21 now costs ~7.3
+For scale: re-sweeping the entire range from 0 to 5e21 now costs ~7.5
 days, and the engine's enforced 1e24 ceiling is ~4 years of single-GPU
 wall (it was ~58 years).
 

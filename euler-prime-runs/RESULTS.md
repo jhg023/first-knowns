@@ -141,11 +141,14 @@ with its own evidence JSON, plus near-miss counts runs 13/14/15/16 =
 
 ## Phase 2, leg 2 — in progress
 
-Leg 2 resumed from the leg-1 checkpoint at 3.2×10²⁰ and swept to
-**3.6004×10²⁰** (wheel period k = 55,650,475,673) before being paused on
-2026-08-15 for an engine upgrade. Census additions during that stretch:
-five more run-17 primes (campaign total 59), each verified three ways
-with its own evidence JSON.
+Leg 2 resumed from the leg-1 checkpoint at 3.2×10²⁰ and is contiguous to
+**3.62×10²⁰** as of 2026-08-15, with no prime of run ≥ 19. Census
+additions over the leg so far: five more run-17 primes (campaign total
+59), each verified three ways with its own evidence JSON, and near-miss
+counts above the u64 cap now run 13/14/15/16 = 1031/487/196/86.
+
+The leg was paused at 3.6004×10²⁰ for an engine upgrade (below), then
+resumed; the last 2×10¹⁷ was swept by the new engine at 7.76×10¹⁵ p/s.
 
 ### Engine upgrade mid-leg: v3-128 (bit-sieve)
 
@@ -172,16 +175,17 @@ search changed except its speed**:
   near-miss/census counts are not double-counted. The exhaustive
   coverage claim from 0 to 3.6004×10²⁰ carries over untouched.
 - Because the engine version changed, the checkpoint's canary flag was
-  cleared: before any production segment runs, the launcher must
-  re-prove through the *new* engine that it rediscovers a(18) and the
-  Waldvogel–Leikauf run-21 value in flight. A new engine does not
-  inherit the old one's canary clearance.
+  cleared, so the launcher had to re-prove through the *new* engine that
+  it rediscovers a(18) and the Waldvogel–Leikauf run-21 value in flight
+  before any production segment ran. It did, on the 2026-08-15 resume
+  (two `CANARY-GOLD` lines). A new engine does not inherit the old
+  one's canary clearance.
 
 ### Standing result and remaining plan
 
-**a(19) and a(20) both exceed 3.6004×10²⁰.** Conditional on the empty
+**a(19) and a(20) both exceed 3.62×10²⁰.** Conditional on the empty
 sweep so far (E = 1.09 spent for run ≥ 19), the model puts a(19) at
-median 8.34×10²⁰, quartiles 5.38×10²⁰ / 1.45×10²¹.
+median 8.37×10²⁰, quartiles 5.40×10²⁰ / 1.46×10²¹.
 
 The leg's default depth is raised from 1×10²¹ to **5×10²¹**. At the old
 rate 1×10²¹ was ~14 days and a sensible stopping point; at the v3 rate
@@ -189,14 +193,17 @@ it is under a day, and stopping there would abandon the hunt at 59%
 odds. 5×10²¹ carries the conditional odds to ~98% for ~6.8 days of
 sweeping — the a(19) median now sits about **17 hours** away.
 
-| depth | P(a(19) found by then) |
-|-------|------------------------|
-| 5.38×10²⁰ (Q1) | 25% |
-| 8.34×10²⁰ (median) | 50% |
-| 1×10²¹ | 59% |
-| 1.45×10²¹ (Q3) | 75% |
-| 2×10²¹ | 85% |
-| 5×10²¹ (leg cap) | 98% |
+| depth | P(a(19) found by then) | wall-clock from 3.62×10²⁰ |
+|-------|------------------------|---------------------------|
+| 5.40×10²⁰ (Q1) | 25% | 6 h |
+| 8.37×10²⁰ (median) | 50% | 17 h |
+| 1×10²¹ | 59% | 0.95 days |
+| 1.46×10²¹ (Q3) | 75% | 1.6 days |
+| 2×10²¹ | 85% | 2.4 days |
+| 5×10²¹ (leg cap) | 98% | 6.9 days |
+
+(at the measured 7.76×10¹⁵ p/s; the same table at the leg-1 rate ran
+3.7 days / 10 days / 13.5 days / 23 days / 34.5 days / 97.6 days)
 
 Any run > 18 halts the hunt under the stop-on-discovery convention. This
 section will be rewritten as results arrive.
