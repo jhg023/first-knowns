@@ -174,9 +174,11 @@ is why a wider 128-bit pattern word loses 5x, folding the table 24x smaller
 loses 1.5x by turning one load into two, and CRT-pairing primes dies on the
 footprint cliff (0.62x at 86 KB, 0.14x at 172 KB). The only lever that
 removes loads is generating fewer candidates, i.e. a wider wheel — measured
-at **1.85x** on production-shaped launches, and not taken, because the frozen
-5×10¹⁴ benchmark window holds 2,494 periods of the 31# wheel but only 68 of
-the 37# one. See [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md).
+at **1.85x** on production-shaped launches. It was blocked on the benchmark
+rather than the engine: the frozen 5×10¹⁴ window holds 2,494 periods of the
+31# wheel but only 68 of the 37# one, so it reports that change as a *loss*.
+A third frozen shape, [6.11×10²⁰, +2×10¹⁶), was added to resolve it — see
+[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md).
 
 The sieve's *other* term is per-thread setup. It was 17.4% of the kernel;
 halving the thread count (one grid slice instead of two) beat making each
@@ -185,11 +187,12 @@ mostly thread overhead rather than instructions — and with T now derived from
 a larger launch it is down to 2.1%. That measurement is also what prices the
 next wheel: 37# generates 1.85x fewer candidates, and once the queue stopped
 capping the launch's period count it measures **1.85x** on production-shaped
-launches. It is not taken, because the frozen 5×10¹⁴ benchmark window holds
-only 68 of its periods and it measures 0.58x there — a blocker in the
-benchmark's shape, not the engine's, and amending the anchor that makes
-scores comparable across engine generations is a human's call, not an
-optimizer's. Net
+launches. It measures 0.58x on the frozen 5×10¹⁴ window, which holds only 68
+of its periods — a blocker in the benchmark's shape, not the engine's.
+Amending the anchor that makes scores comparable across engine generations is
+a human's call, not an optimizer's, so the anchor was not amended: a third
+frozen shape was **added** beside it, wide enough to hold 2,696 periods of
+the wider wheel, and the two originals still reproduce bit-for-bit. Net
 **~32x** over the engine that swept leg 1,
 with both frozen fingerprints reproducing bit-for-bit — the engine got
 faster without the work changing. See
@@ -197,9 +200,11 @@ faster without the work changing. See
 the rejects, and [../OPTIMIZATION.md](../OPTIMIZATION.md) for the process.
 
 Throughput on an RTX 4090 (see BENCHMARKS.md). The engine scores **SCORE
-13,198,517,241** and **SCORE128 13,433,035,057** on its two frozen windows —
-but absolute scores on this machine swing by ~2x between captures of
-identical code, so BENCHMARKS.md quotes paired ratios and so should you.
+16,307,051,103**, **SCORE128 16,325,330,842** and **SCORE_WIDE
+16,662,037,996** on its three frozen windows — but absolute scores on this
+machine swing by ~2x between captures of identical code (the same engine, the
+same session, has read 13,198,517,241 and 20,917,761,353 on the first of
+those), so BENCHMARKS.md quotes paired ratios and so should you.
 Its immediate predecessor realized **1.232×10¹⁶ p/s in production** over a
 10-hour leg; applying the paired 1.329x ratio projects **1.64×10¹⁶ p/s**,
 i.e. **~30x** the 5.5×10¹⁴ the leg-1 engine averaged. At that rate

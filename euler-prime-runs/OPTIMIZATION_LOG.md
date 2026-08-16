@@ -874,3 +874,66 @@ guess did.
 | host + syncs | 1.8% | the round counters went into one array zeroed once per chain instead of one fill per round, which took host time back from 4.7% to 1.8% after ROUND 24 -> 16 tripled the round count |
 
 Three of the four rows still carry named levers with prices on them.
+
+## Phase 6a (2026-08-16): a third frozen benchmark shape
+
+Not an engine change -- **zero lines of engine touched, and that is the
+point.**  Phase 5 ended with the biggest remaining lever (the 37# wheel,
+1.85x on 78% of GPU time) declined for a reason that was not about the
+engine: the frozen 5e14 shape can no longer resolve it, and this repo
+optimizes under the score.  ../OPTIMIZATION.md 2.13 says what to do about
+that -- price both sides, name the shape as the blocker, and leave the
+decision to a human, because the anchor that makes scores comparable across
+engine generations is not something an optimization pass gets to amend.
+
+The decision came back as **add a shape, never amend one**, which is the
+resolution that keeps both properties:
+
+| shape | window | 31# periods | 37# periods | role |
+|-------|--------|-------------|-------------|------|
+| `SCORE` | [1e16, +5e14) | 2,494 | 68 | cross-generation anchor, frozen from the retired u64 kernel |
+| `SCORE128` | [2.3e20, +5e14) | 2,494 | 68 | cross-generation anchor, frozen from the retired first-128 path |
+| `SCORE_WIDE` | [6.11e20, +2e16) | 99,720 | **2,696** | resolves the wheel; production-shaped |
+
+`BENCH_LO/BENCH_SPAN/FINGERPRINT_*` and the `128` pair are byte-for-byte
+unchanged and both still reproduce -- verified in the same battery that froze
+the new one.  All three are checked on every run; a mismatch on any of them
+still scores 0.
+
+Why this window and not another:
+
+- **24 launches** at the current PPL, so it cannot be flattered by a launch
+  size collapsing the whole window into one launch (Rule 4, which is exactly
+  how the old 18.31x turned out to be a 14x).
+- It is the window Phase 5's A/B sweeps already ran on -- every ratio in that
+  ledger was measured here, with its survivor list checked run to run -- so it
+  arrives with a track record rather than as a fresh unknown.
+- **2,696 periods of the 37# wheel**, the same order as the 2,494 the older
+  shapes hold of the 31# wheel, so it resolves the next wheel as well as they
+  resolved the last one.
+- In the a(19) hunt's own zone, so it is production-shaped, not synthetic.
+
+Frozen on a green tree: 13 gates, **6,996 survivors / checksum
+71330844491704598**.  Same battery: SCORE 16,307,051,103 / SCORE128
+16,325,330,842 / SCORE_WIDE 16,662,037,996 -- the three within 2.2%.
+
+I nearly wrote that down as "the tightest same-code spread this machine has
+produced".  The next battery, same code, same session, minutes later, read
+20,917,761,353 / 25,643,824,896 / 19,283,048,101 -- a **33% spread**.  So the
+2.2% was a capture, not a measurement, which is the identical error
+BENCHMARKS.md already carries a correction for ("flat to 0.01%" was one lucky
+capture quoted as precision).  It is worth recording that the trap caught me
+inside the same file that documents it: absolute scores on this machine are
+for the ledger and the fingerprint check, and **nothing** may be concluded
+from arithmetic across them.  Ratios come from interleaved pairs.
+
+`score.py`'s three benchmark functions now share one `_bench(lo, span, runs)`
+body.  Three copies of a timing loop that could drift apart is three shapes
+that could be timed differently, which is a way to game one of them.
+
+**What this unblocks, and what it does not.**  It makes the 37# wheel
+measurable.  It does not make it a win -- that still has to be shown, on this
+shape and on a paired interleaved A/B at production shape.  And `SCORE` and
+`SCORE128` are *expected* to fall ~0.6x if the wheel lands: that is the
+granularity effect above, priced in advance, and it is why the prediction is
+recorded here before the measurement rather than after it.

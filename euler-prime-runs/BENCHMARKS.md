@@ -5,6 +5,47 @@ the frozen benchmark shape, ONLY if all gates are green and the work
 fingerprint (survivor count 178, xor checksum 120489734542316 on
 [1e16, 1e16+5e14)) reproduces exactly. Skipped work scores 0.
 
+**Three frozen shapes (2026-08-16).** All n=17, all measured with the one
+production engine, all three checked on every run:
+
+| name | window | periods held (31# wheel) | fingerprint | frozen |
+|------|--------|--------------------------|-------------|--------|
+| `SCORE` | [1e16, +5e14) | 2,494 | 178 / 120489734542316 | 2026-08-05 |
+| `SCORE128` | [2.3e20, +5e14) | 2,494 | 178 / 133625321009290 | 2026-08-06 |
+| `SCORE_WIDE` | [6.11e20, +2e16) | 99,720 | 6,996 / 71330844491704598 | 2026-08-16 |
+
+The first two are the **cross-generation anchor** and are never amended:
+their fingerprints were frozen from engines that no longer exist (the
+u64-only kernel and the first 128 path), so reproducing them bit-for-bit is
+the standing proof that today's engine still agrees with them. When a shape
+stops being able to resolve a change, it gets a **sibling, not an edit**.
+
+### Why the third shape exists
+
+A frozen window is stated in absolute units while the engine's natural work
+unit -- the wheel period -- grows underneath it (../OPTIMIZATION.md 2.13).
+The 5e14 shape was frozen when the period was 6.47e9 and the window held
+77,285 periods. Two wheel changes later it holds 2,494. The **next** wheel
+would leave it holding 68, which is two pattern words per thread against 20x
+as many threads, so a change measured at **1.85x** on the sieve in production
+comes out at **0.58x** on that shape. At that point the benchmark is not
+neutral about which answer wins -- it picks one, and it picks the wrong one.
+
+`SCORE_WIDE` fixes that additively. [6.11e20, +2e16) is:
+
+- **24 launches** at the current PPL, so no single-launch flattery (Rule 4);
+- the window the Phase-5 A/B sweeps already ran on, so it is heavily
+  exercised and its survivor list was already being checked run-to-run;
+- **~2,696 periods of the 37# wheel** -- enough to resolve a wheel that the
+  older shapes cannot see at all;
+- in the zone the a(19) hunt is actually sweeping, so it is production-shaped
+  rather than synthetic.
+
+Expect a wheel change to move `SCORE` and `SCORE128` **down** while
+`SCORE_WIDE` moves up. That is the granularity effect above, not a
+regression; the wide shape and a paired interleaved A/B at production shape
+are what such a change is judged on.
+
 **Engine unification (2026-08-15).** There is now one production engine
 spanning the whole range, so BOTH frozen shapes are measured with it:
 SCORE on the low window [1e16, +5e14) and SCORE128 on the high window
@@ -56,6 +97,7 @@ stopwatch.
 | 2026-08-15 | v3-128, single-engine tree | SCORE **6,330,661,788** / SCORE128 **6,544,948,396** | retired engines deleted; both frozen shapes now measured with the one production engine, both fingerprints reproduced, 12 gates green. Engine mathematics identical to the row below -- this row differs only in what the tree contains and which engine the SCORE column refers to |
 | 2026-08-16 | v5: stage-2 bit probe, balanced sieve grid, 32-bit stage-1b reductions, launch bound 3, round size 24 | SCORE **9,961,108,420** / SCORE128 **10,302,529,513** | 13 gates green (G15 new), both frozen fingerprints reproduced. **The load-bearing number is the paired ratio 1.294x** measured in one process against the engine this row replaces, not any arithmetic across these absolutes -- run-to-run variance here is ~2x on identical code. Composition: 1.165 x 1.066 x 1.048 x 1.028 x 1.023, none of them individually interesting |
 | 2026-08-16 | v7: value-form queue, baked stage-1b round kernels, 32-bit off-split in stages 1b and 2, marched pattern table, offset chunking; NINC 26, ROUND 16, launch bound 2 | SCORE **13,198,517,241** / SCORE128 **13,433,035,057** | 13 gates green (G13 extended to the offset axis, G15 to the off-split and the stage-1b bitset), both frozen fingerprints reproduced. **The load-bearing number is the paired ratio 1.3293x** against the row above, measured in one process over 7 interleaved rounds on a steady-state 2e16 window, not any arithmetic across these absolutes. Composition: 1.084 x 1.058 x 1.043 x 1.037 x 1.023 x 1.020 x 1.019 x 1.010. An earlier battery on the same engine modulo two changes since measured neutral and reverted read SCORE **15,425,906,583** / SCORE128 **13,497,010,536** -- a 17% swing on the low shape and 0.5% on the high one, which is the variance note at the top of this file doing its job |
+| 2026-08-16 | v7 + third frozen shape (engine unchanged) | SCORE **16,307,051,103** / SCORE128 **16,325,330,842** / SCORE_WIDE **16,662,037,996** | 13 gates green, all THREE fingerprints reproduced (178 / 120489734542316, 178 / 133625321009290, 6,996 / 71330844491704598). **No engine change in this row** -- `SCORE_WIDE` [6.11e20, +2e16) was added and frozen, and the two older shapes keep their exact bytes. The absolutes read ~1.24x the row above on identical code, which is the variance note at the top of this file, not a speedup: nothing in the engine moved. The three shapes agree to 2.2% *in this battery*, and that is luck rather than precision -- the very next battery, same code, same session, read 20,917,761,353 / 25,643,824,896 / 19,283,048,101, a **33% spread across the three**. Same lesson as the 0.01% row above: a tight capture is a capture, not a measurement |
 | 2026-08-15 | v3-128 (frozen) | **6,341,803,579** | bit-sieve stage 1a + stage-1b compaction rounds; NINC=24, ROUND=8, W=64, PPL=131072. Same fingerprint (178 / 133625321009290), bit-identical stream (G13, G14). Full battery green; same-battery u64 SCORE 305,864,144, so the 128 path is now **20.7x the u64 engine**. Shape note: SCORE128 takes the engine's default launch size, raised 8192 -> 131072, so the 77,285-period window is now ONE launch (see score.py header) |
 
 Decomposing that ledger jump, one battery, all three points measured
