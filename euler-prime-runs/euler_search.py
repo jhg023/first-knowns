@@ -1,8 +1,13 @@
 # euler_search.py -- CPU engine for the A164926 Euler-ladder hunt.
 #
 # Pipeline (independent of the oracle; gated against it):
-#   wheel   : p restricted to residues mod 23# = 223092870 that survive the
-#             n forbidden classes of every wheel prime (2..23)
+#   wheel   : p restricted to residues mod prod(wheel primes) that survive the
+#             n forbidden classes of every wheel prime.  This engine runs 23#
+#             or 29#; the GPU picks the largest that fits (best_wheel), which
+#             at n=17 is 37# and is carried factored (wheel_jtab).  The
+#             survivor set does not depend on the wheel -- it only decides
+#             which primes are tested by generation rather than by sieving --
+#             and that difference is exactly what the G6 parity gate measures
 #   stage 1 : bitmask kill by primes 29..Q1 (numpy, compress-as-you-go)
 #   stage 2 : kill by primes Q1..Q2 via the exact 17-value divisibility test
 #   MR      : deterministic 7-base Miller-Rabin (valid < 3.317e24) on the
@@ -44,9 +49,11 @@ from euler_reference import A21_UPPER, KNOWN, run_length
 WHEEL_PRIMES = [2, 3, 5, 7, 11, 13, 17, 19, 23]
 WHEEL_PRIMES_29 = WHEEL_PRIMES + [29]
 WHEEL_PRIMES_31 = WHEEL_PRIMES_29 + [31]
+WHEEL_PRIMES_37 = WHEEL_PRIMES_31 + [37]
 M_WHEEL = 223092870                     # product of WHEEL_PRIMES
 M_WHEEL_29 = 6469693230                 # product incl. 29
 M_WHEEL_31 = 200560490130               # product incl. 31
+M_WHEEL_37 = 7420738134810              # product incl. 37
 Q1 = 1024                               # stage-1 prime bound
 Q2 = 65536                              # stage-2 prime bound
 P_FLOOR = 100_000                       # engine floor (> Q2 guard is at 65536;
@@ -63,6 +70,17 @@ P_FLOOR = 100_000                       # engine floor (> Q2 guard is at 65536;
 # everything at the smallest common denominator.
 WHEEL_BUDGET_OFFS = 50_000_000          # ~400 MB as u64
 
+# ...but the NEXT wheel does not have to be materialized at all, and that is
+# what lets the budget stop being the ceiling on how wide a wheel can get.
+# 37# has 20x the offsets of 31# (5.99e8 / 4.8 GB at n=17, 1.7e10 at n=5), and
+# none of them need to exist: the offsets of the wheel base*q are exactly
+# {off + j*M_base}, and WHICH j survive q depends on off only through
+# off mod q.  So the whole table is the base table plus a q x nj byte table of
+# admissible j (wheel_jtab), and the GPU generates one CHUNK of offsets at a
+# time from those two.  Wheels at or above this prime are carried that way.
+FACTORED_FROM = 37
+
+
 def forbidden(q, n):
     """Residues r mod q killed: q | x^2+x+p for some x < n when p = r."""
     return {(-(x * x + x)) % q for x in range(n)}
@@ -76,10 +94,119 @@ def wheel_offset_count(n, wheel_primes):
     return cnt
 
 
+def wheel_base(wheel_primes):
+    """The primes whose offset table is actually BUILT for this wheel.
+
+    Wheels below FACTORED_FROM carry a real table and this is the identity.
+    37# carries the 31# table plus a 37 x nj admissible-j table, so its base
+    is 31#.  ONE place decides this, and the engine, best_wheel and the gates
+    all ask it -- a derived quantity computed in two places will eventually
+    disagree, and this project has already shipped that bug once
+    (../OPTIMIZATION.md 2.9).
+    """
+    wheel_primes = list(wheel_primes)
+    return (wheel_primes[:-1] if wheel_primes[-1] >= FACTORED_FROM
+            else wheel_primes)
+
+
+def wheel_jtab(n, base_primes, q):
+    """Admissible-j table for folding one more prime q into an existing wheel.
+
+    Let M_b = prod(base_primes).  Every residue mod q*M_b that is admissible
+    for base_primes can be written off + j*M_b for exactly one admissible base
+    offset off < M_b and one j in [0, q).  q divides no base prime, so M_b is
+    invertible mod q and j -> (off + j*M_b) mod q is a bijection; hence
+    off + j*M_b is killed by q exactly when
+
+        off + j*M_b == -(x^2 + x)   (mod q)   for some x < n,
+
+    which depends on off only through off mod q, and leaves exactly
+    q - |F_q(n)| admissible j for EVERY base offset.
+
+    That count is computed, never assumed.  It is 20 at (q=37, n=17) because
+    the 17 values x^2+x are distinct mod 37 -- but at n=21 they are not
+    (20^2+20 == 16^2+16 mod 37) and it is 18.  A hardcoded 20 would silently
+    generate offsets that the wheel forbids.
+
+    Returns (jtab, nj) with jtab[r*nj + t] = the t-th admissible j for a base
+    offset with off mod q == r.  Pure Python ints, no numpy, no cleverness:
+    that this enumerates exactly build_wheel(n, base_primes + [q]) is G16.
+    """
+    q = int(q)
+    Mb = 1
+    for b in base_primes:
+        Mb *= int(b)
+    if Mb % q == 0:
+        raise ValueError("q=%d already divides the base wheel period" % q)
+    F = forbidden(q, n)
+    jtab, nj = [], None
+    for r in range(q):
+        good = [j for j in range(q) if (r + j * Mb) % q not in F]
+        if nj is None:
+            nj = len(good)
+        elif len(good) != nj:               # impossible; the bijection above
+            raise ValueError(               # makes it q - |F| for every r
+                "admissible-j count not uniform at q=%d n=%d: %d vs %d"
+                % (q, n, len(good), nj))
+        jtab.extend(good)
+    return jtab, nj
+
+
+def wheel_factored_slice(n, base_primes, q, a0=0, count=None):
+    """Flat indices [a0, a0+count) of the factored wheel, materialized.
+
+    This is EXACTLY the arithmetic the device kernel performs for one offset
+    chunk, written out once in Python where it can be read and gated:
+
+        flat index a  ->  i = a // nj,  t = a % nj
+                      ->  off = base[i] + jtab[(base[i] % q)*nj + t] * M_base
+
+    A SLICE, not the whole thing, because the whole thing is the point: at
+    (31#, 37) it is 5.99e8 offsets / 4.8 GB, which is why nothing materializes
+    it -- not production, not the gates.  Slices are how the production wheel
+    stays testable, and they are also the unit the device works in, so gating
+    the slice gates the real mechanism rather than a convenience copy.
+
+    Offsets come out in flat-index order, which is NOT sorted.  Nothing needs
+    it to be: the chunks partition the flat index either way, and the engine
+    sorts its survivors.
+    """
+    base, Mb = build_wheel(n, base_primes)
+    jtab, nj = wheel_jtab(n, base_primes, q)
+    total, M = int(base.size) * nj, Mb * int(q)
+    a0 = int(a0)
+    count = total - a0 if count is None else min(int(count), total - a0)
+    if count <= 0:
+        return np.empty(0, dtype=np.uint64), M
+    a = np.arange(a0, a0 + count, dtype=np.int64)
+    b = base[a // nj]
+    jt = np.array(jtab, dtype=np.uint64)
+    off = b + jt[(b % np.uint64(q)).astype(np.int64) * nj
+                 + (a % nj)] * np.uint64(Mb)
+    return off, M
+
+
+def wheel_factored_offsets(n, base_primes, q):
+    """The whole factored wheel, materialized.  Gates, at SMALL q only.
+
+    Only ever called where the directly-built wheel also fits, because its
+    only purpose is to be compared against one (G16).  At (31#, 37) use
+    wheel_factored_slice.
+    """
+    return wheel_factored_slice(n, base_primes, q)
+
+
 def best_wheel(n, budget=WHEEL_BUDGET_OFFS):
-    """The largest wheel whose offset table fits `budget` entries."""
-    for wp in (WHEEL_PRIMES_31, WHEEL_PRIMES_29, WHEEL_PRIMES):
-        if wheel_offset_count(n, wp) <= budget:
+    """The largest wheel whose MATERIALIZED table fits `budget` entries.
+
+    The budget applies to what is built, not to what is swept -- which is why
+    37# is reachable at all: its base is the 31# table (2.99e7 at n=17), and
+    the 5.99e8 offsets it stands for are generated a chunk at a time and never
+    stored.
+    """
+    for wp in (WHEEL_PRIMES_37, WHEEL_PRIMES_31, WHEEL_PRIMES_29,
+               WHEEL_PRIMES):
+        if wheel_offset_count(n, wheel_base(wp)) <= budget:
             return wp
     return WHEEL_PRIMES
 
@@ -232,7 +359,14 @@ class CpuEngine:
 # ------------------------------- gates -------------------------------------
 
 def g3_wheel_property(trials=4000, seed=1):
-    """Wheel admissibility == 'no wheel prime divides any of the n values'."""
+    """Wheel admissibility == 'no wheel prime divides any of the n values'.
+
+    The 37# case comes through the FACTORED enumeration, which is the form
+    production actually runs -- so this gate tests the offsets the engine
+    generates, not a table it never builds.  n=21 is included there on
+    purpose: it is the n where the x^2+x values collide mod 37 and nj is 18
+    rather than 20, i.e. the case a hardcoded count would get wrong.
+    """
     rng = np.random.default_rng(seed)
     for wp in (WHEEL_PRIMES, WHEEL_PRIMES_29):
         for n in (9, 13, 17):
@@ -243,7 +377,124 @@ def g3_wheel_property(trials=4000, seed=1):
                              for q in wp)
                 if direct != ((p % m) in offs):
                     return False, f"G3 FAIL at n={n}, p={p}, wheel={wp[-1]}"
-    return True, "G3 ok: wheel==direct divisibility, both wheels, n=9,13,17"
+    # 37#: the production wheel, tested WITHOUT materializing it.  Two
+    # directions, because only one of them is the dangerous one -- a
+    # generator that emits an inadmissible offset merely wastes work, while
+    # one that DROPS an admissible offset loses survivors, and G6 cannot see
+    # that (it compares against a 29#-wheel reference, so a hole in the 37#
+    # wheel removes the same p from both sides of nothing).
+    import random
+    for n in (17, 21):
+        base, Mb = build_wheel(n, WHEEL_PRIMES_31)
+        jtab, nj = wheel_jtab(n, WHEEL_PRIMES_31, 37)
+        M, total = Mb * 37, int(base.size) * nj
+        rr = random.Random(seed + n)
+        # (a) everything the flat-index arithmetic emits is admissible, at
+        #     slices spread across the index -- including the last one, where
+        #     a chunk runs short
+        for a0 in (0, total // 3 + 1, total - 400):
+            offs_arr, m = wheel_factored_slice(n, WHEEL_PRIMES_31, 37, a0, 400)
+            if m != M or offs_arr.size != 400:
+                return False, f"G3 FAIL n={n}: slice at {a0} is {offs_arr.size}"
+            for o in offs_arr.tolist():
+                p = int(o) + M * rr.randrange(10**8, 10**9)
+                if not all(all((p + x * x + x) % q for x in range(n))
+                           for q in WHEEL_PRIMES_37):
+                    return False, (f"G3 FAIL n={n}: generated offset {o} is"
+                                   f" NOT 37#-admissible (p={p})")
+        # (b) and it emits ALL of them: for a real base offset, admissibility
+        #     of off + j*M_base is exactly "j is in the table", both ways
+        for _ in range(trials // 2):
+            o0 = int(base[rr.randrange(base.size)])
+            row = set(jtab[(o0 % 37) * nj:(o0 % 37 + 1) * nj])
+            j = rr.randrange(37)
+            p = o0 + j * Mb + M * rr.randrange(10**8, 10**9)
+            direct = all(all((p + x * x + x) % q for x in range(n))
+                         for q in WHEEL_PRIMES_37)
+            if direct != (j in row):
+                return False, (f"G3 FAIL n={n} wheel=37: base {o0} j={j}"
+                               f" admissible={direct} but in-table={j in row}")
+    return True, ("G3 ok: wheel==direct divisibility; 23#/29# from built"
+                  " tables at n=9,13,17, and 37# from the FACTORED generator"
+                  " at n=17,21 in both directions (no offset it emits is"
+                  " inadmissible, no admissible offset is missing)")
+
+
+def g16_factored_wheel():
+    """The factored enumeration == the directly built wheel, as a SET.
+
+    The 37# wheel is never materialized in production -- the device generates
+    off = base[i] + jtab[(base[i] mod q)*nj + t] * M_base one chunk at a time.
+    That is a different construction from build_wheel's CRT lifting, and
+    nothing else in the battery would notice if it enumerated a slightly
+    different set: G6 compares the GPU against a 29#-wheel reference, and the
+    survivor set is wheel-independent, so a wheel that dropped admissible
+    offsets would drop survivors on BOTH sides of nothing and simply lose
+    them.  So it is checked here, directly, where both sides are cheap.
+
+    Cheap means a small q.  The mechanism at (31#, 37) is the same code with
+    different constants, and its direct table is 4.8 GB, so the equality is
+    checked at (23#, 29) and (29#, 31) -- a few million entries, and the
+    (29#, 31) tables are the ones the engine builds anyway.  What is checked
+    AT (31#, 37) is what a smaller q cannot stand in for: the count, and that
+    the flat index partitions (chunk c's slice concatenated with chunk c+1's
+    is the slice over their union, with no offset repeated).  G3 covers the
+    (31#, 37) offsets against divisibility itself, in both directions.
+
+    Compared as sorted arrays: the factored order is the flat-index order and
+    is deliberately not sorted.
+    """
+    cases = [(WHEEL_PRIMES, 29, (9, 13, 17, 21)),
+             (WHEEL_PRIMES_29, 31, (13, 17))]
+    checked = 0
+    for base, q, ns in cases:
+        for n in ns:
+            got, m = wheel_factored_offsets(n, base, q)
+            want, mw = build_wheel(n, base + [q])
+            if m != mw:
+                return False, (f"G16 FAIL n={n} q={q}: period {m} vs {mw}")
+            if got.size != want.size:
+                return False, (f"G16 FAIL n={n} q={q}: {got.size} offsets"
+                               f" factored vs {want.size} built")
+            g = np.sort(got)
+            if not np.array_equal(g, want):
+                bad = int(np.argmax(g != want))
+                return False, (f"G16 FAIL n={n} q={q}: first difference at"
+                               f" index {bad}: {int(g[bad])} vs"
+                               f" {int(want[bad])}")
+            checked += int(got.size)
+    # (31#, 37): the production wheel.  nj is COMPUTED, not assumed -- pin
+    # both values, including the n where the x^2+x values collide mod 37.
+    for n, want_nj in ((13, 24), (17, 20), (21, 18)):
+        if wheel_jtab(n, WHEEL_PRIMES_31, 37)[1] != want_nj:
+            return False, (f"G16 FAIL: nj(37, n={n}) != {want_nj}")
+    for n in (17,):
+        bs, _ = build_wheel(n, WHEEL_PRIMES_31)
+        _, nj = wheel_jtab(n, WHEEL_PRIMES_31, 37)
+        total = int(bs.size) * nj
+        if total != wheel_offset_count(n, WHEEL_PRIMES_37):
+            return False, (f"G16 FAIL n={n}: factored count {total} !="
+                           f" {wheel_offset_count(n, WHEEL_PRIMES_37)}")
+        # the chunk partition: adjacent slices join up, and nothing repeats
+        for a0, c1, c2 in ((0, 1000, 1000), (total // 2 - 7, 999, 1001),
+                           (total - 1500, 700, 800)):
+            s1, M = wheel_factored_slice(n, WHEEL_PRIMES_31, 37, a0, c1)
+            s2, _ = wheel_factored_slice(n, WHEEL_PRIMES_31, 37, a0 + c1, c2)
+            whole, _ = wheel_factored_slice(n, WHEEL_PRIMES_31, 37, a0,
+                                            c1 + c2)
+            joined = np.concatenate([s1, s2])
+            if not np.array_equal(joined, whole):
+                return False, (f"G16 FAIL n={n}: chunk split at {a0}+{c1}"
+                               " does not rejoin")
+            if np.unique(whole).size != whole.size:
+                return False, f"G16 FAIL n={n}: repeated offset near {a0}"
+            if int(whole.max()) >= M:
+                return False, f"G16 FAIL n={n}: offset >= period near {a0}"
+            checked += int(whole.size)
+    return True, ("G16 ok: factored enumeration == built wheel over"
+                  f" {checked:,} offsets at q=29 (n=9..21) and q=31"
+                  " (n=13,17); at q=37 the count matches, adjacent chunks"
+                  " rejoin with no repeats, and nj is 24/20/18 at n=13/17/21")
 
 
 def g4_engine_vs_oracle():
@@ -332,8 +583,8 @@ def g10_above_cap():
 
 
 def selftest(fast=False):
-    gates = [g3_wheel_property, g4_engine_vs_oracle, g5_rediscover,
-             g10_above_cap]
+    gates = [g3_wheel_property, g16_factored_wheel, g4_engine_vs_oracle,
+             g5_rediscover, g10_above_cap]
     ok = True
     for g in gates:
         good, msg = g()

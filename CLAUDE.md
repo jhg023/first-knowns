@@ -12,6 +12,22 @@ each README stays.
 
 ## Rules
 
+0. **No command an agent runs may take longer than 5 minutes**, and
+   aim for under two. This is a hard cap, not a guideline. It applies to
+   everything — gate batteries, A/B harnesses, sweeps, benchmarks — and
+   it applies to the *whole* invocation, not to each step inside it.
+   If a measurement does not fit, **cut it up**: fewer rounds, a
+   narrower window, one configuration per invocation, results
+   accumulated across several short runs rather than one long one.
+   Long runs are also bad measurements: a 40-minute A/B in this repo
+   straddled a GPU clock-regime change and had to be thrown away
+   (OPTIMIZATION.md Rule 3). Short paired runs are both faster to
+   supervise and more trustworthy.
+
+   The production hunt itself (`python launch.py`) is the one exception:
+   it is meant to run for days, it checkpoints every segment, and the
+   owner starts it deliberately. Agents do not launch it.
+
 1. **Read `CONVENTIONS.md` before touching any project.** The five-file
    skeleton (oracle / CPU engine / GPU engine / launcher / score) and
    the gate discipline are binding.
@@ -81,6 +97,11 @@ each README stays.
 
 ```
 python launch.py --selftest   # full gate battery -- must end ALL GREEN
-python launch.py              # the hunt (resumable)
-python score.py               # gates x fingerprinted benchmark
+python launch.py              # the hunt (resumable; owner-started, days)
+python score.py               # gates x fingerprinted benchmarks
 ```
+
+Wall-clock, so Rule 0 can be planned against: `score.py` ~2.5 min,
+`launch.py --selftest` ~3 min. Anything you write yourself gets budgeted
+the same way — measure one short run first, then size the sweep to fit
+under 5 minutes.

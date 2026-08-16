@@ -35,6 +35,7 @@ import argparse
 import json
 import math
 import os
+import shutil
 import sys
 import time
 
@@ -53,7 +54,29 @@ from euler_search import (CpuEngine, P_CEIL, P_FLOOR, WHEEL_PRIMES,
 
 CKPT = "campaign_checkpoint.json"              # the single campaign cursor
 DISC = os.path.join("evidence", "euler_discoveries.json")
-SEG_PERIODS = 131_072                          # 29-wheel periods per checkpoint segment
+SEG_SPAN = 2 * 16912 * 7420738134810           # ~2.51e17 of p-line per
+                                               # checkpoint segment: exactly
+                                               # TWO launches on the production
+                                               # wheel, ~10 s of work, which
+                                               # is what a kill can cost.
+                                               # A SPAN, not a period count --
+                                               # it was 131,072 periods, which
+                                               # is 2.63e16 on the 31# wheel
+                                               # and 37x that on the next one,
+                                               # the same absolute-vs-derived-
+                                               # unit trap as LAUNCH_PERIODS
+                                               # pointing the other way.
+                                               # It must also be at least one
+                                               # launch, or the launch size
+                                               # never binds: at the old value
+                                               # a segment was 3,544 periods
+                                               # against a 16,912-period
+                                               # launch, so production would
+                                               # have run short launches and
+                                               # every LAUNCH_PERIODS
+                                               # measurement would have been
+                                               # about a shape production
+                                               # never used.
 # The cursor is denominated in WHEEL PERIODS, so the key pins every part of
 # the configuration that would change their meaning -- including the wheel
 # itself, which is filled in from the engine's actual choice rather than
@@ -181,6 +204,84 @@ def check_cursor(c, eng):
                                 (want / have) if have else float("inf")))
 
 
+def refuse_unreadable_cursor(eng, fresh):
+    """A cursor FILE this configuration cannot read must STOP the run.
+
+    huntlib ignores a checkpoint whose key does not match, which is right --
+    reinterpreting one is the bug that put a 31x error in the frontier once.
+    But "ignore" then falls straight through to a fresh cursor at zero, and a
+    campaign that silently restarts at p=0 after a wheel change destroys the
+    frontier instead of misreading it.  Both directions are wrong, and
+    check_cursor only guards one of them: it is never reached, because there
+    is nothing left to check.
+
+    So: an existing cursor whose key does not match is a refusal.  --fresh
+    says "yes, start over" and --migrate-cursor says "convert it"; there is
+    no path where a wheel change quietly rewinds the campaign.
+    """
+    if fresh or not os.path.exists(CKPT):
+        return
+    with open(CKPT) as f:
+        old = json.load(f)
+    raise CorruptEngineError(
+        "a campaign cursor exists but this configuration cannot read it.\n"
+        "        stored key : %s\n"
+        "        wanted key : %s\n"
+        "        stored     : next_k=%s of M=%s, i.e. p ~ %.4e\n"
+        "  Starting anyway would begin a FRESH sweep at p=0 and abandon that "
+        "frontier.  Convert the cursor with --migrate-cursor, or say --fresh "
+        "to discard it deliberately."
+        % (old.get("key"), ckpt_key(eng.n, eng), old.get("next_k"),
+           old.get("M"), int(old.get("next_k", 0)) * int(old.get("M", 0))))
+
+
+def migrate_cursor(eng, apply=False):
+    """Re-denominate the campaign cursor in THIS engine's wheel period.
+
+    next_k counts periods of the cursor's own M.  A wheel change multiplies
+    the period by an exact integer, so the position is preserved by
+
+        new_next_k = floor(old_next_k * old_M / new_M)
+
+    FLOOR, deliberately.  With a longer period the seam then OVERLAPS by up
+    to one new period rather than leaving a gap: coverage may be swept twice,
+    it may never be claimed and swept zero times.  That is the same
+    convention the 29# -> 31# conversion used, and the reason is that this
+    project's whole claim is exhaustiveness.
+
+    Everything the wheel decides is re-derived, not carried over: the key,
+    M, and `canaries_done` -- the prelude ran on a different wheel, so it has
+    established nothing about this one and must run again.  The cumulative
+    counters are kept; the overlap re-sweeps at most one period (7.4e12 of
+    p-line, ~3 expected survivors), so they drift by that and no more.
+    """
+    with open(CKPT) as f:
+        c = json.load(f)
+    old_m, old_k = int(c["M"]), int(c["next_k"])
+    new_m = int(eng.M)
+    if old_m == new_m:
+        log("STAGE", "cursor already denominated in M=%d; nothing to do"
+                     % new_m)
+        return c
+    p_old = old_k * old_m
+    new_k = p_old // new_m
+    log("STAGE", "cursor migration: period M %d -> %d (ratio %.6g)"
+                 % (old_m, new_m, new_m / old_m))
+    log("STAGE", "  from next_k=%d  (p = %.6e)" % (old_k, p_old))
+    log("STAGE", "  to   next_k=%d  (p = %.6e)" % (new_k, new_k * new_m))
+    log("STAGE", "  seam overlaps by %.4e of p-line (floor, never a gap)"
+                 % (p_old - new_k * new_m))
+    if not apply:
+        log("WARN", "dry run: pass --migrate-cursor to write it")
+        return c
+    shutil.copyfile(CKPT, CKPT + ".pre-migration")
+    c["key"], c["M"], c["next_k"] = ckpt_key(eng.n, eng), new_m, new_k
+    c["canaries_done"] = False       # the prelude ran on the old wheel
+    save_ckpt(c)
+    log("STAGE", "written; backup at %s.pre-migration" % CKPT)
+    return c
+
+
 # ------------------------------- canaries ----------------------------------
 
 def low_pass(n):
@@ -266,9 +367,16 @@ def hunt(args):
         return Eng(m)
 
     eng = make_engine(n)
+    if getattr(args, "migrate_cursor", False):
+        if not os.path.exists(CKPT):
+            log("WARN", "no cursor to migrate")
+            return 0
+        migrate_cursor(eng, apply=True)
+        return 0
     c = None if args.fresh else load_ckpt(n, eng)
     if c is None:
-        c = fresh_ckpt(n, eng)
+        refuse_unreadable_cursor(eng, args.fresh)   # raises, or there is
+        c = fresh_ckpt(n, eng)                      # genuinely no cursor
     check_cursor(c, eng)
 
     if not c["canaries_done"]:
@@ -299,7 +407,9 @@ def hunt(args):
     cap = int(args.to)
     M = eng.M
     k_cap = cap // M + 1
-    seg = args.seg_periods
+    # periods per checkpoint segment, DERIVED from the engine's wheel: the
+    # segment bounds what a kill costs, and that is p-line, not periods
+    seg = max(1, int(args.seg_span) // M)
     t_last, p_last = time.time(), c["next_k"] * M
     log("STAGE", f"production: n={n} filter, from p ~ {c['next_k']*M:.3e} "
         f"to {cap:.3e} ({args.engine})")
@@ -441,16 +551,40 @@ def selftest():
     # word/thread/launch boundaries; this one is the campaign-level check,
     # low in the range where the oracle also has jurisdiction.
     from euler_gpu import GpuEngine
-    eng = GpuEngine(13)
-    a = eng.survivors_pre_mr(P_FLOOR, 2 * 10**9)
-    b = sorted(eng.survivors_pre_mr(P_FLOOR, 10**9)
-               + eng.survivors_pre_mr(10**9, 2 * 10**9))
-    if a != b or len(a) < 1:
-        print("FAIL resume drill: split != whole (%d vs %d)" % (len(a), len(b)))
-        ok = False
-    else:
-        print("PASS resume drill: split-at-1e9 stream == whole stream "
-              "(%d survivors)" % len(a))
+
+    def resume_drill(label, eng, lo, cut, hi, min_surv):
+        """Split stream == unsplit stream, on a POPULATED window.
+
+        Both halves of that sentence are load-bearing, and the second one
+        rotted quietly.  This drill used to ask n=13 for [1e5, 2e9), which
+        holds exactly ZERO pre-MR survivors -- a(13) is at 8.776e9, just
+        outside it -- on every wheel this project has ever run, including the
+        one it was written against.  So it compared two empty lists, which
+        CONVENTIONS says does not count, and its own `len(a) < 1` guard had
+        been failing rather than passing vacuously.  The window is now
+        populated and `min_surv` is asserted separately from the comparison,
+        so the next time one goes empty it says so instead of reporting a
+        mismatch of nothing against nothing.
+        """
+        whole = eng.survivors_pre_mr(lo, hi)
+        split = sorted(eng.survivors_pre_mr(lo, cut)
+                       + eng.survivors_pre_mr(cut, hi))
+        if len(whole) < min_surv:
+            print("FAIL %s: window under-populated (%d survivors, want >= %d)"
+                  " -- the comparison would prove nothing"
+                  % (label, len(whole), min_surv))
+            return False
+        if whole != split:
+            print("FAIL %s: split != whole (%d vs %d)"
+                  % (label, len(split), len(whole)))
+            return False
+        print("PASS %s: split stream == whole stream (%d survivors)"
+              % (label, len(whole)))
+        return True
+
+    eng13 = GpuEngine(13)
+    ok = resume_drill("resume drill (n=9, split at 1e8)", GpuEngine(9),
+                      P_FLOOR, 10**8, 2 * 10**8, 5) and ok
 
     # planted-discovery drill: a genuine run-13 survivor pushed through the
     # n=17 protocol MUST be rejected
@@ -472,18 +606,12 @@ def selftest():
         print("PASS positive control: 41 (run 40) verified 3-way")
 
     # high-range resume drill: the same property 11 orders of magnitude up,
-    # where p no longer fits a machine word
-    a = eng.survivors_pre_mr(3 * 10**19, 3 * 10**19 + 10**11)
-    b = sorted(eng.survivors_pre_mr(3 * 10**19, 3 * 10**19 + 47 * 10**9)
-               + eng.survivors_pre_mr(3 * 10**19 + 47 * 10**9,
-                                      3 * 10**19 + 10**11))
-    if a != b or len(a) < 1:
-        print(f"FAIL high-range resume drill: split != whole "
-              f"({len(a)} vs {len(b)})")
-        ok = False
-    else:
-        print(f"PASS high-range resume drill: split stream == whole "
-              f"({len(a)} survivors, p ~ 3e19)")
+    # where p no longer fits a machine word -- and at n=13, which is where
+    # the campaign-level drills meet the production 37# wheel and its
+    # device-generated offset chunks
+    ok = resume_drill("high-range resume drill (n=13, p ~ 3e19)", eng13,
+                      3 * 10**19, 3 * 10**19 + 47 * 10**9,
+                      3 * 10**19 + 10**11, 3) and ok
 
     # positive control at a height where p exceeds 2^64: the
     # Waldvogel-Leikauf value through the full protocol, which also
@@ -547,7 +675,13 @@ def main():
                     help="gpu (default) is the production engine and spans "
                          "the whole range; cpu is the numpy reference, for "
                          "verification only")
-    ap.add_argument("--seg-periods", type=int, default=SEG_PERIODS)
+    ap.add_argument("--seg-span", type=float, default=float(SEG_SPAN),
+                    help="p-line per checkpoint segment (default %.2e); the "
+                         "period count is derived from the engine's wheel"
+                         % SEG_SPAN)
+    ap.add_argument("--migrate-cursor", action="store_true",
+                    help="re-denominate the campaign cursor in this engine's "
+                         "wheel period and exit; see migrate_cursor()")
     ap.add_argument("--heartbeat", type=float, default=30.0)
     args = ap.parse_args()
     if args.to <= 0:

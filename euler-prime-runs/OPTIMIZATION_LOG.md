@@ -937,3 +937,236 @@ shape and on a paired interleaved A/B at production shape.  And `SCORE` and
 `SCORE128` are *expected* to fall ~0.6x if the wheel lands: that is the
 granularity effect above, priced in advance, and it is why the prediction is
 recorded here before the measurement rather than after it.
+
+## Phase 6b (2026-08-16): the 37# wheel, carried factored
+
+The item Phase 5 left as "the single biggest thing in the project, blocked by
+the benchmark shape".  Phase 6a removed the blocker; this is the wheel.
+
+### The table that does not have to exist
+
+Phase 2 declined 37# on memory (the offset table is 5.99e8 entries / 4.8 GB at
+n=17, and *grows* as n shrinks), Phase 4 declined it again at a fitted 0.75x,
+Phase 5 re-priced it at 1.85x and declined it on the benchmark shape.  All
+three declines shared an assumption nobody stated: that a wheel's offsets have
+to be stored.
+
+They do not.  The offsets of the wheel base*q are exactly `{off + j*M_base}`,
+and since M_base is invertible mod q, `j -> (off + j*M_base) mod q` is a
+bijection -- so which j survive q depends on off only through `off mod q`, and
+every base offset has exactly `q - |F_q(n)|` admissible j.  The whole wheel is
+therefore the 31# table (2.99e7 offsets, 240 MB, already built) plus a
+**37 x nj byte table**, and a chunk of offsets is generated on the device from
+those two, once per chain, by one extra kernel:
+
+    a -> i = a / nj, t = a % nj -> off = base[i] + jtab[(base[i] % 37)*nj + t] * M_base
+
+with nj, q and M_base baked in as literals -- which is catalogue 2.5 but also
+turns both divisions into magic-multiplies instead of real 64-bit division.
+It costs ~0.3% of a launch, against 20x the offsets it stands in for.
+
+`nj` is **computed, not assumed**.  It is 20 at n=17 because the 17 values
+x^2+x are distinct mod 37; it is 18 at n=21, where 20^2+20 == 16^2+16 (mod 37),
+and 24 at n=13.  A hardcoded 20 would have generated offsets the wheel
+forbids, at exactly the n the gates run.
+
+### The ledger
+
+Interleaved paired A/B, one process, ratios formed **inside each round** from
+two sweeps seconds apart with the order alternating.  Window is ONE production
+checkpoint segment (2.51e17, two launches at the production PPL) -- the shape
+the campaign actually sweeps, not a synthetic multiple of it.  Every run
+re-checks the segment's own survivor fingerprint and the frozen SCORE_WIDE
+one.
+
+| # | change | ratio | min/max | verdict |
+|---|--------|-------|---------|---------|
+| 29 | **37# wheel, factored** (old constants) | **1.5418x** | 1.5373 / 1.5425 | KEPT |
+| 30 | `LAUNCH_PERIODS` 4228 -> 16912, `MP_T` 4096 -> 16384, `QUEUE_BUDGET` 220e6 -> 440e6, measured on the **31# wheel** so it is not credited to the wheel | **1.0276x** | 1.0269 / 1.0277 | KEPT |
+| -- | **paired total, HEAD engine vs this one** | **1.5733x** | 1.5700 / 1.5751 | 14 gates green, all three frozen fingerprints exact |
+
+Rows 29 x 30 = 1.584 against the measured 1.573, i.e. they overlap by 0.7%.
+Quote the paired total.
+
+On the three frozen shapes, same pairing, 5 rounds:
+
+| shape | ratio | why |
+|-------|-------|-----|
+| `SCORE_WIDE` [6.11e20, +2e16) | **1.5313x** | the shape added in 6a, doing exactly the job it was added for |
+| `SCORE` [1e16, +5e14) | **0.4012x** | 68 periods of the new wheel against 20x the threads |
+| `SCORE128` [2.3e20, +5e14) | **0.4228x** | same |
+
+The two narrow shapes falling was predicted in 6a and is not a regression --
+but the *size* of the fall was mispredicted, and that is worth recording.
+Phase 5's `f(words) = 36 + 21*words` fit put them at **0.55-0.58x**; they came
+in at **0.40-0.42x**.  The fit modelled the sieve only, and at 68 periods the
+launch is almost entirely per-chain fixed cost, which it does not contain.
+Rule 2 for the third time in this project: the cost model generates
+candidates and prices declines, and is never evidence.
+
+### Gates for a wheel with no table
+
+The obvious gate -- factored enumeration == `build_wheel` -- cannot run at
+(31#, 37): there is no n where the direct table fits.  My first attempt at it
+did not notice, tried to materialize 4.8 GB, and had to be killed.  What the
+battery does instead:
+
+- **G16 (new)**: the identical construction at (23#, 29) and (29#, 31), where
+  both sides fit -- 81.3M offsets compared as sorted arrays.  At (31#, 37):
+  the count matches `wheel_offset_count`, adjacent chunk slices rejoin with no
+  repeats and nothing at or above the period, and nj is 24/20/18.
+- **G3 (extended)**: the generated 37# offsets against big-integer
+  divisibility, in **both directions**.  The second direction is the one that
+  matters and it is not symmetric: a generator that emits an inadmissible
+  offset merely wastes work, while one that *drops* an admissible offset loses
+  survivors -- and G6 cannot see that, because it compares the GPU against a
+  **29#-wheel** reference, so a hole in the 37# wheel removes the same p from
+  neither side of the comparison.  That asymmetry is the reason this gate
+  exists rather than being folded into G6.
+- **G13** now also covers the chunk generator under real cutting: chunk
+  boundaries that fall mid-group (nj offsets share a base entry) and a short
+  final chunk are precisely where the flat-index arithmetic goes wrong.
+- **G14/G15** were re-pointed at slices instead of whole tables; G15's
+  off-split bound now runs on all three wheels (spl=21, spl2=27 at M37).
+
+`build_wheel` on the 37# wheel is now unreachable by design, and
+`wheel_base()` is the single place that decides which primes get a table --
+2.9's rule, applied before the second implementation existed rather than
+after it disagreed.
+
+### The safety net worked
+
+**Both frozen fingerprints reproduced bit-for-bit on the first run of the new
+wheel**, along with the new wide one.  That is the whole argument for the
+convention: the survivor set is wheel-independent, so a wheel change is a hot-
+path rewrite whose correctness is checkable by a checksum that was frozen from
+a kernel retired months ago.
+
+### The battery got slower, and that is the wheel's real cost
+
+A sieve launch spawns one thread per offset **whatever the window's width**,
+so every gate that sweeps a narrow window got ~20x more expensive.  Measured
+per gate rather than guessed, which mattered:
+
+| gate | before | after (as first built) | shipped |
+|---|---|---|---|
+| G13 slicing | 17.5 s | 137.0 s | 50.5 s |
+| G6 parity | 68.8 s | 74.2 s | 68.5 s |
+| G16 (new) | -- | 8.8 s | 8.8 s |
+| everything else | ~10 s | ~10 s | ~9.8 s |
+| **gate battery** | **96.1 s** | **229.9 s** | **137.6 s** |
+
+`launch.py --selftest` end to end is 166 s.
+
+G13's 137 s was 74.5 s of chunk-axis sweeps, and **63.6 s of that was the
+single `chunk=4093` case**: at 20x the offsets that is 240,747 + 146,287
+chains, i.e. 4.2M kernel launches of host-side overhead.  4093 was never the
+point -- many chains and a short final chunk were -- so the smallest chunk
+became a chain-COUNT target (~20,000) floored at 4093.  On every wheel with a
+built table that is byte-for-byte the old behaviour; on 37# it is 20,000
+chains against the 7,300 the gate used to run, so the axis is covered *more*,
+not less, for a quarter of the time.
+
+### Two knobs that were pinned, not flat
+
+The per-phase re-sweep found the interesting thing.  NINC, ROUND and the sieve
+launch bound **did not move** -- the first structural change in this project
+that left every tuning constant where it was, and worth recording because the
+prior was strongly the other way (folding 37 out of the sieve raises its range
+41..163 and costs it a killer worth 46%, which is exactly what moved NINC
+24 -> 28 on the 31# change).
+
+But two knobs that had been measured *flat* turned out to have been **pinned**:
+
+| knob | on 31# | on 37# |
+|---|---|---|
+| `LAUNCH_PERIODS` | 4228/8456/16912 -> 1.000/0.998/0.998, flat | 4228/8456/16912/33824 -> 1.000/1.010/**1.025**/1.022 |
+| `MP_T` (periods per thread) | "2048/4096/8192 -> 1.000/1.007/1.009, flat" | 4096 -> 16384 is **1.035x** |
+
+The T sweep had been reported flat because at PPL=4228 the targets 4096 and
+8192 both *derive the same T=4288* -- the knob could not move, and its
+0.2% difference was correctly noted at the time as re-measuring the noise
+floor.  What nobody said is that a knob which cannot move has not been tested.
+Raising LAUNCH_PERIODS unpinned it: at PPL=16912 the target reaches T=16960,
+265 pattern words per thread instead of 67.
+
+Note that puts the pattern table at ~77 KB, past where Phase 3's stride-padding
+probe measured a cliff (0.62x at 86 KB).  It does not bite, because that probe
+spread the *accesses* while this padding is a stride-1 tail -- but the only
+reason we know is that it was measured rather than reasoned from the earlier
+number.
+
+`QUEUE_BUDGET` moved too, 220e6 -> 440e6 (1.012x), because it sets the chunk
+size and every chain costs 12 kernel launches whose round and cold grids are
+fixed at 4096 blocks.  880e6 is another 0.55% for twice the memory, which is
+inside the 0.4% noise floor this battery re-measured -- declined on that.
+
+### Dynamic chunking: found by a benchmark disagreeing with production
+
+With the new constants the production window improved and **SCORE_WIDE got
+worse** (1.526 -> 1.578 production, 1.487 -> 1.437 wide).  A shape and a
+production window disagreeing about the same change is a fact about the
+engine, not noise, and it was: CHUNK was derived from PPL, so a window
+*shorter than a launch* paid a full launch's worth of chains for a fraction of
+a launch's work.
+
+The queue holds `chunk * periods * rate`, so the budget bounds the **product**
+-- exactly 2.11's lesson one level further in.  Deriving the chunk per launch
+from the launch's actual period count makes the chain count scale with the
+work: 63 chains at 16,912 periods, 10 at 2,695, 6 at 1 (capped by
+`OFFS_BUDGET`, so a one-period window cannot ask for the whole wheel in one
+buffer).  On every wheel with a built table it resolves to one chunk, as
+before.
+
+### Measured and NOT kept
+
+| attempt | ratio | why |
+|---|---|---|
+| `QUEUE_BUDGET` 880e6 (8 chains) | 1.0055x over 440e6 | inside the 0.4% noise floor, for 14 GB of queue against 7 GB |
+| `LAUNCH_PERIODS` 33824 | 1.022x vs 1.025x at 16912 | past 16912 the chunk count doubles faster than the launch count falls |
+| `NINC` 28 (the obvious direction) | 0.992x | folding 37 out of the sieve "should" have wanted more sieve primes, as it did on the 31# change.  It did not |
+
+### A void battery, for the third time
+
+The first attempt at the headline A/B took the ratio of medians over a ~40 min
+run.  Within **one** configuration the spread reached 44% (1.55e16 to 2.23e16
+on the same window, same engine): the machine changed regime partway through
+and each median mixed two populations.  Discarded, per Rule 3's own
+instruction -- interleaving is necessary and not sufficient, and the check is
+that the spread *within* a configuration is small before believing the spread
+between them.
+
+The re-run forms the ratio **inside each round**, from two sweeps seconds
+apart, and reports the median of per-round ratios with min/max; the order
+alternates between rounds so drift inside a pair cancels too.  That is a
+better statistic than the ratio of medians and it costs nothing, so it is what
+the harness does now.  The difference is visible: the discarded battery's
+per-configuration spreads were 40%+, while every per-round ratio above spans
+under 0.5%.
+
+The second lesson is about supervision, and it is now Rule 0 in
+`../CLAUDE.md`: **no command an agent runs may take longer than 5 minutes.**
+That battery ran 40+ minutes and the owner had to ask twice what was
+happening.  The replacement measures one configuration per invocation, three
+rounds, on a one-segment window: **111 s per pair**, three pairs, same
+conclusion and a tighter one.  The long run was not only unsupervisable, it
+was the *worse* measurement -- which is the argument for the rule, not just
+the excuse for it.
+
+### A vacuous drill the wheel change surfaced
+
+`launch.py --selftest`'s low-range resume drill asked n=13 for
+[1e5, 2e9) and required at least one survivor.  That window contains
+**zero** pre-MR survivors -- a(13) is 8.776e9, just outside it -- on the 31#
+wheel, on the 29# reference, and on 37#.  So the drill had been comparing two
+empty lists and failing its own guard, independently of this change; it was
+verified against the 31# configuration before being touched, so as not to
+attribute a pre-existing failure to the wheel.
+
+It now runs n=9 over [1e5, 2e8) (12 survivors) for the low case and keeps
+n=13 at 3e19 (6 survivors) for the high one, which is also where the campaign
+drills meet the production 37# wheel.  The population minimum is asserted
+*separately* from the split-equals-whole comparison, so the next window to go
+empty reports "under-populated" rather than a mismatch of nothing against
+nothing.  CONVENTIONS already said an empty-vs-empty comparison does not
+count; nothing was checking that it stayed true.

@@ -1,12 +1,20 @@
 # euler_gpu.py -- THE GPU engine for the A164926 hunt (CuPy RawKernel).
 #
 # ONE engine, spanning [P_FLOOR, P_CEIL) in a single piece.  Every candidate
-# is carried as the pair (k, off) with p = k*29# + off, so every sieve test
-# reduces to ((k mod q)*(29# mod q) + off mod q) mod q, which stays u64-safe
-# at any height below the enforced ceiling 1e24 -- a factor >3 under the
-# deterministic Miller-Rabin validity bound 3.317e24.  There is no 2^64
-# boundary in the search and no second engine to switch to; the exact p
-# exists only on the host, as a Python int.
+# is carried as the pair (k, off) with p = k*M + off for the wheel period M,
+# so every sieve test reduces to ((k mod q)*(M mod q) + off mod q) mod q,
+# which stays u64-safe at any height below the enforced ceiling 1e24 -- a
+# factor >3 under the deterministic Miller-Rabin validity bound 3.317e24.
+# There is no 2^64 boundary in the search and no second engine to switch to;
+# the exact p exists only on the host, as a Python int.
+#
+# The wheel is the largest one whose table fits, per n (euler_search
+# best_wheel).  At the production n=17 that is 37#, M = 7.42e12, and its
+# 5.99e8 offsets are never stored: the wheel is carried FACTORED as the 31#
+# table plus a 37 x 20 admissible-j table, and each chain generates its own
+# CHUNK of offsets on the device (_WHEEL_CHUNK_SRC).  Folding 37 in generates
+# 1.85x fewer candidates for a mathematically identical survivor set, which is
+# why all three frozen fingerprints still reproduce bit-for-bit.
 #
 # Pipeline, three kernel stages:
 #   stage 1a  bit-sieve over the first NINC stage-1 primes: one precomputed
@@ -30,6 +38,12 @@
 # Miller-Rabin and exact-run classification stay on the HOST: the GPU only
 # ever PROPOSES (euler_search.mr_*).
 #
+# Gate battery note: the 37# wheel has 20x the offsets, and a sieve launch
+# spawns one thread per offset whatever the window's width -- so every gate
+# that sweeps a narrow window got more expensive.  The battery went 96 s ->
+# 138 s (launch.py --selftest, 166 s).  That is the price of the wheel on the
+# gates, and it is paid deliberately.
+#
 # Barrett: for prime q, MAGIC = floor(2^64 / q).  qhat = mulhi64(p, MAGIC)
 # satisfies qhat in [floor(p/q) - 2, floor(p/q)], so r = p - qhat*q needs at
 # most two corrective subtracts.  Exactness is never assumed -- G6 pins this
@@ -39,10 +53,13 @@
 # (to the ceiling zone), G7 comparator planted-fake drill, G8 canary
 # rediscovery of a(13), G12 canary rediscovery of a(18) and the
 # Waldvogel-Leikauf run-21 value, G13 slicing-independence across launch
-# geometries, split points AND offset-chunk sizes, G14 pattern tables ==
-# big-integer divisibility in both layouts, G15 the bitset test and the
-# 32-bit reductions (including the off-split's 2^32 bound at its worst
-# case) == exact integer arithmetic.  See ../OPTIMIZATION.md for why the
+# geometries, split points AND offset-chunk sizes (which on a factored wheel
+# is also the test of the chunk generator under real cutting), G14 pattern
+# tables == big-integer divisibility in both layouts, G15 the bitset test and
+# the 32-bit reductions (including the off-split's 2^32 bound at its worst
+# case, on all three wheels) == exact integer arithmetic.  The factored
+# enumeration itself is G16, in euler_search.py with the rest of the wheel
+# mathematics.  See ../OPTIMIZATION.md for why the
 # engine is shaped this way, and RESULTS.md for what the retired engines
 # were.
 #
@@ -62,19 +79,30 @@ from huntlib.gpu import barrett_magics  # noqa: E402
 from euler_reference import A21_UPPER, KNOWN
 from euler_search import (CpuEngine, M_WHEEL_29, P_CEIL, P_FLOOR,
                           WHEEL_PRIMES,
-                          WHEEL_PRIMES_29, WHEEL_PRIMES_31, best_wheel,
+                          WHEEL_PRIMES_29, WHEEL_PRIMES_31, WHEEL_PRIMES_37,
+                          best_wheel,
                           build_wheel, forbidden, mr_is_prime, mr_run_length,
-                          stage_primes)
+                          stage_primes, wheel_base, wheel_factored_slice,
+                          wheel_jtab, wheel_offset_count)
 
-MP_T = 4096              # TARGET periods per thread; __init__ derives the real
+MP_T = 16384             # TARGET periods per thread; __init__ derives the real
                          # T from it and PPL so the grid's y-slices come out
-                         # even.  4096 rather than 2048 because at the
-                         # production PPL it resolves to a single y-slice,
-                         # halving the thread count -- and the sieve's
-                         # per-thread cost is real: fitting sieve = a + b/T
-                         # over T = 192..2176 gives 239 ms of pattern loop plus
-                         # 109449/T ms of per-thread setup, 17.4% of the kernel
-                         # at T=2176.  Worth 1.022x.
+                         # even.  The sieve's per-thread cost is real: fitting
+                         # sieve = a + b/T over T = 192..2176 gave 239 ms of
+                         # pattern loop plus 109449/T ms of per-thread setup,
+                         # 17.4% of the kernel at T=2176.
+                         # 4096 stood while PPL was 4228, where 4096/8192 both
+                         # resolved to the SAME T=4288 -- so the knob read flat
+                         # because it was pinned, not because T did not matter.
+                         # The 37# wheel needs a bigger LAUNCH_PERIODS, which
+                         # unpinned it: at PPL=16912 the target reaches
+                         # T=16960, i.e. 265 pattern words per thread instead
+                         # of 67.  Worth 1.035x with QUEUE_BUDGET (below), and
+                         # note it puts the pattern table at ~77 KB -- past
+                         # where Phase 3's stride-padding probe measured a
+                         # cliff (0.62x at 86 KB).  It does not bite, because
+                         # that probe spread the ACCESSES and this padding is
+                         # a stride-1 tail.  Measured, not reasoned.
 
 _COLD_SRC = r"""
 // Phase B (cold): one thread per queued stage-1a survivor.  Runs the
@@ -680,6 +708,41 @@ _R_TEST_BITSET = """            {
             }"""
 
 
+_WHEEL_CHUNK_SRC = r"""
+// Materialize ONE offset chunk of a factored wheel.
+//
+// The 37# offset table is 5.99e8 entries (4.8 GB) at n=17, and nothing here
+// stores it.  The offsets of the wheel base*q are exactly
+// {base[i] + j*M_base}, and WHICH j survive q depends on base[i] only through
+// base[i] mod q -- so the wheel is the 240 MB base table plus a q x nj byte
+// table, and a chunk's offsets are generated straight into a CHUNK-sized
+// buffer, once per sieve->rounds->cold chain.  It is one more kernel in an
+// already device-side chain: no host round-trip, and it costs ~0.3% of the
+// launch (cn threads doing two loads, against the sieve's cn*T/W gathers).
+//
+// nj, q and M_base are baked in as literals.  That is catalogue 2.5, but here
+// it also matters arithmetically: with them constant the compiler turns
+// `a / nj` and `o % q` into magic-multiply sequences instead of emitting real
+// 64-bit division, which would dominate this kernel.
+extern "C" __global__
+void wheel_chunk(const unsigned long long a0,     // first flat index
+                 const unsigned int cn,           // offsets in this chunk
+                 const unsigned long long* __restrict__ base,
+                 const unsigned char* __restrict__ jtab,
+                 unsigned long long* __restrict__ out)
+{
+    unsigned int t = blockIdx.x * blockDim.x + threadIdx.x;
+    if (t >= cn) return;
+    unsigned long long a = a0 + (unsigned long long)t;
+    unsigned long long i = a / __NJ__ULL;
+    unsigned int tt = (unsigned int)(a - i * __NJ__ULL);
+    unsigned long long o = base[i];
+    unsigned int r = (unsigned int)(o % __Q__ULL);
+    out[t] = o + (unsigned long long)jtab[r * __NJ__u + tt] * __MB__ULL;
+}
+"""
+
+
 def off_split(M, qmax):
     """Bit position s at which `off` can be split for a 32-bit reduction.
 
@@ -850,18 +913,47 @@ class GpuEngine:
     T = MP_T                 # periods per thread -- a TARGET, not the final
                              # value: __init__ re-derives it from PPL so the
                              # sieve grid's y-slices come out even
-    LAUNCH_SPAN = 131072 * 6469693230    # ~8.48e14 of p-line per launch.
-                             # Expressed as a SPAN, not a period count, so it
-                             # is wheel-independent: the period is 31x longer
-                             # on the 31# wheel, and 131072 of those would
-                             # want a 17 GB queue.  Big launches matter now
-                             # that stage 1a is cheap -- steady-state A/B over
-                             # [2.3e20, +2e15) gave 8192 -> 131072 periods =
-                             # 1.395x on the 29# wheel, identical streams.
-    PPL = None               # periods per launch; derived from LAUNCH_SPAN,
-                             # the wheel period and QUEUE_BUDGET unless set
-    QUEUE_BUDGET = 220_000_000   # max stage-1a queue entries in flight, i.e.
-                             # ~1.8 GB per ping-pong buffer.  This used to cap
+    LAUNCH_PERIODS = 16912   # periods per launch, in units of THIS engine's
+                             # wheel period.  It was a p-line SPAN
+                             # (131072 * 29#), which was right while the queue
+                             # budget capped it and became wrong the moment
+                             # the period could change: what a launch has to
+                             # hold is PERIODS, because T is derived from this
+                             # and the sieve amortizes its per-thread setup
+                             # over T.  An absolute span silently becomes a
+                             # different number of periods on every wheel --
+                             # the same pathology as a frozen benchmark window
+                             # (../OPTIMIZATION.md 2.13), one level down, and
+                             # it is what made the 37# wheel look impossible.
+                             # 4228 was exactly what the old span resolved to
+                             # on the 31# wheel, and bigger measured
+                             # 1.000/0.998/0.998 there -- flat, so it stayed.
+                             # On the 37# wheel it is not flat: 4228 -> 8456 ->
+                             # 16912 measures 1.000/1.010/1.025, because a
+                             # launch is now 37x more p-line and the host
+                             # round-trip per launch is the same size.  33824
+                             # gives it back (1.022x): past 16912 the chunk
+                             # count doubles faster than the launch count
+                             # falls.  Re-swept WITH QUEUE_BUDGET and MP_T,
+                             # which it interacts with -- all three set the
+                             # chunk count, from different directions.
+    PPL = None               # periods per launch; LAUNCH_PERIODS unless set
+    QUEUE_BUDGET = 440_000_000   # max stage-1a queue entries in flight, i.e.
+                             # ~3.5 GB per ping-pong buffer.  It sets the CHUNK
+                             # size, hence how many sieve->rounds->cold chains a
+                             # launch is cut into, and each chain pays a fixed
+                             # cost: 12 kernel launches whose round and cold
+                             # grids are FIXED at 4096 blocks (they have to be
+                             # -- the queue count lives on the device), so a
+                             # short chain runs a million threads that exit
+                             # immediately.  That was invisible while the 31#
+                             # wheel resolved to one chunk.  On 37#:
+                             # 110/220/440/880e6 -> 63/32/16/8 chunks ->
+                             # 0.976/1.000/1.012/1.019.  880e6 is another
+                             # 0.55% over 440e6, which is inside the 0.4% noise
+                             # floor this battery re-measured, for twice the
+                             # memory -- declined on that, not on principle.
+                             # This used to cap
                              # PPL, which made the launch's PERIOD count a
                              # function of the memory budget -- and since T is
                              # derived from PPL, a wheel with a longer period
@@ -870,13 +962,17 @@ class GpuEngine:
                              # 37# wheel at 0.75x in Phase 4.  It was never
                              # necessary: the launch is now cut along the
                              # OFFSET axis instead (CHUNK below), so PPL is set
-                             # purely by LAUNCH_SPAN and the queue is bounded
+                             # purely by LAUNCH_PERIODS and the queue is bounded
                              # by how many offsets are in flight at once.
     CHUNK = None             # offsets per sieve->rounds->cold chain; derived
-                             # from QUEUE_BUDGET unless set.  One chunk (the
-                             # whole offset table) reproduces the pre-chunking
-                             # launch exactly, which is what the 31# wheel
-                             # still resolves to.
+                             # PER LAUNCH from QUEUE_BUDGET and the launch's
+                             # actual period count unless set.  Setting it
+                             # pins the value exactly (G13 does that).
+    OFFS_BUDGET = 100_000_000    # cap on offsets materialized per chunk, ~800
+                             # MB as u64.  It only binds on windows far shorter
+                             # than a launch -- the gate battery's -- where the
+                             # queue would otherwise permit the whole 5.99e8-
+                             # offset wheel in a single chunk.
     ROUND = 16               # stage-1b primes per compaction round; 0 sends
                              # all of stage 1b to the single cold kernel.
                              # Moves with everything around it.  On 29#: peak
@@ -913,11 +1009,27 @@ class GpuEngine:
     def __init__(self, n, wheel_primes=None):
         self.n = n
         # the largest wheel whose offset table fits the budget: fewer
-        # candidates generated, identical survivor set (see euler_search)
+        # candidates generated, identical survivor set (see euler_search).
+        # A wheel at or above FACTORED_FROM is carried as (base table,
+        # admissible-j table) and its offsets are generated a chunk at a time
+        # on the device -- see _WHEEL_CHUNK_SRC.  `wheel_base` is the ONE
+        # place that decides which, so nothing here can disagree with
+        # best_wheel or with the gates.
         self.wheel_primes = wheel_primes or best_wheel(n)
-        offs, self.M = build_wheel(n, self.wheel_primes)
-        self.n_offs = offs.size
-        self.d_offs = cp.asarray(offs.astype(np.uint64))
+        wb = wheel_base(self.wheel_primes)
+        base, Mb = build_wheel(n, wb)
+        self.d_base = cp.asarray(base.astype(np.uint64))
+        if list(wb) == list(self.wheel_primes):
+            self.fq, self.nj = 0, 1
+            self.M, self.n_offs = Mb, int(base.size)
+            self.d_offs, self.d_jtab = self.d_base, None
+        else:
+            self.fq = int(self.wheel_primes[-1])
+            jtab, self.nj = wheel_jtab(n, wb, self.fq)
+            self.M, self.n_offs = Mb * self.fq, int(base.size) * self.nj
+            self.d_jtab = cp.asarray(np.array(jtab, dtype=np.uint8))
+            self.d_offs = None       # there is no whole-wheel table, by design
+        self.Mb = Mb
         s1, s2 = stage_primes(after=self.wheel_primes[-1])
 
         # stage-1 forbidden-residue bitmasks, packed end to end (L2-resident)
@@ -983,21 +1095,40 @@ class GpuEngine:
         # snapshot the tuning before anything is compiled against it
         self.NINC, self.W, self.T = int(self.NINC), int(self.W), int(self.T)
         self.ROUND = int(self.ROUND)
-        if self.PPL:
-            self.PPL = int(self.PPL)
-        else:
-            self.PPL = max(self.W, int(self.LAUNCH_SPAN // int(self.M)))
-        # offsets in flight per chain: the queue holds CHUNK * PPL * rate
-        # entries, so this is what QUEUE_BUDGET actually bounds
-        if self.CHUNK:
-            self.CHUNK = min(int(self.CHUNK), self.n_offs)
-        else:
-            self.CHUNK = min(self.n_offs,
-                             max(1 << 14,
-                                 int(self.QUEUE_BUDGET
-                                     / max(self.PPL * self._s1a_rate(s1) *
-                                           self.Q_HEADROOM, 1.0))))
+        self.PPL = max(self.W, int(self.PPL or self.LAUNCH_PERIODS))
+        # Stage-1a survival is a deterministic product over the sieve primes,
+        # so the queue is sized exactly rather than guessed (2.6).  Derived
+        # once, here, because three things now need it.
+        self.s1a_rate = self._s1a_rate(s1)
+
+        # Offsets in flight per chain.  The queue holds chunk * periods * rate
+        # entries, so QUEUE_BUDGET bounds the PRODUCT -- which means a launch
+        # with fewer periods can afford proportionally more offsets at once,
+        # and should: every chain costs 12 kernel launches whose round and cold
+        # grids are fixed, so chains are a tax paid per chain and not per unit
+        # of work.  Deriving the chunk from PPL instead charged a short window
+        # a full launch's worth of chains for a fraction of a launch's work --
+        # measured as 3.5% off the 2e16 benchmark shape that production never
+        # paid.  Derived per launch (_chunk_for); self.CHUNK is the PPL case,
+        # i.e. the smallest chunk and the largest chain count.
+        self.CHUNK_FIXED = min(int(self.CHUNK), self.n_offs) if self.CHUNK \
+            else None
+        self.CHUNK = self._chunk_for(self.PPL)
         self.nchunks = -(-self.n_offs // self.CHUNK)
+
+        # A factored wheel has no offset table to slice, so each chain
+        # generates its chunk first.  The buffer holds ONE chunk -- that is the
+        # whole saving -- and grows on demand, because the chunk size is a
+        # per-launch quantity.
+        if self.fq:
+            self.d_ochunk = cp.zeros(self.CHUNK, dtype=np.uint64)
+            self.kern_wheel = cp.RawKernel(
+                _WHEEL_CHUNK_SRC.replace("__NJ__", str(self.nj))
+                                .replace("__Q__", str(self.fq))
+                                .replace("__MB__", str(int(self.Mb))),
+                "wheel_chunk")
+        else:
+            self.d_ochunk, self.kern_wheel = None, None
 
         # Balance the sieve grid.  blockIdx.y indexes a slice of T periods and
         # the last slice takes the remainder, but per-thread setup -- NINC
@@ -1008,7 +1139,7 @@ class GpuEngine:
         # from the target first, then divide PPL evenly over it, rounded up to
         # a whole pattern block: 4228 -> gy = 2, T = 2176, slices 2176/2052.
         # Measured 1.066x, and it is derived rather than tuned because PPL
-        # moves with the wheel, with n, and with LAUNCH_SPAN.
+        # moves with the wheel, with n, and with LAUNCH_PERIODS.
         gy = max(1, int(round(self.PPL / float(self.T))))
         per = -(-self.PPL // gy)                       # ceil(PPL / gy)
         self.T = max(self.W, -(-per // self.W) * self.W)
@@ -1016,6 +1147,12 @@ class GpuEngine:
         # Queue entry layout (see _UNPACK_*).  `value` needs off and kp to
         # share 64 bits; derive the split from M and REFUSE it -- fall back to
         # the index form -- if a launch of PPL periods could overflow kp.
+        # A wider wheel spends its extra period bits here: KSHIFT is 26 on the
+        # 31# wheel and 21 on the 37# one, so a launch may hold up to 2^21 =
+        # 2,097,152 periods against a PPL of 4228.  Derived and REFUSED rather
+        # than assumed, as before (2.9) -- the index form still works under a
+        # factored wheel, because the queue carries the offset's index within
+        # its CHUNK and the chunk buffer is what every consumer is handed.
         self.Q_FORM = str(self.Q_FORM)
         self.KSHIFT = 64 - int(self.M).bit_length()
         if self.PPL > (1 << self.KSHIFT):
@@ -1114,12 +1251,6 @@ class GpuEngine:
                 "ladder_round_128")
             for j0, j1 in self.rounds]
 
-        # Stage-1a survival is a deterministic product over the sieve primes,
-        # so the queue is sized exactly rather than guessed; grown on demand
-        # below, which keeps the gate battery's tiny windows from each
-        # reserving a production-sized buffer.
-        self.s1a_rate = self._s1a_rate(s1)
-
         self.out_cap = 1 << 22
         self.d_outk = cp.zeros(self.out_cap, dtype=np.uint64)
         self.d_outo = cp.zeros(self.out_cap, dtype=np.uint64)
@@ -1143,7 +1274,40 @@ class GpuEngine:
             rate *= 1.0 - len(forbidden(q, self.n)) / q
         return rate
 
-    def _ensure_queue(self, periods):
+    def _chunk_for(self, periods):
+        """Offsets per chain for a launch of `periods` periods.
+
+        The queue holds chunk * periods * rate entries, so for a fixed budget
+        the chunk scales as 1/periods -- which makes the chain count scale
+        WITH the work rather than with the launch, so the per-chain fixed cost
+        stops being a tax on short windows.  Capped by OFFS_BUDGET so that a
+        one-period window does not ask for the whole wheel in one buffer, and
+        floored so tiny windows still get a usable chunk.
+        """
+        if self.CHUNK_FIXED:
+            return self.CHUNK_FIXED
+        return min(self.n_offs, int(self.OFFS_BUDGET),
+                   max(1 << 14,
+                       int(self.QUEUE_BUDGET
+                           / max(periods * self.s1a_rate * self.Q_HEADROOM,
+                                 1.0))))
+
+    def _ensure_buffers(self, periods, chunk, nchunks):
+        """Size the per-launch buffers: queues, the offset chunk, the
+        per-chunk stage-1a counters.  All grow on demand and never shrink, so
+        a battery of small windows never reserves production-sized memory and
+        a repeated sweep allocates once."""
+        self._ensure_queue(periods, chunk)
+        if self.fq and chunk > self.d_ochunk.size:
+            self.d_ochunk = None
+            cp.get_default_memory_pool().free_all_blocks()
+            self.d_ochunk = cp.zeros(chunk, dtype=np.uint64)
+        if nchunks > self.d_qn.size:
+            # one stage-1a counter per chain, so a launch still reaches the
+            # host exactly ONCE however many chains it is cut into
+            self.d_qn = cp.zeros(nchunks, dtype=np.uint64)
+
+    def _ensure_queue(self, periods, chunk):
         """Grow the stage-1a queue(s) to hold one launch of `periods` periods.
 
         Both ping-pong buffers get the same capacity on purpose: a round's
@@ -1153,7 +1317,7 @@ class GpuEngine:
         (an undetected mid-round overflow would corrupt the queue tail and
         silently LOSE survivors, which no amount of headroom can rule out).
         """
-        need = int(min(self.CHUNK, self.n_offs) * periods * self.s1a_rate
+        need = int(min(chunk, self.n_offs) * periods * self.s1a_rate
                    * self.Q_HEADROOM)
         need = max(need, 1 << 16)
         if need > self.Q_CAP:
@@ -1181,7 +1345,13 @@ class GpuEngine:
         block = self.BLOCK
         if periods_per_launch is None:
             periods_per_launch = self.PPL
-        self._ensure_queue(min(periods_per_launch, k1 - k0))
+        # the chunk is a function of the launch's period count, so it is fixed
+        # once here (from the LONGEST launch this call will make -- the first)
+        # rather than drifting between the launches of one sweep
+        periods0 = min(periods_per_launch, k1 - k0)
+        chunk = self._chunk_for(periods0)
+        nchunks = -(-self.n_offs // chunk)
+        self._ensure_buffers(periods0, chunk, nchunks)
         got = []
         for kc in range(k0, k1, periods_per_launch):
             np_launch = min(periods_per_launch, k1 - kc)
@@ -1200,10 +1370,19 @@ class GpuEngine:
             # offset table, so the queue only ever holds one chunk's
             # survivors.  Chunk c owns d_qn[c], so no chain has to be waited
             # on -- the launch still reaches the host exactly once, at the end.
-            for c, c0 in enumerate(range(0, self.n_offs, self.CHUNK)):
-                cn = min(self.CHUNK, self.n_offs - c0)
-                offs = self.d_offs[c0:c0 + cn]
+            for c, c0 in enumerate(range(0, self.n_offs, chunk)):
+                cn = min(chunk, self.n_offs - c0)
                 gx = (cn + block - 1) // block
+                if self.fq:
+                    # generate this chunk's offsets; enqueued in the same
+                    # stream, so the chain still reaches the host only at the
+                    # end of the launch
+                    self.kern_wheel((int(gx),), (block,),
+                                    (np.uint64(c0), np.uint32(cn),
+                                     self.d_base, self.d_jtab, self.d_ochunk))
+                    offs = self.d_ochunk[:cn]
+                else:
+                    offs = self.d_offs[c0:c0 + cn]
                 qn_c = self.d_qn[c:c + 1]
                 self.kern_sieve((int(gx), int(gy)), (block,),
                                 (np.uint64(kc),
@@ -1263,7 +1442,7 @@ class GpuEngine:
                     "stage-1a queue overflow: %d > %d (expected %.3e at rate "
                     "%.4e); raise Q_HEADROOM or lower CHUNK"
                     % (qn, self.Q_CAP,
-                       min(self.CHUNK, self.n_offs) * np_launch
+                       min(chunk, self.n_offs) * np_launch
                        * self.s1a_rate, self.s1a_rate))
             cnt = int(self.d_outn.get()[0])
             if cnt > self.out_cap:
@@ -1286,7 +1465,31 @@ class GpuEngine:
 
 # ------------------------------- gates -------------------------------------
 
-G6_CASES = [(5, 10**5, 4 * 10**5, 20),
+def _wheel_sample(n, wheel_primes, per_slice=2048):
+    """(some real offsets of this wheel, its period) -- for gates.
+
+    The gates that need *an* admissible offset to build a real candidate p
+    used to take the whole table.  On a factored wheel that table is 4.8 GB
+    and deliberately does not exist, so they take slices instead, drawn from
+    the start, the middle and the end of the flat index so the sample is not
+    all one corner of the base table.  Returns the built table unchanged for
+    the wheels that have one.
+    """
+    wb = wheel_base(wheel_primes)
+    if list(wb) == list(wheel_primes):
+        return build_wheel(n, wheel_primes)
+    base, _ = build_wheel(n, wb)
+    _, nj = wheel_jtab(n, wb, int(wheel_primes[-1]))
+    total = int(base.size) * nj
+    parts, M = [], None
+    for a0 in (0, total // 2, total - per_slice):
+        s, M = wheel_factored_slice(n, wb, int(wheel_primes[-1]),
+                                    a0, per_slice)
+        parts.append(s)
+    return np.concatenate(parts), M
+
+
+G6_CASES =[(5, 10**5, 4 * 10**5, 20),
             (9, 10**6, 6 * 10**7, 2),
             (13, 10**5, 8_900_000_000, 1),
             (17, 10**15, 10**15 + 3 * 10**12, 1),
@@ -1499,13 +1702,30 @@ def g13_slicing_independence():
                                    % (n, cut - lo, len(split), len(whole)))
         del eng
         cp.get_default_memory_pool().free_all_blocks()
-    # the offset axis
-    csurv, saved = 0, GpuEngine.CHUNK
+    # the offset axis.  On a FACTORED wheel this is also the only test of the
+    # chunk-generation kernel's flat-index arithmetic under real cutting: each
+    # chain regenerates its own offsets from (base, jtab), and a chunk that
+    # lands mid-group (nj offsets share a base entry) or comes up short at the
+    # end is exactly where that goes wrong.
+    csurv, saved, chains = 0, GpuEngine.CHUNK, []
     try:
         for n, lo, hi in ((13, 3 * 10**19, 3 * 10**19 + 6 * 10**13),
                           (17, 230 * 10**18, 230 * 10**18 + 8 * 10**14)):
+            # The smallest chunk is a chain-COUNT target rather than a fixed
+            # size.  What this case tests is many chains plus a short final
+            # chunk, and "many" has to survive a wheel with 20x the offsets:
+            # a literal 4093 became 240,747 chains = 2.6M kernel launches and
+            # 64 s of host-side launch overhead, for no coverage that ~20,000
+            # does not already give.  Floored at 4093, so every wheel with a
+            # built table is cut exactly as it was before -- and on the 37#
+            # wheel this is 20,000 chains against the 7,300 the gate used to
+            # run, i.e. more of the axis, not less.
+            n_offs = wheel_offset_count(n, best_wheel(n))
+            small = max(4093, n_offs // 20_000)
+            while n_offs % small == 0:     # a short LAST chunk is the
+                small += 1                 # interesting case; force one
             ref = None
-            for chunk in (None, 1_000_000, 65_536, 4093):
+            for chunk in (None, 1_000_000, 65_536, small):
                 GpuEngine.CHUNK = chunk
                 eng = GpuEngine(n)
                 got = eng.survivors_pre_mr(lo, hi)
@@ -1518,6 +1738,7 @@ def g13_slicing_independence():
                     return False, ("G13 FAIL n=%d chunk=%s (%d chains): %d vs"
                                    " %d" % (n, chunk, nch, len(got), len(ref)))
                 checks += 1
+            chains.append(nch)
     finally:
         GpuEngine.CHUNK = saved
     if surv < 1000 or csurv < 100:
@@ -1525,8 +1746,10 @@ def g13_slicing_independence():
                        " too sparse to prove anything" % (surv, csurv))
     return True, ("G13 ok: stream independent of slicing over %d comparisons"
                   " (%d + %d survivors) across launch geometries, word/thread"
-                  " boundaries, split points and offset-chunk sizes, to the"
-                  " 1e24 ceiling" % (checks, surv, csurv))
+                  " boundaries, split points and offset-chunk sizes down to"
+                  " %s chains, to the 1e24 ceiling"
+                  % (checks, surv, csurv,
+                     "/".join(format(c, ",") for c in chains)))
 
 
 def g14_pattern_tables(trials=40, seed=11):
@@ -1550,7 +1773,7 @@ def g14_pattern_tables(trials=40, seed=11):
     import random
     for n in (13, 17):
         wp = best_wheel(n)
-        offs, M = build_wheel(n, wp)
+        offs, M = _wheel_sample(n, wp)
         s1, _ = stage_primes(after=wp[-1])
         T, qs, checks = GpuEngine.T, [int(q) for q in s1[:SIEVE_NINC]], 0
         for march in (False, True):
@@ -1648,9 +1871,9 @@ def g15_reduction_identities(trials=3000, seed=17):
     # its worst case (off = M - 1) and the value on real offsets, for each
     # wheel the engine can pick and for BOTH stage split points -- the two
     # differ because stage 2's primes are 64x wider.
-    for wp in (WHEEL_PRIMES_29, WHEEL_PRIMES_31):
+    for wp in (WHEEL_PRIMES_29, WHEEL_PRIMES_31, WHEEL_PRIMES_37):
         for n in (13, 17):
-            offs, M = build_wheel(n, wp)
+            offs, M = _wheel_sample(n, wp)
             s1, s2 = stage_primes(after=wp[-1])
             for arr in (s1, s2):
                 qs = [int(v) for v in arr.tolist()]
@@ -1691,7 +1914,7 @@ def g15_reduction_identities(trials=3000, seed=17):
                   " n=13/17/21 for stage 2 and for every stage-1 prime above"
                   " max(x^2+x); the 32-bit reductions are exact over all"
                   " %d stage-1 + %d stage-2 primes; and the off-split stays"
-                  " under 2^32 at its worst case on both wheels"
+                  " under 2^32 at its worst case on all three wheels"
                   % (s1.size, s2.size))
 
 

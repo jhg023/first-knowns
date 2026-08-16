@@ -46,6 +46,13 @@ Expect a wheel change to move `SCORE` and `SCORE128` **down** while
 regression; the wide shape and a paired interleaved A/B at production shape
 are what such a change is judged on.
 
+That prediction was made before the 37# wheel landed and then tested by it.
+Measured, paired, same battery: `SCORE_WIDE` **1.5313x**, `SCORE` **0.4012x**,
+`SCORE128` **0.4228x**. The direction was right on all three. The *size* of
+the narrow-shape fall was not — Phase 5's sieve fit predicted 0.55–0.58x
+against a measured 0.40–0.42x, because at 68 periods a launch is almost
+entirely per-chain fixed cost, which that fit did not model.
+
 **Engine unification (2026-08-15).** There is now one production engine
 spanning the whole range, so BOTH frozen shapes are measured with it:
 SCORE on the low window [1e16, +5e14) and SCORE128 on the high window
@@ -97,6 +104,7 @@ stopwatch.
 | 2026-08-15 | v3-128, single-engine tree | SCORE **6,330,661,788** / SCORE128 **6,544,948,396** | retired engines deleted; both frozen shapes now measured with the one production engine, both fingerprints reproduced, 12 gates green. Engine mathematics identical to the row below -- this row differs only in what the tree contains and which engine the SCORE column refers to |
 | 2026-08-16 | v5: stage-2 bit probe, balanced sieve grid, 32-bit stage-1b reductions, launch bound 3, round size 24 | SCORE **9,961,108,420** / SCORE128 **10,302,529,513** | 13 gates green (G15 new), both frozen fingerprints reproduced. **The load-bearing number is the paired ratio 1.294x** measured in one process against the engine this row replaces, not any arithmetic across these absolutes -- run-to-run variance here is ~2x on identical code. Composition: 1.165 x 1.066 x 1.048 x 1.028 x 1.023, none of them individually interesting |
 | 2026-08-16 | v7: value-form queue, baked stage-1b round kernels, 32-bit off-split in stages 1b and 2, marched pattern table, offset chunking; NINC 26, ROUND 16, launch bound 2 | SCORE **13,198,517,241** / SCORE128 **13,433,035,057** | 13 gates green (G13 extended to the offset axis, G15 to the off-split and the stage-1b bitset), both frozen fingerprints reproduced. **The load-bearing number is the paired ratio 1.3293x** against the row above, measured in one process over 7 interleaved rounds on a steady-state 2e16 window, not any arithmetic across these absolutes. Composition: 1.084 x 1.058 x 1.043 x 1.037 x 1.023 x 1.020 x 1.019 x 1.010. An earlier battery on the same engine modulo two changes since measured neutral and reverted read SCORE **15,425,906,583** / SCORE128 **13,497,010,536** -- a 17% swing on the low shape and 0.5% on the high one, which is the variance note at the top of this file doing its job |
+| 2026-08-16 | v8: **37# wheel, carried factored**; LAUNCH_PERIODS 16912, MP_T 16384, QUEUE_BUDGET 440e6, per-launch chunk sizing | SCORE **6,231,416,304** / SCORE128 **6,340,921,529** / SCORE_WIDE **23,704,681,646** | 14 gates green (G16 new), all three frozen fingerprints reproduced. **The load-bearing number is the paired ratio 1.5733x** (min 1.5700, max 1.5751) against the row below, measured as per-round ratios on one production checkpoint segment. Composition: 1.5418x from the wheel alone, 1.0276x from the constants — the latter measured on the **31#** wheel so it is not credited to the wheel. **SCORE and SCORE128 fall to 0.40x/0.42x and that is expected**: a 5e14 window holds 68 periods of this wheel, which is what SCORE_WIDE was added in the row below to fix. Judge this engine on SCORE_WIDE (**1.5313x**) and the production segment, never on the narrow pair |
 | 2026-08-16 | v7 + third frozen shape (engine unchanged) | SCORE **16,307,051,103** / SCORE128 **16,325,330,842** / SCORE_WIDE **16,662,037,996** | 13 gates green, all THREE fingerprints reproduced (178 / 120489734542316, 178 / 133625321009290, 6,996 / 71330844491704598). **No engine change in this row** -- `SCORE_WIDE` [6.11e20, +2e16) was added and frozen, and the two older shapes keep their exact bytes. The absolutes read ~1.24x the row above on identical code, which is the variance note at the top of this file, not a speedup: nothing in the engine moved. The three shapes agree to 2.2% *in this battery*, and that is luck rather than precision -- the very next battery, same code, same session, read 20,917,761,353 / 25,643,824,896 / 19,283,048,101, a **33% spread across the three**. Same lesson as the 0.01% row above: a tight capture is a capture, not a measurement |
 | 2026-08-15 | v3-128 (frozen) | **6,341,803,579** | bit-sieve stage 1a + stage-1b compaction rounds; NINC=24, ROUND=8, W=64, PPL=131072. Same fingerprint (178 / 133625321009290), bit-identical stream (G13, G14). Full battery green; same-battery u64 SCORE 305,864,144, so the 128 path is now **20.7x the u64 engine**. Shape note: SCORE128 takes the engine's default launch size, raised 8192 -> 131072, so the 77,285-period window is now ONE launch (see score.py header) |
 
@@ -300,6 +308,59 @@ Cumulative **~30x** over the engine that swept leg 1 (5.5e14 -> 1.64e16).
 Re-sweeping the whole range 0 to 5e21 now costs ~3.5 days and the enforced
 1e24 ceiling is ~1.9 years of single-GPU wall (it was ~58 years, then ~3.0,
 then ~2.4).
+
+## Phase 6 (2026-08-16): a third frozen shape, then the 37# wheel
+
+Two commits, deliberately separate: the benchmark-shape change touches no
+engine code, and the engine change touches no frozen shape.
+
+| change | ratio | note |
+|--------|-------|------|
+| `SCORE_WIDE` added, [6.11e20, +2e16), 6,996 survivors | -- | no engine change; the two older shapes keep their exact bytes and still reproduce |
+| **37# wheel, carried factored** | **1.5418x** | 1.85x fewer candidates for an identical survivor set. Its 5.99e8-offset table is never built: 31# table + a 37x20 byte admissible-j table, chunks generated on the device |
+| `LAUNCH_PERIODS` 4228 -> 16912, `MP_T` 4096 -> 16384, `QUEUE_BUDGET` 220e6 -> 440e6 | **1.0276x** | measured on the **31#** wheel, so it is a separate win and not credited to the wheel |
+| **paired total, HEAD engine vs this one** | **1.5733x** | min 1.5700, max 1.5751 over per-round ratios on one production checkpoint segment |
+
+Both constants that moved had previously been measured **flat**, and both had
+been *pinned* rather than flat: at PPL=4228 the T targets 4096 and 8192 derive
+the same T=4288, so the knob could not move. A knob that cannot move has not
+been tested — the 0.2% difference between them was correctly logged at the
+time as re-measuring the noise floor, and nobody drew the other conclusion.
+
+NINC, ROUND and the sieve launch bound did **not** move. That is the first
+structural change in this project where no tuning constant did, and the prior
+was strongly the other way: folding 37 out of the sieve raises its prime range
+to 41..163 and costs it a killer worth 46%, which is exactly what moved NINC
+24 -> 28 on the 31# change. Measured anyway: 24/26/28/30/32 ->
+0.984/**1.000**/0.992/0.974/0.961.
+
+### Wall-clock after this round
+
+The realized v6 production rate was **1.232e16 p/s** over a 10 h leg, and
+v7 projected 1.64e16 from its paired ratio. Applying this round's paired
+1.5733x to that projection gives **2.58e16 p/s**, to be replaced by a
+realized average once the leg resumes -- the previous round's projection
+transferred to production at 93%, so treat this one the same way.
+
+Conditional on the sweep being clean to the 1.056e21 frontier, and on run
+EXACTLY 19:
+
+| target | v8 (proj.) | v7 (proj.) |
+|--------|-----------|-----------|
+| 1.36e21 (a19 Q1) | 3.3 h | 5.2 h |
+| 1.82e21 (a19 median) | **8.2 h** | 12.9 h |
+| 2.74e21 (a19 Q3) | 18.1 h | 28.5 h |
+| 5.00e21 (leg cap) | **1.77 days** | 2.78 days |
+
+Cumulative **~47x** over the engine that swept leg 1 (5.5e14 -> 2.58e16).
+The enforced 1e24 ceiling is ~1.2 years of single-GPU wall (it was ~58 years).
+
+### The gates got slower, and that is the wheel's price
+
+A sieve launch spawns one thread per offset whatever the window's width, and
+this wheel has 20x the offsets, so every gate sweeping a narrow window costs
+more. Gate battery **96 s -> 138 s**; `launch.py --selftest` 166 s. Paid
+deliberately, and recorded here so nobody has to rediscover why.
 
 **The next wheel is priced but not taken.** 37# is worth **1.85x on the
 sieve** at production launch shape -- the Phase-4 verdict of 0.75x was a

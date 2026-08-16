@@ -22,12 +22,12 @@ a smaller run ≥ 19. Details in [RESULTS.md](RESULTS.md).
 on the empty sweep so far, the model puts a(19) at median 1.82×10²¹
 (quartiles 1.36×10²¹ / 2.74×10²¹); the current leg runs to 5×10²¹, ~94%
 of the conditional distribution. The engine was rebuilt 2026-08-15
-(bit-sieve stage 1a, then a 31# wheel) for ~19x and sharpened three times on
-2026-08-16, by 1.294x, 1.055x and 1.329x — cumulatively **~32x**, measured
-against a realized 5.5×10¹⁴ p/s on the engine that swept leg 1 — with a
-bit-identical survivor stream throughout, proven by paired A/B against the
-engine each version replaced and still pinned by G6/G13/G14/G15 and the
-unchanged fingerprints. That puts the a(19) median ~12 hours out.
+(bit-sieve stage 1a, then a 31# wheel) for ~19x and sharpened four times on
+2026-08-16, by 1.294x, 1.055x, 1.329x and 1.573x — cumulatively **~47x**,
+measured against a realized 5.5×10¹⁴ p/s on the engine that swept leg 1 —
+with a bit-identical survivor stream throughout, proven by paired A/B against
+the engine each version replaced and still pinned by G6/G13/G14/G15/G16 and
+the unchanged fingerprints. That puts the a(19) median ~8 hours out.
 
 ## The problem
 
@@ -58,24 +58,44 @@ residues of p are −(x²+x) mod q — about min(17, (q+1)/2) classes. One
 engine covers the whole range:
 
 **0. Representation.** p is never held in a machine word. Every candidate
-is the pair (k, off) with p = k·31# + off, so every sieve test reduces to
-`((k mod q)·(31# mod q) + off mod q) mod q`, which stays 64-bit-safe to
+is the pair (k, off) with p = k·37# + off, so every sieve test reduces to
+`((k mod q)·(37# mod q) + off mod q) mod q`, which stays 64-bit-safe to
 the enforced ceiling 10²⁴ — a factor >3 under the Miller–Rabin validity
 bound. There is no 2⁶⁴ boundary in the search: the same code sweeps 10⁵
 and 10²³, and exact integers exist only on the host as Python ints.
 
-**1. Wheel.** p is generated only in residues mod 31# = 200,560,490,130
-that survive all wheel primes 2..31 — 1.5×10⁻⁴ of the line. The wheel is
-chosen per n as the largest whose offset table fits a memory budget
-(2.99×10⁷ offsets at n = 17; the same table would be 5.4×10⁸ at n = 5, so
-the small-n gate cases fall back to 29#). Folding a prime into the wheel
-generates ~2x fewer candidates for a *mathematically identical* survivor
-set — the wheel only decides which primes are tested by generation rather
-than by sieving — which is why both frozen fingerprints still reproduce.
+**1. Wheel, and the table that does not exist.** p is generated only in
+residues mod 37# = 7,420,738,134,810 that survive all wheel primes 2..37 —
+8.1×10⁻⁵ of the line. Folding a prime into the wheel generates fewer
+candidates for a *mathematically identical* survivor set — the wheel only
+decides which primes are tested by generation rather than by sieving — which
+is why all three frozen fingerprints still reproduce bit-for-bit after each
+widening.
+
+The limit used to be the offset table, and 37#'s is 5.99×10⁸ entries (4.8 GB
+at n = 17, and *larger* for smaller n). It is never built. The offsets of a
+wheel base·q are exactly `{off + j·M_base}`, and since M_base is invertible
+mod q, which j survive q depends on off only through `off mod q` — leaving
+exactly `q − |F_q(n)|` admissible j for **every** base offset. So the wheel is
+the 31# table (2.99×10⁷ offsets, 240 MB) plus a 37×20 byte table of
+admissible j, and the GPU generates one chunk of offsets at a time from those
+two. That count is computed, not assumed: it is 20 at n = 17 because the 17
+values x²+x are distinct mod 37, and 18 at n = 21 because they are not.
+
+The gates cannot compare that against a built 37# table — there isn't one at
+any n — so **G16** checks the identical construction at (23#,29) and (29#,31)
+where both sides fit, and at (31#,37) checks the count, that adjacent chunks
+rejoin with no repeats, and that `nj` is 24/20/18 at n = 13/17/21. **G3**
+then checks the generated 37# offsets against divisibility directly, in both
+directions — nothing it emits is inadmissible, and no admissible offset is
+missing. The second direction is the one that matters: a generator that
+*drops* offsets loses survivors, and G6 could not see it, because it compares
+against a 29#-wheel reference where the same p would be missing from neither
+side.
 
 **2. Stage 1a, the bit-sieve.** For prime q, if a block of 64 consecutive
 wheel periods starts at residue r, then period offset u is killed by q
-exactly when `(r + u·(31# mod q)) mod q` is forbidden — a function of
+exactly when `(r + u·(37# mod q)) mod q` is forbidden — a function of
 (q, r) alone. So the host precomputes `pat[q][r]`, a 64-bit kill pattern,
 and the kernel ORs **one word per prime per 64 periods** for the first 26
 stage-1 primes, then reads survivors straight out of the complement with
@@ -99,7 +119,7 @@ sweeping the window and fitting, the sieve costs
 
 A survivor is pushed as the pair (offset, period). The queue stores the
 offset's **value**, not its index, because every downstream consumer would
-otherwise have to gather it back out of a 240 MB table — a scattered read per
+otherwise have to gather it back out of the offset chunk — a scattered read per
 entry per round for a number the sieve already had in a register. The two
 fields share 64 bits under a split derived from the wheel period and refused
 if a launch could ever overflow it.
@@ -150,9 +170,12 @@ flight rather than by how many periods a launch spans; **G14** pins the
 sieve's pattern tables directly against big-integer divisibility of the
 actual values, in both layouts; **G15** does the same for the bit probe and
 the 32-bit reductions, checking the *preconditions* that make them valid
-rather than only their output; and the pipeline rediscovers a(13), a(18) and
-the Waldvogel–Leikauf run-21 value end-to-end (G8, G12, and the launcher's
-canary prelude).
+rather than only their output; **G16** pins the factored wheel's enumeration
+against a directly built one where both fit; and the pipeline rediscovers
+a(13), a(18) and the Waldvogel–Leikauf run-21 value end-to-end (G8, G12, and
+the launcher's canary prelude). Fourteen gates; `python score.py` prints a
+SCORE only if every one is green **and** all three frozen fingerprints
+reproduce exactly.
 
 This shape was reached by measurement, not design intuition, and the
 constants interact: the sieve depth went 28 → 24 once compaction rounds
@@ -200,18 +223,22 @@ faster without the work changing. See
 the rejects, and [../OPTIMIZATION.md](../OPTIMIZATION.md) for the process.
 
 Throughput on an RTX 4090 (see BENCHMARKS.md). The engine scores **SCORE
-16,307,051,103**, **SCORE128 16,325,330,842** and **SCORE_WIDE
-16,662,037,996** on its three frozen windows — but absolute scores on this
-machine swing by ~2x between captures of identical code (the same engine, the
-same session, has read 13,198,517,241 and 20,917,761,353 on the first of
-those), so BENCHMARKS.md quotes paired ratios and so should you.
+6,231,416,304**, **SCORE128 6,340,921,529** and **SCORE_WIDE
+23,704,681,646** on its three frozen windows. The narrow pair reads *lower*
+than the engine it replaced and that is the benchmark, not the engine: a
+5×10¹⁴ window holds only 68 periods of the 37# wheel, so it measures a change
+worth 1.53x in production at 0.40x. `SCORE_WIDE` exists precisely to resolve
+that, and reads **1.5313x** paired. Absolute scores on this machine also swing
+by ~2x between captures of identical code, so BENCHMARKS.md quotes paired
+ratios and so should you.
+
 Its immediate predecessor realized **1.232×10¹⁶ p/s in production** over a
-10-hour leg; applying the paired 1.329x ratio projects **1.64×10¹⁶ p/s**,
-i.e. **~30x** the 5.5×10¹⁴ the leg-1 engine averaged. At that rate
-re-sweeping everything from 0 to 5×10²¹ costs ~3.5 days, and the enforced
-10²⁴ ceiling is ~1.9 years of single-GPU wall (it was ~58). For historical
-reference the retired u64-only kernel scored 512,819,184 (5.1×10¹⁴ p/s) and
-took ~9.5 hours to cover the 64-bit-safe range.
+10-hour leg; applying the paired ratios projects **2.58×10¹⁶ p/s**, i.e.
+**~47x** the 5.5×10¹⁴ the leg-1 engine averaged. At that rate re-sweeping
+everything from 0 to 5×10²¹ costs ~1.8 days, and the enforced 10²⁴ ceiling is
+~1.2 years of single-GPU wall (it was ~58). For historical reference the
+retired u64-only kernel scored 512,819,184 (5.1×10¹⁴ p/s) and took ~9.5 hours
+to cover the 64-bit-safe range.
 
 ## The odds model
 
@@ -255,7 +282,7 @@ python euler_model.py          # rebuild the odds model + its gates
 ```
 
 **One engine, one cursor, no flags.** Every candidate is carried as the
-pair (k, off) with p = k·29# + off, which is as valid at 10⁵ as at 10²³,
+pair (k, off) with p = k·37# + off, which is as valid at 10⁵ as at 10²³,
 so a single sweep runs from the oracle floor to the enforced ceiling
 10²⁴ with no seam at 2⁶⁴ and nothing to select. The GPU is always used.
 `--engine cpu` selects the numpy reference engine, which exists for

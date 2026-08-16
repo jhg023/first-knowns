@@ -241,5 +241,26 @@ survivors) rather than risking a gap, following the same convention as the
 old 2⁶⁴ seam. Canaries were reset so the new wheel must re-prove the
 in-flight rediscoveries before production resumes.
 
+### Cursor conversion again, for the 37# wheel (2026-08-16)
+
+Same operation, one wheel further: the period is another 37x longer, so
+`next_k` = 5,263,800,747 periods of 31# became **142,264,885** periods of
+37# — `floor(old_next_k · M_old / M_new)`, which lands on the identical
+position p ≈ 1.0557×10²¹ and **overlaps** the seam by 4.01×10¹¹ of p-line
+(~0.14 expected survivors) rather than risking a gap. Canaries cleared
+again: a prelude run on the old wheel has established nothing about the new
+one. `launch.py --migrate-cursor` performs the conversion and writes a
+`.pre-migration` backup; it is never automatic.
+
+This exposed a real hole in the safety net, and closing it was worth more
+than the conversion. The 31# incident added `check_cursor`, which refuses a
+cursor whose stored period disagrees with the engine's. But the key check
+runs *first*, and a key mismatch makes huntlib **ignore** the checkpoint —
+so `check_cursor` was never reached, and the campaign would have started a
+**fresh sweep at p = 0**, silently abandoning the frontier instead of
+misreading it. Verified against the real cursor: the launcher now halts with
+an `[ALARM]` and exit 2, naming both keys and the position at stake, and
+`--fresh` is the only way to discard a cursor it cannot read.
+
 Any run > 18 halts the hunt under the stop-on-discovery convention. This
 section will be rewritten as results arrive.
