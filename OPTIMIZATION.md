@@ -100,6 +100,15 @@ Practical form: wrap each phase in timers, print the percentages, and check
 that the phases sum to the wall-clock. If they don't, you don't understand
 the pipeline yet.
 
+**This applies to the scaffolding too, not just the engine.** Asked to speed
+up the case study's gate battery, I read the code and produced three
+plausible candidates. Timing each gate took two minutes and showed the
+battery was *one* gate at 89%, and that one of my three candidates was 0.3%
+of the runtime. The fix — parallelising that gate's reference sweeps across
+processes, without touching the deliberately-slow reference itself — took the
+battery from 9m51s to 1m33s. Anything you run on every change is worth
+measuring on the same terms as the thing it measures.
+
 **Corollary — re-measure after every accepted change.** Optima move, and in
 the case study they moved **four times in one session**:
 

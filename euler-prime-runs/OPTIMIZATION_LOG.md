@@ -823,6 +823,47 @@ Re-run over 9 rounds, the last five are internally consistent and put 512 at
 0.956x.  Interleaving is necessary but not sufficient: check that the spread
 within a configuration is small before believing the spread between them.
 
+### The gate battery: 9m51s -> 1m33s, and Rule 1 again
+
+Not an engine change, but it gates every engine change, so it belongs here.
+
+I was asked to speed the battery up and produced three plausible candidates
+by reading the code -- memoize `build_wheel`, fix G10's pure-Python
+enumeration loop, parallelise the CPU gates.  Timing each gate individually
+took two minutes and showed all three were nearly irrelevant:
+
+| gate | wall | share |
+|---|---|---|
+| **G6 GPU vs CPU parity** | **525.7 s** | **89.0%** |
+| G13 slicing independence | 37.4 s | 6.3% |
+| everything else combined | 27.5 s | 4.7% |
+
+G10, one of my three, is 2.0 s -- 0.3% of the battery.  This is the same
+error the Phase-1 review made about the cold path and the same one Rule 5a
+describes: an unmeasured review is a hypothesis list, and mine was
+mis-ranked in a way that two minutes of measurement fixed.
+
+G6 sweeps seven windows with the numpy reference, which is single-threaded
+*by design* and may not be optimized -- its slowness and its independence are
+what the parity gate measures.  So the parallelism went **outside** it: the
+seven cases are cut into 24 contiguous sub-windows, swept one process per
+sub-window, while the parent runs the GPU sweeps concurrently.
+`euler_search.py`'s engine is untouched.  G6: **525.7 -> 75.8 s (6.9x)**.
+
+The gate got *stronger* in passing.  The reference now arrives as a
+concatenation of sub-windows while the GPU still sweeps each window unsplit,
+so a boundary bug on either side breaks it -- which unsplit-vs-unsplit could
+not catch.  Every reported coverage count is unchanged, which is the
+invariant to check when making a gate faster: sizes [29,2,1,1,2,1,2], G13's
+384 comparisons over 105,460+4,297 survivors, G14's 2,080 checks, G15's
+161+6,370 primes.
+
+`build_wheel` was memoized as well (a pure function that builds and sorts up
+to a 4e7-element array, called forty-odd times per battery; the cached array
+is marked read-only so a mutating caller fails loudly).  Worth a few percent,
+which is roughly what the measurement predicted and nothing like what my
+guess did.
+
 ### Split after this round
 
 | phase | share | verdict |
