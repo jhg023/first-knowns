@@ -29,6 +29,8 @@
 #
 # ASCII only.
 
+import functools
+
 import numpy as np
 from sympy import primerange
 
@@ -88,8 +90,19 @@ def build_wheel(n, wheel_primes=None, chunk_bytes=1 << 26):
     Lifting is chunked over the new prime's residue classes so peak memory
     stays near chunk_bytes instead of q * len(offs) * 8; the result is the
     same set, built in pieces, and is sorted at the end either way.
+
+    MEMOIZED.  This is a pure function of its arguments that builds and sorts
+    up to a 4e7-element array, and the gate battery calls it forty-odd times
+    -- every engine construction on both sides, G3, G14, G15 and the direct
+    trial-division helper.  The cached array is marked read-only so that a
+    caller which mutated it would fail loudly rather than corrupt every
+    later caller; every current caller only reads, copies or converts it.
     """
-    wheel_primes = wheel_primes or WHEEL_PRIMES
+    return _build_wheel(n, tuple(wheel_primes or WHEEL_PRIMES), chunk_bytes)
+
+
+@functools.lru_cache(maxsize=None)
+def _build_wheel(n, wheel_primes, chunk_bytes):
     offs = np.array([0], dtype=np.uint64)
     m = 1
     for q in wheel_primes:
@@ -104,6 +117,7 @@ def build_wheel(n, wheel_primes=None, chunk_bytes=1 << 26):
         offs = parts[0] if len(parts) == 1 else np.concatenate(parts)
         m *= q
     offs.sort()
+    offs.flags.writeable = False
     return offs, m
 
 

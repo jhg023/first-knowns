@@ -48,6 +48,8 @@
 #
 # ASCII only.
 
+import os
+
 import numpy as np
 
 import cupy as cp
@@ -58,7 +60,8 @@ _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
 from huntlib.gpu import barrett_magics  # noqa: E402
 
 from euler_reference import A21_UPPER, KNOWN
-from euler_search import (CpuEngine, P_CEIL, P_FLOOR, WHEEL_PRIMES,
+from euler_search import (CpuEngine, M_WHEEL_29, P_CEIL, P_FLOOR,
+                          WHEEL_PRIMES,
                           WHEEL_PRIMES_29, WHEEL_PRIMES_31, best_wheel,
                           build_wheel, forbidden, mr_is_prime, mr_run_length,
                           stage_primes)
@@ -1283,7 +1286,44 @@ class GpuEngine:
 
 # ------------------------------- gates -------------------------------------
 
-def g6_parity():
+G6_CASES = [(5, 10**5, 4 * 10**5, 20),
+            (9, 10**6, 6 * 10**7, 2),
+            (13, 10**5, 8_900_000_000, 1),
+            (17, 10**15, 10**15 + 3 * 10**12, 1),
+            (17, 17 * 10**18, 17 * 10**18 + 2 * 10**12, 1),
+            (17, A21_UPPER - 10**10, A21_UPPER + 10**10, 1),
+            (17, P_CEIL - 10**13, P_CEIL, 1)]
+
+G6_SPLIT_PERIODS = 128   # reference sub-window size, in 29# wheel periods
+
+
+def _g6_cpu(job):
+    """Worker: the numpy reference over ONE sub-window, in its own process.
+
+    Module-level and self-contained so it survives Windows spawn.  It touches
+    no GPU -- the reference is plain numpy -- so the workers never contend
+    with the parent's device work.
+    """
+    n, lo, hi = job
+    return sorted(p for chunk in CpuEngine(n, wheel_primes=WHEEL_PRIMES_29)
+                  .survivors_pre_mr(lo, hi) for p in chunk)
+
+
+def _g6_jobs(n, lo, hi):
+    """Cut [lo, hi) into contiguous, disjoint sub-windows.
+
+    Their concatenation is exactly the reference sweep of the whole window,
+    because survivors_pre_mr filters to [lo, hi) exactly.  The cuts land at
+    arbitrary p (not period boundaries) on purpose.
+    """
+    span = G6_SPLIT_PERIODS * M_WHEEL_29
+    if hi - lo <= span:
+        return [(n, lo, hi)]
+    cuts = list(range(lo, hi, span)) + [hi]
+    return [(n, a, b) for a, b in zip(cuts, cuts[1:])]
+
+
+def g6_parity(workers=None):
     """THE parity gate: GPU stream == CPU reference stream, bit-for-bit.
 
     Two independent implementations of the hot path, as CONVENTIONS
@@ -1296,19 +1336,41 @@ def g6_parity():
     Waldvogel-Leikauf run-21 value, and the 1e24 ceiling zone.  The retired
     u64-only kernel could not reach the last three at all, so this is
     strictly more coverage than the pre-unification G6+G11 pair it replaces.
+
+    The reference side is swept in PARALLEL, one process per sub-window,
+    while the parent runs the GPU sweeps -- this gate was 89% of the battery
+    and the reference is single-threaded numpy by design (it may not be
+    optimized; its slowness and its independence are the point).  Nothing
+    about the comparison changes except that the reference now arrives as a
+    concatenation of sub-windows while the GPU still sweeps each window
+    UNSPLIT, so a boundary bug on either side breaks the gate -- strictly
+    more than the old unsplit-vs-unsplit form could catch.
     """
-    cases = [(5, 10**5, 4 * 10**5, 20),
-             (9, 10**6, 6 * 10**7, 2),
-             (13, 10**5, 8_900_000_000, 1),
-             (17, 10**15, 10**15 + 3 * 10**12, 1),
-             (17, 17 * 10**18, 17 * 10**18 + 2 * 10**12, 1),
-             (17, A21_UPPER - 10**10, A21_UPPER + 10**10, 1),
-             (17, P_CEIL - 10**13, P_CEIL, 1)]
+    from concurrent.futures import ProcessPoolExecutor
+    jobs, owner = [], []
+    for ci, (n, lo, hi, _) in enumerate(G6_CASES):
+        for j in _g6_jobs(n, lo, hi):
+            jobs.append(j)
+            owner.append(ci)
+    if workers is None:
+        workers = min(12, len(jobs), os.cpu_count() or 4)
+
+    cpus, gpus = [[] for _ in G6_CASES], []
+    if workers <= 1:
+        parts = [_g6_cpu(j) for j in jobs]
+        gpus = [_g6_gpu(n, lo, hi) for n, lo, hi, _ in G6_CASES]
+    else:
+        with ProcessPoolExecutor(max_workers=workers) as ex:
+            futs = [ex.submit(_g6_cpu, j) for j in jobs]
+            # the device work overlaps the pool instead of queueing after it
+            gpus = [_g6_gpu(n, lo, hi) for n, lo, hi, _ in G6_CASES]
+            parts = [f.result() for f in futs]      # exceptions propagate
+    for ci, part in zip(owner, parts):
+        cpus[ci].extend(part)
+
     counts = []
-    for n, lo, hi, min_surv in cases:
-        cpu = sorted(p for chunk in CpuEngine(n, wheel_primes=WHEEL_PRIMES_29)
-                     .survivors_pre_mr(lo, hi) for p in chunk)
-        gpu = GpuEngine(n).survivors_pre_mr(lo, hi)
+    for (n, lo, hi, min_surv), cpu, gpu in zip(G6_CASES, cpus, gpus):
+        cpu.sort()
         if len(cpu) < min_surv:
             return False, f"G6 FAIL n={n}: window under-populated ({len(cpu)})"
         if cpu != gpu:
@@ -1316,7 +1378,16 @@ def g6_parity():
                            f" gpu {len(gpu)}")
         counts.append(len(cpu))
     return True, ("G6 ok: GPU == CPU reference on 7 populated windows from"
-                  f" 1e5 to the 1e24 ceiling, sizes {counts}")
+                  f" 1e5 to the 1e24 ceiling, sizes {counts}"
+                  f" ({len(jobs)} reference sub-windows, {workers} workers)")
+
+
+def _g6_gpu(n, lo, hi):
+    eng = GpuEngine(n)
+    out = eng.survivors_pre_mr(lo, hi)
+    del eng
+    cp.get_default_memory_pool().free_all_blocks()
+    return out
 
 
 def g7_comparator_drill():
