@@ -195,40 +195,39 @@ search changed except its speed**:
 
 ### Standing result and remaining plan
 
-**a(19) and a(20) both exceed 6.12×10²⁰.** The leg ran from 3.62×10²⁰ to
-**6.1152×10²⁰** before being paused on 2026-08-16 for engine work,
-producing 26 more run-17s and 4 more run-18s (evidence/) and no run ≥ 19.
-Its realized rate was **1.03×10¹⁶ p/s**, measured from the near-miss
-timestamps over interleaved 1 h and 6 h windows that agree to 3%.
+**a(19) and a(20) both exceed 1.056×10²¹.** Leg 2 ran from 3.62×10²⁰ to
+**1.0557×10²¹** in two stretches -- to 6.1152×10²⁰, then a 10.0 h overnight
+run on the re-tuned engine -- producing 64 run-17s and 13 run-18s
+(evidence/) and no run ≥ 19. The overnight stretch realized
+**1.232×10¹⁶ p/s**, 93% of the 1.33×10¹⁶ projected from the paired
+benchmark ratio: the A/B transferred to production.
 
-Conditional on the empty sweep (E = 1.30 spent for run exactly 19), the
-model puts a(19) at median 1.26×10²¹, quartiles 8.58×10²⁰ / 2.07×10²¹.
+Conditional on the empty sweep (E = 1.80 spent for run exactly 19), the
+model puts a(19) at median 1.82×10²¹, quartiles 1.36×10²¹ / 2.74×10²¹.
 These are "run exactly 19" figures, E₁₉ − E₂₀, which is the quantity that
 actually settles a term: about 12% of run-≥19 events overshoot into
 run-21 or beyond and do not.
 
-The leg's default depth stays at **5×10²¹**, now ~96% of the conditional
-distribution and ~3.8 days of sweeping at the projected post-tuning rate
-of 1.33×10¹⁶ p/s — the a(19) median sits about **13 hours** away.
+The leg's default depth stays at **5×10²¹**, now ~94% of the conditional
+distribution and ~3.5 days of sweeping at the post-tuning rate -- the
+a(19) median sits about **16 hours** away.
 
-| depth | P(a(19) found by then) | wall-clock from 6.12×10²⁰ |
+| depth | P(a(19) found by then) | wall-clock from 1.056×10²¹ |
 |-------|------------------------|---------------------------|
-| 8.58×10²⁰ (Q1) | 25% | 5.1 h |
-| 1×10²¹ | 36% | 8.2 h |
-| 1.26×10²¹ (median) | 50% | 13.5 h |
-| 2×10²¹ | 74% | 29.0 h |
-| 2.07×10²¹ (Q3) | 75% | 30.4 h |
-| 5×10²¹ (leg cap) | 96% | 3.81 days |
+| 1.36×10²¹ (Q1) | 25% | 6.4 h |
+| 1.82×10²¹ (median) | 50% | 16.4 h |
+| 2×10²¹ | 57% | 0.84 days |
+| 2.74×10²¹ (Q3) | 75% | 1.5 days |
+| 5×10²¹ (leg cap) | 94% | 3.5 days |
 
-The near-miss ladder is behaving: the leg's 26 run-17s and 4 run-18s give
-a ratio of 0.154 against a Bateman–Horn prediction of
-exp(ΔlogC)/ln p = 0.118, well inside Poisson noise on four events. The
-same ratio going 18 → 19 is 0.116, so four run-18s buy an expectation of
-~0.46 run-19s in this leg. Zero is what the model says it should be.
+The near-miss ladder stayed consistent: leg 2's 64 run-17s and 13 run-18s
+give a ratio of 0.203 against a Bateman–Horn prediction of
+exp(ΔlogC)/ln p = 0.118 -- high, but inside Poisson scatter on 13 events.
+The same ratio going 18 → 19 is 0.116, so 13 run-18s carry an expectation
+of ~1.5 run-19s across the leg. Zero against 1.5 has probability 22%:
+unremarkable on its own, and the first stretch where the ladder has been
+even mildly quiet.
 
-(at a projected 1.07×10¹⁶ p/s — the measured 7.76×10¹⁵ scaled by the
-paired 1.374x ratio; the same table at the leg-1 rate ran 3.7 days /
-10 days / 13.5 days / 23 days / 34.5 days / 97.6 days)
 
 ### Cursor conversion for the wider wheel
 

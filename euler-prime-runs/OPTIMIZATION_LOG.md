@@ -534,3 +534,104 @@ the offset table is streamed, not gathered.
 
 Not done -- three of the four phases still have named levers with prices on
 them.
+
+---
+
+## Phase 4 (2026-08-16): the per-thread term, and the 37# wheel priced out
+
+The overnight leg validated the previous round in production: 6.1152e20 ->
+1.0557e21 in 10.0 h, a realized **1.232e16 p/s** against the 1.33e16 the
+paired 1.294x had projected -- 93%, so the benchmark ratio transferred.
+
+Starting profile: sieve 66.3%, rounds 26.4%, cold 7.4%.  Only one lever was
+left named on the dominant phase, so it got priced first.
+
+### Pricing the 37# wheel without building it
+
+The wheel is the classic candidate-count lever (section 2.8): folding 37 in
+generates 37/(37-17) = 1.85x fewer candidates for an identical survivor set,
+and removes a prime from the sieve.  The worry was memory -- 5.99e8 offsets,
+4.8 GB -- but the real obstacle turned out to be somewhere else entirely, and
+it was measurable in the CURRENT engine.
+
+A 37x longer period means a launch covering the same p-line holds 37x fewer
+periods, so each thread gets fewer periods to amortize its setup over.  How
+much does that cost?  Fit it: force T down and measure the sieve alone.
+
+| T | 192 | 256 | 640 | 1088 | 2176 |
+|---|-----|-----|-----|------|------|
+| sieve ms | 810.9 | 664.9 | 411.0 | 335.1 | 293.6 |
+
+    sieve = 239 ms (pattern loop) + 109449/T ms (per-thread)
+
+so the per-thread term is **17.4% of the sieve at T=2176** and 42% by T=640.
+Combining that with the 1.85x candidate saving and the queue budget the
+wheel would need (its s1a_rate rises to 1.76e-3, since the sieve loses 37 and
+gains 173):
+
+| queue per buffer | PPL | T | sieve | overall |
+|---|---|---|---|---|
+| 1.8 GB (today) | 178 | 192 | 1.511 | **0.75x** |
+| 3 GB | 305 | 320 | 1.085 | **0.95x** |
+| 8 GB | 813 | 832 | 0.692 | 1.27x |
+| 16 GB | 1627 | 1664 | 0.569 | 1.41x |
+
+The wheel is a LOSS at any queue we can afford and needs 32 GB of buffers
+plus the 4.8 GB table to reach 1.41x.  **Rejected** -- and note the stated
+reason is neither "4.8 GB is too big" (it is affordable) nor a projection,
+but a fitted curve from the existing engine.
+
+### What that measurement was actually worth
+
+The same fit named a phase nobody had looked at: **per-thread setup, 17.4% of
+the dominant kernel**.  Two things came out of attacking it.
+
+| # | change | ratio | verdict |
+|---|--------|-------|---------|
+| 18 | **one y-slice**: T is derived from PPL, so raising the target 2048 -> 4096 makes gy 2 -> 1 at the production PPL, halving the thread count | **1.022x** | KEPT |
+| 19 | **32-bit residue seeding** in the sieve (`_SIEVE_INIT32`), same split as `_R_MIX32`: only off mod q needs 64 bits, since the host passes k_base mod q and the thread adds its own kp0 + tb | **1.015x** | KEPT, gated (G15) |
+| 20 | **32-bit reduction in cold stage 2** (`_S2_RED_MIX32`), the transformation left priced-but-unbuilt last round | **1.014x** | KEPT, gated (G15) |
+| -- | **paired total vs bb72e2d, same process, 7 rounds** | **1.055x** | both reproduce the frozen fingerprint on identical work |
+
+#18 is worth dwelling on.  A flat T sweep in the previous round had measured
+T=4096 at 1.004x and moved on -- but that was before T became derived, so
+T=4096 still produced gy=2 with a 132-period tail slice.  Once T is derived,
+the same nominal value resolves to a single full slice and is worth 1.022x.
+**The knob had not been tested; a differently-shaped knob with the same name
+had been.**
+
+Note also that #19 returned 1.015x where the Barrett count predicted ~4%.
+That gap is informative: the per-thread term is mostly NOT arithmetic -- it is
+thread setup and the offset load -- which is why #18 (halving the number of
+threads) beat #19 (making each one cheaper), and which independently confirms
+the wheel verdict above.
+
+### A bug the fingerprint caught
+
+#19's first version put the (k_base mod q) upload where it already lived --
+after the sieve launch, since only stage 1b had needed it.  The sieve then
+read the *previous* launch's table.  Count came back 183 against the frozen
+178, i.e. it was under-killing, and the A/B refused to report a rate.  Two
+minutes to find, and the discipline that caught it is the cheap one: the
+fingerprint is checked on every run, not at the end.
+
+### Constants, re-swept after all of the above
+
+| constant | swept | result |
+|----------|-------|--------|
+| NINC | 26/28/30 | 0.992/**1.000**/0.996 -- still the interior peak |
+| ROUND | 20/24/28 | 1.005/**1.000**/0.994 -- 20 and 24 are inside the noise floor, kept 24 |
+
+The noise floor is now measured rather than assumed: T=3000 and T=4096
+resolve to the *same* derived T=4288, and those two identical configurations
+differed by 0.3% in the same battery.  So 0.5% gaps are not results and 1.4%
+gaps are.
+
+### Split after this round
+
+| phase | share | verdict |
+|-------|-------|---------|
+| bit-sieve stage 1a | 66.6% | pattern loop is at 239 ms with the table pinned from both sides (see Phase 3); the per-thread term is now down to ~9% of the kernel and is mostly thread setup, not arithmetic. The wheel -- the only remaining candidate-count lever -- is priced out above |
+| stage-1b compaction rounds | 27.4% | 32-bit reductions taken (Phase 3), round size re-swept, grid insensitive |
+| cold kernel (stage 2) | 6.0% | 3.1x from the bit probe, 1.014x more from the 32-bit reduction. Compaction remains unbuilt, now bounded by a 6% phase |
+| host + syncs | 2.2% | measured |

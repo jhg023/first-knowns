@@ -52,6 +52,7 @@ stopwatch.
 | 2026-08-06 | v1-128 | 248,019,330 | phase-2 128-bit path, one-kernel design, window [2.3e20, +5e14), fingerprint 178 survivors / checksum 133625321009290; captured under desktop load (u64 SCORE read 323,531,367 in the same battery). Paired A/B: 0.77x the u64 kernel |
 | 2026-08-06 | v2-128 (frozen) | **362,319,437** | two-phase compaction (stage-1a hot kernel + queued cold kernel; see OPTIMIZATION_LOG). Same fingerprint, bit-identical stream. Same-battery pair: SCORE128 362,319,437 vs u64 SCORE 323,394,817 -- **the 128 path is now 1.13x the proven u64 engine** (paired A/B median 1.135, min 1.111 over 12 rounds) |
 | 2026-08-15 | v4: 31# wheel, sieve depth 28, round size 16 | SCORE **7,694,248,260** / SCORE128 **8,252,670,019** | folding 31 into the wheel: 2.07x fewer candidates for an identical survivor set, both frozen fingerprints reproduced, 12 gates green. **The load-bearing number is the paired ratio 1.374x, not any comparison of these absolutes against the rows below** -- run-to-run variance here is ~2x on identical code (see the table above), so cross-row absolute arithmetic is exactly what Rule 3 in ../OPTIMIZATION.md warns against. Composition: the wheel alone was 1.121x, sieve depth re-swept 24 -> 28 took it to 1.212x, and the round size then had to move 8 -> 16 for a further 1.134x |
+| 2026-08-16 | v6: one grid slice, 32-bit residue seeding, 32-bit stage-2 reduction | SCORE **11,327,935,354** / SCORE128 **10,308,201,234** | 13 gates green, both frozen fingerprints reproduced. **The load-bearing number is the paired ratio 1.055x** against the row below it, measured in one process over 7 interleaved rounds. Composition: 1.022 x 1.015 x 1.014. Note SCORE and SCORE128 differ by 9.9% here on identical code, which is the variance note at the top of this file doing its job -- do not read it as a height effect |
 | 2026-08-15 | v3-128, single-engine tree | SCORE **6,330,661,788** / SCORE128 **6,544,948,396** | retired engines deleted; both frozen shapes now measured with the one production engine, both fingerprints reproduced, 12 gates green. Engine mathematics identical to the row below -- this row differs only in what the tree contains and which engine the SCORE column refers to |
 | 2026-08-16 | v5: stage-2 bit probe, balanced sieve grid, 32-bit stage-1b reductions, launch bound 3, round size 24 | SCORE **9,961,108,420** / SCORE128 **10,302,529,513** | 13 gates green (G15 new), both frozen fingerprints reproduced. **The load-bearing number is the paired ratio 1.294x** measured in one process against the engine this row replaces, not any arithmetic across these absolutes -- run-to-run variance here is ~2x on identical code. Composition: 1.165 x 1.066 x 1.048 x 1.028 x 1.023, none of them individually interesting |
 | 2026-08-15 | v3-128 (frozen) | **6,341,803,579** | bit-sieve stage 1a + stage-1b compaction rounds; NINC=24, ROUND=8, W=64, PPL=131072. Same fingerprint (178 / 133625321009290), bit-identical stream (G13, G14). Full battery green; same-battery u64 SCORE 305,864,144, so the 128 path is now **20.7x the u64 engine**. Shape note: SCORE128 takes the engine's default launch size, raised 8192 -> 131072, so the 77,285-period window is now ONE launch (see score.py header) |
@@ -206,6 +207,37 @@ Cumulative **25.1x** over the engine that swept leg 1 (5.5e14 -> 1.33e16).
 Re-sweeping the whole range 0 to 5e21 now costs ~4.3 days, the a(20)
 conditional median (1.06e22) is ~8.7 days out, and the enforced 1e24 ceiling
 is ~2.4 years of single-GPU wall (it was ~58 years, then ~3.0).
+
+## Phase 4 (2026-08-16): the per-thread term
+
+The previous round's paired ratio is now confirmed in production, which is
+the check that matters: the overnight leg swept 6.1152e20 -> 1.0557e21 in
+10.0 h at a realized **1.232e16 p/s**, against 1.33e16 projected from the
+paired 1.294x. 93% -- the A/B transferred.
+
+Same discipline as always: interleaved paired ratios, frozen fingerprint
+re-checked every run, steady-state 2e16 window at 6.1e20.
+
+| change | ratio | note |
+|--------|-------|------|
+| one grid y-slice (T target 2048 -> 4096) | **1.022x** | T is derived from PPL, so this resolves to a single full slice at the production launch size and halves the thread count. A flat T sweep had measured "T=4096" at 1.004x the round before -- but that was before T was derived, so the same nominal value still produced two slices with a 132-period tail. The knob had not been tested; a differently-shaped knob with the same name had |
+| 32-bit residue seeding in the sieve | **1.015x** | predicted ~4% from the Barrett count and delivered 1.5%, which is itself the finding: the per-thread term is mostly thread setup and the offset load, not arithmetic |
+| 32-bit reduction in cold stage 2 | **1.014x** | the transformation left priced-but-unbuilt at ~1.5% the round before; it came in at exactly that |
+| **paired total vs the previous engine** | **1.055x** | one process, 7 interleaved rounds, both reproducing the frozen fingerprint |
+
+Noise floor, measured rather than assumed: T targets 3000 and 4096 resolve
+to the *same* derived T=4288, and those two identical configurations
+differed by **0.3%** in one battery. So 0.5% gaps in this ledger are not
+results and 1.4% gaps are.
+
+Rejected: **the 37# wheel**, the last named candidate-count lever. It would
+generate 1.85x fewer candidates, but its period is 37x longer, so a launch
+holds 37x fewer periods and the sieve's per-thread setup is amortized over
+far fewer of them. Fitting `sieve = a + b/T` from a forced-T sweep in the
+existing engine (T = 192/256/640/1088/2176 -> 810.9/664.9/411.0/335.1/293.6
+ms, giving 239 ms + 109449/T) prices it at **0.75x** with today's queue
+budget and 0.95x with 6 GB; it needs 32 GB of buffers plus a 4.8 GB offset
+table to reach 1.41x. Priced without building any of it.
 
 Note (2026-08-06): after the public-repo refactor (shared code moved to
 ../huntlib), the full gate battery re-ran green and the benchmark

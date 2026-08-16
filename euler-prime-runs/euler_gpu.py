@@ -55,7 +55,15 @@ from euler_search import (CpuEngine, P_CEIL, P_FLOOR, WHEEL_PRIMES,
                           build_wheel, forbidden, mr_is_prime, mr_run_length,
                           stage_primes)
 
-MP_T = 2048              # wheel periods per thread (rate plateaus 1024..4096)
+MP_T = 4096              # TARGET periods per thread; __init__ derives the real
+                         # T from it and PPL so the grid's y-slices come out
+                         # even.  4096 rather than 2048 because at the
+                         # production PPL it resolves to a single y-slice,
+                         # halving the thread count -- and the sieve's
+                         # per-thread cost is real: fitting sieve = a + b/T
+                         # over T = 192..2176 gives 239 ms of pattern loop plus
+                         # 109449/T ms of per-thread setup, 17.4% of the kernel
+                         # at T=2176.  Worth 1.022x.
 
 _COLD_SRC = r"""
 // Phase B (cold): one thread per queued stage-1a survivor.  Runs the
@@ -77,6 +85,8 @@ void ladder_cold_128(const unsigned long long k_base,
                      const unsigned int* __restrict__ s2_q,
                      const unsigned long long* __restrict__ s2_magic,
                      const unsigned int* __restrict__ s2_dM,
+                     const unsigned int* __restrict__ s2_kbq,
+                     const unsigned int* __restrict__ s2_m32,
                      const int nxx,
                      const unsigned int* __restrict__ xx,
                      unsigned long long* __restrict__ out_k,
@@ -100,6 +110,8 @@ void ladder_cold_128(const unsigned long long k_base,
     unsigned long long e = queue[idx];
     unsigned long long off = offs[e >> 32];
     unsigned long long k = k_base + (e & 0xffffffffULL);
+    unsigned int kp = (unsigned int)(e & 0xffffffffULL);
+    unsigned int rr;
 
     bool alive = true;
     // stage 1b: remaining stage-1 primes via (k, off) Barrett
@@ -116,25 +128,14 @@ void ladder_cold_128(const unsigned long long k_base,
         unsigned long long vq = v - __umul64hi(v, mg) * qq;
         if (vq >= qq) vq -= qq;
         if (vq >= qq) vq -= qq;
-        unsigned int rr = (unsigned int)vq;
+        rr = (unsigned int)vq;
         if ((s1_mask[s1_woff[j] + (rr >> 5)] >> (rr & 31)) & 1u)
             alive = false;
     }
-    // stage 2: q > 272 so rr + xx < 2q; dead iff rr+xx == 0 or q
+    // stage 2
     for (int j = 0; j < ns2 && alive; ++j) {
         unsigned int qq = s2_q[j];
-        unsigned long long mg = s2_magic[j];
-        unsigned long long kq = k - __umul64hi(k, mg) * qq;
-        if (kq >= qq) kq -= qq;
-        if (kq >= qq) kq -= qq;
-        unsigned long long oq = off - __umul64hi(off, mg) * qq;
-        if (oq >= qq) oq -= qq;
-        if (oq >= qq) oq -= qq;
-        unsigned long long v = kq * (unsigned long long)s2_dM[j] + oq;
-        unsigned long long vq = v - __umul64hi(v, mg) * qq;
-        if (vq >= qq) vq -= qq;
-        if (vq >= qq) vq -= qq;
-        unsigned int rr = (unsigned int)vq;
+__S2RED__
 __S2TEST__
     }
     if (alive) {
@@ -160,6 +161,42 @@ __S2TEST__
 # branch-free, instead of a 17-iteration loop.  The kernel argument pair
 # (nxx, xx) carries (n, the x^2+x values) for `scan` and (xxmax, the packed
 # bitset) for `bitset`, so the signature and the call site are shared.
+# The same reduction split as _R_MIX32, for stage 2.  The u32 bound is
+# tighter here because q can reach 65521, but kq*dM + oq is still below
+# q^2 + q = 4.293e9 < 2^32 -- G15 checks that for every stage-2 prime rather
+# than trusting the arithmetic.
+_S2_RED_U64 = """        {
+            unsigned long long mg = s2_magic[j];
+            unsigned long long k = k_base + (unsigned long long)kp;
+            unsigned long long kq = k - __umul64hi(k, mg) * qq;
+            if (kq >= qq) kq -= qq;
+            if (kq >= qq) kq -= qq;
+            unsigned long long oq = off - __umul64hi(off, mg) * qq;
+            if (oq >= qq) oq -= qq;
+            if (oq >= qq) oq -= qq;
+            unsigned long long v = kq * (unsigned long long)s2_dM[j] + oq;
+            unsigned long long vq = v - __umul64hi(v, mg) * qq;
+            if (vq >= qq) vq -= qq;
+            if (vq >= qq) vq -= qq;
+            rr = (unsigned int)vq;
+        }"""
+
+_S2_RED_MIX32 = """        {
+            const unsigned int m32 = s2_m32[j];
+            unsigned int kx = s2_kbq[j] + kp;
+            unsigned int kq = kx - __umulhi(kx, m32) * qq;
+            if (kq >= qq) kq -= qq;
+            if (kq >= qq) kq -= qq;
+            unsigned long long oq = off - __umul64hi(off, s2_magic[j]) * qq;
+            if (oq >= qq) oq -= qq;
+            if (oq >= qq) oq -= qq;
+            unsigned int v = kq * s2_dM[j] + (unsigned int)oq;
+            unsigned int vq = v - __umulhi(v, m32) * qq;
+            if (vq >= qq) vq -= qq;
+            if (vq >= qq) vq -= qq;
+            rr = vq;
+        }"""
+
 _S2_SCAN = """        for (int x = 0; x < nxx; ++x) {
             unsigned int tt = rr + xx[x];
             if (tt == 0u || tt == qq) { alive = false; break; }
@@ -194,6 +231,7 @@ _S2_BITSET = """        {
 # M mod q, (W*M) mod q, the Barrett magics and the table offsets as
 # literals, which also frees the registers a per-thread copy would need.
 
+SIEVE_INIT_FORM = "mix32"   # residue seeding: "mix32" or "u64"
 SIEVE_LB = 3             # min blocks/SM in the sieve's __launch_bounds__; 0
                          # omits the clause and lets the compiler choose.  At 4
                          # the compiler is held to 64 registers and SPILLS (24
@@ -240,6 +278,35 @@ _SIEVE_INIT = """
         r%(j)d = (unsigned int)vq;
     }"""
 
+# Seeding the residues is not a rounding error: measured by forcing T down and
+# fitting, the sieve costs 239 ms of pattern loop + 109449/T ms of per-thread
+# init, i.e. **17.4% of the kernel at T=2176** -- and it is what decides
+# whether a wider wheel can ever pay, since a longer period leaves each thread
+# fewer periods to amortize it over.
+#
+# Same trick as _R_MIX32: only off mod q genuinely needs 64 bits.  k is never
+# formed -- the host passes k_base mod q per launch and the thread adds its own
+# (kp0 + tb), which is bounded by PPL -- and the recombination kq*dM + oq is
+# below q^2 + q, under 2^20 for any stage-1 prime.
+_SIEVE_INIT32 = """
+    unsigned int r%(j)d;
+    {
+        const unsigned int q = %(q)du, m32 = %(m32)du;
+        unsigned int kx = kbq[%(j)d] + kk;
+        unsigned int kq = kx - __umulhi(kx, m32) * q;
+        if (kq >= q) kq -= q;
+        if (kq >= q) kq -= q;
+        unsigned long long oq = off - __umul64hi(off, %(magic)dULL)
+                                      * (unsigned long long)q;
+        if (oq >= q) oq -= q;
+        if (oq >= q) oq -= q;
+        unsigned int v = kq * %(dm)du + (unsigned int)oq;
+        unsigned int vq = v - __umulhi(v, m32) * q;
+        if (vq >= q) vq -= q;
+        if (vq >= q) vq -= q;
+        r%(j)d = vq;
+    }"""
+
 _SIEVE_STEP1 = """
         acc[0] |= pat[%(po)du + r%(j)d];
         r%(j)d += %(dmw)du; if (r%(j)d >= %(q)du) r%(j)d -= %(q)du;"""
@@ -272,6 +339,7 @@ ladder_sieve_128(const unsigned long long k_base,   // absolute first k
                  const unsigned long long hi_k,     // p < hi bound
                  const unsigned long long hi_s,
                  const unsigned int np_total,       // periods this launch
+                 const unsigned int* __restrict__ kbq,   // k_base mod q
                  const unsigned long long* __restrict__ pat,
                  unsigned long long* __restrict__ queue,
                  unsigned long long* __restrict__ q_n,
@@ -310,6 +378,7 @@ ladder_sieve_128(const unsigned long long k_base,   // absolute first k
     // run, so the union over blockIdx.y still partitions the launch
     unsigned int tb = t_lo & ~(W - 1u);
     unsigned long long kst = k0 + tb;
+    unsigned int kk = kp0 + tb;
 
     // residues at period tb: ((kst mod q)*(M mod q) + off mod q) mod q
 __SIEVE_INIT__
@@ -447,7 +516,7 @@ _R_MIX32 = """            const unsigned int m32 = s1_m32[j];
             unsigned int rr = vq;"""
 
 
-def sieve_tables(n, M, s1, ninc, W=SIEVE_W, T=MP_T):
+def sieve_tables(n, M, s1, ninc, W=SIEVE_W, T=MP_T, form=SIEVE_INIT_FORM):
     """Exact-integer pattern tables for the first `ninc` stage-1 primes.
 
     Returns (source_fragments, flat_pattern_array).  pat[po_j + r] has bit
@@ -478,8 +547,9 @@ def sieve_tables(n, M, s1, ninc, W=SIEVE_W, T=MP_T):
             # split the W-bit pattern into nw little-endian u64 words
             for c in range(nw):
                 pat.append((w >> (64 * c)) & ((1 << 64) - 1))
-        init.append(_SIEVE_INIT % {"j": j, "q": q, "dm": dm,
-                                   "magic": (1 << 64) // q})
+        init.append((_SIEVE_INIT32 if form == "mix32" else _SIEVE_INIT)
+                    % {"j": j, "q": q, "dm": dm, "magic": (1 << 64) // q,
+                       "m32": (1 << 32) // q})
         step.append(tmpl % {"j": j, "q": q, "po": po, "nw": nw,
                             "dmw": (W * M) % q})
         po += q
@@ -487,9 +557,10 @@ def sieve_tables(n, M, s1, ninc, W=SIEVE_W, T=MP_T):
             np.array(pat, dtype=np.uint64))
 
 
-def sieve_kernel_src(n, M, s1, ninc, W=SIEVE_W, T=MP_T, lb=SIEVE_LB):
+def sieve_kernel_src(n, M, s1, ninc, W=SIEVE_W, T=MP_T, lb=SIEVE_LB,
+                     form=SIEVE_INIT_FORM):
     """Generated CUDA source + the pattern table it indexes."""
-    init, step, pat = sieve_tables(n, M, s1, ninc, W, T)
+    init, step, pat = sieve_tables(n, M, s1, ninc, W, T, form)
     src = (_SIEVE_BODY.replace("__MP_T__", str(T))
                       .replace("__SIEVE_W__", str(W))
                       .replace("__SIEVE_NW__", str(W // 64))
@@ -515,6 +586,7 @@ class GpuEngine:
 
     NINC = SIEVE_NINC        # primes handled by the bit-sieve
     SIEVE_LB = SIEVE_LB      # sieve __launch_bounds__ min blocks/SM (0 = none)
+    SIEVE_INIT_FORM = SIEVE_INIT_FORM
     W = SIEVE_W              # pattern width in periods (multiple of 64)
     T = MP_T                 # periods per thread -- a TARGET, not the final
                              # value: __init__ re-derives it from PPL so the
@@ -554,6 +626,7 @@ class GpuEngine:
                              # that its count never has to reach the host
     S2_TEST = "bitset"       # stage-2 kill test: "bitset" or "scan"
     R_TEST = "mix32"         # stage-1b reduction width: "mix32" or "u64"
+    S2_RED = "mix32"         # stage-2 reduction width: ditto
     Q_HEADROOM = 1.25        # queue slack over the exact expected occupancy
 
     def __init__(self, n, wheel_primes=None):
@@ -587,6 +660,7 @@ class GpuEngine:
         # 32-bit Barrett magics + the per-launch (k_base mod q) table that let
         # stage 1b reduce k without ever forming k (see _R_MIX32)
         self.s1_list = [int(q) for q in s1.tolist()]
+        self.np_s1q = s1.astype(np.uint64)
         self.d_s1m32 = cp.asarray(np.array([(1 << 32) // q
                                             for q in self.s1_list],
                                            dtype=np.uint32))
@@ -597,6 +671,12 @@ class GpuEngine:
         self.d_s2dM = cp.asarray(np.array([int(self.M) % int(q)
                                            for q in s2.tolist()],
                                           dtype=np.uint32))
+        self.np_s2q = s2.astype(np.uint64)
+        self.d_s2m32 = cp.asarray(np.array([(1 << 32) // int(q)
+                                            for q in s2.tolist()],
+                                           dtype=np.uint32))
+        self.h_s2kbq = np.zeros(int(s2.size), dtype=np.uint32)
+        self.d_s2kbq = cp.zeros(int(s2.size), dtype=np.uint32)
         self.d_xx = cp.asarray(np.array([x * x + x for x in range(n)],
                                         dtype=np.uint32))
 
@@ -646,8 +726,15 @@ class GpuEngine:
         self.T = max(self.W, -(-per // self.W) * self.W)
 
         self.SIEVE_LB = int(self.SIEVE_LB)
+        # kx = (k_base mod q) + (kp0 + tb) must not wrap a u32; kp0 + tb is
+        # bounded by one launch's period count plus a slice, so this is the
+        # same guard the other two 32-bit reductions carry
+        self.SIEVE_INIT_FORM = str(self.SIEVE_INIT_FORM)
+        if self.PPL + self.T + int(s1[self.NINC - 1]) >= (1 << 32):
+            self.SIEVE_INIT_FORM = "u64"
         src, pat = sieve_kernel_src(n, int(self.M), s1, self.NINC,
-                                    W=self.W, T=self.T, lb=self.SIEVE_LB)
+                                    W=self.W, T=self.T, lb=self.SIEVE_LB,
+                                    form=self.SIEVE_INIT_FORM)
         self.sieve_src = src
         self.d_pat = cp.asarray(pat)
         self.kern_sieve = cp.RawKernel(src, "ladder_sieve_128")
@@ -662,8 +749,14 @@ class GpuEngine:
             self.rounds.append((j, j1))
             j = j1
         self.cold_j0 = j
+        self.S2_RED = str(self.S2_RED)
+        if self.PPL + int(s2[-1]) >= (1 << 32):
+            self.S2_RED = "u64"
         self.kern_cold = cp.RawKernel(
             _COLD_SRC.replace("__MP_NINC__", str(self.cold_j0))
+                     .replace("__S2RED__",
+                              _S2_RED_MIX32 if self.S2_RED == "mix32"
+                              else _S2_RED_U64)
                      .replace("__S2TEST__",
                               _S2_BITSET if self.S2_TEST == "bitset"
                               else _S2_SCAN),
@@ -743,13 +836,20 @@ class GpuEngine:
         for kc in range(k0, k1, periods_per_launch):
             np_launch = min(periods_per_launch, k1 - kc)
             gy = (np_launch + self.T - 1) // self.T
+            # (k_base mod q) for this launch, uploaded once: the sieve's
+            # first NINC entries and stage 1b's the rest, so neither ever has
+            # to reduce k itself
+            self.h_s1kbq[:] = np.uint64(kc) % self.np_s1q
+            self.d_s1kbq.set(self.h_s1kbq)
+            self.h_s2kbq[:] = np.uint64(kc) % self.np_s2q
+            self.d_s2kbq.set(self.h_s2kbq)
             self.d_qn[0] = 0
             self.kern_sieve((int(gx), int(gy)), (block,),
                             (np.uint64(kc),
                              np.uint32(self.n_offs), self.d_offs,
                              np.uint64(lo_k), np.uint64(lo_s),
                              np.uint64(hi_k), np.uint64(hi_s),
-                             np.uint32(np_launch), self.d_pat,
+                             np.uint32(np_launch), self.d_s1kbq, self.d_pat,
                              self.d_queue, self.d_qn, np.uint64(self.Q_CAP)),
                             )
             # stage-1b compaction rounds, then the cold kernel: every count
@@ -758,11 +858,6 @@ class GpuEngine:
             # counters ping-pong between d_qn2 and d_qn3 and never touch
             # d_qn, so the stage-1a count survives the chain and can be
             # overflow-checked at the end instead of mid-stream.
-            if self.rounds:
-                # (k_base mod q) for this launch: 161 host modulos, uploaded
-                # once per launch, so stage 1b never has to reduce k itself
-                self.h_s1kbq[:] = [kc % q for q in self.s1_list]
-                self.d_s1kbq.set(self.h_s1kbq)
             qin, nin = self.d_queue, self.d_qn
             if self.rounds and self.d_queue2 is None:
                 raise RuntimeError("compaction rounds active but no second "
@@ -790,6 +885,7 @@ class GpuEngine:
                             self.d_s1w, self.d_s1m,
                             np.int32(self.d_s2q.size), self.d_s2q,
                             self.d_s2magic, self.d_s2dM,
+                            self.d_s2kbq, self.d_s2m32,
                             np.int32(self.s2_nxx), self.d_s2tab,
                             self.d_outk, self.d_outo,
                             self.d_outn, np.uint64(self.out_cap)),
@@ -1025,10 +1121,13 @@ def g15_reduction_identities(trials=3000, seed=17):
     (a) The stage-2 kill test (_S2_BITSET).  q divides one of p + x^2 + x for
         some x < n exactly when p mod q == 0 or q - (p mod q) is itself of the
         form x^2 + x -- valid only while q > max(x^2+x), which is asserted.
-    (b) The 32-bit reductions in _R_MIX32.  For m32 = floor(2^32/q) and any
-        x < 2^32, two conditional subtracts recover x mod q exactly; and the
-        recombination kq*dM + oq that _R_MIX32 keeps in 32 bits really does
-        stay under 2^32 for every stage-1 and stage-2 prime.
+    (b) The 32-bit reductions, now used in three places -- _SIEVE_INIT32
+        (residue seeding), _R_MIX32 (stage 1b) and _S2_RED_MIX32 (stage 2).
+        For m32 = floor(2^32/q) and any x < 2^32, two conditional subtracts
+        recover x mod q exactly; and the recombination kq*dM + oq that all
+        three keep in 32 bits really does stay under 2^32 for every stage-1
+        and stage-2 prime -- the stage-2 bound is the tight one, at
+        q^2 + q = 4.293e9 for q = 65521.
     """
     import random
     rng = random.Random(seed)

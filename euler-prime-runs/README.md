@@ -18,15 +18,16 @@ the known Waldvogel–Leikauf upper bound at 2.35×10²⁰ without finding
 a smaller run ≥ 19. Details in [RESULTS.md](RESULTS.md).
 
 **Status: ACTIVE** — hunting a(19). The sweep is contiguous from
-0 to **6.12×10²⁰**, so a(19) and a(20) both exceed that. Conditional
-on the empty sweep so far, the model puts a(19) at median 1.26×10²¹
-(quartiles 8.58×10²⁰ / 2.07×10²¹); the current leg runs to 5×10²¹, ~96%
+0 to **1.056×10²¹**, so a(19) and a(20) both exceed that. Conditional
+on the empty sweep so far, the model puts a(19) at median 1.82×10²¹
+(quartiles 1.36×10²¹ / 2.74×10²¹); the current leg runs to 5×10²¹, ~94%
 of the conditional distribution. The engine was rebuilt 2026-08-15
-(bit-sieve stage 1a, then a 31# wheel) for ~19x, and sharpened again
-2026-08-16 for a further **1.294x** — cumulatively **~25x** — with a
-bit-identical survivor stream throughout, proven by paired A/B against
-the engine each version replaced and still pinned by G6/G13/G14/G15 and
-the unchanged fingerprints. That puts the a(19) median ~13 hours out.
+(bit-sieve stage 1a, then a 31# wheel) for ~19x and sharpened twice on
+2026-08-16, by 1.294x and then 1.055x — cumulatively **~24x**, measured
+against a realized 5.5×10¹⁴ p/s on the engine that swept leg 1 — with a
+bit-identical survivor stream throughout, proven by paired A/B against the
+engine each version replaced and still pinned by G6/G13/G14/G15 and the
+unchanged fingerprints. That puts the a(19) median ~16 hours out.
 
 ## The problem
 
@@ -84,6 +85,13 @@ the obvious "test each candidate, exit early" loop spends most of its
 instructions maintaining state for primes the average candidate never
 reaches, and a warp runs until its *last* lane dies.
 
+Seeding those residues is not free — it is ~17% of the kernel, since each
+thread reduces k and its offset against all 28 primes before the loop
+starts. So the grid is shaped to pay it as few times as possible: the
+periods-per-thread T is *derived* from the launch size rather than fixed,
+chosen so the grid's y-slices come out even and, at the production launch
+size, so there is only one of them.
+
 **3. Stage 1b, compaction rounds.** The remaining stage-1 primes (to
 1024) are tested 24 at a time, with survivors forwarded to a second queue
 between rounds and counts kept on the device. Its exit depth averages
@@ -99,7 +107,10 @@ probe: q divides one of p + x² + x exactly when p mod q is 0 or
 q − (p mod q) is itself of the form x² + x, which is a valid restatement
 precisely because every stage-2 prime exceeds max(x²+x) = 272. Gate
 **G15** pins that equivalence against big-integer divisibility, including
-its precondition.
+its precondition. Its residue reduction is split the same way stage 1b's
+is: only `off mod q` needs 64 bits, and the recombination stays under
+2³² for every stage-2 prime — which G15 also checks, rather than trusting
+the arithmetic.
 
 **5. Host classification.** The ~3.6×10⁻¹³ of the line that survives goes
 to the host, where a deterministic 7-base Miller–Rabin (valid to
@@ -134,8 +145,17 @@ pinned from both sides at once: at a fixed 21.5 KB it counts load
 instructions and does not care at all how far apart the addresses are
 (0.993x confining a warp to one 32-byte sector), but the moment the table
 outgrows L1 it collapses (0.62x at 86 KB, 0.14x at 172 KB). Smaller only
-helps if it does not cost a load; bigger does not help at all. Net
-**~25x** over the engine that swept leg 1,
+helps if it does not cost a load; bigger does not help at all.
+
+The sieve's *other* term is per-thread setup, which a forced-T sweep fits
+at 17.4% of the kernel — and halving the thread count (one grid slice
+instead of two) beat making each thread's arithmetic cheaper, 1.022x
+against 1.015x, which says that term is mostly thread overhead rather than
+instructions. The same measurement priced the next wheel up out of the
+running: 37# would generate 1.85x fewer candidates but leave each thread
+37x fewer periods to amortize setup over, a net **loss** at any queue
+budget that fits in the card. Net
+**~24x** over the engine that swept leg 1,
 with both frozen fingerprints reproducing bit-for-bit — the engine got
 faster without the work changing. See
 [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) for every attempt including
