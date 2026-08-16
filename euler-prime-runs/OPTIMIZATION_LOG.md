@@ -390,3 +390,102 @@ GPU load moves the absolute rate by up to ~30% minute to minute (see
 BENCHMARKS.md), so every number in the ledger above is a per-candidate
 median over interleaved rounds, and every measurement re-checks the
 frozen fingerprint before it counts as a data point.
+
+---
+
+## Phase 3 (2026-08-16): the cheap tests, and two ablations that lied
+
+Starting point: the engine from the 31# wheel work, and the termination
+table in ../OPTIMIZATION.md section 3.1 -- which flagged *itself* as stale,
+because its shares predated the round-size change. Re-measuring first
+(Rule 1) was again the highest-value action: the split had moved from the
+recorded 48.1/34.6/17.3 to **54.7/25.0/20.3**, and the phase that had grown
+was the one whose verdict line read "structurally optimal".
+
+### The ledger
+
+All ratios are per-candidate medians over interleaved rounds in ONE process,
+every run re-checking the frozen 128 fingerprint, over a steady-state window
+of 2e16 at 6.1e20 (24 launches, so no single-launch flattery).
+
+| # | change | ratio | verdict |
+|---|--------|-------|---------|
+| 13 | **stage-2 kill test by bitset**: the scan over the n values of x^2+x asks a membership question about a set that never changes, and every stage-2 prime exceeds max(x^2+x), so no residue wraps -- rr dies iff rr == 0 or q - rr is itself of the form x^2+x. A 17-iteration loop becomes one bounds test and one bit probe | **1.165x** | KEPT, gated (G15). Cold kernel 170 -> 55 ms, its share 20.3% -> 7.6% |
+| 14 | **balance the sieve grid**: blockIdx.y slices T periods and the last slice takes the remainder, but per-thread setup (NINC Barrett reductions) is paid in full by every slice. PPL=4228 with T=2048 gave slices of 2048/2048/**132**. Derive T from PPL instead: gy = round(PPL/T_target), T = ceil(PPL/gy) rounded up to W -- 2176, slices 2176/2052 | **1.066x** | KEPT. Derived, not tuned, because PPL moves with the wheel, with n and with LAUNCH_SPAN |
+| 15 | **32-bit reductions in stage 1b** (`_R_MIX32`): of the three 64-bit Barretts per candidate-prime, only `off mod q` needs 64 bits. k never has to be formed -- the host knows k_base mod q and kp is the low half of the queue entry -- and the recombination kq*dM + oq stays under 2^32 for every stage-1 and stage-2 prime | **1.048x** | KEPT, gated (G15) |
+| 16 | **sieve `__launch_bounds__` 4 -> 3 blocks/SM**: at 4 the compiler is held to 64 registers and spills 24 B/thread | **1.028x** | KEPT. 2 and 0 both give ~0.998x: below 3 the spill is already gone and only occupancy is being sold |
+| 17 | ROUND re-sweep after #15: 16/20/24/28/34 | 1.000/1.016/**1.023**/1.009/0.978 | KEPT: ROUND 16 -> 24 |
+| -- | **paired total, HEAD engine vs this one, same process, 7 rounds** | **1.294x** | both reproduce the frozen fingerprint on identical work |
+
+The paired 1.294x is the load-bearing number and it is *less* than the
+product of the rows (1.37x), because the individual ratios were measured
+against different baselines and #14 overlaps the launch-size lever. Quote
+the paired figure.
+
+### Two ablations that lied, and the one that did not
+
+This is the part worth reading. Pricing by deleting the suspect work
+(section 3.3) is only definitive if the deletion leaves the rest of the
+kernel doing the same thing, and twice it did not:
+
+| ablation | reported | why it was wrong |
+|----------|----------|------------------|
+| replace the pattern gather with `pat[po]` (literal index) | sieve 400 -> **26 ms**, "the gather is 81% of the kernel" | the index is loop-invariant, so the compiler hoisted all 28 loads out of the loop. It measured a kernel with no loads at all, not one with cheap loads |
+| replace it with `acc from r_j` (no memory access at all) | **2.99x SLOWER** | acc fills with garbage, the survivor bitmap inverts, and the extraction loop then runs on nearly every bit. It measured the extraction path, not the gather |
+| confine the index with a mask: `pat[po + (r & 3)]` vs `& 15`, `& 63`, full q | **0.993 / 1.008 / 1.020 / 1.000** | valid: every variant keeps 28 data-dependent loads, so nothing hoists, and the survivor pattern is equally garbage in all four. Only the address spread changes |
+
+The valid one is decisive and counter-intuitive: **within L1, gather
+divergence is free.** Confining all 32 lanes of a warp to a single 32-byte
+sector is worth nothing at all. So the sieve is bound by load *count*, not
+by sector replays, and the rule for this kernel is: never trade one load
+for two, however much smaller the table gets.
+
+Which is exactly what the next attempt did.
+
+### Rejected: the folded pattern table (0.685x)
+
+`pat[r]` has bit u set iff (r + u*dm) mod q is forbidden, so consecutive
+residues are not independent -- if r' = r + dm then pat[r'] is pat[r]
+shifted by one. Writing r = s*dm (dm is invertible mod q, since q is not a
+wheel prime) makes that exact: pat[r] bit u = b[s+u], where
+b[m] = [(m*dm) mod q in F]. Every one of the q patterns is then a 64-bit
+*window* into a single periodic bit-string, so prime q needs
+ceil((q+63)/64) words instead of q. The whole table goes from **22,032
+bytes to 904**, and the cursor gets cheaper too: stepping r by W*dm is
+stepping s by W, and s0 = k + off*dm^-1 (mod q).
+
+Measured **0.685x**, at every launch bound tried. The 24x smaller table
+bought nothing, because sector spread was never the constraint, and
+extracting a window that straddles a word boundary costs a second load --
+28 loads became 56. Implemented, gated (it reproduced the frozen
+fingerprint exactly, so the mathematics was right), measured, deleted.
+
+The prediction that motivated it was mine, and it was the same error the
+cost model made in Phase 2: reasoning about bytes and cache residency when
+the machine was counting instructions.
+
+### Priced and declined
+
+| item | price | why not |
+|------|-------|---------|
+| bigger launches (PPL 4228 -> 9000) | **1.009x** for +2.1 GB of queue | it measured 1.041x *before* #14. Most of what a bigger launch bought was the grid tail, which #14 fixes for free; re-measured after, the lever is nearly gone. A constant worth paying for became one that was not, without the code changing |
+| removing the mid-chain host round-trips | **0.995x** | confirms Phase 2's 0.2% finding at the new profile. The grid-striding cold kernel that removes them was kept anyway, because it makes the launch chain uniform, but it is NOT a speedup and is not counted in the 1.294x |
+| ROUND_GRID 2048/4096/8192/16384 | 1.002/1.000/1.002/1.000 | the grid-stride loop is insensitive; never swept before, now it has been |
+| NINC re-sweep, twice (24/26/28/30/32) | 0.987/0.996/**1.000**/0.931/0.870 | 28 is a genuine interior peak and stayed there through every other change this session. Re-swept again after #15: 26/28/30 -> 0.996/1.000/1.002 |
+| T sweep 1024/2048/4096 at fixed PPL | 0.929/1.000/1.004 | flat -- which is what showed the PPL gain was launch overhead rather than T, and pointed at #14 |
+| CRT-combining sieve primes into one table | not implemented, ~10% | halves the load count, the only thing the sieve cares about. But it stays L1-resident for at most 3-4 pairs (37*41 + 43*47 + 53*59 = 6,665 entries = 53 KB), so it buys 3 loads of 28; past that the table leaves L1, where divergence stops being free. Worth trying next, and the pairs must be the SMALLEST primes |
+| the 37# wheel | 5.99e8 offsets = **4.8 GB** of VRAM | generates 37/(37-17) = 1.85x fewer candidates AND removes a prime from the sieve. 4.8 GB is affordable on a 24 GB card alongside the 2.5 GB of queues, so the old "16x over budget" decline is a statement about the budget constant, not about the hardware. The real costs are table build time and a fallback for every gate parameter. Biggest single item left |
+| stage-2 compaction rounds | not implemented, bounded at 7.4% | the standing verdict "rare-and-deep, at most one lane per warp, already optimal" is **stale**: it described the pre-compaction design, where stage 2 sat behind all of stage 1. The cold kernel is now fed by the compaction chain, so every lane entering it runs stage 2 -- mean depth 109 over 6,370 primes, with a much larger warp-max |
+| `_R_MIX32` extended to the cold kernel's stage-2 loop | not implemented, ~1.5% | same transformation, same preconditions; G15 already checks the u32 bound for stage-2 primes |
+
+### Split after this round
+
+| phase | share | verdict |
+|-------|-------|---------|
+| bit-sieve stage 1a | 66.3% | load-count bound, and divergence is free (0.993x at one sector). NINC is an interior peak; W=64 beats 128 (0.25x, Phase 2) and beats the folded form (0.685x). Levers left: CRT pairs (~10%) and the 37# wheel |
+| stage-1b compaction rounds | 26.4% | 1.048x from #15, round size re-swept to 24 (1.023x), grid insensitive |
+| cold kernel (stage 2) | 7.4% | 3.1x from #13; two priced items left, both bounded by the share |
+| host + syncs | 2.5% | measured; removing them is 0.995x |
+
+Not done -- three of the four phases still have named levers with prices on
+them.

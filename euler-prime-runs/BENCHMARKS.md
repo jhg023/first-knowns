@@ -53,6 +53,7 @@ stopwatch.
 | 2026-08-06 | v2-128 (frozen) | **362,319,437** | two-phase compaction (stage-1a hot kernel + queued cold kernel; see OPTIMIZATION_LOG). Same fingerprint, bit-identical stream. Same-battery pair: SCORE128 362,319,437 vs u64 SCORE 323,394,817 -- **the 128 path is now 1.13x the proven u64 engine** (paired A/B median 1.135, min 1.111 over 12 rounds) |
 | 2026-08-15 | v4: 31# wheel, sieve depth 28, round size 16 | SCORE **7,694,248,260** / SCORE128 **8,252,670,019** | folding 31 into the wheel: 2.07x fewer candidates for an identical survivor set, both frozen fingerprints reproduced, 12 gates green. **The load-bearing number is the paired ratio 1.374x, not any comparison of these absolutes against the rows below** -- run-to-run variance here is ~2x on identical code (see the table above), so cross-row absolute arithmetic is exactly what Rule 3 in ../OPTIMIZATION.md warns against. Composition: the wheel alone was 1.121x, sieve depth re-swept 24 -> 28 took it to 1.212x, and the round size then had to move 8 -> 16 for a further 1.134x |
 | 2026-08-15 | v3-128, single-engine tree | SCORE **6,330,661,788** / SCORE128 **6,544,948,396** | retired engines deleted; both frozen shapes now measured with the one production engine, both fingerprints reproduced, 12 gates green. Engine mathematics identical to the row below -- this row differs only in what the tree contains and which engine the SCORE column refers to |
+| 2026-08-16 | v5: stage-2 bit probe, balanced sieve grid, 32-bit stage-1b reductions, launch bound 3, round size 24 | SCORE **9,961,108,420** / SCORE128 **10,302,529,513** | 13 gates green (G15 new), both frozen fingerprints reproduced. **The load-bearing number is the paired ratio 1.294x** measured in one process against the engine this row replaces, not any arithmetic across these absolutes -- run-to-run variance here is ~2x on identical code. Composition: 1.165 x 1.066 x 1.048 x 1.028 x 1.023, none of them individually interesting |
 | 2026-08-15 | v3-128 (frozen) | **6,341,803,579** | bit-sieve stage 1a + stage-1b compaction rounds; NINC=24, ROUND=8, W=64, PPL=131072. Same fingerprint (178 / 133625321009290), bit-identical stream (G13, G14). Full battery green; same-battery u64 SCORE 305,864,144, so the 128 path is now **20.7x the u64 engine**. Shape note: SCORE128 takes the engine's default launch size, raised 8192 -> 131072, so the 77,285-period window is now ONE launch (see score.py header) |
 
 Decomposing that ledger jump, one battery, all three points measured
@@ -76,7 +77,7 @@ change is worth 1.395x. The honest sustained figure is therefore
 
 Tuning is all measured, always as an interleaved paired ratio with the
 frozen fingerprint re-checked on every single run (a sequential sweep on
-this machine produced a 31% "cliff" that does not exist — see
+this machine produced a 31% "cliff" that does not exist -- see
 OPTIMIZATION_LOG.md). Ratios, each from one battery:
 
 | change | ratio | note |
@@ -145,6 +146,66 @@ Cumulative **19.4x** over the engine that swept leg 1 (5.5e14 -> 1.07e16).
 For scale: re-sweeping the entire range from 0 to 5e21 now costs ~5.4
 days, and the enforced 1e24 ceiling is ~3.0 years of single-GPU wall (it
 was ~58 years).
+
+## Phase 3 (2026-08-16): the cheap tests
+
+Same discipline: interleaved paired ratios, frozen fingerprint re-checked on
+every run, measured on a steady-state 2e16 window at 6.1e20 (24 launches, so
+no single-launch flattery). Ratios, all from one battery:
+
+| change | ratio | note |
+|--------|-------|------|
+| stage-2 kill test: 17-iteration scan -> one bit probe | **1.165x** | every stage-2 prime exceeds max(x^2+x), so "q divides some p+x^2+x" is just "p mod q == 0, or q - p mod q is of the form x^2+x". Cold kernel 170 -> 55 ms |
+| sieve grid balance: T derived from PPL | **1.066x** | the y-slices were 2048/2048/**132**, and per-thread setup is paid in full by every slice however short. Derived rather than tuned, since PPL moves with the wheel and with n |
+| 32-bit reductions in stage 1b | **1.048x** | only `off mod q` genuinely needs 64 bits; k never has to be formed, and kq*dM + oq fits a u32 for every stage-1 and stage-2 prime |
+| sieve `__launch_bounds__` 4 -> 3 blocks/SM | **1.028x** | at 4 the compiler is capped at 64 registers and spills 24 B/thread; at 2 and 0 the spill is already gone and only occupancy is being sold (~0.998x) |
+| round size 16 -> 24 | **1.023x** | the optimum moved *again* once stage-1b primes got cheaper -- and reversed direction: 24 measured 0.984x before that change |
+| **paired total, previous engine vs this one** | **1.294x** | one process, 7 interleaved rounds, both reproducing the frozen fingerprint on identical work |
+
+The paired 1.294x is the load-bearing number, and it is deliberately *less*
+than the product of the rows above (1.37x): those were measured against
+different baselines and two of them overlap. Cross-row absolute arithmetic
+against the ledger below is exactly what Rule 3 in ../OPTIMIZATION.md warns
+against -- run-to-run variance on this machine is ~2x on identical code.
+
+Rejected on measurement: the folded pattern table (**0.685x** -- 24x smaller
+tables, but it trades one load for two, and within L1 the sieve turns out to
+care only about load count); bigger launches (**1.009x** for 2.1 GB of queue,
+after the grid-balance fix took away what they were buying); removing the
+mid-chain host round-trips (**0.995x**, confirming the earlier 0.2%);
+ROUND_GRID 2048..16384 (flat within 0.2%).
+
+The measurement lesson of this round is in OPTIMIZATION_LOG.md: two of the
+three sieve ablations were invalid -- one let the compiler hoist the very
+loads it was pricing, the other inverted the survivor bitmap and priced the
+extraction loop instead. The valid one showed that gather *divergence* inside
+L1 is free, which is what killed the folded table.
+
+### Wall-clock after this round
+
+The realized v4 production rate was **1.03e16 p/s** (measured from the leg's
+own near-miss timestamps over interleaved 1 h and 6 h windows, which agree to
+3%, not from the projection). Applying the paired 1.294x projects
+**1.33e16 p/s** for v5, to be replaced by a realized average once the leg
+resumes.
+
+Conditional on the sweep being clean to the 6.09e20 frontier where the leg
+stopped, and on run EXACTLY 19 (E_19 - E_20, which is what actually settles a
+term -- about 12% of run->=19 events overshoot into run-21 and do not):
+
+| target | P(a(19) by then) | v5 (proj.) | v4 (realized) |
+|--------|------------------|-----------|---------------|
+| 8.55e20 (a19 Q1) | 25% | 5.1 h | 6.6 h |
+| 1.00e21 | 36% | 8.1 h | 10.5 h |
+| 1.25e21 (a19 median) | 50% | **13.4 h** | 17.4 h |
+| 2.00e21 | 74% | 29.0 h | 37.5 h |
+| 2.07e21 (a19 Q3) | 75% | 30.4 h | 39.3 h |
+| 5.00e21 (leg cap) | 96% | **3.81 days** | 4.93 days |
+
+Cumulative **25.1x** over the engine that swept leg 1 (5.5e14 -> 1.33e16).
+Re-sweeping the whole range 0 to 5e21 now costs ~4.3 days, the a(20)
+conditional median (1.06e22) is ~8.7 days out, and the enforced 1e24 ceiling
+is ~2.4 years of single-GPU wall (it was ~58 years, then ~3.0).
 
 Note (2026-08-06): after the public-repo refactor (shared code moved to
 ../huntlib), the full gate battery re-ran green and the benchmark

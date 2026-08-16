@@ -16,11 +16,16 @@ and a catalogue of the optimizations that have actually paid, with the
 measured numbers and — just as important — the ones that did not.
 
 Case study throughout: `euler-prime-runs`, whose engine went from 5.5×10¹⁴
-to ~1.07×10¹⁶ p/s — **~19x**, of which 14.1x was measured in production
-from the restructure and ×1.374 came from a wider wheel *plus the two
-tuning constants that change invalidated* — with a survivor stream that is
-bit-identical to the engine it replaced. See that project's
-`OPTIMIZATION_LOG.md` for the full ledger.
+to ~1.33×10¹⁶ p/s — **~25x**, of which 14.1x was measured in production
+from the restructure, ×1.374 came from a wider wheel *plus the two tuning
+constants that change invalidated*, and ×1.294 from a later round of small
+ones — with a survivor stream that is bit-identical to the engine it
+replaced. See that project's `OPTIMIZATION_LOG.md` for the full ledger.
+
+That last 1.294x is worth noticing: it came *after* a session that had
+already taken 19x and re-swept every constant, from five changes worth
+1.165 / 1.066 / 1.048 / 1.028 / 1.023 — not one of which looked like
+anything on its own.
 
 > **Read this first.** The recurring failure here is not a bad
 > optimization — it is a review that **stops too early** and reports "not
@@ -486,6 +491,7 @@ crashing.
 | attempt | result | why it was tempting |
 |---------|--------|---------------------|
 | wider pattern word (128/256-bit) | **0.25x / 0.31x** | halves gather count; but the multi-word accumulator's data-dependent extraction defeats it |
+| folding the pattern table 24x smaller (22 KB -> 904 B) by storing each prime's periodic bit-string once instead of one 64-bit window per residue | **0.685x** | the mathematics was exact and the table became trivially cache-resident -- but a window that straddles a word boundary needs two loads, and this kernel is bound by load COUNT, so 28 loads became 56. Table size was never the constraint |
 | warp-aggregated single-address atomic | not worth doing: whole push is **10%** of the kernel | the raw atomic rate looked close to the hardware limit |
 | removing per-launch host syncs | **0.2%** of GPU time | "obviously" a pipeline bubble |
 | compacting the rare-and-deep final stage | ~0 by analysis | it is 24% of a phase and 109 steps deep, so it looks like the tail |
@@ -524,21 +530,35 @@ Worked example — the case study's final state, which is what let it stop:
 
 | phase | share | verdict |
 |-------|-------|---------|
-| bit-sieve stage 1a | 48.1% | ~90% pattern work by ablation (deleting the queue push moved it only 10%); the candidate-count lever was taken (§2.8, 1.212x), and the next wheel prime (37) needs a 6.0e8-offset table, ~16x over budget |
-| stage-1b compaction rounds | 34.6% | divergence recovered 5.8x -> ~1x. Grew from 17.3% when the wheel moved work here, so the round size was re-swept against the new balance: peak moved 8 -> 16, worth **1.134x**. That factor was found *because this row visibly grew* — nothing looked broken, the engine was simply leaving 13% on the floor |
-| cold stage-2 kernel | 17.3% | structurally optimal: rare-and-deep, so at most one lane per warp is active and the per-warp cost already equals the perfectly-packed cost |
-| host + syncs | <1% | measured 0.2%, priced and declined |
+| bit-sieve stage 1a | 66.3% | bound by load **count** -- divergence is free inside L1 (0.993x confining a warp's 32 lanes to one 32 B sector), so the lever is fewer loads, never cheaper ones. NINC is a measured interior peak; W=128 lost 4x and a 24x-smaller folded table lost 1.5x, both by trading one load for two. Left: CRT-combining prime pairs (~10%, only while the table stays L1-resident) and the 37# wheel (1.85x fewer candidates, 4.8 GB of offsets) |
+| stage-1b compaction rounds | 26.4% | divergence recovered 5.8x -> ~1x. Of the three modular reductions per candidate-prime, two provably fit in 32 bits: **1.048x**. Round size then re-swept 16 -> 24, another **1.023x** |
+| cold stage-2 kernel | 7.4% | was 20.3%. Its per-prime test was a 17-iteration scan over a set that never changes; it is now one bit probe, worth **1.165x** overall. Left: the same 32-bit reductions (~1.5%) and compaction (below) |
+| host + syncs | 2.5% | measured; removing the mid-chain round-trips is 0.995x |
 
-The table earned its keep immediately: filling in the rounds row exposed a
-1.134x that no amount of staring at the code would have suggested, because
-the code was not wrong — it was tuned for a balance that no longer existed.
-That is the whole argument for a per-phase verdict over a judgement call.
+The table earned its keep twice. In the first session, filling in the rounds
+row exposed a 1.134x that no amount of staring at the code would have
+suggested, because the code was not wrong — it was tuned for a balance that
+no longer existed. That is the whole argument for a per-phase verdict over a
+judgement call.
 
-And note what the table still does *not* say: "done". The shares above are
-from the profile *before* the round-size change, so they have already moved
-again, and the next re-profile is the next round's first action. The table's
-job is to keep remaining work **visible and priced**, not to certify
-completion.
+In the second session it did something better: it exposed a **stale
+verdict**. The cold stage-2 row above used to read "structurally optimal:
+rare-and-deep, so at most one lane per warp is active." That was true of the
+design where stage 2 sat behind all of stage 1 — and it stopped being true
+the moment compaction rounds began feeding that kernel, because then every
+lane entering it runs stage 2. Nobody re-derived it; it was inherited from
+one profile to the next, and it was sitting on a 3.1x.
+
+So a verdict is not permanent, and this is the failure mode the table is
+most prone to. **A structural argument is only valid against the structure
+that existed when you made it.** When a phase's share moves, re-derive its
+verdict rather than re-reading it — an inherited "optimal" is exactly as
+dangerous as an inherited constant, and harder to notice, because a stale
+constant merely costs you a factor while a stale verdict stops you looking.
+
+And note what the table still does *not* say: "done". Three of its four rows
+carry named levers with prices on them. The table's job is to keep remaining
+work **visible and priced**, not to certify completion.
 
 ### 3.2 Every catalogue entry has been applied to every phase
 
@@ -556,6 +576,40 @@ timing the result** — a deliberately-wrong kernel is a five-minute
 experiment and it is definitive. This is how the case study established
 that the atomic was 10% (not the bottleneck it looked like) without writing
 any aggregation code, and it is how "I think X is slow" becomes a number.
+
+**But an ablation is only valid if it changes one thing.** A wrong-answer
+kernel is allowed to compute nonsense; it is *not* allowed to change how
+much work the rest of the kernel does, and it is not allowed to hand the
+compiler an optimization the real kernel cannot have. Both happened in the
+case study, in the same afternoon, and both produced confident numbers that
+were off by more than an order of magnitude:
+
+| ablation | reported | what actually happened |
+|---|---|---|
+| replace a divergent table gather with a **constant index** | "the gather is 81% of the kernel" | the index became loop-invariant, so the compiler hoisted all 28 loads out of the loop. It priced a kernel with *no loads*, not one with cheap loads |
+| replace the gather with **pure arithmetic** (no memory at all) | 3x *slower* | the accumulator filled with garbage, which inverted the survivor bitmap downstream, so the extraction loop ran on nearly every bit. It priced the extraction path |
+
+The fix is a **differential** ablation: keep the instruction mix and the
+downstream work identical across variants, and change only the property
+under test. Here that meant masking the index to 4 / 16 / 64 entries versus
+the full table — every variant still issues the same number of
+data-dependent loads, so nothing hoists and the garbage is equally garbage;
+only the address spread moves. That version answered the question in one
+run: **within L1, gather divergence is free** (0.993x at one sector), so the
+kernel is bound by load *count*.
+
+Checklist before believing an ablation:
+
+- did the deleted work feed an address or a branch the compiler can now
+  fold? (make the replacement data-dependent)
+- does the variant change how many items reach the *next* stage? (compare
+  per-kernel times, not wall-clock, and sanity-check the survivor counts)
+- is the variant's instruction count comparable, or did you delete a load
+  *and* five ALU ops and attribute all of it to the load?
+
+An ablation that fails these is not weak evidence, it is *anti*-evidence: it
+will point confidently at the wrong phase, and the resulting "optimization"
+gets built before anyone re-checks.
 
 ### 3.4 The constants have been re-swept since the last structural change
 

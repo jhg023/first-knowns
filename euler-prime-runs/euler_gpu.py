@@ -16,8 +16,11 @@
 #             tests a few primes and forwards survivors to a second queue, so
 #             every round restarts with all 32 lanes alive instead of letting
 #             a warp run until its last lane dies
-#   stage 2   primes Q1..Q2 via the exact n-value divisibility test, one
-#             thread per surviving candidate
+#   stage 2   primes Q1..Q2, one thread per surviving candidate; the kill
+#             test is a bit probe rather than a scan over the n values,
+#             because every stage-2 prime exceeds max(x^2+x) (see _S2_BITSET)
+# All three grids are fixed and every count stays on the device, so a launch
+# is enqueued end to end and reaches the host exactly once.
 # Miller-Rabin and exact-run classification stay on the HOST: the GPU only
 # ever PROPOSES (euler_search.mr_*).
 #
@@ -31,8 +34,9 @@
 # rediscovery of a(13), G12 canary rediscovery of a(18) and the
 # Waldvogel-Leikauf run-21 value, G13 slicing-independence across launch
 # geometries and split points, G14 pattern tables == big-integer
-# divisibility.  See ../OPTIMIZATION.md for why the engine is shaped this
-# way, and RESULTS.md for what the retired engines were.
+# divisibility, G15 the stage-2 bitset test and the 32-bit reductions ==
+# exact integer arithmetic.  See ../OPTIMIZATION.md for why the engine is
+# shaped this way, and RESULTS.md for what the retired engines were.
 #
 # ASCII only.
 
@@ -60,7 +64,8 @@ _COLD_SRC = r"""
 extern "C" __global__
 void ladder_cold_128(const unsigned long long k_base,
                      const unsigned long long* __restrict__ offs,
-                     const unsigned long long n_cand,
+                     const unsigned long long* __restrict__ n_in,
+                     const unsigned long long in_cap,
                      const unsigned long long* __restrict__ queue,
                      const int ns1,
                      const unsigned int* __restrict__ s1_q,
@@ -80,9 +85,18 @@ void ladder_cold_128(const unsigned long long k_base,
                      const unsigned long long out_cap)
 {
     const int NINC = __MP_NINC__;
-    unsigned long long idx = (unsigned long long)blockIdx.x * blockDim.x
-                             + threadIdx.x;
-    if (idx >= n_cand) return;
+    // The candidate count arrives as a DEVICE pointer and the grid strides,
+    // exactly as in ladder_round_128, so the whole sieve -> rounds -> cold
+    // chain is enqueued without a host round-trip.  `in_cap` clamps the read:
+    // on a stage-1a overflow the count exceeds what was actually written, and
+    // the host raises straight afterwards -- but the clamp is what stops the
+    // kernel dereferencing uninitialised queue entries in the meantime.
+    const unsigned long long total = (*n_in < in_cap) ? *n_in : in_cap;
+    const unsigned long long stride = (unsigned long long)gridDim.x
+                                      * blockDim.x;
+    for (unsigned long long idx = (unsigned long long)blockIdx.x * blockDim.x
+                                  + threadIdx.x;
+         idx < total; idx += stride) {
     unsigned long long e = queue[idx];
     unsigned long long off = offs[e >> 32];
     unsigned long long k = k_base + (e & 0xffffffffULL);
@@ -121,10 +135,7 @@ void ladder_cold_128(const unsigned long long k_base,
         if (vq >= qq) vq -= qq;
         if (vq >= qq) vq -= qq;
         unsigned int rr = (unsigned int)vq;
-        for (int x = 0; x < nxx; ++x) {
-            unsigned int tt = rr + xx[x];
-            if (tt == 0u || tt == qq) { alive = false; break; }
-        }
+__S2TEST__
     }
     if (alive) {
         unsigned long long slot = atomicAdd(out_n, 1ULL);
@@ -133,8 +144,33 @@ void ladder_cold_128(const unsigned long long k_base,
             out_off[slot] = off;
         }
     }
+    }
 }
 """
+
+# Stage-2 kill test, two ways.  `scan` walks the n values of x^2+x and asks
+# whether any is == 0 or q mod q -- n table reads and n branches per prime,
+# run to completion on every survivor because a kill is rare (17/q).
+#
+# `bitset` uses the fact that the test is a membership question about a set
+# that never changes: q | p + x^2 + x means rr == -(x^2+x) mod q, and every
+# stage-2 prime exceeds max(x^2+x) = (n-1)^2 + (n-1), so no residue wraps.
+# Hence rr is killed iff rr == 0 (the x = 0 case) or q - rr is itself of the
+# form x^2 + x -- one bounds test and one bit probe of a 273-bit table,
+# branch-free, instead of a 17-iteration loop.  The kernel argument pair
+# (nxx, xx) carries (n, the x^2+x values) for `scan` and (xxmax, the packed
+# bitset) for `bitset`, so the signature and the call site are shared.
+_S2_SCAN = """        for (int x = 0; x < nxx; ++x) {
+            unsigned int tt = rr + xx[x];
+            if (tt == 0u || tt == qq) { alive = false; break; }
+        }"""
+
+_S2_BITSET = """        {
+            unsigned int d = qq - rr;          // rr != 0 => d in [1, qq)
+            if (rr == 0u || (d <= (unsigned int)nxx
+                             && ((xx[d >> 5] >> (d & 31)) & 1u)))
+                alive = false;
+        }"""
 
 
 # ---------------------------- the bit-sieve --------------------------------
@@ -158,6 +194,15 @@ void ladder_cold_128(const unsigned long long k_base,
 # M mod q, (W*M) mod q, the Barrett magics and the table offsets as
 # literals, which also frees the registers a per-thread copy would need.
 
+SIEVE_LB = 3             # min blocks/SM in the sieve's __launch_bounds__; 0
+                         # omits the clause and lets the compiler choose.  At 4
+                         # the compiler is held to 64 registers and SPILLS (24
+                         # B of local memory per thread); 3 gives it 80 and
+                         # spills nothing, for 1.028x.  Below 3 the register
+                         # budget stops binding and occupancy is what is lost,
+                         # so 2 and 0 both fall back to ~0.998x -- an interior
+                         # optimum in the usual place, where the spill goes
+                         # away and no more occupancy has been paid for it.
 SIEVE_W = 64             # periods per pattern word (u64); must divide T
 SIEVE_NINC = 28          # sieve-phase primes.  An extra prime costs one OR
                          # plus one stepped residue per W periods and multiplies
@@ -218,7 +263,7 @@ _SIEVE_STEPN = """
 
 _SIEVE_BODY = r"""
 extern "C" __global__
-void __launch_bounds__(256, 4)
+void __SIEVE_LB__
 ladder_sieve_128(const unsigned long long k_base,   // absolute first k
                  const unsigned int n_offs,
                  const unsigned long long* __restrict__ offs,
@@ -322,11 +367,17 @@ void ladder_round_128(const unsigned long long k_base,
                       const unsigned int* __restrict__ s1_dM,
                       const unsigned int* __restrict__ s1_woff,
                       const unsigned int* __restrict__ s1_mask,
+                      const unsigned int* __restrict__ s1_kbq,
+                      const unsigned int* __restrict__ s1_m32,
                       unsigned long long* __restrict__ qout,
                       unsigned long long* __restrict__ n_out,
                       const unsigned long long out_cap)
 {
-    const unsigned long long total = *n_in;
+    // both ping-pong queues are allocated at the same capacity, so out_cap
+    // is also the input capacity; clamp for the same reason as the cold
+    // kernel (see there) -- an overflowed count must not become a wild read.
+    const unsigned long long tin = *n_in;
+    const unsigned long long total = (tin < out_cap) ? tin : out_cap;
     const unsigned long long stride = (unsigned long long)gridDim.x
                                       * blockDim.x;
     for (unsigned long long idx = (unsigned long long)blockIdx.x * blockDim.x
@@ -334,22 +385,11 @@ void ladder_round_128(const unsigned long long k_base,
          idx < total; idx += stride) {
         unsigned long long e = qin[idx];
         unsigned long long off = offs[e >> 32];
-        unsigned long long k = k_base + (e & 0xffffffffULL);
+        unsigned int kp = (unsigned int)(e & 0xffffffffULL);
         bool alive = true;
         for (int j = j0; j < j1 && alive; ++j) {
             unsigned int qq = s1_q[j];
-            unsigned long long mg = s1_magic[j];
-            unsigned long long kq = k - __umul64hi(k, mg) * qq;
-            if (kq >= qq) kq -= qq;
-            if (kq >= qq) kq -= qq;
-            unsigned long long oq = off - __umul64hi(off, mg) * qq;
-            if (oq >= qq) oq -= qq;
-            if (oq >= qq) oq -= qq;
-            unsigned long long v = kq * (unsigned long long)s1_dM[j] + oq;
-            unsigned long long vq = v - __umul64hi(v, mg) * qq;
-            if (vq >= qq) vq -= qq;
-            if (vq >= qq) vq -= qq;
-            unsigned int rr = (unsigned int)vq;
+__RTEST__
             if ((s1_mask[s1_woff[j] + (rr >> 5)] >> (rr & 31)) & 1u)
                 alive = false;
         }
@@ -360,6 +400,51 @@ void ladder_round_128(const unsigned long long k_base,
     }
 }
 """
+
+
+# Stage-1b residue reduction, two ways.  Both compute
+# rr = (k*M + off) mod q with k = k_base + kp.
+#
+# `u64` reduces k, off and the recombination with the 64-bit Barrett magic --
+# three __umul64hi, each of which the compiler expands into several IMADs
+# because it is a 64x64->128 high multiply.
+#
+# `mix32` keeps only the reduction that genuinely needs 64 bits.  off < M can
+# be ~2^38, so it stays.  But k mod q does not need k: the host already knows
+# k_base mod q, and kp is the low 32 bits of the queue entry, so
+# (k_base mod q) + kp is a u32 -- and the recombination kq*dM + oq is bounded
+# by q^2 + q, which for a stage-1 prime (q < 1024) is under 2^21 and for a
+# stage-2 prime (q < 65536) is still under 2^32.  Both become __umulhi.
+# Barrett stays exact: for x < 2^32 and m32 = floor(2^32/q) the quotient
+# estimate is short by at most one, so the same two conditional subtracts
+# that the 64-bit path uses are more than sufficient.
+_R_U64 = """            unsigned long long mg = s1_magic[j];
+            unsigned long long k = k_base + (unsigned long long)kp;
+            unsigned long long kq = k - __umul64hi(k, mg) * qq;
+            if (kq >= qq) kq -= qq;
+            if (kq >= qq) kq -= qq;
+            unsigned long long oq = off - __umul64hi(off, mg) * qq;
+            if (oq >= qq) oq -= qq;
+            if (oq >= qq) oq -= qq;
+            unsigned long long v = kq * (unsigned long long)s1_dM[j] + oq;
+            unsigned long long vq = v - __umul64hi(v, mg) * qq;
+            if (vq >= qq) vq -= qq;
+            if (vq >= qq) vq -= qq;
+            unsigned int rr = (unsigned int)vq;"""
+
+_R_MIX32 = """            const unsigned int m32 = s1_m32[j];
+            unsigned int kx = s1_kbq[j] + kp;
+            unsigned int kq = kx - __umulhi(kx, m32) * qq;
+            if (kq >= qq) kq -= qq;
+            if (kq >= qq) kq -= qq;
+            unsigned long long oq = off - __umul64hi(off, s1_magic[j]) * qq;
+            if (oq >= qq) oq -= qq;
+            if (oq >= qq) oq -= qq;
+            unsigned int v = kq * s1_dM[j] + (unsigned int)oq;
+            unsigned int vq = v - __umulhi(v, m32) * qq;
+            if (vq >= qq) vq -= qq;
+            if (vq >= qq) vq -= qq;
+            unsigned int rr = vq;"""
 
 
 def sieve_tables(n, M, s1, ninc, W=SIEVE_W, T=MP_T):
@@ -402,12 +487,15 @@ def sieve_tables(n, M, s1, ninc, W=SIEVE_W, T=MP_T):
             np.array(pat, dtype=np.uint64))
 
 
-def sieve_kernel_src(n, M, s1, ninc, W=SIEVE_W, T=MP_T):
+def sieve_kernel_src(n, M, s1, ninc, W=SIEVE_W, T=MP_T, lb=SIEVE_LB):
     """Generated CUDA source + the pattern table it indexes."""
     init, step, pat = sieve_tables(n, M, s1, ninc, W, T)
     src = (_SIEVE_BODY.replace("__MP_T__", str(T))
                       .replace("__SIEVE_W__", str(W))
                       .replace("__SIEVE_NW__", str(W // 64))
+                      .replace("__SIEVE_LB__",
+                               "__launch_bounds__(256, %d)" % lb if lb
+                               else "")
                       .replace("__SIEVE_INIT__", init)
                       .replace("__SIEVE_STEP__", step))
     return src, pat
@@ -426,8 +514,11 @@ class GpuEngine:
     """
 
     NINC = SIEVE_NINC        # primes handled by the bit-sieve
+    SIEVE_LB = SIEVE_LB      # sieve __launch_bounds__ min blocks/SM (0 = none)
     W = SIEVE_W              # pattern width in periods (multiple of 64)
-    T = MP_T                 # periods per thread
+    T = MP_T                 # periods per thread -- a TARGET, not the final
+                             # value: __init__ re-derives it from PPL so the
+                             # sieve grid's y-slices come out even
     LAUNCH_SPAN = 131072 * 6469693230    # ~8.48e14 of p-line per launch.
                              # Expressed as a SPAN, not a period count, so it
                              # is wheel-independent: the period is 31x longer
@@ -444,16 +535,25 @@ class GpuEngine:
                              # queue scales with n_offs * PPL * survival and
                              # the offset table is 15x larger on the 31# wheel
                              # (and larger again at small n)
-    ROUND = 16               # stage-1b primes per compaction round; 0 sends
+    ROUND = 24               # stage-1b primes per compaction round; 0 sends
                              # all of stage 1b to the single cold kernel.
-                             # Another constant that moved with the wheel: on
-                             # 29# the sweep 0/4/8/16/32 gave
-                             # 1.000/1.568/1.684/1.638/1.531 (peak 8), but the
-                             # 31# wheel shifted work into stage 1b (17% -> 35%
-                             # of GPU time) and the peak moved out to 16:
-                             # 4/6/8/12/16/20/24/32 ->
-                             # 0.769/0.922/1.000/1.088/1.134/1.128/1.121/1.081
-    ROUND_GRID = 4096        # fixed grid for the grid-striding round kernel
+                             # Moves with everything around it.  On 29#: peak
+                             # 8.  The 31# wheel shifted work into stage 1b and
+                             # moved it to 16.  Making the stage-1b reduction
+                             # 32-bit (_R_MIX32) made each prime cheaper, so
+                             # the peak moved out again: 16/20/24/28/34 ->
+                             # 1.000/1.016/1.023/1.009/0.978.  Note 24 MEASURED
+                             # 0.984 before that change and 1.023 after -- the
+                             # direction reversed, which is why this is
+                             # re-swept after every structural change and never
+                             # reasoned about.
+    ROUND_GRID = 4096        # fixed grid for the grid-striding round kernel;
+                             # swept 2048/4096/8192/16384 -> 1.002/1.000/
+                             # 1.002/1.000, i.e. the stride loop does not care
+    COLD_GRID = 4096         # ditto for the cold kernel, which strides too so
+                             # that its count never has to reach the host
+    S2_TEST = "bitset"       # stage-2 kill test: "bitset" or "scan"
+    R_TEST = "mix32"         # stage-1b reduction width: "mix32" or "u64"
     Q_HEADROOM = 1.25        # queue slack over the exact expected occupancy
 
     def __init__(self, n, wheel_primes=None):
@@ -484,6 +584,14 @@ class GpuEngine:
                                           dtype=np.uint32))
         self.d_s1w = cp.asarray(np.array(woff, dtype=np.uint32))
         self.d_s1m = cp.asarray(np.concatenate(mask_bits))
+        # 32-bit Barrett magics + the per-launch (k_base mod q) table that let
+        # stage 1b reduce k without ever forming k (see _R_MIX32)
+        self.s1_list = [int(q) for q in s1.tolist()]
+        self.d_s1m32 = cp.asarray(np.array([(1 << 32) // q
+                                            for q in self.s1_list],
+                                           dtype=np.uint32))
+        self.h_s1kbq = np.zeros(len(self.s1_list), dtype=np.uint32)
+        self.d_s1kbq = cp.zeros(len(self.s1_list), dtype=np.uint32)
         self.d_s2q = cp.asarray(s2.astype(np.uint32))
         self.d_s2magic = cp.asarray(barrett_magics(s2))
         self.d_s2dM = cp.asarray(np.array([int(self.M) % int(q)
@@ -491,6 +599,25 @@ class GpuEngine:
                                           dtype=np.uint32))
         self.d_xx = cp.asarray(np.array([x * x + x for x in range(n)],
                                         dtype=np.uint32))
+
+        # stage-2 kill test: see _S2_SCAN / _S2_BITSET.  The bitset form is
+        # only valid while every stage-2 prime exceeds max(x^2+x), which is
+        # what makes q - rr an unwrapped membership question; assert it
+        # rather than assume it, and fall back to the scan if it ever fails.
+        self.S2_TEST = str(self.S2_TEST)
+        self.xxmax = (n - 1) * (n - 1) + (n - 1)
+        if self.S2_TEST == "bitset" and int(s2[0]) <= self.xxmax:
+            self.S2_TEST = "scan"
+        if self.S2_TEST == "bitset":
+            bits = np.zeros((self.xxmax >> 5) + 1, dtype=np.uint32)
+            for x in range(n):
+                v = x * x + x
+                bits[v >> 5] |= np.uint32(1 << (v & 31))
+            self.d_s2tab = cp.asarray(bits)
+            self.s2_nxx = self.xxmax
+        else:
+            self.d_s2tab = self.d_xx
+            self.s2_nxx = n
 
         # snapshot the tuning before anything is compiled against it
         self.NINC, self.W, self.T = int(self.NINC), int(self.W), int(self.T)
@@ -504,8 +631,23 @@ class GpuEngine:
                                  self.Q_HEADROOM, 1.0))
             self.PPL = max(self.W, min(by_span, by_queue))
 
+        # Balance the sieve grid.  blockIdx.y indexes a slice of T periods and
+        # the last slice takes the remainder, but per-thread setup -- NINC
+        # Barrett reductions to seed the residues -- is paid in full by every
+        # slice however few periods it ends up with.  At PPL = 4228 a flat
+        # T = 2048 gives slices of 2048/2048/132, so a third of the threads
+        # pay full setup for a sixteenth of the work.  So pick the slice count
+        # from the target first, then divide PPL evenly over it, rounded up to
+        # a whole pattern block: 4228 -> gy = 2, T = 2176, slices 2176/2052.
+        # Measured 1.066x, and it is derived rather than tuned because PPL
+        # moves with the wheel, with n, and with LAUNCH_SPAN.
+        gy = max(1, int(round(self.PPL / float(self.T))))
+        per = -(-self.PPL // gy)                       # ceil(PPL / gy)
+        self.T = max(self.W, -(-per // self.W) * self.W)
+
+        self.SIEVE_LB = int(self.SIEVE_LB)
         src, pat = sieve_kernel_src(n, int(self.M), s1, self.NINC,
-                                    W=self.W, T=self.T)
+                                    W=self.W, T=self.T, lb=self.SIEVE_LB)
         self.sieve_src = src
         self.d_pat = cp.asarray(pat)
         self.kern_sieve = cp.RawKernel(src, "ladder_sieve_128")
@@ -521,9 +663,19 @@ class GpuEngine:
             j = j1
         self.cold_j0 = j
         self.kern_cold = cp.RawKernel(
-            _COLD_SRC.replace("__MP_NINC__", str(self.cold_j0)),
+            _COLD_SRC.replace("__MP_NINC__", str(self.cold_j0))
+                     .replace("__S2TEST__",
+                              _S2_BITSET if self.S2_TEST == "bitset"
+                              else _S2_SCAN),
             "ladder_cold_128")
-        self.kern_round = cp.RawKernel(_ROUND_SRC, "ladder_round_128")
+        # kx = (k_base mod q) + kp must not wrap a u32 for _R_MIX32 to hold
+        if self.PPL + max(self.s1_list) >= (1 << 32):
+            self.R_TEST = "u64"
+        self.kern_round = cp.RawKernel(
+            _ROUND_SRC.replace("__RTEST__",
+                               _R_MIX32 if self.R_TEST == "mix32"
+                               else _R_U64),
+            "ladder_round_128")
 
         # Stage-1a survival is a deterministic product over the sieve primes,
         # so the queue is sized exactly rather than guessed; grown on demand
@@ -537,6 +689,7 @@ class GpuEngine:
         self.d_outn = cp.zeros(1, dtype=np.uint64)
         self.d_qn = cp.zeros(1, dtype=np.uint64)
         self.d_qn2 = cp.zeros(1, dtype=np.uint64)
+        self.d_qn3 = cp.zeros(1, dtype=np.uint64)
         self.d_queue, self.d_queue2, self.Q_CAP = None, None, 0
 
     def _s1a_rate(self, s1):
@@ -599,17 +752,17 @@ class GpuEngine:
                              np.uint32(np_launch), self.d_pat,
                              self.d_queue, self.d_qn, np.uint64(self.Q_CAP)),
                             )
-            qn = int(self.d_qn.get()[0])
-            if qn > self.Q_CAP:
-                raise RuntimeError(
-                    "stage-1a queue overflow: %d > %d (expected %.3e at rate "
-                    "%.4e); raise Q_HEADROOM or lower periods_per_launch"
-                    % (qn, self.Q_CAP,
-                       self.n_offs * np_launch * self.s1a_rate, self.s1a_rate))
-            if not qn:
-                continue
-            # stage-1b compaction rounds: counts stay on the device, so the
-            # chain costs no host round-trips
+            # stage-1b compaction rounds, then the cold kernel: every count
+            # stays on the device and every grid is fixed, so the whole chain
+            # is enqueued without a single host round-trip.  The round
+            # counters ping-pong between d_qn2 and d_qn3 and never touch
+            # d_qn, so the stage-1a count survives the chain and can be
+            # overflow-checked at the end instead of mid-stream.
+            if self.rounds:
+                # (k_base mod q) for this launch: 161 host modulos, uploaded
+                # once per launch, so stage 1b never has to reduce k itself
+                self.h_s1kbq[:] = [kc % q for q in self.s1_list]
+                self.d_s1kbq.set(self.h_s1kbq)
             qin, nin = self.d_queue, self.d_qn
             if self.rounds and self.d_queue2 is None:
                 raise RuntimeError("compaction rounds active but no second "
@@ -617,34 +770,39 @@ class GpuEngine:
                                    "the queues were sized)")
             for j0, j1 in self.rounds:
                 qout = self.d_queue2 if qin is self.d_queue else self.d_queue
-                nout = self.d_qn2 if nin is self.d_qn else self.d_qn
+                nout = self.d_qn3 if nin is self.d_qn2 else self.d_qn2
                 nout.fill(0)
                 self.kern_round((self.ROUND_GRID,), (block,),
                                 (np.uint64(kc), self.d_offs, nin, qin,
                                  np.int32(j0), np.int32(j1),
                                  self.d_s1q, self.d_s1magic, self.d_s1dM,
                                  self.d_s1w, self.d_s1m,
+                                 self.d_s1kbq, self.d_s1m32,
                                  qout, nout, np.uint64(self.Q_CAP)),
                                 )
                 qin, nin = qout, nout
-            if self.rounds:
-                qn = int(nin.get()[0])
-                if not qn:
-                    continue
             self.d_outn[0] = 0
-            gxc = (qn + block - 1) // block
-            self.kern_cold((int(gxc),), (block,),
+            self.kern_cold((int(self.COLD_GRID),), (block,),
                            (np.uint64(kc), self.d_offs,
-                            np.uint64(qn), qin,
+                            nin, np.uint64(self.Q_CAP), qin,
                             np.int32(self.d_s1q.size), self.d_s1q,
                             self.d_s1magic, self.d_s1dM,
                             self.d_s1w, self.d_s1m,
                             np.int32(self.d_s2q.size), self.d_s2q,
                             self.d_s2magic, self.d_s2dM,
-                            np.int32(self.n), self.d_xx,
+                            np.int32(self.s2_nxx), self.d_s2tab,
                             self.d_outk, self.d_outo,
                             self.d_outn, np.uint64(self.out_cap)),
                            )
+            # the launch's ONE host round-trip: stage-1a overflow check and
+            # survivor count come back together, after the chain is queued
+            qn = int(self.d_qn.get()[0])
+            if qn > self.Q_CAP:
+                raise RuntimeError(
+                    "stage-1a queue overflow: %d > %d (expected %.3e at rate "
+                    "%.4e); raise Q_HEADROOM or lower periods_per_launch"
+                    % (qn, self.Q_CAP,
+                       self.n_offs * np_launch * self.s1a_rate, self.s1a_rate))
             cnt = int(self.d_outn.get()[0])
             if cnt > self.out_cap:
                 raise RuntimeError("survivor buffer overflow: %d" % cnt)
@@ -854,10 +1012,73 @@ def g14_pattern_tables(trials=40, seed=11):
                   % (checks, qs[0], qs[-1]))
 
 
+def g15_reduction_identities(trials=3000, seed=17):
+    """The two arithmetic shortcuts, checked against exact integer arithmetic.
+
+    G6 pins the whole stream, so either of these failing would have to be
+    reproduced by the numpy-`%` reference to survive.  This gate closes the
+    gap the way G14 does for the tables -- directly, with no engine in the
+    loop -- because both shortcuts are conditional identities whose
+    PRECONDITIONS are what a future parameter change would break, and a
+    stream comparison would only reveal that after the fact.
+
+    (a) The stage-2 kill test (_S2_BITSET).  q divides one of p + x^2 + x for
+        some x < n exactly when p mod q == 0 or q - (p mod q) is itself of the
+        form x^2 + x -- valid only while q > max(x^2+x), which is asserted.
+    (b) The 32-bit reductions in _R_MIX32.  For m32 = floor(2^32/q) and any
+        x < 2^32, two conditional subtracts recover x mod q exactly; and the
+        recombination kq*dM + oq that _R_MIX32 keeps in 32 bits really does
+        stay under 2^32 for every stage-1 and stage-2 prime.
+    """
+    import random
+    rng = random.Random(seed)
+    for n in (13, 17, 21):
+        xxmax = (n - 1) * (n - 1) + (n - 1)
+        xxset = {x * x + x for x in range(n)}
+        s1, s2 = stage_primes()
+        if int(s2[0]) <= xxmax:
+            return False, ("G15 FAIL n=%d: stage-2 floor %d <= max(x^2+x) %d,"
+                           " so the bitset test's precondition is void"
+                           % (n, int(s2[0]), xxmax))
+        for _ in range(trials):
+            q = int(s2[rng.randrange(s2.size)])
+            p = rng.randrange(10**20, 10**24)
+            rr = p % q
+            direct = any((p + x * x + x) % q == 0 for x in range(n))
+            shortcut = (rr == 0) or ((q - rr) <= xxmax and (q - rr) in xxset)
+            if direct != shortcut:
+                return False, ("G15 FAIL n=%d q=%d p=%d: divisibility %d vs"
+                               " bitset %d" % (n, q, p, direct, shortcut))
+    # (b) 32-bit Barrett, over both prime ranges and the extremes of the input
+    s1, s2 = stage_primes()
+    for arr in (s1, s2):
+        for q in [int(v) for v in arr.tolist()]:
+            m32 = (1 << 32) // q
+            dM = rng.randrange(q)
+            if (q - 1) * dM + (q - 1) >= (1 << 32):
+                return False, ("G15 FAIL q=%d: kq*dM + oq can reach %d, which"
+                               " overflows the u32 _R_MIX32 keeps it in"
+                               % (q, (q - 1) * dM + (q - 1)))
+            for x in [0, 1, q - 1, q, q + 1, (1 << 32) - 1,
+                      rng.randrange(1 << 32), rng.randrange(1 << 32)]:
+                r = x - ((x * m32) >> 32) * q
+                if r >= q:
+                    r -= q
+                if r >= q:
+                    r -= q
+                if r != x % q:
+                    return False, ("G15 FAIL 32-bit Barrett q=%d x=%d: %d vs"
+                                   " %d" % (q, x, r, x % q))
+    return True, ("G15 ok: stage-2 bitset == big-integer divisibility over"
+                  " n=13/17/21, and the 32-bit reductions are exact over all"
+                  " %d stage-1 + %d stage-2 primes" % (s1.size, s2.size))
+
+
 def selftest():
     ok = True
     for g in (g6_parity, g7_comparator_drill, g8_gpu_canary, g12_canaries,
-              g13_slicing_independence, g14_pattern_tables):
+              g13_slicing_independence, g14_pattern_tables,
+              g15_reduction_identities):
         good, msg = g()
         print(("PASS " if good else "FAIL ") + msg)
         ok = ok and good

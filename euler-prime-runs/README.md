@@ -18,14 +18,15 @@ the known Waldvogel–Leikauf upper bound at 2.35×10²⁰ without finding
 a smaller run ≥ 19. Details in [RESULTS.md](RESULTS.md).
 
 **Status: ACTIVE** — hunting a(19). The sweep is contiguous from
-0 to **3.62×10²⁰**, so a(19) and a(20) both exceed that. Conditional
-on the empty sweep so far, the model puts a(19) at median 8.37×10²⁰
-(quartiles 5.40×10²⁰ / 1.46×10²¹); the current leg runs to 5×10²¹, ~98%
-of the conditional distribution. The phase-2 engine was rebuilt
-2026-08-15 (bit-sieve stage 1a, then a 31# wheel) and is **~19x** faster
-with a bit-identical survivor stream — proven against the engine it
-replaced before that engine was retired, and still pinned by G6/G13/G14
-and the unchanged fingerprints. That puts the a(19) median ~12 hours out.
+0 to **6.09×10²⁰**, so a(19) and a(20) both exceed that. Conditional
+on the empty sweep so far, the model puts a(19) at median 1.25×10²¹
+(quartiles 8.55×10²⁰ / 2.07×10²¹); the current leg runs to 5×10²¹, ~96%
+of the conditional distribution. The engine was rebuilt 2026-08-15
+(bit-sieve stage 1a, then a 31# wheel) for ~19x, and sharpened again
+2026-08-16 for a further **1.294x** — cumulatively **~25x** — with a
+bit-identical survivor stream throughout, proven by paired A/B against
+the engine each version replaced and still pinned by G6/G13/G14/G15 and
+the unchanged fingerprints. That puts the a(19) median ~13 hours out.
 
 ## The problem
 
@@ -84,15 +85,21 @@ instructions maintaining state for primes the average candidate never
 reaches, and a warp runs until its *last* lane dies.
 
 **3. Stage 1b, compaction rounds.** The remaining stage-1 primes (to
-1024) are tested 16 at a time, with survivors forwarded to a second queue
+1024) are tested 24 at a time, with survivors forwarded to a second queue
 between rounds and counts kept on the device. Its exit depth averages
 13.9 but maxes at 80.4 across a 32-lane warp, so restarting each round
-with every lane alive recovers most of that 5.8x.
+with every lane alive recovers most of that 5.8x. Only one of the three
+modular reductions per candidate-prime needs 64 bits: *k* itself is never
+formed, because the host knows k mod q and the candidate carries its
+period offset in the low half of its queue entry.
 
-**4. Stage 2.** Primes 1024..65536 by direct 17-value divisibility, one
-thread per surviving candidate. Deliberately *not* compacted: only
-5.7×10⁻³ of the queue reaches it, so at most one lane per warp is ever
-inside and there is no divergence to recover.
+**4. Stage 2.** Primes 1024..65536, one thread per surviving candidate.
+The kill test is not a scan over the 17 values of x²+x but a single bit
+probe: q divides one of p + x² + x exactly when p mod q is 0 or
+q − (p mod q) is itself of the form x² + x, which is a valid restatement
+precisely because every stage-2 prime exceeds max(x²+x) = 272. Gate
+**G15** pins that equivalence against big-integer divisibility, including
+its precondition.
 
 **5. Host classification.** The ~3.6×10⁻¹³ of the line that survives goes
 to the host, where a deterministic 7-base Miller–Rabin (valid to
@@ -108,20 +115,25 @@ mini-windows (G10) and against the sympy oracle on small windows (G4);
 **G13** proves the stream does not depend on how work is sliced into
 pattern words, threads or launches; **G14** pins the sieve's pattern
 tables directly against big-integer divisibility of the actual values;
-and the pipeline rediscovers a(13), a(18) and the Waldvogel–Leikauf
-run-21 value end-to-end (G8, G12, and the launcher's canary prelude).
+**G15** does the same for the stage-2 bit probe and the 32-bit
+reductions, checking the *preconditions* that make them valid rather than
+only their output; and the pipeline rediscovers a(13), a(18) and the
+Waldvogel–Leikauf run-21 value end-to-end (G8, G12, and the launcher's
+canary prelude).
 
 This shape was reached by measurement, not design intuition, and the
-constants interact: four of them **moved during one session** — the sieve
-depth went 28 → 24 once compaction rounds made stage 1b cheaper, then back
-to 28 once the wider wheel shifted the sieve's prime range upward, and the
-round size went 8 → 16 once that same wheel moved a third of the runtime
-into stage 1b — while a wider 128-bit pattern word *lost* 4x. Net **~19x**
-over the previous engine (10.29x from the restructure at an unchanged
-launch shape, ×1.395 from the launch size, ×1.374 from the wheel together
-with the two constants it invalidated), with both frozen fingerprints
-reproducing bit-for-bit — the engine got faster without the work
-changing. See
+constants interact: the sieve depth went 28 → 24 once compaction rounds
+made stage 1b cheaper, then back to 28 once the wider wheel shifted the
+sieve's prime range upward; the round size went 8 → 16 once that same
+wheel moved a third of the runtime into stage 1b, then **16 → 24** once
+the 32-bit reductions made each stage-1b prime cheaper — a move that
+*reversed direction*, since 24 had measured 0.984x before that change and
+1.023x after. Meanwhile a wider 128-bit pattern word lost 4x, and folding
+the pattern table 24x smaller lost another 1.5x, because within L1 this
+sieve counts load instructions and is completely indifferent to how far
+apart the addresses are. Net **~25x** over the engine that swept leg 1,
+with both frozen fingerprints reproducing bit-for-bit — the engine got
+faster without the work changing. See
 [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) for every attempt including
 the rejects, and [../OPTIMIZATION.md](../OPTIMIZATION.md) for the process.
 
