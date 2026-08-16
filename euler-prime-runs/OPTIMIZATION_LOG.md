@@ -635,3 +635,164 @@ gaps are.
 | stage-1b compaction rounds | 27.4% | 32-bit reductions taken (Phase 3), round size re-swept, grid insensitive |
 | cold kernel (stage 2) | 6.0% | 3.1x from the bit probe, 1.014x more from the 32-bit reduction. Compaction remains unbuilt, now bounded by a 6% phase |
 | host + syncs | 2.2% | measured |
+
+---
+
+## Phase 5 (2026-08-16): what the sieve is actually bound by, and the phase nobody had baked
+
+Re-measured split before touching anything (Rule 1): **65.8 / 28.0 / 6.3 / 1.3**,
+close enough to the recorded 66.6/27.4/6.0/2.2 that no verdict was stale on
+share alone.  Two of them were stale on *evidence*, which is worse.
+
+### First: two experiments that told the sieve what it is not
+
+The sieve's verdict said "bound by load COUNT", inherited from Phase 3's
+gather-masking ablation.  Before spending anything on the dominant phase,
+that got tested from both sides.
+
+| experiment | result | what it rules out |
+|---|---|---|
+| **marched pattern table** -- store each prime's words in VISIT order, so the index sequence becomes stride-1 and the per-prime `r += dmw; if (r >= q) r -= q` disappears from the inner loop (dmw is invertible mod q, so `G[m] = pat[m*dmw mod q]` is exact; costs T/W-1 rows of tail padding) | **1.007x**, later 1.019x | removing ~2 of ~6 instructions per prime per pattern word bought nothing measurable, so the pattern loop is **not instruction-issue bound** |
+| **gather-spread probe** -- `off = offs[i & ~m]`, so groups of lanes share an offset and therefore all 26 pattern addresses.  Load count, table footprint and the per-lane survivor density (hence extraction and push counts) are all unchanged; only distinct sectors per warp-load moves, 17.3 -> 1.0 | **1.53x at ONE sector**, and non-monotone in between (16 lanes 1.21x, 8 lanes 1.14x, 4 lanes 1.07x, 2 lanes 1.00x) | collapsing the gather 17x wins only 1.53x, so it is **not sector-throughput bound** either.  A warp-cooperative redesign that got 18 sectors down to 8 would be worth ~1.2x on the phase at best, against a much worse setup amortization -- **priced and declined** |
+
+The marched table is kept (it is 1.019x against the same engine once the
+other changes landed, with disjoint min/max across 7 interleaved rounds) but
+the reason it matters is the negative result: it redirected the whole session
+away from the sieve and onto the phase that had never been touched.
+
+### The ledger
+
+Interleaved medians over a steady-state 2e16 window at 6.11e20 (24 launches),
+every run re-checking the frozen 128 fingerprint AND that the window's own
+survivor list is identical.
+
+| # | change | ratio | verdict |
+|---|--------|-------|---------|
+| 21 | **queue carries `off`, not its index**.  A stage-1a survivor is the pair (off, kp); the queue stored the offset's INDEX, so every compaction round and the cold kernel gathered `offs[i]` back out of a 240 MB table -- one scattered read per entry per round, for a value the sieve already had in a register.  Pack `off` itself, shifted by a KSHIFT derived from M and refused if a launch could overflow it | **1.058x** | KEPT |
+| 22 | **baked stage-1b round kernels** (catalogue 2.5, applied to a phase that had never had it).  The round loop read six warp-uniform values per prime out of global arrays; five are properties of the prime, so they become literals and the loop is unrolled into one kernel per round | **1.084x** | KEPT |
+| 23 | **32-bit `off mod q` in stage 1b**.  `off = oa*2^s + ob` with s derived so `oa*(2^s mod q) + ob < 2^32` for the widest prime in the stage; one `__umulhi` replaces `__umul64hi` plus a 64-bit multiply, subtract and two 64-bit conditional subtracts, with oa/ob computed once per candidate | **1.037x** on top | KEPT, gated (G15) |
+| 24 | NINC re-sweep after (22): 22/24/26/28/30 -> 1.000/0.998/**1.020**/0.976/0.960 | **1.020x** | KEPT: NINC 28 -> 26 |
+| 25 | ROUND re-sweep after (24): 8/12/16/20/24/34 -> 0.938/0.988/**1.000**/0.983/0.959/0.918 | **1.043x** | KEPT: ROUND 24 -> 16 |
+| 26 | the same off-split in the cold kernel's stage 2 (its own s: those primes reach 65521, so the product has 64x less room) | **1.023x** | KEPT, gated (G15) |
+| 27 | marched pattern table (above) | **1.019x** | KEPT |
+| 28 | sieve `__launch_bounds__` 3 -> 2 blocks/SM: 2/3/4/0 -> 1.000/0.990/0.972/0.995 | **1.010x** | KEPT.  The optimum tracks register demand, and NINC 28 -> 26 freed two live residues |
+| -- | **paired total, HEAD engine vs this one, same process, 7 rounds** | **1.3293x** | both reproduce both frozen fingerprints on identical work |
+
+Here the product of the rows (1.332) and the paired figure (1.329) agree to
+0.2%, unlike Phase 3 where they diverged by 6% -- these changes touch
+different phases and barely overlap.  Quote the paired one anyway: agreement
+is a property of this particular set, not a licence to multiply.
+
+Both re-sweeps moved **down**, and both for the same reason: (22) and (23)
+made a stage-1b prime 2.4x cheaper, so handing work back to stage 1b became
+the better trade.  That is Rule 1's corollary for the fifth time in this
+project, and it is worth 1.06x on its own -- pure loss if nobody re-sweeps.
+
+### Offset chunking: an enabler, deliberately neutral
+
+`QUEUE_BUDGET` used to cap **PPL**, which made the launch's *period count* a
+function of the memory budget.  Since T is derived from PPL, that is what
+priced the 37# wheel at 0.75x in Phase 4: a longer period leaves each thread
+too few periods to amortize its setup over.  The coupling was never
+necessary.  A launch is now cut along the **offset** axis instead -- each
+chunk runs its own sieve -> rounds -> cold chain over the launch's whole
+period range, with its own stage-1a counter -- so PPL is set purely by
+LAUNCH_SPAN and the queue is bounded by how many offsets are in flight.
+
+At the production wheel this resolves to exactly one chunk, so it is a
+no-op by construction, which is the point: it is gated (G13 now sweeps chunk
+sizes down to 4093 -- 7,300 chains for a single window -- and requires one
+identical stream) before anything depends on it.
+
+### The 37# wheel: re-priced, and the verdict inverted
+
+Phase 4 declined the next wheel at **0.75x**, from a fitted `sieve = a + b/T`
+curve, because the queue budget forced PPL down and T with it.  With
+chunking that constraint is gone, so the same technique was re-run on the
+axis that actually moves now -- the WINDOW size.  Sweeping the window in the
+current engine and timing the sieve alone:
+
+| periods | 67 | 134 | 268 | 623 | 1246 | 2493 | 4228 |
+|---|---|---|---|---|---|---|---|
+| pattern words per thread | 2 | 3 | 5 | 10 | 20 | 39 | 67 |
+| ms per 1e9 sieve threads | 78.3 | 106.5 | 159.6 | 225.6 | 444.1 | 858.0 | 1444.1 |
+
+    f(words) = 36.3 + 21.0*words        (per-thread setup is 2.5% at 67 words)
+
+Repeated on a second battery: `f = 31.5 + 21.5*words`, 2.1% -- the intercept
+is the noisy term, as it should be at 2.5% of the total, and neither fit
+changes a conclusion below.
+
+The 37# wheel has 20x the offsets and 37x the period, so its cost against
+the 31# wheel is `20 * f(w37) / (launches * f(w31))`:
+
+| window | 31# | 37# | 37# sieve cost |
+|---|---|---|---|
+| production / steady-state (many full launches) | 24 launches x 67 words | 1 x 43 | **0.54x -- a 1.85x WIN** |
+| the frozen 5e14 benchmark shape | 1 launch x 39 words | 1 x **2** | **1.7-1.8x -- a 0.55-0.58x loss** |
+
+So the Phase-4 verdict is inverted: at production shape the wheel is
+**1.85x on a phase that is 78% of GPU time**, i.e. ~1.5x overall, and the
+blocker is no longer the engine at all.  It is the **benchmark shape**: a
+5e14 window holds 2,494 periods of the 31# wheel but only 68 of the 37#
+wheel, which is two pattern words per thread against 20x as many threads, so
+95% of a thread's work there would be prologue and block padding.
+
+**Not shipped.**  This repo optimizes under the score, and a change that
+raises production throughput ~1.5x while halving SCORE is not something an
+engine should decide for itself -- the frozen shapes are the cross-generation
+anchor and amending one is a human call.  What has changed is that the item
+now has a measured price on both sides and a named blocker, instead of a
+model-based "it is a loss".  If the frozen windows are ever re-cut wide
+enough to hold a few thousand periods of the wider wheel, this is the single
+biggest item left in the project.
+
+### Re-derived, not inherited
+
+| item | Phase 2/3 verdict | re-measured now | verdict |
+|------|-------------------|-----------------|---------|
+| the sieve's queue push | "the whole push is 10% of the sieve", so no warp aggregation | **11.8%** (register-counter ablation, extraction and __ffsll chain untouched).  It grew because NINC 28 -> 26 multiplies the queue by 1.24 | still declined, now on a current number: ~2.2 survivors per warp-block, so aggregating 2.2 atomics into 1 plus ballot/popc/prefix is roughly break-even |
+| pattern width W=128 | 0.252x | **0.188x** | REJECTED again, at a completely different profile |
+| bigger launches | 1.009x | flat (PPL 4228/8456/16912 -> 1.000/0.998/0.998) | no lever |
+| T | flat | flat (2048/4096/8192 -> 1.000/1.007/1.009; the last two derive the same T=4288, which re-measures the noise floor at 0.2%) | no lever |
+
+### Measured and NOT kept
+
+Both of these are the same finding twice, and it is the useful one: the
+sieve does not care about arithmetic.
+
+| attempt | ratio | why it was tempting |
+|---------|-------|---------------------|
+| the off-split applied to the sieve's residue SEEDING as well (the last 64-bit multiply in the prologue) | **1.006x** -- inside the noise floor | it is the identical transformation that paid 1.037x in stage 1b and 1.023x in stage 2.  It does not pay here because the prologue is now 2.1% of the kernel, and Phase 4 had already shown that term is thread setup rather than arithmetic |
+| building the extraction loop's edge mask under a (warp-uniform, almost always false) branch instead of on every pattern word | **0.9985x** | ~6 unconditional ALU ops per word against ~100 in the pattern loop.  Removed again: a neutral variant is a code path with no measurement behind it |
+
+### Constants, re-swept after all of the above
+
+| constant | swept | result |
+|----------|-------|--------|
+| NINC | 22/24/26/28/30 | 1.000/0.998/**1.020**/0.976/0.960 -- moved 28 -> 26 |
+| ROUND | 8/12/16/20/24/34 | 0.938/0.988/**1.000**/0.983/0.959/0.918 -- moved 24 -> 16 |
+| sieve launch bound | 2/3/4/0 | **1.000**/0.990/0.972/0.995 -- moved 3 -> 2 |
+| T | 2048/4096/8192 | 1.000/1.007/1.009 -- flat (4096 and 8192 derive the SAME T=4288, so their 0.2% gap re-measures the noise floor) |
+| PPL | 4228/8456/16912 | **1.000**/0.998/0.998 -- flat; chunking makes bigger launches affordable and they buy nothing |
+| ROUND_GRID / COLD_GRID | 1024/4096/16384 | 0.999/**1.000**/0.999 -- the grid-stride loops still do not care |
+| block size | 128/256/512 | 0.988/**1.000**/0.956 -- 256 stands.  Never swept in this generation, and it could not have been swept safely before: the block size is baked into the sieve's `__launch_bounds__`, so it is now taken from the same snapshot the launcher uses rather than being a literal that a knob could desync |
+
+The block sweep is also a Rule 3 cautionary tale in miniature.  Its first run
+reported **block512 at 1.068x** -- a 7% win that does not exist.  The machine
+changed regime a third of the way through (every configuration's minimum was
+~0.86 s against medians of ~1.30 s), so the median mixed two populations.
+Re-run over 9 rounds, the last five are internally consistent and put 512 at
+0.956x.  Interleaving is necessary but not sufficient: check that the spread
+within a configuration is small before believing the spread between them.
+
+### Split after this round
+
+| phase | share | verdict |
+|-------|-------|---------|
+| bit-sieve stage 1a | 78.2% | **not instruction-bound** (marched table removed 2 of ~6 instructions per prime per word for 1.007x; edge-mask hoisting 0.9985x; 32-bit seeding 1.006x) and **not sector-bound** (17.3 sectors per warp-load down to 1.0 buys only 1.53x, non-monotonically) -- so Phase 3's "bound by load COUNT" survives being attacked from both sides.  The table is still pinned from both sides (W=128 0.188x, folded form 0.685x, CRT pairing dead on the footprint cliff).  Queue push re-priced at 11.8%, still break-even to aggregate.  The one lever that removes loads is the wheel: **1.85x, blocked by the benchmark shape**, priced above |
+| stage-1b compaction rounds | 15.9% | was 28.0%.  Baked per-prime literals (1.084x) and the 32-bit off-split (1.037x) cut it 2.39x, then NINC and ROUND both moved DOWN in response (1.020x, 1.043x) |
+| cold kernel (stage 2) | 5.9% | 32-bit off-split with its own split point (1.023x).  Compaction still unbuilt, still bounded by a 6% phase |
+| host + syncs | 1.8% | the round counters went into one array zeroed once per chain instead of one fill per round, which took host time back from 4.7% to 1.8% after ROUND 24 -> 16 tripled the round count |
+
+Three of the four rows still carry named levers with prices on them.

@@ -8,19 +8,25 @@
 # boundary in the search and no second engine to switch to; the exact p
 # exists only on the host, as a Python int.
 #
-# Pipeline, three kernels:
+# Pipeline, three kernel stages:
 #   stage 1a  bit-sieve over the first NINC stage-1 primes: one precomputed
 #             W-period kill pattern OR-ed per prime per W periods, survivors
 #             extracted from the complement with __ffsll, pushed to a queue
+#             as (off, kp) -- the offset's VALUE, so nothing downstream has
+#             to gather it back out of the offset table
 #   stage 1b  compaction ROUNDS over the remaining stage-1 primes: each round
-#             tests a few primes and forwards survivors to a second queue, so
-#             every round restarts with all 32 lanes alive instead of letting
-#             a warp run until its last lane dies
+#             is its own GENERATED kernel with its primes unrolled and their
+#             moduli, magics and mask offsets as literals, and forwards
+#             survivors to a second queue, so every round restarts with all
+#             32 lanes alive instead of letting a warp run until its last
+#             lane dies
 #   stage 2   primes Q1..Q2, one thread per surviving candidate; the kill
 #             test is a bit probe rather than a scan over the n values,
 #             because every stage-2 prime exceeds max(x^2+x) (see _S2_BITSET)
-# All three grids are fixed and every count stays on the device, so a launch
-# is enqueued end to end and reaches the host exactly once.
+# Every grid is fixed and every count stays on the device, so a launch is
+# enqueued end to end and reaches the host exactly once -- however many
+# offset CHUNKS it is cut into (see CHUNK: the queue is bounded by offsets in
+# flight, not by the launch's period count, which is what lets T stay large).
 # Miller-Rabin and exact-run classification stay on the HOST: the GPU only
 # ever PROPOSES (euler_search.mr_*).
 #
@@ -33,10 +39,12 @@
 # (to the ceiling zone), G7 comparator planted-fake drill, G8 canary
 # rediscovery of a(13), G12 canary rediscovery of a(18) and the
 # Waldvogel-Leikauf run-21 value, G13 slicing-independence across launch
-# geometries and split points, G14 pattern tables == big-integer
-# divisibility, G15 the stage-2 bitset test and the 32-bit reductions ==
-# exact integer arithmetic.  See ../OPTIMIZATION.md for why the engine is
-# shaped this way, and RESULTS.md for what the retired engines were.
+# geometries, split points AND offset-chunk sizes, G14 pattern tables ==
+# big-integer divisibility in both layouts, G15 the bitset test and the
+# 32-bit reductions (including the off-split's 2^32 bound at its worst
+# case) == exact integer arithmetic.  See ../OPTIMIZATION.md for why the
+# engine is shaped this way, and RESULTS.md for what the retired engines
+# were.
 #
 # ASCII only.
 
@@ -87,6 +95,7 @@ void ladder_cold_128(const unsigned long long k_base,
                      const unsigned int* __restrict__ s2_dM,
                      const unsigned int* __restrict__ s2_kbq,
                      const unsigned int* __restrict__ s2_m32,
+                     const unsigned int* __restrict__ s2_c,
                      const int nxx,
                      const unsigned int* __restrict__ xx,
                      unsigned long long* __restrict__ out_k,
@@ -108,9 +117,9 @@ void ladder_cold_128(const unsigned long long k_base,
                                   + threadIdx.x;
          idx < total; idx += stride) {
     unsigned long long e = queue[idx];
-    unsigned long long off = offs[e >> 32];
-    unsigned long long k = k_base + (e & 0xffffffffULL);
-    unsigned int kp = (unsigned int)(e & 0xffffffffULL);
+__UNPACK__
+__OSPLIT__
+    unsigned long long k = k_base + (unsigned long long)kp;
     unsigned int rr;
 
     bool alive = true;
@@ -197,6 +206,28 @@ _S2_RED_MIX32 = """        {
             rr = vq;
         }"""
 
+# Stage 2 with the same split as the baked rounds: off = oa*2^s + ob, so
+# off mod q needs no 64-bit Barrett either.  The split point is WIDER here
+# (q reaches 65521, so the product oa*(2^s mod q) has less room), which is
+# why it is derived per stage rather than shared -- off_split does that and
+# G15 checks the resulting bound against every stage-2 prime.
+_S2_RED_SPLIT32 = """        {
+            const unsigned int m32 = s2_m32[j];
+            unsigned int kx = s2_kbq[j] + kp;
+            unsigned int kq = kx - __umulhi(kx, m32) * qq;
+            if (kq >= qq) kq -= qq;
+            if (kq >= qq) kq -= qq;
+            unsigned int oq = oa * s2_c[j] + ob;
+            oq = oq - __umulhi(oq, m32) * qq;
+            if (oq >= qq) oq -= qq;
+            if (oq >= qq) oq -= qq;
+            unsigned int v = kq * s2_dM[j] + oq;
+            unsigned int vq = v - __umulhi(v, m32) * qq;
+            if (vq >= qq) vq -= qq;
+            if (vq >= qq) vq -= qq;
+            rr = vq;
+        }"""
+
 _S2_SCAN = """        for (int x = 0; x < nxx; ++x) {
             unsigned int tt = rr + xx[x];
             if (tt == 0u || tt == qq) { alive = false; break; }
@@ -232,17 +263,35 @@ _S2_BITSET = """        {
 # literals, which also frees the registers a per-thread copy would need.
 
 SIEVE_INIT_FORM = "mix32"   # residue seeding: "mix32" or "u64"
-SIEVE_LB = 3             # min blocks/SM in the sieve's __launch_bounds__; 0
+SIEVE_MARCH = True       # lay the pattern table out in VISIT ORDER.
+                         # The inner loop's index sequence for prime q is
+                         # r_s = (r_0 + s*dmw) mod q, so the kernel carried a
+                         # residue per prime and stepped it: an add and a
+                         # conditional subtract per prime per pattern word,
+                         # on the critical path of the NEXT iteration's
+                         # address.  dmw is invertible mod q (q divides
+                         # neither W nor M), so storing G[m] = pat[m*dmw mod q]
+                         # makes the sequence m_s = m_0 + s -- a walk of
+                         # STRIDE ONE, shared by every prime.  Hoist
+                         # `gs = pat + s` out of the prime list and the whole
+                         # step collapses to `acc |= gs[po_q + m_q]`: the
+                         # add/compare/subtract disappears and the residue
+                         # registers become loop-invariant.
+                         # Costs T/W - 1 words of tail padding per prime
+                         # (the table is periodic, so the tail is a copy of
+                         # the head) -- 21.5 KB -> 29.1 KB at the production
+                         # T, which matters because the footprint cliff
+                         # (Phase 3) starts somewhere below 86 KB.
+SIEVE_LB = 2             # min blocks/SM in the sieve's __launch_bounds__; 0
                          # omits the clause and lets the compiler choose.  At 4
                          # the compiler is held to 64 registers and SPILLS (24
-                         # B of local memory per thread); 3 gives it 80 and
-                         # spills nothing, for 1.028x.  Below 3 the register
-                         # budget stops binding and occupancy is what is lost,
-                         # so 2 and 0 both fall back to ~0.998x -- an interior
-                         # optimum in the usual place, where the spill goes
-                         # away and no more occupancy has been paid for it.
+                         # B of local memory per thread); the optimum sits just
+                         # past where the spill disappears, and it MOVES with
+                         # the register demand.  It was 3 at NINC=28; at
+                         # NINC=26 (two fewer live residues) it is 2:
+                         # 2/3/4/0 -> 1.000/0.990/0.972/0.995.
 SIEVE_W = 64             # periods per pattern word (u64); must divide T
-SIEVE_NINC = 28          # sieve-phase primes.  An extra prime costs one OR
+SIEVE_NINC = 26          # sieve-phase primes.  An extra prime costs one OR
                          # plus one stepped residue per W periods and multiplies
                          # the cold queue by (q-r_q)/q, so there is an interior
                          # optimum -- and it MOVES with every structural change
@@ -259,6 +308,10 @@ SIEVE_NINC = 28          # sieve-phase primes.  An extra prime costs one OR
                          #     up).  At 31#: 24/26/28/30/32/36 ->
                          #     1.110/1.152/1.212/1.159/1.160/0.874 vs the
                          #     previous 29#/24 config.
+                         #   + baked stage-1b rounds:            26 (they cut
+                         #     stage 1b 2.39x, so handing a prime BACK to it
+                         #     got cheaper and the optimum fell again).  At
+                         #     22/24/26/28/30 -> 1.000/0.998/1.020/0.976/0.960.
                          # See BENCHMARKS.md and ../OPTIMIZATION.md.
 
 _SIEVE_INIT = """
@@ -306,6 +359,28 @@ _SIEVE_INIT32 = """
         if (vq >= q) vq -= q;
         r%(j)d = vq;
     }"""
+
+# The marched forms.  `m` is the position in the visit-order table, and it
+# advances by exactly one per pattern word for EVERY prime, so the advance is
+# hoisted into a single pointer bump shared by all NINC primes.  Seeding pays
+# one extra 32-bit multiply-reduce (m0 = r0 * dmw^-1 mod q, both factors < q
+# so the product is under 2^32 for any stage-1 prime).
+_SIEVE_INIT_M = _SIEVE_INIT.replace("        r%(j)d = (unsigned int)vq;", """
+        v = vq * %(dmwinv)dULL;
+        vq = v - __umul64hi(v, mg) * q;
+        if (vq >= q) vq -= q;
+        if (vq >= q) vq -= q;
+        r%(j)d = (unsigned int)vq;""")
+
+_SIEVE_INIT32_M = _SIEVE_INIT32.replace("        r%(j)d = vq;", """
+        v = vq * %(dmwinv)du;
+        vq = v - __umulhi(v, m32) * q;
+        if (vq >= q) vq -= q;
+        if (vq >= q) vq -= q;
+        r%(j)d = vq;""")
+
+_SIEVE_STEP1_M = """
+        acc[0] |= gs[%(po)du + r%(j)d];"""
 
 _SIEVE_STEP1 = """
         acc[0] |= pat[%(po)du + r%(j)d];
@@ -382,12 +457,13 @@ ladder_sieve_128(const unsigned long long k_base,   // absolute first k
 
     // residues at period tb: ((kst mod q)*(M mod q) + off mod q) mod q
 __SIEVE_INIT__
-
+__SIEVE_MARCH_DECL__
     for (unsigned int t = tb; t < t_end; t += W) {
         unsigned long long acc[NW];
         #pragma unroll
         for (int w = 0; w < NW; ++w) acc[w] = 0ULL;
 __SIEVE_STEP__
+__SIEVE_MARCH_INC__
         #pragma unroll
         for (int w = 0; w < NW; ++w) {
             unsigned int b0 = t + 64u * (unsigned int)w;
@@ -403,7 +479,7 @@ __SIEVE_STEP__
                 alive &= alive - 1ULL;
                 unsigned long long slot = atomicAdd(q_n, 1ULL);
                 if (slot < q_cap)
-                    queue[slot] = ((unsigned long long)i << 32)
+                    queue[slot] = __PACK__
                                   | (unsigned long long)(kp0 + b0 + u);
             }
         }
@@ -438,6 +514,7 @@ void ladder_round_128(const unsigned long long k_base,
                       const unsigned int* __restrict__ s1_mask,
                       const unsigned int* __restrict__ s1_kbq,
                       const unsigned int* __restrict__ s1_m32,
+                      const unsigned int* __restrict__ xxt,
                       unsigned long long* __restrict__ qout,
                       unsigned long long* __restrict__ n_out,
                       const unsigned long long out_cap)
@@ -453,15 +530,10 @@ void ladder_round_128(const unsigned long long k_base,
                                   + threadIdx.x;
          idx < total; idx += stride) {
         unsigned long long e = qin[idx];
-        unsigned long long off = offs[e >> 32];
-        unsigned int kp = (unsigned int)(e & 0xffffffffULL);
+__UNPACK__
+__OSPLIT__
         bool alive = true;
-        for (int j = j0; j < j1 && alive; ++j) {
-            unsigned int qq = s1_q[j];
-__RTEST__
-            if ((s1_mask[s1_woff[j] + (rr >> 5)] >> (rr & 31)) & 1u)
-                alive = false;
-        }
+__PRIMES__
         if (alive) {
             unsigned long long slot = atomicAdd(n_out, 1ULL);
             if (slot < out_cap) qout[slot] = e;
@@ -469,6 +541,30 @@ __RTEST__
     }
 }
 """
+
+
+# Queue entry layout, two ways.  A stage-1a survivor is the pair (off, kp):
+# which wheel offset, and which period inside the launch.
+#
+# `index` stores the offset's INDEX, so every consumer -- each compaction
+# round and the cold kernel -- has to gather offs[i] back out of a table that
+# is 240 MB on the production wheel.  That is one scattered DRAM read per
+# queue entry per round, and it buys nothing: the sieve already had `off` in
+# a register when it pushed.
+#
+# `value` stores `off` itself, shifted up by KSHIFT bits to leave room for
+# kp.  It fits because off < M (38 bits on the 31# wheel) and kp < PPL, so
+# the pair needs 38 + ceil(log2 PPL) bits; the engine derives KSHIFT from M
+# and REFUSES the layout if a launch could ever overflow it, rather than
+# assuming (../OPTIMIZATION.md 2.9 -- store the unit, assert it).
+_UNPACK_INDEX_COLD = """    unsigned long long off = offs[e >> 32];
+    unsigned int kp = (unsigned int)(e & 0xffffffffULL);"""
+_UNPACK_VALUE_COLD = """    unsigned long long off = e >> __KSHIFT__;
+    unsigned int kp = (unsigned int)(e & __KMASK__ULL);"""
+_UNPACK_INDEX_ROUND = """        unsigned long long off = offs[e >> 32];
+        unsigned int kp = (unsigned int)(e & 0xffffffffULL);"""
+_UNPACK_VALUE_ROUND = """        unsigned long long off = e >> __KSHIFT__;
+        unsigned int kp = (unsigned int)(e & __KMASK__ULL);"""
 
 
 # Stage-1b residue reduction, two ways.  Both compute
@@ -515,27 +611,172 @@ _R_MIX32 = """            const unsigned int m32 = s1_m32[j];
             if (vq >= qq) vq -= qq;
             unsigned int rr = vq;"""
 
+# Table-driven stage 1b (the loop above), for reference and for the gate that
+# pins the generated form against it.
+_ROUND_TABLE = """        for (int j = j0; j < j1 && alive; ++j) {
+            unsigned int qq = s1_q[j];
+__RTEST__
+            if ((s1_mask[s1_woff[j] + (rr >> 5)] >> (rr & 31)) & 1u)
+                alive = false;
+        }"""
 
-def sieve_tables(n, M, s1, ninc, W=SIEVE_W, T=MP_T, form=SIEVE_INIT_FORM):
+# BAKED stage 1b (catalogue 2.5, applied to a phase that never had it).  The
+# round kernel's inner loop read SIX values per prime out of global arrays --
+# q, the 64-bit magic, M mod q, the mask's word offset, k_base mod q and the
+# 32-bit magic -- all warp-uniform, all costing an instruction and an L1
+# broadcast.  Five of the six are properties of the prime and are known when
+# the kernel is generated, so they become literals; only k_base mod q changes
+# per launch and stays a load.
+#
+# Two more things fall out of generating the source:
+#
+#   * `off mod q` no longer needs 64-bit Barrett.  Split off = a*2^s + b with
+#     s chosen so that a*(2^s mod q) + b < 2^32 for every prime in the stage
+#     (the engine derives s and G15 checks the bound), and one __umulhi
+#     replaces __umul64hi plus a 64-bit multiply, subtract and two 64-bit
+#     conditional subtracts.  a and b are computed ONCE per candidate,
+#     outside the prime list.
+#   * primes above max(x^2+x) can use the stage-2 bitset identity instead of
+#     the per-prime forbidden-residue mask: rr is killed iff rr == 0 or
+#     q - rr is itself of the form x^2+x.  That trades a gather into the
+#     ~10 KB stage-1 mask table for a probe of the 36-byte x^2+x bitset.
+_R_PRIME_HEAD = """
+        if (alive) {
+            const unsigned int qq = %(q)du, m32 = %(m32)du;
+            unsigned int kx = s1_kbq[%(j)d] + kp;
+            unsigned int kq = kx - __umulhi(kx, m32) * qq;
+            if (kq >= qq) kq -= qq;
+            if (kq >= qq) kq -= qq;
+%(ored)s
+            unsigned int v = kq * %(dm)du + oq;
+            unsigned int rr = v - __umulhi(v, m32) * qq;
+            if (rr >= qq) rr -= qq;
+            if (rr >= qq) rr -= qq;
+%(test)s
+        }"""
+
+_O_SPLIT32 = """            unsigned int oq = oa * %(c)du + ob;
+            oq = oq - __umulhi(oq, m32) * qq;
+            if (oq >= qq) oq -= qq;
+            if (oq >= qq) oq -= qq;"""
+
+_O_U64 = """            unsigned long long o64 = off - __umul64hi(off, %(magic)dULL)
+                                            * (unsigned long long)qq;
+            if (o64 >= qq) o64 -= qq;
+            if (o64 >= qq) o64 -= qq;
+            unsigned int oq = (unsigned int)o64;"""
+
+_R_TEST_MASK = """            if ((s1_mask[%(woff)du + (rr >> 5)] >> (rr & 31)) & 1u)
+                alive = false;"""
+
+_R_TEST_BITSET = """            {
+                unsigned int d = qq - rr;
+                if (rr == 0u || (d <= %(xxmax)du
+                                 && ((xxt[d >> 5] >> (d & 31)) & 1u)))
+                    alive = false;
+            }"""
+
+
+def off_split(M, qmax):
+    """Bit position s at which `off` can be split for a 32-bit reduction.
+
+    off mod q == ((off >> s)*(2^s mod q) + (off & (2^s - 1))) mod q exactly;
+    what the 32-bit Barrett needs is that the right-hand side never reaches
+    2^32.  The bound is (M >> s)*(q - 1) + 2^s, which is convex in s, so
+    scan and take the first s that clears it.  Returns None when no split
+    works (then the caller keeps 64-bit arithmetic).
+    """
+    M, qmax = int(M), int(qmax)
+    for s in range(1, 64):
+        if (M >> s) * (qmax - 1) + (1 << s) < (1 << 32):
+            return s
+    return None
+
+
+def round_kernel_src(s1_list, j0, j1, form="baked", rtest="mix32",
+                     ored="split32", spl=None, xxmax=0, M=0, woff=None):
+    """Generated stage-1b compaction-round kernel for primes [j0, j1).
+
+    `baked` unrolls the prime list with q, M mod q, the magics and the mask
+    offsets as literals (catalogue 2.5); `table` keeps the original indexed
+    loop and is what the generated form is gated against.
+    """
+    if form == "table":
+        body = _ROUND_TABLE.replace("__RTEST__",
+                                    _R_MIX32 if rtest == "mix32" else _R_U64)
+        osp = ""
+    else:
+        out = []
+        for j in range(j0, j1):
+            q = int(s1_list[j])
+            m32 = (1 << 32) // q
+            if ored == "split32" and spl:
+                o = _O_SPLIT32 % {"c": (1 << spl) % q}
+            else:
+                o = _O_U64 % {"magic": (1 << 64) // q}
+            if xxmax and q > xxmax:
+                t = _R_TEST_BITSET % {"xxmax": xxmax}
+            else:
+                t = _R_TEST_MASK % {"woff": int(woff[j])}
+            out.append(_R_PRIME_HEAD % {"q": q, "m32": m32, "j": j,
+                                        "dm": int(M) % q, "ored": o,
+                                        "test": t})
+        body = "".join(out)
+        osp = ("        const unsigned int oa = (unsigned int)(off >> %du);\n"
+               "        const unsigned int ob = (unsigned int)(off & %dULL);"
+               % (spl, (1 << spl) - 1)) if (ored == "split32" and spl) else ""
+    return (_ROUND_SRC.replace("__PRIMES__", body)
+                      .replace("__OSPLIT__", osp))
+
+
+def sieve_layout(n, M, s1, ninc, W=SIEVE_W, T=MP_T, march=SIEVE_MARCH):
+    """Per-prime table geometry: where prime j's words live and how the
+    kernel indexes them.  ONE source of truth, so the generator and G14
+    cannot drift apart (../OPTIMIZATION.md 2.9)."""
+    M, nw, po, out = int(M), W // 64, 0, []
+    pad = (T // W) - 1 if march else 0    # tail copies for the stride-1 walk
+    for j, q in enumerate([int(v) for v in s1[:ninc]]):
+        dmw = (W * M) % q
+        if march and dmw == 0:
+            raise ValueError("q=%d divides W*M: the marched table needs "
+                             "dmw invertible" % q)
+        out.append({"j": j, "q": q, "po": po, "nw": nw, "dm": M % q,
+                    "dmw": dmw, "rows": q + pad,
+                    "dmwinv": pow(dmw, -1, q) if march else 0,
+                    "magic": (1 << 64) // q, "m32": (1 << 32) // q})
+        po += q + pad          # ROW units; the step templates scale by nw
+    return out
+
+
+def sieve_tables(n, M, s1, ninc, W=SIEVE_W, T=MP_T, form=SIEVE_INIT_FORM,
+                 march=SIEVE_MARCH):
     """Exact-integer pattern tables for the first `ninc` stage-1 primes.
 
-    Returns (source_fragments, flat_pattern_array).  pat[po_j + r] has bit
-    u set iff q_j divides one of the n values at the period W-block that
-    starts with p == r (mod q_j) -- i.e. iff (r + u*(M mod q_j)) mod q_j
-    is a forbidden residue of q_j.  Pure Python ints; no numpy modulo, no
-    Barrett, nothing shared with the CPU engine.
+    Returns (init_src, step_src, flat_pattern_array, layout).  In the plain
+    layout pat[po_j + r] has bit u set iff q_j divides one of the n values at
+    the period W-block that starts with p == r (mod q_j) -- i.e. iff
+    (r + u*(M mod q_j)) mod q_j is a forbidden residue of q_j.  In the MARCHED
+    layout the same words are stored in the order the inner loop visits them,
+    pat[po_j + m] = plain[po_j + (m*dmw_j mod q_j)], extended past q_j by the
+    table's own period so a thread's whole run is a stride-1 walk.  Pure
+    Python ints; no numpy modulo, no Barrett, nothing shared with the CPU
+    engine.
     """
     if W & (W - 1):
         raise ValueError("SIEVE_W must be a power of two")
     if T % W:
         raise ValueError("SIEVE_W must divide the periods-per-thread T")
+    if march and W != 64:
+        raise ValueError("the marched layout is defined for W=64 only")
     M = int(M)
     nw = W // 64
-    tmpl = {1: _SIEVE_STEP1, 2: _SIEVE_STEP2}.get(nw, _SIEVE_STEPN)
-    init, step, pat, po = [], [], [], 0
-    for j, q in enumerate([int(v) for v in s1[:ninc]]):
+    tmpl = (_SIEVE_STEP1_M if march else
+            {1: _SIEVE_STEP1, 2: _SIEVE_STEP2}.get(nw, _SIEVE_STEPN))
+    init, step, pat = [], [], []
+    for e in sieve_layout(n, M, s1, ninc, W, T, march):
+        q, dm = e["q"], e["dm"]
         F = forbidden(q, n)
-        dm = M % q
+        plain = []
         for r in range(q):
             w, rr = 0, r
             for u in range(W):
@@ -545,29 +786,43 @@ def sieve_tables(n, M, s1, ninc, W=SIEVE_W, T=MP_T, form=SIEVE_INIT_FORM):
                 if rr >= q:
                     rr -= q
             # split the W-bit pattern into nw little-endian u64 words
-            for c in range(nw):
-                pat.append((w >> (64 * c)) & ((1 << 64) - 1))
-        init.append((_SIEVE_INIT32 if form == "mix32" else _SIEVE_INIT)
-                    % {"j": j, "q": q, "dm": dm, "magic": (1 << 64) // q,
-                       "m32": (1 << 32) // q})
-        step.append(tmpl % {"j": j, "q": q, "po": po, "nw": nw,
-                            "dmw": (W * M) % q})
-        po += q
+            plain.append([(w >> (64 * c)) & ((1 << 64) - 1)
+                          for c in range(nw)])
+        for m in range(e["rows"]):
+            r = (m * e["dmw"]) % q if march else m
+            pat.extend(plain[r])
+        init.append((_SIEVE_INIT32_M if march else _SIEVE_INIT32)
+                    if form == "mix32" else
+                    (_SIEVE_INIT_M if march else _SIEVE_INIT))
+        init[-1] = init[-1] % e
+        step.append(tmpl % e)
     return ("".join(init), "".join(step),
-            np.array(pat, dtype=np.uint64))
+            np.array(pat, dtype=np.uint64),
+            sieve_layout(n, M, s1, ninc, W, T, march))
 
 
 def sieve_kernel_src(n, M, s1, ninc, W=SIEVE_W, T=MP_T, lb=SIEVE_LB,
-                     form=SIEVE_INIT_FORM):
-    """Generated CUDA source + the pattern table it indexes."""
-    init, step, pat = sieve_tables(n, M, s1, ninc, W, T, form)
+                     form=SIEVE_INIT_FORM, march=SIEVE_MARCH, block=256):
+    """Generated CUDA source + the pattern table it indexes.
+
+    `block` is baked into __launch_bounds__ and must be the block size the
+    launcher actually uses -- a knob changed after compilation desyncing the
+    kernel from its geometry is a bug this project has already shipped once
+    (OPTIMIZATION_LOG, "two robustness bugs the gates caught").
+    """
+    init, step, pat, _ = sieve_tables(n, M, s1, ninc, W, T, form, march)
     src = (_SIEVE_BODY.replace("__MP_T__", str(T))
                       .replace("__SIEVE_W__", str(W))
                       .replace("__SIEVE_NW__", str(W // 64))
                       .replace("__SIEVE_LB__",
-                               "__launch_bounds__(256, %d)" % lb if lb
-                               else "")
+                               "__launch_bounds__(%d, %d)" % (block, lb)
+                               if lb else "")
                       .replace("__SIEVE_INIT__", init)
+                      .replace("__SIEVE_MARCH_DECL__",
+                               "    const unsigned long long* __restrict__"
+                               " gs = pat;" if march else "")
+                      .replace("__SIEVE_MARCH_INC__",
+                               "        ++gs;" if march else "")
                       .replace("__SIEVE_STEP__", step))
     return src, pat
 
@@ -587,6 +842,7 @@ class GpuEngine:
     NINC = SIEVE_NINC        # primes handled by the bit-sieve
     SIEVE_LB = SIEVE_LB      # sieve __launch_bounds__ min blocks/SM (0 = none)
     SIEVE_INIT_FORM = SIEVE_INIT_FORM
+    SIEVE_MARCH = SIEVE_MARCH   # visit-order pattern table (see the constant)
     W = SIEVE_W              # pattern width in periods (multiple of 64)
     T = MP_T                 # periods per thread -- a TARGET, not the final
                              # value: __init__ re-derives it from PPL so the
@@ -601,13 +857,24 @@ class GpuEngine:
                              # 1.395x on the 29# wheel, identical streams.
     PPL = None               # periods per launch; derived from LAUNCH_SPAN,
                              # the wheel period and QUEUE_BUDGET unless set
-    QUEUE_BUDGET = 220_000_000   # max stage-1a queue entries per launch, i.e.
-                             # ~1.8 GB per ping-pong buffer.  PPL is capped by
-                             # this as well as by LAUNCH_SPAN, because the
-                             # queue scales with n_offs * PPL * survival and
-                             # the offset table is 15x larger on the 31# wheel
-                             # (and larger again at small n)
-    ROUND = 24               # stage-1b primes per compaction round; 0 sends
+    QUEUE_BUDGET = 220_000_000   # max stage-1a queue entries in flight, i.e.
+                             # ~1.8 GB per ping-pong buffer.  This used to cap
+                             # PPL, which made the launch's PERIOD count a
+                             # function of the memory budget -- and since T is
+                             # derived from PPL, a wheel with a longer period
+                             # left each thread too few periods to amortize its
+                             # setup over.  That coupling is what priced the
+                             # 37# wheel at 0.75x in Phase 4.  It was never
+                             # necessary: the launch is now cut along the
+                             # OFFSET axis instead (CHUNK below), so PPL is set
+                             # purely by LAUNCH_SPAN and the queue is bounded
+                             # by how many offsets are in flight at once.
+    CHUNK = None             # offsets per sieve->rounds->cold chain; derived
+                             # from QUEUE_BUDGET unless set.  One chunk (the
+                             # whole offset table) reproduces the pre-chunking
+                             # launch exactly, which is what the 31# wheel
+                             # still resolves to.
+    ROUND = 16               # stage-1b primes per compaction round; 0 sends
                              # all of stage 1b to the single cold kernel.
                              # Moves with everything around it.  On 29#: peak
                              # 8.  The 31# wheel shifted work into stage 1b and
@@ -618,15 +885,26 @@ class GpuEngine:
                              # 0.984 before that change and 1.023 after -- the
                              # direction reversed, which is why this is
                              # re-swept after every structural change and never
-                             # reasoned about.
+                             # reasoned about.  Baking the round kernels moved
+                             # it back to 16: 8/12/16/20/24/34 ->
+                             # 0.938/0.988/1.000/0.983/0.959/0.918.
+    BLOCK = 256              # threads per block, for every kernel.  Baked into
+                             # the sieve's __launch_bounds__ from the same
+                             # snapshot the launcher uses, so the two cannot
+                             # disagree
     ROUND_GRID = 4096        # fixed grid for the grid-striding round kernel;
                              # swept 2048/4096/8192/16384 -> 1.002/1.000/
                              # 1.002/1.000, i.e. the stride loop does not care
     COLD_GRID = 4096         # ditto for the cold kernel, which strides too so
                              # that its count never has to reach the host
     S2_TEST = "bitset"       # stage-2 kill test: "bitset" or "scan"
+    Q_FORM = "value"         # queue entry: "value" (off itself) or "index"
+    ROUND_FORM = "baked"     # stage-1b kernel: "baked" (per-prime literals,
+                             # one kernel per round) or "table" (indexed loop)
+    O_RED = "split32"        # `off mod q` in the baked rounds: "split32" or
+                             # "u64" (see off_split)
     R_TEST = "mix32"         # stage-1b reduction width: "mix32" or "u64"
-    S2_RED = "mix32"         # stage-2 reduction width: ditto
+    S2_RED = "split32"       # stage-2 reduction: "split32", "mix32" or "u64"
     Q_HEADROOM = 1.25        # queue slack over the exact expected occupancy
 
     def __init__(self, n, wheel_primes=None):
@@ -705,11 +983,18 @@ class GpuEngine:
         if self.PPL:
             self.PPL = int(self.PPL)
         else:
-            by_span = int(self.LAUNCH_SPAN // int(self.M))
-            by_queue = int(self.QUEUE_BUDGET
-                           / max(self.n_offs * self._s1a_rate(s1) *
-                                 self.Q_HEADROOM, 1.0))
-            self.PPL = max(self.W, min(by_span, by_queue))
+            self.PPL = max(self.W, int(self.LAUNCH_SPAN // int(self.M)))
+        # offsets in flight per chain: the queue holds CHUNK * PPL * rate
+        # entries, so this is what QUEUE_BUDGET actually bounds
+        if self.CHUNK:
+            self.CHUNK = min(int(self.CHUNK), self.n_offs)
+        else:
+            self.CHUNK = min(self.n_offs,
+                             max(1 << 14,
+                                 int(self.QUEUE_BUDGET
+                                     / max(self.PPL * self._s1a_rate(s1) *
+                                           self.Q_HEADROOM, 1.0))))
+        self.nchunks = -(-self.n_offs // self.CHUNK)
 
         # Balance the sieve grid.  blockIdx.y indexes a slice of T periods and
         # the last slice takes the remainder, but per-thread setup -- NINC
@@ -725,16 +1010,37 @@ class GpuEngine:
         per = -(-self.PPL // gy)                       # ceil(PPL / gy)
         self.T = max(self.W, -(-per // self.W) * self.W)
 
-        self.SIEVE_LB = int(self.SIEVE_LB)
+        # Queue entry layout (see _UNPACK_*).  `value` needs off and kp to
+        # share 64 bits; derive the split from M and REFUSE it -- fall back to
+        # the index form -- if a launch of PPL periods could overflow kp.
+        self.Q_FORM = str(self.Q_FORM)
+        self.KSHIFT = 64 - int(self.M).bit_length()
+        if self.PPL > (1 << self.KSHIFT):
+            self.Q_FORM = "index"
+        if self.Q_FORM == "index" and self.n_offs >= (1 << 32):
+            raise RuntimeError("offset table too large for the index queue "
+                               "form (%d offsets)" % self.n_offs)
+
+        self.SIEVE_LB, self.BLOCK = int(self.SIEVE_LB), int(self.BLOCK)
         # kx = (k_base mod q) + (kp0 + tb) must not wrap a u32; kp0 + tb is
         # bounded by one launch's period count plus a slice, so this is the
         # same guard the other two 32-bit reductions carry
+        # ONE derivation of the stage-1 off-split point (2.9: a derived
+        # quantity computed in two places will eventually disagree)
+        self.spl = off_split(self.M, max(self.s1_list))
         self.SIEVE_INIT_FORM = str(self.SIEVE_INIT_FORM)
         if self.PPL + self.T + int(s1[self.NINC - 1]) >= (1 << 32):
             self.SIEVE_INIT_FORM = "u64"
+        # the marched layout is derived for W=64 (one word per residue)
+        self.SIEVE_MARCH = bool(self.SIEVE_MARCH) and self.W == 64
         src, pat = sieve_kernel_src(n, int(self.M), s1, self.NINC,
                                     W=self.W, T=self.T, lb=self.SIEVE_LB,
-                                    form=self.SIEVE_INIT_FORM)
+                                    form=self.SIEVE_INIT_FORM,
+                                    march=self.SIEVE_MARCH, block=self.BLOCK)
+        src = src.replace("__PACK__",
+                          "(off << %du)" % self.KSHIFT
+                          if self.Q_FORM == "value"
+                          else "((unsigned long long)i << 32)")
         self.sieve_src = src
         self.d_pat = cp.asarray(pat)
         self.kern_sieve = cp.RawKernel(src, "ladder_sieve_128")
@@ -752,11 +1058,36 @@ class GpuEngine:
         self.S2_RED = str(self.S2_RED)
         if self.PPL + int(s2[-1]) >= (1 << 32):
             self.S2_RED = "u64"
+        # stage-2 split point.  Its primes reach 65521, so the product
+        # oa*(2^s mod q) has far less room than stage 1b's and needs its own
+        # s -- derived, and checked against every stage-2 prime by G15.
+        self.spl2 = (off_split(self.M, int(s2[-1]))
+                     if self.S2_RED == "split32" else None)
+        if self.S2_RED == "split32" and not self.spl2:
+            self.S2_RED = "mix32"
+        self.d_s2c = cp.asarray(np.array(
+            [(1 << (self.spl2 or 0)) % int(q) for q in s2.tolist()],
+            dtype=np.uint32))
+        val = self.Q_FORM == "value"
+        unpack = (lambda s: s.replace("__KSHIFT__", str(self.KSHIFT))
+                             .replace("__KMASK__",
+                                      "0x%x" % ((1 << self.KSHIFT) - 1)))
         self.kern_cold = cp.RawKernel(
             _COLD_SRC.replace("__MP_NINC__", str(self.cold_j0))
+                     .replace("__UNPACK__",
+                              unpack(_UNPACK_VALUE_COLD) if val
+                              else _UNPACK_INDEX_COLD)
+                     .replace("__OSPLIT__",
+                              "    const unsigned int oa = "
+                              "(unsigned int)(off >> %du);\n"
+                              "    const unsigned int ob = "
+                              "(unsigned int)(off & %dULL);"
+                              % (self.spl2, (1 << self.spl2) - 1)
+                              if self.spl2 else "")
                      .replace("__S2RED__",
-                              _S2_RED_MIX32 if self.S2_RED == "mix32"
-                              else _S2_RED_U64)
+                              _S2_RED_SPLIT32 if self.S2_RED == "split32"
+                              else (_S2_RED_MIX32 if self.S2_RED == "mix32"
+                                    else _S2_RED_U64))
                      .replace("__S2TEST__",
                               _S2_BITSET if self.S2_TEST == "bitset"
                               else _S2_SCAN),
@@ -764,11 +1095,21 @@ class GpuEngine:
         # kx = (k_base mod q) + kp must not wrap a u32 for _R_MIX32 to hold
         if self.PPL + max(self.s1_list) >= (1 << 32):
             self.R_TEST = "u64"
-        self.kern_round = cp.RawKernel(
-            _ROUND_SRC.replace("__RTEST__",
-                               _R_MIX32 if self.R_TEST == "mix32"
-                               else _R_U64),
-            "ladder_round_128")
+        self.ROUND_FORM, self.O_RED = str(self.ROUND_FORM), str(self.O_RED)
+        if not self.spl:
+            self.O_RED = "u64"
+        rxx = self.xxmax if self.S2_TEST == "bitset" else 0
+        self.kern_rounds = [
+            cp.RawKernel(
+                round_kernel_src(self.s1_list, j0, j1,
+                                 form=self.ROUND_FORM, rtest=self.R_TEST,
+                                 ored=self.O_RED, spl=self.spl, xxmax=rxx,
+                                 M=int(self.M), woff=woff)
+                .replace("__UNPACK__",
+                         unpack(_UNPACK_VALUE_ROUND) if val
+                         else _UNPACK_INDEX_ROUND),
+                "ladder_round_128")
+            for j0, j1 in self.rounds]
 
         # Stage-1a survival is a deterministic product over the sieve primes,
         # so the queue is sized exactly rather than guessed; grown on demand
@@ -780,9 +1121,15 @@ class GpuEngine:
         self.d_outk = cp.zeros(self.out_cap, dtype=np.uint64)
         self.d_outo = cp.zeros(self.out_cap, dtype=np.uint64)
         self.d_outn = cp.zeros(1, dtype=np.uint64)
-        self.d_qn = cp.zeros(1, dtype=np.uint64)
-        self.d_qn2 = cp.zeros(1, dtype=np.uint64)
-        self.d_qn3 = cp.zeros(1, dtype=np.uint64)
+        # one stage-1a counter per chunk, so a launch still reaches the host
+        # exactly ONCE however many chains it is cut into
+        self.d_qn = cp.zeros(self.nchunks, dtype=np.uint64)
+        # one output counter per compaction round, in a single array: the
+        # rounds used to ping-pong between two counters and zero one per
+        # round, which is a host-side launch each.  One fill per chain
+        # instead -- the counters are already distinct, so nothing else
+        # changes.
+        self.d_rn = cp.zeros(max(1, len(self.rounds)), dtype=np.uint64)
         self.d_queue, self.d_queue2, self.Q_CAP = None, None, 0
 
     def _s1a_rate(self, s1):
@@ -803,7 +1150,8 @@ class GpuEngine:
         (an undetected mid-round overflow would corrupt the queue tail and
         silently LOSE survivors, which no amount of headroom can rule out).
         """
-        need = int(self.n_offs * periods * self.s1a_rate * self.Q_HEADROOM)
+        need = int(min(self.CHUNK, self.n_offs) * periods * self.s1a_rate
+                   * self.Q_HEADROOM)
         need = max(need, 1 << 16)
         if need > self.Q_CAP:
             self.d_queue = self.d_queue2 = None   # release before reserving
@@ -827,8 +1175,7 @@ class GpuEngine:
         k0, k1 = lo // M, hi // M + 1
         lo_k, lo_s = k0, lo - k0 * M
         hi_k, hi_s = hi // M, hi % M
-        block = 256
-        gx = (self.n_offs + block - 1) // block
+        block = self.BLOCK
         if periods_per_launch is None:
             periods_per_launch = self.PPL
         self._ensure_queue(min(periods_per_launch, k1 - k0))
@@ -843,62 +1190,78 @@ class GpuEngine:
             self.d_s1kbq.set(self.h_s1kbq)
             self.h_s2kbq[:] = np.uint64(kc) % self.np_s2q
             self.d_s2kbq.set(self.h_s2kbq)
-            self.d_qn[0] = 0
-            self.kern_sieve((int(gx), int(gy)), (block,),
-                            (np.uint64(kc),
-                             np.uint32(self.n_offs), self.d_offs,
-                             np.uint64(lo_k), np.uint64(lo_s),
-                             np.uint64(hi_k), np.uint64(hi_s),
-                             np.uint32(np_launch), self.d_s1kbq, self.d_pat,
-                             self.d_queue, self.d_qn, np.uint64(self.Q_CAP)),
-                            )
-            # stage-1b compaction rounds, then the cold kernel: every count
-            # stays on the device and every grid is fixed, so the whole chain
-            # is enqueued without a single host round-trip.  The round
-            # counters ping-pong between d_qn2 and d_qn3 and never touch
-            # d_qn, so the stage-1a count survives the chain and can be
-            # overflow-checked at the end instead of mid-stream.
-            qin, nin = self.d_queue, self.d_qn
-            if self.rounds and self.d_queue2 is None:
-                raise RuntimeError("compaction rounds active but no second "
-                                   "queue was reserved (ROUND changed after "
-                                   "the queues were sized)")
-            for j0, j1 in self.rounds:
-                qout = self.d_queue2 if qin is self.d_queue else self.d_queue
-                nout = self.d_qn3 if nin is self.d_qn2 else self.d_qn2
-                nout.fill(0)
-                self.kern_round((self.ROUND_GRID,), (block,),
-                                (np.uint64(kc), self.d_offs, nin, qin,
-                                 np.int32(j0), np.int32(j1),
-                                 self.d_s1q, self.d_s1magic, self.d_s1dM,
-                                 self.d_s1w, self.d_s1m,
-                                 self.d_s1kbq, self.d_s1m32,
-                                 qout, nout, np.uint64(self.Q_CAP)),
+            self.d_qn.fill(0)
+            self.d_outn.fill(0)
+            # The launch is cut along the OFFSET axis: each chunk runs the
+            # whole sieve -> rounds -> cold chain over its own slice of the
+            # offset table, so the queue only ever holds one chunk's
+            # survivors.  Chunk c owns d_qn[c], so no chain has to be waited
+            # on -- the launch still reaches the host exactly once, at the end.
+            for c, c0 in enumerate(range(0, self.n_offs, self.CHUNK)):
+                cn = min(self.CHUNK, self.n_offs - c0)
+                offs = self.d_offs[c0:c0 + cn]
+                gx = (cn + block - 1) // block
+                qn_c = self.d_qn[c:c + 1]
+                self.kern_sieve((int(gx), int(gy)), (block,),
+                                (np.uint64(kc),
+                                 np.uint32(cn), offs,
+                                 np.uint64(lo_k), np.uint64(lo_s),
+                                 np.uint64(hi_k), np.uint64(hi_s),
+                                 np.uint32(np_launch), self.d_s1kbq,
+                                 self.d_pat, self.d_queue, qn_c,
+                                 np.uint64(self.Q_CAP)),
                                 )
-                qin, nin = qout, nout
-            self.d_outn[0] = 0
-            self.kern_cold((int(self.COLD_GRID),), (block,),
-                           (np.uint64(kc), self.d_offs,
-                            nin, np.uint64(self.Q_CAP), qin,
-                            np.int32(self.d_s1q.size), self.d_s1q,
-                            self.d_s1magic, self.d_s1dM,
-                            self.d_s1w, self.d_s1m,
-                            np.int32(self.d_s2q.size), self.d_s2q,
-                            self.d_s2magic, self.d_s2dM,
-                            self.d_s2kbq, self.d_s2m32,
-                            np.int32(self.s2_nxx), self.d_s2tab,
-                            self.d_outk, self.d_outo,
-                            self.d_outn, np.uint64(self.out_cap)),
-                           )
-            # the launch's ONE host round-trip: stage-1a overflow check and
-            # survivor count come back together, after the chain is queued
-            qn = int(self.d_qn.get()[0])
+                # stage-1b compaction rounds, then the cold kernel: every
+                # count stays on the device and every grid is fixed, so the
+                # whole chain is enqueued without a single host round-trip.
+                # The round counters ping-pong between d_qn2 and d_qn3 and
+                # never touch qn_c, so the stage-1a count survives the chain
+                # and can be overflow-checked at the end instead of mid-stream.
+                qin, nin = self.d_queue, qn_c
+                if self.rounds and self.d_queue2 is None:
+                    raise RuntimeError("compaction rounds active but no second"
+                                       " queue was reserved (ROUND changed"
+                                       " after the queues were sized)")
+                if self.rounds:
+                    self.d_rn.fill(0)
+                for r, ((j0, j1), kern) in enumerate(zip(self.rounds,
+                                                         self.kern_rounds)):
+                    qout = (self.d_queue2 if qin is self.d_queue
+                            else self.d_queue)
+                    nout = self.d_rn[r:r + 1]
+                    kern((self.ROUND_GRID,), (block,),
+                         (np.uint64(kc), offs, nin, qin,
+                          np.int32(j0), np.int32(j1),
+                          self.d_s1q, self.d_s1magic, self.d_s1dM,
+                          self.d_s1w, self.d_s1m,
+                          self.d_s1kbq, self.d_s1m32, self.d_s2tab,
+                          qout, nout, np.uint64(self.Q_CAP)),
+                         )
+                    qin, nin = qout, nout
+                self.kern_cold((int(self.COLD_GRID),), (block,),
+                               (np.uint64(kc), offs,
+                                nin, np.uint64(self.Q_CAP), qin,
+                                np.int32(self.d_s1q.size), self.d_s1q,
+                                self.d_s1magic, self.d_s1dM,
+                                self.d_s1w, self.d_s1m,
+                                np.int32(self.d_s2q.size), self.d_s2q,
+                                self.d_s2magic, self.d_s2dM,
+                                self.d_s2kbq, self.d_s2m32, self.d_s2c,
+                                np.int32(self.s2_nxx), self.d_s2tab,
+                                self.d_outk, self.d_outo,
+                                self.d_outn, np.uint64(self.out_cap)),
+                               )
+            # the launch's ONE host round-trip: every chunk's stage-1a
+            # overflow check and the survivor count come back together
+            qns = self.d_qn.get()
+            qn = int(qns.max())
             if qn > self.Q_CAP:
                 raise RuntimeError(
                     "stage-1a queue overflow: %d > %d (expected %.3e at rate "
-                    "%.4e); raise Q_HEADROOM or lower periods_per_launch"
+                    "%.4e); raise Q_HEADROOM or lower CHUNK"
                     % (qn, self.Q_CAP,
-                       self.n_offs * np_launch * self.s1a_rate, self.s1a_rate))
+                       min(self.CHUNK, self.n_offs) * np_launch
+                       * self.s1a_rate, self.s1a_rate))
             cnt = int(self.d_outn.get()[0])
             if cnt > self.out_cap:
                 raise RuntimeError("survivor buffer overflow: %d" % cnt)
@@ -1017,6 +1380,13 @@ def g13_slicing_independence():
     that dropped the same survivor at every geometry would slip past G13 and
     be caught by G6; a bug that only fires at one launch size would slip
     past G6's single geometry and be caught here.
+
+    There are now TWO slicing axes.  A launch is also cut along the OFFSET
+    axis into CHUNK-sized groups, each running its own sieve -> rounds ->
+    cold chain over the launch's whole period range, with its own stage-1a
+    counter.  A chunking bug loses or duplicates survivors exactly the way a
+    period-boundary bug does -- and it is the newer mechanism -- so the same
+    test applies to it: same window, several chunk sizes, one stream.
     """
     M = 6469693230
     heights = [3 * 10**19, 230 * 10**18, A21_UPPER, 10**24 - 10**15]
@@ -1058,13 +1428,34 @@ def g13_slicing_independence():
                                    % (n, cut - lo, len(split), len(whole)))
         del eng
         cp.get_default_memory_pool().free_all_blocks()
-    if surv < 1000:
-        return False, ("G13 FAIL: only %d survivors compared -- windows are"
-                       " too sparse to prove anything" % surv)
+    # the offset axis
+    csurv, saved = 0, GpuEngine.CHUNK
+    try:
+        for n, lo, hi in ((13, 3 * 10**19, 3 * 10**19 + 6 * 10**13),
+                          (17, 230 * 10**18, 230 * 10**18 + 8 * 10**14)):
+            ref = None
+            for chunk in (None, 1_000_000, 65_536, 4093):
+                GpuEngine.CHUNK = chunk
+                eng = GpuEngine(n)
+                got = eng.survivors_pre_mr(lo, hi)
+                nch = eng.nchunks
+                del eng
+                cp.get_default_memory_pool().free_all_blocks()
+                if ref is None:
+                    ref, csurv = got, csurv + len(got)
+                elif got != ref:
+                    return False, ("G13 FAIL n=%d chunk=%s (%d chains): %d vs"
+                                   " %d" % (n, chunk, nch, len(got), len(ref)))
+                checks += 1
+    finally:
+        GpuEngine.CHUNK = saved
+    if surv < 1000 or csurv < 100:
+        return False, ("G13 FAIL: only %d/%d survivors compared -- windows are"
+                       " too sparse to prove anything" % (surv, csurv))
     return True, ("G13 ok: stream independent of slicing over %d comparisons"
-                  " (%d survivors) across launch geometries, word/thread"
-                  " boundaries and split points, to the 1e24 ceiling"
-                  % (checks, surv))
+                  " (%d + %d survivors) across launch geometries, word/thread"
+                  " boundaries, split points and offset-chunk sizes, to the"
+                  " 1e24 ceiling" % (checks, surv, csurv))
 
 
 def g14_pattern_tables(trials=40, seed=11):
@@ -1078,34 +1469,46 @@ def g14_pattern_tables(trials=40, seed=11):
     pat[q][p mod q] must equal "q divides one of x^2+x+(p + u*29#) for some
     x < n" -- big-integer divisibility of the actual values, not a restated
     residue identity.
+
+    The index is whatever `sieve_layout` says it is, which is the point: the
+    marched layout permutes the rows and pads them, so a gate that hard-coded
+    `pat[po + p % q]` would silently stop testing the table that is actually
+    loaded.  Both layouts are checked, at every step s a thread can reach, so
+    the padded rows are covered too.
     """
     import random
     for n in (13, 17):
         wp = best_wheel(n)
         offs, M = build_wheel(n, wp)
         s1, _ = stage_primes(after=wp[-1])
-        _, _, pat = sieve_tables(n, int(M), s1, SIEVE_NINC, SIEVE_W)
-        qs = [int(q) for q in s1[:SIEVE_NINC]]
-        rng = random.Random(seed + n)
-        po = checks = 0
-        for q in qs:
-            for _ in range(trials):
-                k = rng.randrange(5 * 10**10, 6 * 10**10)   # above 2^64
-                off = int(offs[rng.randrange(offs.size)])
-                p = k * int(M) + off
-                u = rng.randrange(SIEVE_W)
-                bit = (int(pat[po + (p % q)]) >> u) & 1
-                pu = p + u * int(M)
-                direct = any((pu + x * x + x) % q == 0 for x in range(n))
-                if bit != int(direct):
-                    return False, ("G14 FAIL n=%d q=%d r=%d u=%d: pattern %d"
-                                   " vs divisibility %d"
-                                   % (n, q, p % q, u, bit, int(direct)))
-                checks += 1
-            po += q
+        T, qs, checks = GpuEngine.T, [int(q) for q in s1[:SIEVE_NINC]], 0
+        for march in (False, True):
+            _, _, pat, lay = sieve_tables(n, int(M), s1, SIEVE_NINC, SIEVE_W,
+                                          T=T, march=march)
+            rng = random.Random(seed + n)
+            for e in lay:
+                q, po = e["q"], e["po"]
+                for _ in range(trials):
+                    k = rng.randrange(5 * 10**10, 6 * 10**10)  # above 2^64
+                    off = int(offs[rng.randrange(offs.size)])
+                    p = k * int(M) + off
+                    u = rng.randrange(SIEVE_W)
+                    # s: the pattern-word index within a thread's run.  The
+                    # kernel loads row (idx + s) when it is at p + s*W*M.
+                    s = rng.randrange(T // SIEVE_W) if march else 0
+                    idx = ((p % q) * e["dmwinv"]) % q if march else p % q
+                    bit = (int(pat[po + idx + s]) >> u) & 1
+                    pu = p + (u + s * SIEVE_W) * int(M)
+                    direct = any((pu + x * x + x) % q == 0 for x in range(n))
+                    if bit != int(direct):
+                        return False, ("G14 FAIL n=%d march=%d q=%d r=%d u=%d"
+                                       " s=%d: pattern %d vs divisibility %d"
+                                       % (n, march, q, p % q, u, s, bit,
+                                          int(direct)))
+                    checks += 1
     return True, ("G14 ok: pattern bits == big-integer divisibility of the"
-                  " actual values, %d checks per n over primes %d..%d"
-                  % (checks, qs[0], qs[-1]))
+                  " actual values, both layouts, %d checks per n over primes"
+                  " %d..%d" % (checks, qs[0], qs[-1]))
 
 
 def g15_reduction_identities(trials=3000, seed=17):
@@ -1168,9 +1571,57 @@ def g15_reduction_identities(trials=3000, seed=17):
                 if r != x % q:
                     return False, ("G15 FAIL 32-bit Barrett q=%d x=%d: %d vs"
                                    " %d" % (q, x, r, x % q))
-    return True, ("G15 ok: stage-2 bitset == big-integer divisibility over"
-                  " n=13/17/21, and the 32-bit reductions are exact over all"
-                  " %d stage-1 + %d stage-2 primes" % (s1.size, s2.size))
+    # (c) the off-split reduction.  off mod q == (a*(2^s mod q) + b) mod q
+    # with off = a*2^s + b is an identity for ANY s; what the 32-bit Barrett
+    # needs is that a*(2^s mod q) + b never reaches 2^32.  Check the bound at
+    # its worst case (off = M - 1) and the value on real offsets, for each
+    # wheel the engine can pick and for BOTH stage split points -- the two
+    # differ because stage 2's primes are 64x wider.
+    for wp in (WHEEL_PRIMES_29, WHEEL_PRIMES_31):
+        for n in (13, 17):
+            offs, M = build_wheel(n, wp)
+            s1, s2 = stage_primes(after=wp[-1])
+            for arr in (s1, s2):
+                qs = [int(v) for v in arr.tolist()]
+                s = off_split(M, qs[-1])
+                if s is None:
+                    continue
+                for q in qs:
+                    c = (1 << s) % q
+                    worst = ((int(M) - 1) >> s) * c + ((1 << s) - 1)
+                    if worst >= (1 << 32):
+                        return False, ("G15 FAIL split s=%d q=%d wheel=%d: the"
+                                       " 32-bit form can reach %d"
+                                       % (s, q, wp[-1], worst))
+                for _ in range(200):
+                    off = int(offs[rng.randrange(offs.size)])
+                    q = qs[rng.randrange(len(qs))]
+                    v = (off >> s) * ((1 << s) % q) + (off & ((1 << s) - 1))
+                    if v % q != off % q or v >= (1 << 32):
+                        return False, ("G15 FAIL split off=%d q=%d s=%d: %d vs"
+                                       " %d" % (off, q, s, v % q, off % q))
+    # (d) the stage-1b bitset.  Same identity as (a), now also used for the
+    # stage-1 primes above max(x^2+x); those are the ones whose precondition
+    # a wider n would break first, so check them at the n the engine runs.
+    for n in (13, 17):
+        xxmax = (n - 1) * (n - 1) + (n - 1)
+        xxset = {x * x + x for x in range(n)}
+        s1, _ = stage_primes(after=31)
+        for q in [int(v) for v in s1.tolist() if int(v) > xxmax]:
+            for _ in range(20):
+                p = rng.randrange(10**20, 10**24)
+                rr = p % q
+                direct = any((p + x) % q == 0 for x in xxset)
+                if direct != ((rr == 0) or ((q - rr) <= xxmax
+                                            and (q - rr) in xxset)):
+                    return False, ("G15 FAIL stage-1b bitset n=%d q=%d p=%d"
+                                   % (n, q, p))
+    return True, ("G15 ok: the bitset test == big-integer divisibility over"
+                  " n=13/17/21 for stage 2 and for every stage-1 prime above"
+                  " max(x^2+x); the 32-bit reductions are exact over all"
+                  " %d stage-1 + %d stage-2 primes; and the off-split stays"
+                  " under 2^32 at its worst case on both wheels"
+                  % (s1.size, s2.size))
 
 
 def selftest():

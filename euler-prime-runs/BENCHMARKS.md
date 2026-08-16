@@ -55,6 +55,7 @@ stopwatch.
 | 2026-08-16 | v6: one grid slice, 32-bit residue seeding, 32-bit stage-2 reduction | SCORE **11,327,935,354** / SCORE128 **10,308,201,234** | 13 gates green, both frozen fingerprints reproduced. **The load-bearing number is the paired ratio 1.055x** against the row below it, measured in one process over 7 interleaved rounds. Composition: 1.022 x 1.015 x 1.014. Note SCORE and SCORE128 differ by 9.9% here on identical code, which is the variance note at the top of this file doing its job -- do not read it as a height effect |
 | 2026-08-15 | v3-128, single-engine tree | SCORE **6,330,661,788** / SCORE128 **6,544,948,396** | retired engines deleted; both frozen shapes now measured with the one production engine, both fingerprints reproduced, 12 gates green. Engine mathematics identical to the row below -- this row differs only in what the tree contains and which engine the SCORE column refers to |
 | 2026-08-16 | v5: stage-2 bit probe, balanced sieve grid, 32-bit stage-1b reductions, launch bound 3, round size 24 | SCORE **9,961,108,420** / SCORE128 **10,302,529,513** | 13 gates green (G15 new), both frozen fingerprints reproduced. **The load-bearing number is the paired ratio 1.294x** measured in one process against the engine this row replaces, not any arithmetic across these absolutes -- run-to-run variance here is ~2x on identical code. Composition: 1.165 x 1.066 x 1.048 x 1.028 x 1.023, none of them individually interesting |
+| 2026-08-16 | v7: value-form queue, baked stage-1b round kernels, 32-bit off-split in stages 1b and 2, marched pattern table, offset chunking; NINC 26, ROUND 16, launch bound 2 | SCORE **13,198,517,241** / SCORE128 **13,433,035,057** | 13 gates green (G13 extended to the offset axis, G15 to the off-split and the stage-1b bitset), both frozen fingerprints reproduced. **The load-bearing number is the paired ratio 1.3293x** against the row above, measured in one process over 7 interleaved rounds on a steady-state 2e16 window, not any arithmetic across these absolutes. Composition: 1.084 x 1.058 x 1.043 x 1.037 x 1.023 x 1.020 x 1.019 x 1.010. An earlier battery on the same engine modulo two changes since measured neutral and reverted read SCORE **15,425,906,583** / SCORE128 **13,497,010,536** -- a 17% swing on the low shape and 0.5% on the high one, which is the variance note at the top of this file doing its job |
 | 2026-08-15 | v3-128 (frozen) | **6,341,803,579** | bit-sieve stage 1a + stage-1b compaction rounds; NINC=24, ROUND=8, W=64, PPL=131072. Same fingerprint (178 / 133625321009290), bit-identical stream (G13, G14). Full battery green; same-battery u64 SCORE 305,864,144, so the 128 path is now **20.7x the u64 engine**. Shape note: SCORE128 takes the engine's default launch size, raised 8192 -> 131072, so the 77,285-period window is now ONE launch (see score.py header) |
 
 Decomposing that ledger jump, one battery, all three points measured
@@ -207,6 +208,64 @@ Cumulative **25.1x** over the engine that swept leg 1 (5.5e14 -> 1.33e16).
 Re-sweeping the whole range 0 to 5e21 now costs ~4.3 days, the a(20)
 conditional median (1.06e22) is ~8.7 days out, and the enforced 1e24 ceiling
 is ~2.4 years of single-GPU wall (it was ~58 years, then ~3.0).
+
+## Phase 5 (2026-08-16): the compaction rounds, and what the sieve is bound by
+
+Paired ratio **1.3293x**, one process, 7 interleaved rounds over a
+steady-state 2e16 window at 6.11e20 (24 launches, so no single-launch
+flattery), both frozen fingerprints re-checked and the window's own survivor
+list required to be identical on every run. Composition, each measured
+against the baseline it was taken on:
+
+| change | ratio |
+|--------|-------|
+| baked per-prime literals in the stage-1b round kernels | 1.084 |
+| queue carries `off` rather than its index (no 240 MB gather per round) | 1.058 |
+| ROUND re-sweep 24 -> 16 | 1.043 |
+| 32-bit `off mod q` split, stage 1b | 1.037 |
+| 32-bit `off mod q` split, stage 2 | 1.023 |
+| NINC re-sweep 28 -> 26 | 1.020 |
+| marched (visit-order) pattern table | 1.019 |
+| sieve launch bound 3 -> 2 | 1.010 |
+
+Measured and NOT kept, because both landed inside the noise floor: the same
+off-split applied to the sieve's residue seeding (1.006x) and hoisting the
+extraction loop's edge mask under a branch (0.999x). They are the same
+finding twice, and it is the load-bearing one -- **the sieve does not care
+about arithmetic.** Together with the gather-spread probe (17.3 sectors per
+warp-load down to 1.0 is worth only 1.53x), that pins the dominant phase to
+load COUNT from both directions.
+
+Phase split after this round: bit-sieve 78.2%, compaction rounds 15.9%
+(was 28.0%), cold stage-2 kernel 5.9%, host 1.8%.
+
+### Wall-clock after this round
+
+The realized v6 production rate was **1.232e16 p/s** over a 10 h leg.
+Applying the paired 1.3293x projects **1.64e16 p/s**, to be replaced by a
+realized average once the leg resumes.
+
+Conditional on the sweep being clean to the 1.056e21 frontier where the leg
+stopped, and on run EXACTLY 19:
+
+| target | v7 (proj.) | v6 (realized) |
+|--------|-----------|---------------|
+| 1.25e21 | 3.3 h | 4.4 h |
+| 2.00e21 | 16.0 h | 21.3 h |
+| 5.00e21 (leg cap) | **2.79 days** | 3.71 days |
+
+Cumulative **~30x** over the engine that swept leg 1 (5.5e14 -> 1.64e16).
+Re-sweeping the whole range 0 to 5e21 now costs ~3.5 days and the enforced
+1e24 ceiling is ~1.9 years of single-GPU wall (it was ~58 years, then ~3.0,
+then ~2.4).
+
+**The next wheel is priced but not taken.** 37# is worth **1.85x on the
+sieve** at production launch shape -- the Phase-4 verdict of 0.75x was a
+consequence of the queue budget capping the launch's period count, which
+offset chunking removes. It measures **0.58x on the frozen 5e14 shape**,
+which holds 2,494 periods of the 31# wheel but only 68 of the 37# one. The
+blocker is the benchmark's shape rather than the engine's, and re-cutting a
+frozen anchor is a human decision; see OPTIMIZATION_LOG.md for the fit.
 
 ## Phase 4 (2026-08-16): the per-thread term
 

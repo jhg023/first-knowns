@@ -22,12 +22,12 @@ a smaller run ≥ 19. Details in [RESULTS.md](RESULTS.md).
 on the empty sweep so far, the model puts a(19) at median 1.82×10²¹
 (quartiles 1.36×10²¹ / 2.74×10²¹); the current leg runs to 5×10²¹, ~94%
 of the conditional distribution. The engine was rebuilt 2026-08-15
-(bit-sieve stage 1a, then a 31# wheel) for ~19x and sharpened twice on
-2026-08-16, by 1.294x and then 1.055x — cumulatively **~24x**, measured
+(bit-sieve stage 1a, then a 31# wheel) for ~19x and sharpened three times on
+2026-08-16, by 1.294x, 1.055x and 1.329x — cumulatively **~32x**, measured
 against a realized 5.5×10¹⁴ p/s on the engine that swept leg 1 — with a
 bit-identical survivor stream throughout, proven by paired A/B against the
 engine each version replaced and still pinned by G6/G13/G14/G15 and the
-unchanged fingerprints. That puts the a(19) median ~16 hours out.
+unchanged fingerprints. That puts the a(19) median ~12 hours out.
 
 ## The problem
 
@@ -77,29 +77,47 @@ than by sieving — which is why both frozen fingerprints still reproduce.
 wheel periods starts at residue r, then period offset u is killed by q
 exactly when `(r + u·(31# mod q)) mod q` is forbidden — a function of
 (q, r) alone. So the host precomputes `pat[q][r]`, a 64-bit kill pattern,
-and the kernel ORs **one word per prime per 64 periods** for the first 28
+and the kernel ORs **one word per prime per 64 periods** for the first 26
 stage-1 primes, then reads survivors straight out of the complement with
-`__ffsll`. Nothing is tested per candidate, so there is no per-candidate
+`__ffsll`. Those words are stored in *visit order* — the index sequence for
+prime q is `(r₀ + s·dmw) mod q`, and dmw is invertible mod q, so storing
+`G[m] = pat[m·dmw mod q]` makes the walk stride-1 and shared by every prime,
+which collapses the per-prime residue step into one pointer bump. Nothing is
+tested per candidate, so there is no per-candidate
 state to step and no early-exit branch to diverge on — which is the point:
 the obvious "test each candidate, exit early" loop spends most of its
 instructions maintaining state for primes the average candidate never
 reaches, and a warp runs until its *last* lane dies.
 
-Seeding those residues is not free — it is ~17% of the kernel, since each
-thread reduces k and its offset against all 28 primes before the loop
-starts. So the grid is shaped to pay it as few times as possible: the
-periods-per-thread T is *derived* from the launch size rather than fixed,
-chosen so the grid's y-slices come out even and, at the production launch
-size, so there is only one of them.
+Seeding those residues is not free — each thread reduces k and its offset
+against all 26 primes before the loop starts. So the grid is shaped to pay it
+as few times as possible: the periods-per-thread T is *derived* from the
+launch size rather than fixed, chosen so the grid's y-slices come out even
+and, at the production launch size, so there is only one of them. Measured by
+sweeping the window and fitting, the sieve costs
+`~36 + ~21·words` ms per 10⁹ threads, so seeding is now ~2.5% of it.
+
+A survivor is pushed as the pair (offset, period). The queue stores the
+offset's **value**, not its index, because every downstream consumer would
+otherwise have to gather it back out of a 240 MB table — a scattered read per
+entry per round for a number the sieve already had in a register. The two
+fields share 64 bits under a split derived from the wheel period and refused
+if a launch could ever overflow it.
 
 **3. Stage 1b, compaction rounds.** The remaining stage-1 primes (to
-1024) are tested 24 at a time, with survivors forwarded to a second queue
+1024) are tested 16 at a time, with survivors forwarded to a second queue
 between rounds and counts kept on the device. Its exit depth averages
 13.9 but maxes at 80.4 across a 32-lane warp, so restarting each round
-with every lane alive recovers most of that 5.8x. Only one of the three
-modular reductions per candidate-prime needs 64 bits: *k* itself is never
-formed, because the host knows k mod q and the candidate carries its
-period offset in the low half of its queue entry.
+with every lane alive recovers most of that 5.8x. Each round is its own
+**generated kernel** with its primes unrolled and their moduli, magics and
+mask offsets as literals: the indexed loop read six warp-uniform values per
+prime out of global arrays, and five of them are properties of the prime.
+Only one of the modular reductions per candidate-prime needs 64 bits — *k*
+itself is never formed, because the host knows k mod q and the candidate
+carries its period offset in the low half of its queue entry — and even
+`off mod q` does not, since `off = a·2ˢ + b` with s chosen so that
+`a·(2ˢ mod q) + b` clears 2³² for every prime in the stage. **G15** checks
+that bound at its worst case rather than trusting it.
 
 **4. Stage 2.** Primes 1024..65536, one thread per surviving candidate.
 The kill test is not a scan over the 17 values of x²+x but a single bit
@@ -107,10 +125,12 @@ probe: q divides one of p + x² + x exactly when p mod q is 0 or
 q − (p mod q) is itself of the form x² + x, which is a valid restatement
 precisely because every stage-2 prime exceeds max(x²+x) = 272. Gate
 **G15** pins that equivalence against big-integer divisibility, including
-its precondition. Its residue reduction is split the same way stage 1b's
-is: only `off mod q` needs 64 bits, and the recombination stays under
-2³² for every stage-2 prime — which G15 also checks, rather than trusting
-the arithmetic.
+its precondition — and the same restatement is used for the stage-1 primes
+above 272, where it replaces a gather into the ~10 KB forbidden-residue mask
+with a probe of the same 36-byte table. Its residue reduction uses the same
+splits as stage 1b, with its **own** split point: these primes reach 65521,
+so the product has 64x less room, and the engine derives s per stage rather
+than sharing one.
 
 **5. Host classification.** The ~3.6×10⁻¹³ of the line that survives goes
 to the host, where a deterministic 7-base Miller–Rabin (valid to
@@ -123,55 +143,70 @@ gate **G6** pins the whole GPU stream bit-for-bit against an independent
 numpy-`%` engine on populated windows at seven heights up to the ceiling.
 That engine is itself pinned against direct big-integer trial division on
 mini-windows (G10) and against the sympy oracle on small windows (G4);
-**G13** proves the stream does not depend on how work is sliced into
-pattern words, threads or launches; **G14** pins the sieve's pattern
-tables directly against big-integer divisibility of the actual values;
-**G15** does the same for the stage-2 bit probe and the 32-bit
-reductions, checking the *preconditions* that make them valid rather than
-only their output; and the pipeline rediscovers a(13), a(18) and the
-Waldvogel–Leikauf run-21 value end-to-end (G8, G12, and the launcher's
+**G13** proves the stream does not depend on how work is sliced — into
+pattern words, threads, launches, *or offset chunks*, since a launch is also
+cut along the offset axis so the queue is bounded by how many offsets are in
+flight rather than by how many periods a launch spans; **G14** pins the
+sieve's pattern tables directly against big-integer divisibility of the
+actual values, in both layouts; **G15** does the same for the bit probe and
+the 32-bit reductions, checking the *preconditions* that make them valid
+rather than only their output; and the pipeline rediscovers a(13), a(18) and
+the Waldvogel–Leikauf run-21 value end-to-end (G8, G12, and the launcher's
 canary prelude).
 
 This shape was reached by measurement, not design intuition, and the
 constants interact: the sieve depth went 28 → 24 once compaction rounds
-made stage 1b cheaper, then back to 28 once the wider wheel shifted the
-sieve's prime range upward; the round size went 8 → 16 once that same
-wheel moved a third of the runtime into stage 1b, then **16 → 24** once
-the 32-bit reductions made each stage-1b prime cheaper — a move that
-*reversed direction*, since 24 had measured 0.984x before that change and
-1.023x after. Meanwhile a wider 128-bit pattern word lost 4x, and folding
-the pattern table 24x smaller lost another 1.5x — because the sieve is
-pinned from both sides at once: at a fixed 21.5 KB it counts load
-instructions and does not care at all how far apart the addresses are
-(0.993x confining a warp to one 32-byte sector), but the moment the table
-outgrows L1 it collapses (0.62x at 86 KB, 0.14x at 172 KB). Smaller only
-helps if it does not cost a load; bigger does not help at all.
+made stage 1b cheaper, back to 28 once the wider wheel shifted the sieve's
+prime range upward, then **28 → 26** once baked round kernels cut stage 1b
+by 2.4x and made handing a prime *back* to it the better trade; the round
+size went 8 → 16 → 24 and then **24 → 16** for the same reason. Every one of
+those moves was a re-sweep after a structural change, and two of them
+reversed direction.
 
-The sieve's *other* term is per-thread setup, which a forced-T sweep fits
-at 17.4% of the kernel — and halving the thread count (one grid slice
-instead of two) beat making each thread's arithmetic cheaper, 1.022x
-against 1.015x, which says that term is mostly thread overhead rather than
-instructions. The same measurement priced the next wheel up out of the
-running: 37# would generate 1.85x fewer candidates but leave each thread
-37x fewer periods to amortize setup over, a net **loss** at any queue
-budget that fits in the card. Net
-**~24x** over the engine that swept leg 1,
+What the sieve is bound by has been established by attacking it from both
+sides, and both answers are negative. It is **not instruction-bound**:
+removing two of about six instructions per prime per pattern word (the
+visit-order table) is worth 1.007x, hoisting the edge mask 0.999x, narrowing
+the prologue's arithmetic 1.006x. It is **not sector-bound** either:
+collapsing a warp's 26 gathers from 17.3 distinct 32-byte sectors down to 1
+buys only 1.53x, and not monotonically. It counts *load instructions* — which
+is why a wider 128-bit pattern word loses 5x, folding the table 24x smaller
+loses 1.5x by turning one load into two, and CRT-pairing primes dies on the
+footprint cliff (0.62x at 86 KB, 0.14x at 172 KB). The only lever that
+removes loads is generating fewer candidates, i.e. a wider wheel — measured
+at **1.85x** on production-shaped launches, and not taken, because the frozen
+5×10¹⁴ benchmark window holds 2,494 periods of the 31# wheel but only 68 of
+the 37# one. See [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md).
+
+The sieve's *other* term is per-thread setup. It was 17.4% of the kernel;
+halving the thread count (one grid slice instead of two) beat making each
+thread's arithmetic cheaper, 1.022x against 1.015x, which says that term is
+mostly thread overhead rather than instructions — and with T now derived from
+a larger launch it is down to 2.1%. That measurement is also what prices the
+next wheel: 37# generates 1.85x fewer candidates, and once the queue stopped
+capping the launch's period count it measures **1.85x** on production-shaped
+launches. It is not taken, because the frozen 5×10¹⁴ benchmark window holds
+only 68 of its periods and it measures 0.58x there — a blocker in the
+benchmark's shape, not the engine's, and amending the anchor that makes
+scores comparable across engine generations is a human's call, not an
+optimizer's. Net
+**~32x** over the engine that swept leg 1,
 with both frozen fingerprints reproducing bit-for-bit — the engine got
 faster without the work changing. See
 [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) for every attempt including
 the rejects, and [../OPTIMIZATION.md](../OPTIMIZATION.md) for the process.
 
 Throughput on an RTX 4090 (see BENCHMARKS.md). The engine scores **SCORE
-7,694,248,260** and **SCORE128 8,252,670,019** on its two frozen windows —
+13,198,517,241** and **SCORE128 13,433,035,057** on its two frozen windows —
 but absolute scores on this machine swing by ~2x between captures of
 identical code, so BENCHMARKS.md quotes paired ratios and so should you.
-Its immediate predecessor was measured at **7.76×10¹⁵ p/s in
-production**; applying the paired 1.374x ratio projects **1.07×10¹⁶ p/s**,
-i.e. **19.4x** the 5.5×10¹⁴ the leg-1 engine averaged. At that rate re-sweeping everything from 0 to
-5×10²¹ costs ~5.4 days, and the enforced 10²⁴ ceiling is ~3.0 years of
-single-GPU wall (it was ~58). For historical reference the retired
-u64-only kernel scored 512,819,184 (5.1×10¹⁴ p/s) and took ~9.5 hours to
-cover the 64-bit-safe range.
+Its immediate predecessor realized **1.232×10¹⁶ p/s in production** over a
+10-hour leg; applying the paired 1.329x ratio projects **1.64×10¹⁶ p/s**,
+i.e. **~30x** the 5.5×10¹⁴ the leg-1 engine averaged. At that rate
+re-sweeping everything from 0 to 5×10²¹ costs ~3.5 days, and the enforced
+10²⁴ ceiling is ~1.9 years of single-GPU wall (it was ~58). For historical
+reference the retired u64-only kernel scored 512,819,184 (5.1×10¹⁴ p/s) and
+took ~9.5 hours to cover the 64-bit-safe range.
 
 ## The odds model
 

@@ -16,16 +16,19 @@ and a catalogue of the optimizations that have actually paid, with the
 measured numbers and — just as important — the ones that did not.
 
 Case study throughout: `euler-prime-runs`, whose engine went from 5.5×10¹⁴
-to ~1.30×10¹⁶ p/s — **~24x**, of which 14.1x was measured in production
+to ~1.7×10¹⁶ p/s — **~32x**, of which 14.1x was measured in production
 from the restructure, ×1.374 came from a wider wheel *plus the two tuning
-constants that change invalidated*, and ×1.294 then ×1.055 from two later
-rounds of small ones — with a survivor stream that is bit-identical to the engine it
-replaced. See that project's `OPTIMIZATION_LOG.md` for the full ledger.
+constants that change invalidated*, and ×1.294, ×1.055 then ×1.329 from three
+later rounds of small ones — with a survivor stream that is bit-identical to
+the engine it replaced. See that project's `OPTIMIZATION_LOG.md` for the full
+ledger.
 
-That last 1.294x is worth noticing: it came *after* a session that had
-already taken 19x and re-swept every constant, from five changes worth
-1.165 / 1.066 / 1.048 / 1.028 / 1.023 — not one of which looked like
-anything on its own.
+Those last three rounds are worth noticing: each came *after* a session that
+had already re-swept every constant and reported the profile flat. The 1.294x
+was five changes worth 1.165 / 1.066 / 1.048 / 1.028 / 1.023; the 1.329x was
+eight worth 1.084 / 1.058 / 1.043 / 1.037 / 1.023 / 1.020 / 1.019 / 1.010 —
+not one of which looked like anything on its own, and two of which were
+re-sweeps of constants that had just been declared optimal.
 
 > **Read this first.** The recurring failure here is not a bad
 > optimization — it is a review that **stops too early** and reports "not
@@ -514,7 +517,7 @@ crashing.
 | wider pattern word (128/256-bit) | **0.25x / 0.31x** | halves gather count; but the multi-word accumulator's data-dependent extraction defeats it |
 | folding the pattern table 24x smaller (22 KB -> 904 B) by storing each prime's periodic bit-string once instead of one 64-bit window per residue | **0.685x** | the mathematics was exact and the table became trivially cache-resident -- but a window that straddles a word boundary needs two loads, and this kernel is bound by load COUNT, so 28 loads became 56. Table size was never the constraint |
 | CRT-combining pairs of sieve primes into one table (halving the load count, the only thing that kernel was shown to care about) | **rejected without implementing**, on a differential ablation | the pairs multiply, so 3 pairs is 53 KB against 21.5 KB today. Padding the EXISTING table to the same footprints (same loads, same results, same fingerprint) measured 0.62x at 86 KB and 0.14x at 172 KB, so the win was already spent before the first line was written |
-| the next wheel up (1.85x fewer candidates, the usual big lever) | **rejected**, 0.75x at the affordable queue budget | its longer period puts 37x fewer periods in a launch, and the kernel amortizes per-thread setup over periods. Fitting `sieve = a + b/T` from a forced-T sweep in the existing engine priced it without building the 4.8 GB table (2.8) |
+| the next wheel up (1.85x fewer candidates, the usual big lever) | first **rejected at 0.75x**, then re-priced at **1.85x** once the constraint behind the 0.75x was removed -- see 2.11 | the "0.75x" was real *given a queue budget that capped the launch's period count*. Cutting the launch along a different axis dissolved that, and the verdict inverted |
 | warp-aggregated single-address atomic | not worth doing: whole push is **10%** of the kernel | the raw atomic rate looked close to the hardware limit |
 | removing per-launch host syncs | **0.2%** of GPU time | "obviously" a pipeline bubble |
 | compacting the rare-and-deep final stage | ~0 by analysis | it is 24% of a phase and 109 steps deep, so it looks like the tail |
@@ -524,6 +527,82 @@ crashing.
 The first four are the instructive ones: each was priced with a
 five-minute experiment (compile a variant with the suspect work deleted and
 time it) rather than an afternoon of implementation.
+
+
+### 2.11 When a budget caps a *shape* parameter, find another axis to cut
+
+**Recognise it when:** a memory budget is enforced by shrinking something
+that also controls how the work is shaped — batch size, tile size, launch
+span — so the budget silently sets a tuning constant.
+
+In the case study, a queue budget capped the launch's **period count**. But
+the periods-per-thread T is derived from that, and per-thread setup is
+amortized over T. So the memory budget was secretly setting the arithmetic
+efficiency, and a wider wheel — which makes each period 37x wider — was
+measured at 0.75x and declined on a fitted curve.
+
+The fix was one question: *does the queue actually have to scale with the
+launch's period count?* It did not. The launch is a rectangle of
+(offsets x periods), and the queue scales with the product; cutting it into
+**offset chunks** bounds the queue by how many offsets are in flight and
+leaves the period count free. Each chunk runs the full pipeline over the
+launch's whole period range. At the parameters where the old code ran, this
+resolves to exactly one chunk — a deliberate no-op, gated before anything
+depended on it — and the wheel's verdict then inverted from 0.75x to
+**1.85x on a phase worth 78% of runtime**.
+
+Generalisable: when you decline something because a constant is too small,
+check whether that constant is *forced* or merely *conventional*. A budget
+that binds on one axis is not a budget that binds on the work.
+
+### 2.12 A negative measurement is a result; spend it
+
+Two of the case study's most valuable experiments in its fifth round
+returned ~1.00x:
+
+- the visit-order pattern table (removing 2 of ~6 instructions per prime per
+  pattern word): **1.007x**;
+- collapsing a warp's 26 gathers from 17.3 distinct 32-byte sectors to 1:
+  **1.53x**, and non-monotonically.
+
+Neither is a speedup worth reporting. Together they *prove* the dominant
+kernel is bound by load COUNT — not by issue rate, not by address spread —
+and that proof is what redirected the session onto a phase that had never
+been touched, which then returned 2.39x. The rule: when a phase resists,
+buy information about *what it is bound by* before buying more attempts at
+it, and prefer experiments whose negative outcome is as informative as their
+positive one.
+
+The corollary for [Part 3](#part-3--the-termination-test): a phase whose
+verdict is "bound by X" should have X attacked from at least two directions
+before the verdict is trusted, because the cheapest way to be wrong is to
+inherit a plausible one.
+
+### 2.13 The benchmark shape can become the blocker
+
+**Recognise it when:** a frozen benchmark window is expressed in absolute
+units (a span, a byte count, a row count) while the engine's natural work
+unit grows underneath it.
+
+The case study's frozen shape is a 5e14-wide window of the number line. It
+was frozen when the engine's period was 6.47e9, so the window held 77,285
+periods. Two wheel changes later the period is 2.01e11 and it holds 2,494 —
+still plenty. The *next* wheel would make it hold **68**, which is two
+pattern words per thread against 20x as many threads, so the same change
+that is worth 1.85x in production measures 0.58x on the benchmark.
+
+That is not the engine being wrong and not the benchmark being wrong: a
+5e14 window genuinely is a bad shape for that wheel. But it means the
+benchmark can no longer resolve the change, and "optimize under the score"
+then stops being a neutral rule and starts picking the answer.
+
+The discipline that follows: **do not ship it and do not quietly ship it
+either.** Price both sides, name the shape as the blocker, and leave the
+decision — amend the frozen shape, or accept the ceiling — to a human,
+because changing the anchor that makes scores comparable across engine
+generations is not a change an optimization pass gets to make. Record the
+period count the frozen window holds, so the next person can see the margin
+shrinking before it bites.
 
 ---
 
@@ -553,10 +632,10 @@ Worked example — the case study's final state, which is what let it stop:
 
 | phase | share | verdict |
 |-------|-------|---------|
-| bit-sieve stage 1a | 66.6% | two terms, both now pinned. The pattern loop's table is bounded from both sides (at fixed footprint only load COUNT matters, 0.993x confining a warp to one sector; at fixed load count the footprint cliff starts before 86 KB), so every table restructuring dies on one side or the other. The per-thread term was 17.4% and is now ~9%, by halving the thread count (1.022x) and narrowing its arithmetic (1.015x) -- and it is mostly thread setup, not arithmetic, which is what prices the wheel out (2.8) |
-| stage-1b compaction rounds | 26.4% | divergence recovered 5.8x -> ~1x. Of the three modular reductions per candidate-prime, two provably fit in 32 bits: **1.048x**. Round size then re-swept 16 -> 24, another **1.023x** |
-| cold stage-2 kernel | 6.0% | was 20.3%. The per-prime test became one bit probe (1.165x overall) and its reduction narrowed to 32 bits (1.014x). Compaction is still unbuilt, now bounded by a 6% phase |
-| host + syncs | 2.5% | measured; removing the mid-chain round-trips is 0.995x |
+| bit-sieve stage 1a | 78.2% | bound by load COUNT, and that is now established by *failing* to move it any other way: not instruction-bound (removing 2 of ~6 instructions per prime per pattern word = 1.007x; hoisting the edge mask = 0.999x; narrowing the prologue = 1.006x) and not sector-bound (collapsing a warp's gathers from 17.3 distinct sectors to 1 = **1.53x**, non-monotonically, so a warp-cooperative redesign is priced out). Table pinned from both sides as before. Queue push re-priced at 11.8%, still break-even to aggregate. The one lever that removes loads is the wheel: **1.85x at production launch shape**, blocked by the benchmark window, priced below |
+| stage-1b compaction rounds | 15.9% | was 28.0%. Per-prime literals in a generated per-round kernel (**1.084x**) and a 32-bit `off mod q` via an off-split (**1.037x**) cut it 2.39x; NINC and ROUND then both moved DOWN in response (1.020x, 1.043x) |
+| cold stage-2 kernel | 5.9% | the same off-split with its own split point (**1.023x**). Compaction still unbuilt, still bounded by a 6% phase |
+| host + syncs | 1.8% | round counters consolidated into one array zeroed once per chain rather than one fill per round, after ROUND 24 -> 16 tripled the round count |
 
 The table earned its keep twice. In the first session, filling in the rounds
 row exposed a 1.134x that no amount of staring at the code would have
