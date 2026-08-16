@@ -766,6 +766,43 @@ sieve does not care about arithmetic.
 | the off-split applied to the sieve's residue SEEDING as well (the last 64-bit multiply in the prologue) | **1.006x** -- inside the noise floor | it is the identical transformation that paid 1.037x in stage 1b and 1.023x in stage 2.  It does not pay here because the prologue is now 2.1% of the kernel, and Phase 4 had already shown that term is thread setup rather than arithmetic |
 | building the extraction loop's edge mask under a (warp-uniform, almost always false) branch instead of on every pattern word | **0.9985x** | ~6 unconditional ALU ops per word against ~100 in the pattern loop.  Removed again: a neutral variant is a code path with no measurement behind it |
 
+### One more idea for the sieve, and the number that killed it
+
+If a 64-period block is already entirely killed, the remaining primes' ORs
+cannot change it -- and blocks saturate fast: 13% are dead after 8 sieve
+primes, 47% after 12, 90% after 24.  Guarding each OR with
+`if (acc[0] != ~0ULL)` is an exact identity (the fingerprint reproduces) and
+would cut the expected load count from 26 to **14.4**.
+
+| guarded from prime | 0 (all 26) | 4 | 8 | 12 | none |
+|---|---|---|---|---|---|
+| ratio | **0.818** | 0.862 | 0.901 | 0.944 | 1.000 |
+
+Monotone in the number of guards at ~1.3% each, with **no** credit for the
+loads skipped.  So the guard is a branch, the branch is taken whenever ANY
+lane of the warp is still alive (which is essentially always), and the loads
+are not skipped at the warp level at all -- while the branch itself costs far
+more than the ALU ops this session has shown the sieve to ignore.
+
+Put together with the two probes above, the dominant phase is now
+characterised rather than merely labelled:
+
+- **ALU is free.** Three separate reductions in per-word or per-thread
+  arithmetic measured 1.007x, 1.006x and 0.999x.
+- **Branches are not.** ~1.3% each, per prime per pattern word.
+- **Sectors are about half of it.** Collapsing 17.3 sectors per warp-load to
+  1.0 is worth 1.53x, about what you would expect if half the kernel is L1
+  sector work and the rest is issue and latency.  A warp-cooperative layout
+  (one offset per warp, lanes on consecutive pattern words) would reach ~8.5
+  sectors, worth ~1.33x on that half -- but it pays 32 redundant prologues
+  per offset, +8% at the current 2.5% prologue share, netting **~1.1-1.2x for
+  a full kernel rewrite**.  Priced, declined, and the number is soft because
+  the probe was non-monotone.
+- **Load COUNT is the binding term**, and the only lever that reduces it
+  without touching anything else is generating fewer candidates.
+
+Which is the wheel, priced above at 1.85x and blocked by the benchmark shape.
+
 ### Constants, re-swept after all of the above
 
 | constant | swept | result |
@@ -790,7 +827,7 @@ within a configuration is small before believing the spread between them.
 
 | phase | share | verdict |
 |-------|-------|---------|
-| bit-sieve stage 1a | 78.2% | **not instruction-bound** (marched table removed 2 of ~6 instructions per prime per word for 1.007x; edge-mask hoisting 0.9985x; 32-bit seeding 1.006x) and **not sector-bound** (17.3 sectors per warp-load down to 1.0 buys only 1.53x, non-monotonically) -- so Phase 3's "bound by load COUNT" survives being attacked from both sides.  The table is still pinned from both sides (W=128 0.188x, folded form 0.685x, CRT pairing dead on the footprint cliff).  Queue push re-priced at 11.8%, still break-even to aggregate.  The one lever that removes loads is the wheel: **1.85x, blocked by the benchmark shape**, priced above |
+| bit-sieve stage 1a | 78.2% | Phase 3's "bound by load COUNT" attacked from three sides and still standing: **ALU is free** (1.007x / 1.006x / 0.999x from three separate arithmetic reductions), **sectors are ~half of it** (17.3 -> 1.0 buys 1.53x; a warp-cooperative rewrite reaching ~8.5 nets ~1.1-1.2x after its 32x redundant prologues -- priced, declined), and **skipping the redundant loads is impossible** (a saturation guard is a branch, taken whenever any lane is alive: 0.818x).  Table still pinned from both sides (W=128 0.188x, folded form 0.685x, CRT pairing dead on the footprint cliff).  Queue push re-priced at 11.8%, still break-even to aggregate.  One lever removes loads -- the wheel: **1.85x, blocked by the benchmark shape**, priced above |
 | stage-1b compaction rounds | 15.9% | was 28.0%.  Baked per-prime literals (1.084x) and the 32-bit off-split (1.037x) cut it 2.39x, then NINC and ROUND both moved DOWN in response (1.020x, 1.043x) |
 | cold kernel (stage 2) | 5.9% | 32-bit off-split with its own split point (1.023x).  Compaction still unbuilt, still bounded by a 6% phase |
 | host + syncs | 1.8% | the round counters went into one array zeroed once per chain instead of one fill per round, which took host time back from 4.7% to 1.8% after ROUND 24 -> 16 tripled the round count |
