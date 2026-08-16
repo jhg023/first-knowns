@@ -18,9 +18,9 @@ the known Waldvogel–Leikauf upper bound at 2.35×10²⁰ without finding
 a smaller run ≥ 19. Details in [RESULTS.md](RESULTS.md).
 
 **Status: ACTIVE** — hunting a(19). The sweep is contiguous from
-0 to **6.09×10²⁰**, so a(19) and a(20) both exceed that. Conditional
-on the empty sweep so far, the model puts a(19) at median 1.25×10²¹
-(quartiles 8.55×10²⁰ / 2.07×10²¹); the current leg runs to 5×10²¹, ~96%
+0 to **6.12×10²⁰**, so a(19) and a(20) both exceed that. Conditional
+on the empty sweep so far, the model puts a(19) at median 1.26×10²¹
+(quartiles 8.58×10²⁰ / 2.07×10²¹); the current leg runs to 5×10²¹, ~96%
 of the conditional distribution. The engine was rebuilt 2026-08-15
 (bit-sieve stage 1a, then a 31# wheel) for ~19x, and sharpened again
 2026-08-16 for a further **1.294x** — cumulatively **~25x** — with a
@@ -129,9 +129,13 @@ wheel moved a third of the runtime into stage 1b, then **16 → 24** once
 the 32-bit reductions made each stage-1b prime cheaper — a move that
 *reversed direction*, since 24 had measured 0.984x before that change and
 1.023x after. Meanwhile a wider 128-bit pattern word lost 4x, and folding
-the pattern table 24x smaller lost another 1.5x, because within L1 this
-sieve counts load instructions and is completely indifferent to how far
-apart the addresses are. Net **~25x** over the engine that swept leg 1,
+the pattern table 24x smaller lost another 1.5x — because the sieve is
+pinned from both sides at once: at a fixed 21.5 KB it counts load
+instructions and does not care at all how far apart the addresses are
+(0.993x confining a warp to one 32-byte sector), but the moment the table
+outgrows L1 it collapses (0.62x at 86 KB, 0.14x at 172 KB). Smaller only
+helps if it does not cost a load; bigger does not help at all. Net
+**~25x** over the engine that swept leg 1,
 with both frozen fingerprints reproducing bit-for-bit — the engine got
 faster without the work changing. See
 [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) for every attempt including

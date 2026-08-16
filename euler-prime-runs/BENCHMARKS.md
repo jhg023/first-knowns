@@ -189,15 +189,15 @@ own near-miss timestamps over interleaved 1 h and 6 h windows, which agree to
 **1.33e16 p/s** for v5, to be replaced by a realized average once the leg
 resumes.
 
-Conditional on the sweep being clean to the 6.09e20 frontier where the leg
+Conditional on the sweep being clean to the 6.12e20 frontier where the leg
 stopped, and on run EXACTLY 19 (E_19 - E_20, which is what actually settles a
 term -- about 12% of run->=19 events overshoot into run-21 and do not):
 
 | target | P(a(19) by then) | v5 (proj.) | v4 (realized) |
 |--------|------------------|-----------|---------------|
-| 8.55e20 (a19 Q1) | 25% | 5.1 h | 6.6 h |
-| 1.00e21 | 36% | 8.1 h | 10.5 h |
-| 1.25e21 (a19 median) | 50% | **13.4 h** | 17.4 h |
+| 8.58e20 (a19 Q1) | 25% | 5.1 h | 6.6 h |
+| 1.00e21 | 36% | 8.2 h | 10.5 h |
+| 1.25e21 (a19 median) | 50% | **13.5 h** | 17.4 h |
 | 2.00e21 | 74% | 29.0 h | 37.5 h |
 | 2.07e21 (a19 Q3) | 75% | 30.4 h | 39.3 h |
 | 5.00e21 (leg cap) | 96% | **3.81 days** | 4.93 days |

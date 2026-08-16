@@ -492,6 +492,7 @@ crashing.
 |---------|--------|---------------------|
 | wider pattern word (128/256-bit) | **0.25x / 0.31x** | halves gather count; but the multi-word accumulator's data-dependent extraction defeats it |
 | folding the pattern table 24x smaller (22 KB -> 904 B) by storing each prime's periodic bit-string once instead of one 64-bit window per residue | **0.685x** | the mathematics was exact and the table became trivially cache-resident -- but a window that straddles a word boundary needs two loads, and this kernel is bound by load COUNT, so 28 loads became 56. Table size was never the constraint |
+| CRT-combining pairs of sieve primes into one table (halving the load count, the only thing that kernel was shown to care about) | **rejected without implementing**, on a differential ablation | the pairs multiply, so 3 pairs is 53 KB against 21.5 KB today. Padding the EXISTING table to the same footprints (same loads, same results, same fingerprint) measured 0.62x at 86 KB and 0.14x at 172 KB, so the win was already spent before the first line was written |
 | warp-aggregated single-address atomic | not worth doing: whole push is **10%** of the kernel | the raw atomic rate looked close to the hardware limit |
 | removing per-launch host syncs | **0.2%** of GPU time | "obviously" a pipeline bubble |
 | compacting the rare-and-deep final stage | ~0 by analysis | it is 24% of a phase and 109 steps deep, so it looks like the tail |
@@ -530,7 +531,7 @@ Worked example — the case study's final state, which is what let it stop:
 
 | phase | share | verdict |
 |-------|-------|---------|
-| bit-sieve stage 1a | 66.3% | bound by load **count** -- divergence is free inside L1 (0.993x confining a warp's 32 lanes to one 32 B sector), so the lever is fewer loads, never cheaper ones. NINC is a measured interior peak; W=128 lost 4x and a 24x-smaller folded table lost 1.5x, both by trading one load for two. Left: CRT-combining prime pairs (~10%, only while the table stays L1-resident) and the 37# wheel (1.85x fewer candidates, 4.8 GB of offsets) |
+| bit-sieve stage 1a | 66.3% | pinned from both sides by two differential ablations: at fixed footprint only load COUNT matters (0.993x confining a warp's 32 lanes to one 32 B sector), and at fixed load count the footprint cliff starts before 86 KB (0.62x), reaching 0.14x by 172 KB. Every table restructuring therefore dies on one side or the other -- W=128 0.25x, folding it 24x smaller 0.685x, CRT pairing rejected on the cliff. Left: the 37# wheel (1.85x fewer candidates, 4.8 GB of offsets) |
 | stage-1b compaction rounds | 26.4% | divergence recovered 5.8x -> ~1x. Of the three modular reductions per candidate-prime, two provably fit in 32 bits: **1.048x**. Round size then re-swept 16 -> 24, another **1.023x** |
 | cold stage-2 kernel | 7.4% | was 20.3%. Its per-prime test was a 17-iteration scan over a set that never changes; it is now one bit probe, worth **1.165x** overall. Left: the same 32-bit reductions (~1.5%) and compaction (below) |
 | host + syncs | 2.5% | measured; removing the mid-chain round-trips is 0.995x |
@@ -597,6 +598,19 @@ data-dependent loads, so nothing hoists and the garbage is equally garbage;
 only the address spread moves. That version answered the question in one
 run: **within L1, gather divergence is free** (0.993x at one sector), so the
 kernel is bound by load *count*.
+
+The same technique is the cheapest way to **price an optimization you have
+not written**. Before building a change that would make some resource bigger
+or smaller, first make *that resource* bigger or smaller in the existing code
+and measure. In the case study the candidate was combining pairs of sieve
+primes into one table -- one load instead of two, known to be the only thing
+that kernel cared about -- at the cost of a much larger table. Rather than
+implement it, the existing table was padded to the same footprints (entry i
+stored at index i*PAD: same load count, same access pattern, same results,
+fingerprint still exact). It measured 0.62x at 86 KB and 0.14x at 172 KB, so
+the win was already spent before a line of it was written. An hour of
+implementation replaced by five minutes of padding -- and unlike a
+projection, the answer is a number.
 
 Checklist before believing an ablation:
 

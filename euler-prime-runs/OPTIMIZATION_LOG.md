@@ -473,16 +473,61 @@ the machine was counting instructions.
 | ROUND_GRID 2048/4096/8192/16384 | 1.002/1.000/1.002/1.000 | the grid-stride loop is insensitive; never swept before, now it has been |
 | NINC re-sweep, twice (24/26/28/30/32) | 0.987/0.996/**1.000**/0.931/0.870 | 28 is a genuine interior peak and stayed there through every other change this session. Re-swept again after #15: 26/28/30 -> 0.996/1.000/1.002 |
 | T sweep 1024/2048/4096 at fixed PPL | 0.929/1.000/1.004 | flat -- which is what showed the PPL gain was launch overhead rather than T, and pointed at #14 |
-| CRT-combining sieve primes into one table | not implemented, ~10% | halves the load count, the only thing the sieve cares about. But it stays L1-resident for at most 3-4 pairs (37*41 + 43*47 + 53*59 = 6,665 entries = 53 KB), so it buys 3 loads of 28; past that the table leaves L1, where divergence stops being free. Worth trying next, and the pairs must be the SMALLEST primes |
+| CRT-combining sieve primes into one table | **rejected on measurement** | see the table-cliff section below: three pairs cost 53 KB to save 3 loads of 28, and the cliff starts before 86 KB |
 | the 37# wheel | 5.99e8 offsets = **4.8 GB** of VRAM | generates 37/(37-17) = 1.85x fewer candidates AND removes a prime from the sieve. 4.8 GB is affordable on a 24 GB card alongside the 2.5 GB of queues, so the old "16x over budget" decline is a statement about the budget constant, not about the hardware. The real costs are table build time and a fallback for every gate parameter. Biggest single item left |
 | stage-2 compaction rounds | not implemented, bounded at 7.4% | the standing verdict "rare-and-deep, at most one lane per warp, already optimal" is **stale**: it described the pre-compaction design, where stage 2 sat behind all of stage 1. The cold kernel is now fed by the compaction chain, so every lane entering it runs stage 2 -- mean depth 109 over 6,370 primes, with a much larger warp-max |
 | `_R_MIX32` extended to the cold kernel's stage-2 loop | not implemented, ~1.5% | same transformation, same preconditions; G15 already checks the u32 bound for stage-2 primes |
+
+### The sieve's table is pinned from both sides (and CRT pairing is dead)
+
+The top remaining sieve lever was CRT-combining pairs of sieve primes into
+one table indexed by r mod (q1*q2): one load instead of two for each pair,
+which is the only thing this kernel was shown to care about. The open
+question was how much table that buys, since the pairs multiply -- 3 pairs
+is 53 KB, all 14 is 1.26 MB, against 21.5 KB today.
+
+Answered by a differential ablation rather than by building it. The
+existing table was spread over PAD times the memory by storing entry i at
+index i*PAD: identical load count, identical access pattern, identical
+RESULTS (every variant reproduced the frozen fingerprint) -- only the
+footprint moves.
+
+| table | ratio |
+|-------|-------|
+| 21.5 KB (PAD=1, production) | 1.000 |
+| 86 KB (PAD=4) | **0.624** |
+| 172 KB (PAD=8) | **0.142** |
+| 1.38 MB (PAD=64) | **0.092** |
+
+So the cliff is between 21.5 KB and 86 KB, and it is a cliff, not a slope:
+7x by 172 KB. CRT pairing needs 53 KB for three pairs -- to save 3 loads of
+28 -- and lands in it. **Rejected without implementation, on a measurement.**
+
+Put beside the earlier result, the sieve is now pinned from both directions
+and the two together are much sharper than either alone:
+
+- at fixed footprint, address spread is free (0.993x confining a warp's 32
+  lanes to a single 32-byte sector), so only load COUNT matters;
+- at fixed load count, footprint is brutal past L1.
+
+Which retires the whole family of "restructure the table" ideas: the folded
+form went smaller and lost by adding a load (0.685x), CRT pairing removes
+loads and loses on footprint, and shrinking further at constant load count
+gains nothing because 21.5 KB is already resident. The sieve's pattern
+table is at its optimum, and the remaining levers on that phase are the
+ones that reduce work rather than rearrange it -- NINC (a measured interior
+peak) and the wheel.
+
+That leaves the **37# wheel** as the only unpriced item on the dominant
+phase: 1.85x fewer candidates AND one fewer sieve prime, for a 5.99e8-entry
+offset table (4.8 GB). Note it does not interact with the cliff above --
+the offset table is streamed, not gathered.
 
 ### Split after this round
 
 | phase | share | verdict |
 |-------|-------|---------|
-| bit-sieve stage 1a | 66.3% | load-count bound, and divergence is free (0.993x at one sector). NINC is an interior peak; W=64 beats 128 (0.25x, Phase 2) and beats the folded form (0.685x). Levers left: CRT pairs (~10%) and the 37# wheel |
+| bit-sieve stage 1a | 66.3% | pinned from both sides: at fixed footprint only load COUNT matters (divergence is free, 0.993x at one sector), and at fixed load count the footprint cliff starts before 86 KB (0.62x) and reaches 0.14x by 172 KB. The table is therefore at its optimum -- W=128 (0.25x), the folded form (0.685x) and CRT pairing each die on one side or the other. Only lever left on this phase: the 37# wheel |
 | stage-1b compaction rounds | 26.4% | 1.048x from #15, round size re-swept to 24 (1.023x), grid insensitive |
 | cold kernel (stage 2) | 7.4% | 3.1x from #13; two priced items left, both bounded by the share |
 | host + syncs | 2.5% | measured; removing them is 0.995x |
