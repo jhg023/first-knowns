@@ -55,6 +55,37 @@ next kernel win.** 61% of survivors die on the first value (m = 1) and
 the mean chain is 1.65 tests, so the cheap-first ordering is already in
 place.
 
+## v2 (2026-08-18): bit-sieve + geometric compaction + warp-per-candidate tail
+
+Measured before touching anything (Rule 1), on top of the v1 split above:
+mean exit depth 1.57 primes vs warp-max 8.6 -- a **5.5x divergence tax**
+at n = 10 (4.9x at n = 12), from the exact w_q. The v1 kernel spends
+most of its issue slots on lanes that died on the first prime.
+
+Restructure, gated by G6/G13/G14 and a new G15 (v2 == v1 bit for bit on
+populated windows at n = 10 and 12):
+
+| step | change | measured |
+|------|--------|----------|
+| 1 | **stage 1a bit-sieve** (NS = 32 primes as one 64-bit kill pattern per (q, j mod q), one residue register per prime, T = 64 blocks per thread) + one-shot stage 1b over the remaining ~6500 primes | **15.5x / 15.3x** paired vs v1; split flips to 1a 1.3 ms (1%), 1b 82 ms (90%) per 2^32 window |
+| 2 | fixed 32-prime compaction rounds (204 rounds) | **0.85x** vs one-shot: 3,280 launches per window; a 4096-block grid costs 0.27 ms even empty. REJECTED |
+| 3 | **geometric rounds** (a round ends when survival within it halves; 11 rounds), grids sized from the analytic survival | 1b 82 -> 65 ms; but rounds 8-10 (2-8k candidates each walking 1-3k primes) took 9/19/25 ms at <1 M lane-tests/ms: **latency-bound**, one dependent 64-bit chain per lane and a near-empty GPU |
+| 4 | LAUNCH 2^28 -> 2^30 (4x the population per round) | 1b 65 -> 16 ms; **1.95x / 2.34x** paired (2^29: 1.57x; 2^31: 2.15x/2.52x; 2^32: 2.40x/2.82x but that is one launch per frozen window -- Rule 4 -- and its spread is 2x) |
+| 5 | **warp-per-candidate kernel for the sparse rounds** (expected population < 2^16 per launch: lanes split the primes, `__any_sync` every 4 iterations) | tail rounds 2.4/4.4/6.2 ms -> 0.29/0.15/0.21 ms; 1b 16 -> 2.5 ms per window |
+| 6 | host-side sort of the final survivors instead of `cp.sort` on a ~300-element array | readback 6.0 -> 0.7 ms per window |
+
+**Paired totals (5 rounds, one process, fingerprints re-checked on every
+run): v2/v1 = 289x on `SCORE` (min 283, max 303) and 314x on `SCORE12`
+(min 294, max 357).** Both fingerprints reproduce.
+
+Phase split after step 6, per 2^32 window at n = 10 (LAUNCH 2^30):
+1a 1.4 ms (23%), 1b 2.5 ms (43%), readback 0.7 ms (12%), Python launch
+overhead ~1.3 ms (22%) -- 6.0 ms of GPU-side wall against **~70 ms of
+host classification** for the window's 1,213 survivors at 58 us each.
+The trigger written down in the v1 entry (host parallel before the next
+kernel win once the kernel gains 4x) fired at 15x and is now overdue by
+an order of magnitude: the host is ~92% of end-to-end wall.
+
 ## Priced, not built
 
 Candidates in rough order of expected value. None has been measured on
