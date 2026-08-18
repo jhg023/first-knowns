@@ -25,7 +25,7 @@
 # run >= 17 => THREE-WAY verification (own MR chain / sympy chain / fresh
 # alternate-alignment re-sieve) + composite witness at x=run + evidence JSON
 # euler_hit_run{r}_p{p}.json + entry in euler_discoveries.json; hunt
-# CONTINUES (a(18)-a(20) remain) unless --stop-on-find.  Any verification
+# CONTINUES (a(20) remains) unless --stop-on-discovery.  Any verification
 # disagreement = CorruptEngineError, exit 2.  Expected-known: p=41 (run 40)
 # fires the full protocol as a positive control, labeled CANARY-GOLD.
 #
@@ -89,26 +89,29 @@ CONFIG_KEY = ("euler-prime-runs/v4/n={n}/wheel={wheel}#"
 
 EXPECTED_KNOWN = {41: 40}                      # low-range positive control
 
-# Verified finds of THIS campaign (phase 1, evidence/ + RESULTS.md).
+# Verified finds of THIS campaign (evidence/ + RESULTS.md).
 # The discovery frontier: only a run strictly beyond every previously
 # recorded value counts as a discovery (repo convention; rediscoveries
 # and census-grade repeats of settled run lengths never trigger
-# --stop-on-discovery).
+# --stop-on-discovery).  A term joins this table the moment it is
+# settled, which is what demotes its run length from "discovery" to
+# "census" -- a(19) landed 2026-08-18, so a second run-19 prime is now
+# evidenced and counted like a run-17 or run-18 repeat instead of
+# halting an a(20) leg.
 CAMPAIGN_FOUND = {17: 348_284_517_256_411_907,
-                  18: 8_461_068_614_861_832_371}
+                  18: 8_461_068_614_861_832_371,
+                  19: 3_744_101_869_688_673_856_367}
 FRONTIER_RUN = max(CAMPAIGN_FOUND)             # discovery = run > FRONTIER_RUN
-DEFAULT_TO = 5000 * 10**18                      # 5e21: leg 2 of the a(19) hunt.
-                                               # Leg 1 (to 3.2e20) came back
-                                               # empty with E=1.02 spent.  The
-                                               # cap was 1e21 (the conditional
-                                               # median, ~62%) when a leg cost
-                                               # ~14 days; the v3-128 engine
-                                               # made the sweep ~14x faster, so
-                                               # 1e21 is now under a day and
-                                               # would stop the hunt at 59%
-                                               # odds.  5e21 carries the
-                                               # conditional odds to ~98% and
-                                               # still costs only ~6 days.
+DEFAULT_TO = 20000 * 10**18                     # 2e22: leg 3, the a(20) hunt.
+                                               # a(19) was found at 3.744e21
+                                               # and the sweep halted there.
+                                               # Conditional on that sweep
+                                               # being empty of run-20 primes,
+                                               # a(20)'s median is 1.75e22
+                                               # (quartiles 8.5e21 / 3.83e22),
+                                               # so 2e22 carries ~54% of the
+                                               # distribution at ~10 days of
+                                               # the realized 1.85e16 p/s.
                                                # --to overrides; stop-on-
                                                # discovery means the cap only
                                                # matters if nothing is found.
@@ -306,12 +309,13 @@ def canary_prelude(engine_factory, n):
 
     One engine spans the range, so one prelude covers it: a(14)/a(15) are
     rediscovered as the FIRST run-exactly-n prime above the floor (a
-    least-claim drill, not just a hit), and a(18) plus the
-    Waldvogel-Leikauf run-21 value are rediscovered in local windows --
-    the first tying this engine to the phase-1 record below the old u64
-    cap, the second landing above it.  Spanning both sides of 2^64 in one
-    prelude is the point: that boundary is no longer special, and the
-    prelude is what proves it before production runs.
+    least-claim drill, not just a hit), and a(18), the Waldvogel-Leikauf
+    run-21 value and a(19) are rediscovered in local windows -- the first
+    tying this engine to the phase-1 record below the old u64 cap, the
+    others landing above it, the last at the frontier itself.  Spanning
+    both sides of 2^64 in one prelude is the point: that boundary is no
+    longer special, and the prelude is what proves it before production
+    runs.
     """
     for cn in (14, 15):
         target = KNOWN[cn]
@@ -325,7 +329,8 @@ def canary_prelude(engine_factory, n):
         log("CANARY-GOLD", f"a({cn}) = {target} rediscovered end-to-end "
             f"({time.time()-t0:.0f}s)")
     eng = engine_factory(n)
-    for target, run in ((CAMPAIGN_FOUND[18], 18), (A21_UPPER, 21)):
+    for target, run in ((CAMPAIGN_FOUND[18], 18), (A21_UPPER, 21),
+                        (CAMPAIGN_FOUND[19], 19)):
         t0 = time.time()
         hits = eng.hunt(target - 5 * 10**9, target + 10**6)
         if (target, run) not in hits:

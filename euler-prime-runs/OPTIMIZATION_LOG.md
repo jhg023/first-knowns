@@ -45,6 +45,12 @@ Barrett multiply amortized to once per prime per 2048 periods. Host-side
 MR load is negligible (~3.6e-13 of p-space reaches MR; ~6.5M survivors
 per 1.8e19, confirmed by the live campaign counter: 8.4e5 at 2.4e18).
 
+**STALE as of 2026-08-18 -- read Phase 7 before using that last
+sentence.** It was true at 5.1e14 p/s, where the host was ~2% of the
+wall. The survivor density has not moved (3.60e-13, re-measured), but
+the GPU is ~70x faster and the same host loop is now **52%** of a
+production leg. The density figure is still good; "negligible" is not.
+
 ## TODOs (unpriced, try only with gates green)
 
 - Sort stage-1 primes by measured kill rate instead of ascending q
@@ -52,8 +58,10 @@ per 1.8e19, confirmed by the live campaign counter: 8.4e5 at 2.4e18).
 - Persistent-kernel + device-side segment loop to cut launch overhead
   (launches are 8192 periods = 5.3e13 p; overhead already amortized;
   expected small).
-- Batch MR on GPU (Montgomery 64-bit): only relevant if Q2 is lowered
-  or a wider survivor stream is wanted (e.g. n=16 census mode).
+- Batch MR on GPU (128-bit Montgomery; p passed 2^64 long ago): no
+  longer conditional -- Phase 7 measures host MR at 52% of a production
+  leg. Price it against parallelizing the existing host loop first,
+  which is far less work for a similar ceiling.
 
 ## Phase 2 (2026-08-06): 128-bit value path -- implemented
 
@@ -1170,3 +1178,65 @@ drills meet the production 37# wheel.  The population minimum is asserted
 empty reports "under-populated" rather than a mismatch of nothing against
 nothing.  CONVENTIONS already said an empty-vs-empty comparison does not
 count; nothing was checking that it stayed true.
+
+## Phase 7 (2026-08-18): the a(19) leg, and the phase that stopped being free
+
+No engine change. The measurement is the leg itself: 1.0557e21 -> 3.7441e21,
+2.688e21 of p-line, 39.8 h, realized **1.85e16 p/s** against 2.58e16
+projected -- **72%**, where the two previous rounds transferred at 93%.
+
+Measure the phase split first (Rule 1) applies to diagnosing a shortfall as
+much as to planning a change, and two constants settled it. Both measured on
+this machine after the leg, on real pre-MR survivors from the zone it swept:
+survivor density **3.60e-13** of the p-line, and **77 us** to classify one
+survivor with `mr_run_length(p, cap=100)`, single-threaded, in the production
+code path. That is ~9.7e8 survivors and **20.7 h of host time inside a 39.8 h
+leg**, none of it overlapped -- the launcher classifies serially after each
+segment's kernel returns.
+
+Netting the host out of both legs gives GPU-only rates of 1.88e16 (31#) and
+**3.91e16** (37#), a ratio of **2.08x** against the 2.09x the chained paired
+ratios predicted. The engine work transferred in full. The pipeline did not,
+because the untouched phase went 34% -> 52% of the wall. Amdahl, exactly on
+schedule, and the log had recorded the setup for it: the v4 cost-accounting
+note above called host MR "negligible" and was right when written.
+
+### What that makes the next lever -- priced, not built
+
+**1. Parallelize the host classification.** The loop is embarrassingly
+parallel per survivor and the machine has idle cores while it runs. The
+ceiling is the whole 20.7 h: perfect scaling takes the leg to ~19.1 h,
+**2.08x**, larger than any single GPU round this project has landed.
+Realistically less -- process pools, pickling big ints, and keeping the
+checkpoint's ascending-classification order (which the least-claim argument
+depends on, see RESULTS.md) all cost -- but the headroom is over half the
+wall and no CUDA is involved.
+
+**2. A device-side primality test on p, to shrink the host queue.**
+Measured rather than assumed, and it prices out worse than it sounds:
+60.6% of survivors die at x = 0, but they are the *cheap* ones. Timing the
+same batch with the x = 0 deaths removed upstream leaves **82%** of the host
+time, so filtering p on the GPU buys ~18% of 52%, i.e. ~9% of the leg. The
+version worth building is batch MR for the whole chain (mean 1.65 tests per
+survivor), which is 128-bit Montgomery on device -- real work, and it should
+be priced against option 1 rather than instead of it.
+
+**3. Nothing on the sieve.** Phase 5 established it is neither
+instruction- nor sector-bound and moves only on candidate count; the next
+wheel (41#) generates 1.708x fewer candidates (24 admissible j of 41 at
+n = 17, computed not assumed) for a 41x longer period, and
+it would be optimizing a 19.1 h phase while a 20.7 h phase sits next to it
+untouched. Declining it costs nothing to say and is priced here so the next
+agent does not re-derive it.
+
+### The method correction
+
+The projection that missed was three paired ratios chained onto a realized
+rate. Every one of those ratios is a statement about the kernel, measured on
+a frozen shape that has never contained a host. Chaining them produced a
+number that was quoted as a hunt rate, and the error compounded instead of
+averaging. The rule that comes out of it, alongside "never treat the cost
+model as evidence": **a projection may only be quoted in the units it was
+measured in.** A kernel ratio projects a kernel rate; converting it to a
+production rate requires knowing the pipeline's phase split at the *new*
+speed, which is the thing that had silently changed.

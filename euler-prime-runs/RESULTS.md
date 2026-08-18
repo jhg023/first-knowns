@@ -139,13 +139,17 @@ with its own evidence JSON, plus near-miss counts runs 13/14/15/16 =
 939/449/177/78. All exact runs ≥ 13 remain census-tracked in
 `evidence/euler_nearmiss.jsonl`.
 
-## Phase 2, leg 2 — in progress
+## Phase 2, leg 2 — complete: a(19) found at 3.744×10²¹
 
-Leg 2 resumed from the leg-1 checkpoint at 3.2×10²⁰ and is contiguous to
-**3.62×10²⁰** as of 2026-08-15, with no prime of run ≥ 19. Census
-additions over the leg so far: five more run-17 primes (campaign total
-59), each verified three ways with its own evidence JSON, and near-miss
-counts above the u64 cap now run 13/14/15/16 = 1031/487/196/86.
+Leg 2 resumed from the leg-1 checkpoint at 3.2×10²⁰ and ran to
+**3.7441×10²¹**, where it halted on the discovery of a(19) (own section
+below). It swept in four stretches: to 3.62×10²⁰ on the 29# engine, then
+to 6.1152×10²⁰ and 1.0557×10²¹ on the bit-sieve engine and its re-tuned
+successor, then 1.0557×10²¹ → 3.7441×10²¹ on the 37# engine in one
+39.8 h run. Census over the whole leg: **216 run-17 primes and 27 run-18
+primes** (campaign totals 270 and 34), each verified three ways with its
+own evidence JSON, and near-miss counts above the u64 cap now run
+13/14/15/16 = 6539/2738/1115/452.
 
 The leg was paused at 3.6004×10²⁰ for an engine upgrade (below), then
 resumed; the last 2×10¹⁷ was swept by the new engine at 7.76×10¹⁵ p/s.
@@ -193,41 +197,36 @@ search changed except its speed**:
   (two `CANARY-GOLD` lines). A new engine does not inherit the old
   one's canary clearance.
 
-### Standing result and remaining plan
+### Leg 2 final state
 
-**a(19) and a(20) both exceed 1.056×10²¹.** Leg 2 ran from 3.62×10²⁰ to
-**1.0557×10²¹** in two stretches -- to 6.1152×10²⁰, then a 10.0 h overnight
-run on the re-tuned engine -- producing 64 run-17s and 13 run-18s
-(evidence/) and no run ≥ 19. The overnight stretch realized
-**1.232×10¹⁶ p/s**, 93% of the 1.33×10¹⁶ projected from the paired
-benchmark ratio: the A/B transferred to production.
+**a(19) = 3,744,101,869,688,673,856,367, and a(20) exceeds it.** The last
+stretch ran from 1.0557×10²¹ to the find at 3.7441×10²¹ — 2.688×10²¹ of
+p-line in 39.8 h, a realized **1.85×10¹⁶ p/s** — and produced 147
+run-17s, 14 run-18s and the run-19 (evidence/). Campaign totals at the
+halt: 1,334,119,172 pre-MR survivors classified in 233.2 production
+hours, 270 run-17 primes, 34 run-18 primes, one run-19, one run-21.
 
-Conditional on the empty sweep (E = 1.80 spent for run exactly 19), the
-model puts a(19) at median 1.82×10²¹, quartiles 1.36×10²¹ / 2.74×10²¹.
-These are "run exactly 19" figures, E₁₉ − E₂₀, which is the quantity that
-actually settles a term: about 12% of run-≥19 events overshoot into
-run-21 or beyond and do not.
+That rate is **72% of the 2.58×10¹⁶ projected** in BENCHMARKS.md, the
+worst transfer this project has recorded, and measuring it rather than
+arguing about it located the cause: **the GPU is no longer the whole
+pipeline**. Two constants, measured on this machine after the leg against
+real survivors from the zone it swept — pre-MR survivor density
+3.60×10⁻¹³ of the p-line, and 77 µs to classify one survivor on the host
+(`mr_run_length`, single-threaded, the production path) — put ~9.7×10⁸
+survivors and **20.7 h of host time inside a 39.8 h leg**. The launcher
+classifies serially after each segment returns, so none of that overlaps
+the GPU. Back the host out of both legs and the GPU-only rates are
+1.88×10¹⁶ → 3.91×10¹⁶ p/s, a ratio of **2.08x** against the 2.09x the
+chained paired ratios predicted: the engine work transferred in full, and
+what grew was the share of wall-clock spent on the one phase nobody has
+optimized (34% → 52%). Full numbers and the priced follow-ups in
+BENCHMARKS.md and OPTIMIZATION_LOG.md § Phase 7.
 
-The leg's default depth stays at **5×10²¹**, now ~94% of the conditional
-distribution and ~3.5 days of sweeping at the post-tuning rate -- the
-a(19) median sits about **16 hours** away.
-
-| depth | P(a(19) found by then) | wall-clock from 1.056×10²¹ |
-|-------|------------------------|---------------------------|
-| 1.36×10²¹ (Q1) | 25% | 6.4 h |
-| 1.82×10²¹ (median) | 50% | 16.4 h |
-| 2×10²¹ | 57% | 0.84 days |
-| 2.74×10²¹ (Q3) | 75% | 1.5 days |
-| 5×10²¹ (leg cap) | 94% | 3.5 days |
-
-The near-miss ladder stayed consistent: leg 2's 64 run-17s and 13 run-18s
-give a ratio of 0.203 against a Bateman–Horn prediction of
-exp(ΔlogC)/ln p = 0.118 -- high, but inside Poisson scatter on 13 events.
-The same ratio going 18 → 19 is 0.116, so 13 run-18s carry an expectation
-of ~1.5 run-19s across the leg. Zero against 1.5 has probability 22%:
-unremarkable on its own, and the first stretch where the ladder has been
-even mildly quiet.
-
+The near-miss ladder over that stretch: 147 run-17s and 14 run-18s, a
+ratio of 0.095 against a Bateman–Horn prediction of exp(ΔlogC)/ln p =
+0.115 at the stretch's midpoint — 17% quiet, well inside Poisson scatter
+on 14 events. The same ratio going 18 → 19 is 0.113, so 14 run-18s carry
+an expectation of 1.6 run-19s. One arrived.
 
 ### Cursor conversion for the wider wheel
 
@@ -262,5 +261,90 @@ misreading it. Verified against the real cursor: the launcher now halts with
 an `[ALARM]` and exit 2, naming both keys and the position at stake, and
 `--fresh` is the only way to discard a cursor it cannot read.
 
-Any run > 18 halts the hunt under the stop-on-discovery convention. This
-section will be rewritten as results arrive.
+Any run > 18 halts the hunt under the stop-on-discovery convention. It
+did, at 3.7441×10²¹, on 2026-08-18.
+
+## A164926(19) = 3,744,101,869,688,673,856,367
+
+Found 2026-08-18 at p ≈ 3.744×10²¹, 39.8 h into leg 2's final stretch.
+
+- x² + x + p is prime for x = 0..18 (nineteen consecutive primes).
+- The run breaks at x = 19: 3,744,101,869,688,673,856,747 = **83** × 769
+  × 5,581 × 297,853 × 35,288,177.
+- Least-claim basis: the same ascending exhaustive sweep, contiguous from
+  0 (oracle low-pass below 10⁵, gated sieve above) through this p, with
+  every survivor below it classified. The only prime below it with run
+  ≥ 19 is a(21) = 234,505,015,943,235,329,417, whose run is 21 — so no
+  prime below has run *exactly* 19, and this p is the least.
+- **Third new term found by this campaign**, and the fourth term of
+  A164926 it settles (a(17), a(18) and a(19) found; a(21) settled by
+  sweeping past the known bound). Model quantile of the find: **0.98** on
+  the run-exactly-19 statistic, 0.99 on run ≥ 19 — the campaign's first
+  late draw; see below.
+- Evidence: `evidence/euler_hit_run19_p3744101869688673856367.json`
+
+The cursor does not point at the find, and that is deliberate:
+`--stop-on-discovery` returns without advancing past the segment it
+stopped in, so `campaign_checkpoint.json` holds `next_k` = 504,519,925 —
+p ≈ 3.7439×10²¹, the *start* of the segment containing the find. The
+segment's survivors are classified in ascending order and that walk
+reached the find, so coverage below the find is complete; a resume
+re-covers the segment rather than skipping it. The coverage claim is
+about what was classified, not about where the cursor points.
+
+### What the find says about the model
+
+The model has now called three terms out of sample, at quantiles 0.69
+(a(17)), 0.63 (a(18)) and 0.99 (a(19)) on the run ≥ n statistic — or
+0.63 / 0.58 / 0.98 on the run-exactly-n statistic that actually settles a
+term. The third is a tail draw: the sweep spent E = 3.84 expected
+run-exactly-19 primes before finding one, where the median wait is
+ln 2 ≈ 0.69.
+
+That is not a refutation and should not be dressed up as one. The
+question worth asking is how far off the singular series would have to be,
+and three terms can answer it with an interval rather than an adjective.
+Under the model, E at each find is an Exp(1) draw, so pooling
+1.00 / 0.86 / 3.84 gives a maximum-likelihood optimism factor of **1.9**
+with a 95% interval of about **[0.8, 9.2]**. That contains 1 comfortably
+— and almost everything else too. Three events cannot resolve a bias of
+this size, and saying so is the result.
+
+Taken alone the a(19) draw would need C₁₉ overestimated by ~3x to be a
+typical wait, and a(17) and a(18) landing at E = 1.00 and 0.86 are what
+rules that out. The local signal points the same way and is just as weak:
+the near-miss ladder ran 17% quiet over the last stretch, against ±27%
+Poisson noise on 14 run-18s. The reading that survives is an unlucky
+draw, with a hint of optimism that only a(20) could turn into evidence.
+
+## Campaign standing state (2026-08-18)
+
+Settled by this campaign: **a(17)**, **a(18)** and **a(19)** found, and
+**a(21)** settled by exhaustive passage of the known bound. Still open:
+**a(20)**, which the sweep proves exceeds 3.7441×10²¹ — larger than both
+a(19) and a(21), which is a fact about this stretch rather than a
+monotonicity (a(21) < a(19) already breaks that).
+
+The hunt is **paused** here rather than concluded. The checkpoint, the
+evidence and the engine are all in the tree, and
+`python launch.py --stop-on-discovery --to <depth>` resumes at
+3.7439×10²¹ behind the canary prelude. What a(20) costs from here,
+conditional on the sweep being empty of run-20 primes below the find and
+on the realized 1.85×10¹⁶ p/s:
+
+| target | P(a(20) found by then) | wall-clock from 3.744×10²¹ |
+|--------|------------------------|------------------------------|
+| 8.50×10²¹ (Q1) | 25% | 3.0 days |
+| 1.75×10²² (median) | 50% | 8.6 days |
+| 3.83×10²² (Q3) | 75% | 21.6 days |
+| 7.43×10²² (P90) | 90% | 44 days |
+
+The enforced ceiling is 10²⁴, roughly 1.7 years of single-GPU wall from
+here at the realized end-to-end rate, so a(20) is reachable by this engine
+but is a multi-week run rather than an overnight one — and the first thing
+worth doing to it is not on the GPU (OPTIMIZATION_LOG.md § Phase 7).
+
+Planned next: one consolidated OEIS update — the new terms a(17), a(18),
+a(19), the a(21) settlement, and the exhaustive search bound superseding
+the entry's 2009 comment. That is a human decision and is not automated
+(CONVENTIONS.md: discoveries are records, not announcements).

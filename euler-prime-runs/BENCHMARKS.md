@@ -370,6 +370,64 @@ which holds 2,494 periods of the 31# wheel but only 68 of the 37# one. The
 blocker is the benchmark's shape rather than the engine's, and re-cutting a
 frozen anchor is a human decision; see OPTIMIZATION_LOG.md for the fit.
 
+## Phase 7 (2026-08-18): what production actually did
+
+No engine change; this section is the a(19) leg reporting back on the
+projection above. It swept 1.0557e21 -> 3.7441e21 -- 2.688e21 of p-line in
+39.8 h -- at a realized **1.85e16 p/s**, fitted over the 162 in-stream
+verifications the leg logged. Against the 2.58e16 projected that is **72%**,
+the worst transfer this project has recorded (the two before it were 93%).
+
+Diagnosing it started where Rule 1 says it should, with the phase split.
+Measured on this machine after the leg, against real pre-MR survivors from
+the zone the leg swept:
+
+| quantity | measured |
+|----------|----------|
+| pre-MR survivor density | **3.60e-13** of the p-line (1,439 survivors in a 4e15 window at 3.74e21) |
+| host classification, `mr_run_length(p, cap=100)` | **77 us per survivor**, single-threaded, the production code path |
+| survivors dying at x = 0 (p itself composite) | 60.6%; mean 1.65 MR tests per survivor |
+| three-way verification of a run >= 17 hit | 0.63 s, x162 over the leg = 0.03 h, negligible |
+
+The leg handed ~9.7e8 survivors to the host, and at 77 us that is **20.7 h
+of the 39.8 h**. The launcher classifies serially after each segment's
+kernel returns, so none of it overlaps the GPU. Netting it out of both legs:
+
+| leg | p-line | wall | host (est.) | GPU-only | GPU-only rate |
+|-----|--------|------|-------------|----------|---------------|
+| 31# engine, 2026-08-16 | 4.44e20 | 10.0 h | 3.4 h (34%) | 6.6 h | 1.88e16 p/s |
+| 37# engine, a(19) leg | 2.69e21 | 39.8 h | **20.7 h (52%)** | 19.1 h | **3.91e16 p/s** |
+
+GPU-only ratio **2.08x** against the 2.09x the chained paired ratios
+projected. **The A/Bs transferred.** What did not is the pipeline, because
+the phase nobody has optimized went from a third of the wall to over half.
+This is a back-calculation from two measured constants rather than an
+instrumented profile -- it assumes the leg had no idle time and that host
+cost per survivor is flat in p across 6e20..3.7e21 (both ints are 3-4 limbs,
+so the second is safe) -- and anyone acting on it should instrument first.
+
+The honest correction to this file's method: a projection built by chaining
+three paired ratios onto a realized rate is a statement about the *kernel*,
+and it was quoted as one about the *hunt*. The frozen shapes measure the GPU
+because that is what they are for. Nothing in this file was ever measuring
+the host, and at 5.1e14 p/s nothing needed to.
+
+Two captures taken the same day with the hunt stopped and the engine code
+unchanged since the wheel commit (only the G12 gate gained an a(19) canary,
+which the benchmark never calls), both green with all three fingerprints
+reproducing:
+
+| capture | SCORE | SCORE128 | SCORE_WIDE |
+|---------|-------|----------|------------|
+| before this commit's edits | 9,484,054,196 | 6,367,896,226 | 37,328,873,892 |
+| after, committed with it | 6,646,568,882 | 6,709,147,389 | 26,629,808,367 |
+| the wheel commit, same engine | 6,231,416,304 | 6,340,921,529 | 23,704,681,646 |
+
+A 1.4x spread on `SCORE_WIDE` between two runs of identical code hours
+apart, and SCORE128 flat across all three. Nothing changed but ambient
+desktop load -- the swing this file opens by warning about, now with a
+same-day example. Paired ratios, not absolutes.
+
 ## Phase 4 (2026-08-16): the per-thread term
 
 The previous round's paired ratio is now confirmed in production, which is

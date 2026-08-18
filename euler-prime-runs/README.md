@@ -10,24 +10,38 @@ least prime p such that Euler's polynomial form **x² + x + p** is prime
 for exactly n consecutive values x = 0, 1, ..., n−1.
 
 **Results so far: a(17) = 348,284,517,256,411,907,
-a(18) = 8,461,068,614,861,832,371, and
+a(18) = 8,461,068,614,861,832,371,
+a(19) = 3,744,101,869,688,673,856,367, and
 a(21) = 234,505,015,943,235,329,417.** a(17) and a(18) were found and
 verified 2026-08-05/06, the first new terms of the sequence since
 2009; a(21) was settled 2026-08-12 when the exhaustive sweep passed
 the known Waldvogel–Leikauf upper bound at 2.35×10²⁰ without finding
-a smaller run ≥ 19. Details in [RESULTS.md](RESULTS.md).
+a smaller run ≥ 19; **a(19) was found 2026-08-18** at 3.74×10²¹, after a
+sweep that had to run 2.1x past the model's median to reach it. Details
+in [RESULTS.md](RESULTS.md).
 
-**Status: ACTIVE** — hunting a(19). The sweep is contiguous from
-0 to **1.056×10²¹**, so a(19) and a(20) both exceed that. Conditional
-on the empty sweep so far, the model puts a(19) at median 1.82×10²¹
-(quartiles 1.36×10²¹ / 2.74×10²¹); the current leg runs to 5×10²¹, ~94%
-of the conditional distribution. The engine was rebuilt 2026-08-15
-(bit-sieve stage 1a, then a 31# wheel) for ~19x and sharpened four times on
-2026-08-16, by 1.294x, 1.055x, 1.329x and 1.573x — cumulatively **~47x**,
-measured against a realized 5.5×10¹⁴ p/s on the engine that swept leg 1 —
-with a bit-identical survivor stream throughout, proven by paired A/B against
-the engine each version replaced and still pinned by G6/G13/G14/G15/G16 and
-the unchanged fingerprints. That puts the a(19) median ~8 hours out.
+**Status: PAUSED — open to others.** The hunt halted 2026-08-18 on the
+a(19) find, under the stop-on-discovery convention, and has not been
+restarted. The sweep is contiguous from 0 to **3.744×10²¹**, so the one
+term of this stretch still unknown — **a(20)** — exceeds that, which puts
+it above a(19) and a(21) both. Conditional on the empty sweep, the model
+puts a(20) at median 1.75×10²² (quartiles 8.5×10²¹ / 3.8×10²²): ~9 days of
+sweeping to the median at the realized rate, ~3 weeks to Q3. Anyone can
+resume it — `python launch.py --stop-on-discovery --to 2e22` picks up at
+3.7439×10²¹ behind the canary prelude, and no campaign state lives outside
+this repo.
+
+The engine was rebuilt 2026-08-15 (bit-sieve stage 1a, then a 31# wheel)
+for ~19x and sharpened four times on 2026-08-16, by 1.294x, 1.055x, 1.329x
+and 1.573x, with a bit-identical survivor stream throughout — proven by
+paired A/B against the engine each version replaced and still pinned by
+G6/G13/G14/G15/G16 and the unchanged fingerprints. Realized against
+realized in production that is **~34x** end-to-end the engine that swept
+leg 1 (5.5×10¹⁴ → 1.85×10¹⁶ p/s) and **~70x** on the GPU alone. Those two
+numbers differ because the pipeline is now **host-bound**: 52% of the
+a(19) leg was single-threaded Miller–Rabin classification on the CPU, up
+from 2% when this campaign started. See [RESULTS.md](RESULTS.md) § Leg 2
+final state.
 
 ## The problem
 
@@ -172,8 +186,9 @@ actual values, in both layouts; **G15** does the same for the bit probe and
 the 32-bit reductions, checking the *preconditions* that make them valid
 rather than only their output; **G16** pins the factored wheel's enumeration
 against a directly built one where both fit; and the pipeline rediscovers
-a(13), a(18) and the Waldvogel–Leikauf run-21 value end-to-end (G8, G12, and
-the launcher's canary prelude). Fourteen gates; `python score.py` prints a
+a(13), a(18), the Waldvogel–Leikauf run-21 value and a(19) end-to-end (G8,
+G12, and the launcher's canary prelude — the frontier term is a canary the
+moment it is settled). Fourteen gates; `python score.py` prints a
 SCORE only if every one is green **and** all three frozen fingerprints
 reproduce exactly.
 
@@ -233,12 +248,22 @@ by ~2x between captures of identical code, so BENCHMARKS.md quotes paired
 ratios and so should you.
 
 Its immediate predecessor realized **1.232×10¹⁶ p/s in production** over a
-10-hour leg; applying the paired ratios projects **2.58×10¹⁶ p/s**, i.e.
-**~47x** the 5.5×10¹⁴ the leg-1 engine averaged. At that rate re-sweeping
-everything from 0 to 5×10²¹ costs ~1.8 days, and the enforced 10²⁴ ceiling is
-~1.2 years of single-GPU wall (it was ~58). For historical reference the
-retired u64-only kernel scored 512,819,184 (5.1×10¹⁴ p/s) and took ~9.5 hours
-to cover the 64-bit-safe range.
+10-hour leg; applying the paired ratios projected **2.58×10¹⁶ p/s**. The
+a(19) leg then measured the real thing: **1.85×10¹⁶ p/s** over 39.8 hours
+and 2.69×10²¹ of p-line — 72% of the projection, and the first projection
+in this file to miss. The A/Bs themselves carried; what changed is that the
+GPU stopped being the whole pipeline. Measured
+after the leg, a pre-MR survivor costs **77 µs** of single-threaded host
+Miller–Rabin and they arrive at 3.60×10⁻¹³ of the p-line, so the leg spent
+**20.7 h of its 39.8 h on the host**, serially, between kernel launches.
+Netting that out, GPU-only went 1.88×10¹⁶ → 3.91×10¹⁶ p/s, a **2.08x**
+against the 2.09x projected. The engine is ~70x the leg-1 kernel; the
+*pipeline* is ~34x, and the gap is a CPU loop nobody has touched since it
+was 2% of the wall. At the realized end-to-end rate, re-sweeping everything
+from 0 to 5×10²¹ costs ~3.1 days and the enforced 10²⁴ ceiling is ~1.7
+years of single-GPU wall (it was ~58). For historical reference the retired
+u64-only kernel scored 512,819,184 (5.1×10¹⁴ p/s) and took ~9.5 hours to
+cover the 64-bit-safe range.
 
 ## The odds model
 
@@ -246,12 +271,19 @@ to cover the 64-bit-safe range.
 evaluated singular series (primes to 2×10⁶, tail bounded). Validation:
 the six known generic terms a(9)–a(15) sit at model quantiles
 .99/.56/.41/.23/.83/.64 — scattered, as an honest model's knowns should
-be. Out-of-sample performance so far: a(17) landed at quantile 0.69
-(median predicted 2.6×10¹⁷); a(18) landed at quantile 0.63, essentially
-exactly at the predicted E = 1 depth (found 8.46×10¹⁸, predicted
-8.58×10¹⁸); the run-17 census closed at 8 against an expected 11.6
-(within Poisson scatter). The model is two-for-two on out-of-sample
-terms.
+be. Out-of-sample performance: a(17) landed at quantile 0.69 (median
+predicted 2.6×10¹⁷); a(18) landed at quantile 0.63, essentially exactly at
+the predicted E = 1 depth (found 8.46×10¹⁸, predicted 8.58×10¹⁸); the
+run-17 census closed at 8 against an expected 11.6 (within Poisson
+scatter). **a(19) landed at 0.99** — 0.98 on the run-exactly-19 statistic
+that actually settles a term — found at 3.74×10²¹ against a conditional
+median of 1.82×10²¹. Two centred calls and one tail draw is not a broken
+model. Pooling the three finds — E = 1.00 / 0.86 / 3.84, each an Exp(1)
+draw if the model is right — puts the maximum-likelihood optimism factor
+at 1.9 with a 95% interval of roughly [0.8, 9.2]: three terms cannot tell
+whether the singular series is biased. The near-miss ladder over the same
+stretch ran 17% quiet, pointing the same way and just as weakly. a(20) is
+the measurement that would settle it.
 
 Predictions for phase 2, restated as the sweep consumes them. Stated
 before leg 1 (conditional on the empty 64-bit tail, E = 0.20 spent):
@@ -260,22 +292,27 @@ landing below the Waldvogel–Leikauf run-21 value at 2.35×10²⁰. Leg 1
 then came back empty to 3.2×10²⁰, which is a 36% outcome on its own
 terms (E = 1.02 spent) and is also what settled a(21).
 
-Conditional on the sweep now being empty to 3.6004×10²⁰ (E = 1.09 spent
-for run ≥ 19): **a(19) median 8.34×10²⁰, quartiles 5.38×10²⁰ /
-1.45×10²¹**, 98% by the current leg cap of 5×10²¹. a(20) is far deeper —
-median ≈ 8×10²¹ conditionally, unconditional E = 1 at 1.1×10²² — so the
-two open terms are not comparable targets, and both are already known to
-exceed a(21).
+Leg 2 then swept to 1.0557×10²¹ still empty, which moved the conditional
+a(19) median to 1.82×10²¹ (quartiles 1.36×10²¹ / 2.74×10²¹) — and the find
+came in at **3.744×10²¹**, past Q3 and just inside the conditional 90th
+percentile at 4.17×10²¹. E = 3.84 run-exactly-19 primes were spent in
+total, against a median wait of ln 2 ≈ 0.69.
+
+Restated for the one term left. Conditional on the sweep being empty of
+run-20 primes to the a(19) find: **a(20) median 1.75×10²², quartiles
+8.50×10²¹ / 3.83×10²²**, with the unconditional E = 1 depth at 1.11×10²².
+That is 3.0 / 8.6 / 21.6 days of sweeping from 3.744×10²¹ at the realized
+rate, and it sits well inside the enforced 10²⁴ ceiling.
 
 ## Running it
 
 ```
 python launch.py --selftest    # full gate battery + drills (~15 min)
-python launch.py --stop-on-discovery
+python launch.py --stop-on-discovery --to 2e22
                                # THE HUNT: resumes at the frontier
-                               # (3.62e20), runs to 5e21 (~98% of the
-                               # conditional a(19) distribution), halts
-                               # after a frontier-extending find
+                               # (3.7439e21, where the a(19) find halted
+                               # it), sweeps for a(20), halts after a
+                               # frontier-extending find
 python launch.py --status      # scoreboard
 python score.py                # gates x fingerprinted benchmarks
 python euler_model.py          # rebuild the odds model + its gates
@@ -302,11 +339,13 @@ at seven heights up to the ceiling. That is not an old version, it is the
 other half of the parity gate.
 
 `--stop-on-discovery` follows the repo-wide convention (CONVENTIONS.md):
-only a run beyond the campaign frontier (currently ≥ 19) halts the hunt;
-run-17/18 repeats are verified, evidenced, and counted as census
-(`near13-18` in the status line). The known run-21 value at 2.345×10²⁰
-was treated as an in-flight canary, not a discovery — rediscovered on
-schedule 2026-08-12 and thereby settled as a(21) (see RESULTS.md).
+only a run beyond the campaign frontier halts the hunt. With a(19)
+settled the frontier is now **≥ 20**, so run-17/18/19 repeats are
+verified, evidenced, and counted as census (`near13-19` in the status
+line) rather than stopping a leg. The known run-21 value at 2.345×10²⁰
+was treated the same way — an in-flight canary, not a discovery —
+rediscovered on schedule 2026-08-12 and thereby settled as a(21) (see
+RESULTS.md).
 
 Requires Python 3.12+, numpy, sympy, CuPy + CUDA GPU (or `--engine cpu`).
 

@@ -51,9 +51,9 @@
 #
 # Gates here: G6 GPU == CPU reference on populated windows at seven heights
 # (to the ceiling zone), G7 comparator planted-fake drill, G8 canary
-# rediscovery of a(13), G12 canary rediscovery of a(18) and the
-# Waldvogel-Leikauf run-21 value, G13 slicing-independence across launch
-# geometries, split points AND offset-chunk sizes (which on a factored wheel
+# rediscovery of a(13), G12 canary rediscovery of a(18), the
+# Waldvogel-Leikauf run-21 value and a(19), G13 slicing-independence across
+# launch geometries, split points AND offset-chunk sizes (which on a factored wheel
 # is also the test of the chunk generator under real cutting), G14 pattern
 # tables == big-integer divisibility in both layouts, G15 the bitset test and
 # the 32-bit reductions (including the off-split's 2^32 bound at its worst
@@ -1617,13 +1617,16 @@ def g8_gpu_canary():
 
 
 def g12_canaries():
-    """End-to-end rediscovery of a(18) and the run-21 literature value.
+    """End-to-end rediscovery of a(18), the run-21 literature value, a(19).
 
     One engine spans the range, so these land on opposite sides of the old
     u64 boundary in the same gate -- which is the point: that boundary is no
-    longer a thing the search knows about.
+    longer a thing the search knows about.  a(19) is here because it is the
+    campaign's frontier term: the value a resumed a(20) leg sweeps away
+    from, and the one whose loss would be hardest to notice.
     """
     a18 = 8_461_068_614_861_832_371
+    a19 = 3_744_101_869_688_673_856_367
     eng = GpuEngine(17)
     hits = eng.hunt(a18 - 5 * 10**9, a18 + 5 * 10**9)
     firsts = [p for p, r in hits if r == 18]
@@ -1632,8 +1635,12 @@ def g12_canaries():
     hits = eng.hunt(A21_UPPER - 10**7, A21_UPPER + 10**7)
     if (A21_UPPER, 21) not in hits:
         return False, f"G12 FAIL: run-21 value not rediscovered ({hits})"
-    return True, ("G12 ok: rediscovered a(18) = %d (below 2^64) and the"
-                  " Waldvogel-Leikauf run-21 value (above it)" % a18)
+    hits = eng.hunt(a19 - 10**7, a19 + 10**7)
+    if (a19, 19) not in hits:
+        return False, f"G12 FAIL: a(19) not rediscovered ({hits})"
+    return True, ("G12 ok: rediscovered a(18) = %d (below 2^64), the"
+                  " Waldvogel-Leikauf run-21 value and a(19) = %d (above"
+                  " it)" % (a18, a19))
 
 
 def g13_slicing_independence():
