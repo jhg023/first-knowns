@@ -7,7 +7,7 @@ The shared library behind every hunt in this repository. Projects add
 the repo root to `sys.path` and import:
 
 ```python
-from huntlib.hlog import log, banner
+from huntlib.hlog import log, banner, census_str
 from huntlib import checkpoint
 from huntlib.primes import mr_is_prime, factor_witness, MR_VALID_BELOW
 from huntlib.gpu import barrett_magics
@@ -16,7 +16,7 @@ from huntlib import scoring
 
 | module | contents |
 |--------|----------|
-| `hlog` | timestamped tagged logging + the repo-wide tag taxonomy |
+| `hlog` | timestamped tagged logging + the repo-wide tag taxonomy, and `census_str` — the one format every `[STATUS]` line uses for the census counts per run length (`census 7:280 8:71 9:28 10:8`) |
 | `checkpoint` | atomic (temp + `os.replace`) config-keyed JSON checkpoints |
 | `primes` | deterministic 7-base Miller–Rabin (valid < 3.317×10²⁴, bound exported as a constant) and factor witnesses (trial division + Brent's rho) |
 | `gpu` | Barrett magic-multiply reciprocals: the host-side helper and the canonical CUDA snippet that every kernel uses in place of hardware u64 division |

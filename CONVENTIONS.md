@@ -59,29 +59,60 @@ A candidate find must survive **three independent confirmations**:
    alternate-alignment re-sieve with a different wheel).
 
 plus a **factor witness** for the composite that bounds the claim, so the
-evidence JSON is checkable by anyone with a calculator. Verified finds
-are recorded in `evidence/`; any disagreement between the three legs is
-an engine bug by definition and halts the campaign (exit 2). Discoveries
-are never announced from inside the pipeline — a human reviews the
-evidence first.
+evidence JSON is checkable by anyone with a calculator. Verified first
+occurrences are recorded in `evidence/` (and nothing else is — see the
+census rule below); any disagreement between the three legs is an engine
+bug by definition and halts the campaign (exit 2). Discoveries are never
+announced from inside the pipeline — a human reviews the evidence first.
 
 **A discovery is a FIRST OCCURRENCE, and it is logged once (repo-wide).**
 Every hunt has a *frontier*: the largest run length (or term index)
 settled so far, seeded from the literature and from the launcher's table
 of terms found in earlier campaigns, and **promoted at runtime** the
 moment a longer run is verified — the launcher stores the promotion in
-the checkpoint, so it survives a resume and needs no hand edit. Only the
+the checkpoint (and saves the checkpoint at the end of that segment, so
+the promotion never lives only in memory) and needs no hand edit. Only the
 first value beyond the frontier is a `[DISCOVERY]`; it is a(r') for every
 unsettled r' up to its run (a run of 12 settles a(11) and a(12) at once,
-each logged once). Every later value whose run is at or below the frontier
-is a **census** event: if it beats the literature it is still verified and
-evidenced exactly like a find, but it is logged as `[NEAR]` with a running
-count per run length (`run-10 census #7 (a(10) settled at K)`), never as a
-discovery again. A campaign that finds a(10) in its first minutes and
-keeps running reports one discovery and then counts run-10 values as it
-meets them; the counts per length are the campaign's census and belong in
-`[STATUS]` and `[MILESTONE]` lines. Where this rule lives in code is one
-function (`event_kind` in dickson-ladders), and the selftest drills it.
+each logged once). Only discoveries are evidenced.
+
+**The census is counted, not narrated (repo-wide).** Every other value
+with a run at or above the project's census floor is a *census* event,
+and there are exactly two kinds:
+
+- **One value short of an open term** — a run r with a(r+1) still open
+  (in a monotone hunt, r equal to the frontier; in a per-length hunt like
+  euler-prime-runs, any r whose successor is unsettled). It gets one
+  `[NEAR]` line with its census ordinal (`run 10 at k = K (run-10 #7 of
+  the campaign; a(10) settled at K0; verified 3-way) -- ONE value short of
+  a(11)!`), is verified by the cheap legs of the protocol as a running
+  engine health check, and is **not evidenced**.
+- **Everything below that** — a run r with a(r+1) already settled (run-7,
+  run-8, and run-9 once a(10) has landed, run-10 once a(11) has landed,
+  and so on) — is noise as an individual: it is **counted** in the
+  checkpoint's per-length table and appears **only** in the census counts
+  of the `[STATUS]` heartbeat and `[MILESTONE]` lines. No log line of its
+  own, no evidence file, no near-miss record. The moment a term lands, the
+  classification follows: run-9 values stop being logged the instant a(10)
+  is verified.
+
+The **evidence directory holds first occurrences only** — one JSON per
+verified discovery plus the ledger. Census values are counts, and the
+counts live in the checkpoint and the log. (Per-value census files and
+near-miss `.jsonl` records written before this convention were retired
+from the tree on 2026-08-18; they remain in the git history before commit
+`3d01f95` for anyone who wants them.) Where this rule lives in code is one
+function per project (`event_kind`), and each selftest drills it: beyond
+the frontier → DISCOVERY, one short → NEAR, below → CENSUS, under the
+floor → nothing.
+
+**The 30-second heartbeat is mandatory (repo-wide).** Every launcher
+logs a `[STATUS]` line every 30 s by default (`--heartbeat`), and that
+line carries the census counts per run length from the floor to the
+frontier in the shared format produced by `huntlib.hlog.census_str`
+(`census 7:280 8:71 9:28 10:8`) — the one place a human reads how many
+run-7s, run-8s, run-9s the campaign has met. `--status` prints the same
+counts from the checkpoint.
 
 **Campaigns run indefinitely; rungs mark progress (repo-wide).** A
 launcher started with no arguments runs until it reaches the end of the
@@ -124,22 +155,26 @@ finds are scored against them after.
 
 ## Logging taxonomy
 
-`[STAGE]` phases; `[STATUS]` heartbeat with position, rate, survivor
-count, the census counts per run length from the near-miss floor to the
-current frontier, the number of finds, live model odds, ETA;
-`[MILESTONE]` decade crossings *and* model-odds crossings (the hunt has
-passed the point where the model put the next term with 25/50/75/90%
-probability — "past the median" is worth a line); `[RUNG]` a rung of the
-progress ladder passed, with the next rung named; `[NEAR]`
-individually-logged near misses and census repeats with their campaign
-ordinal (`run-9 #12 of the campaign`), flagged when they are one value
-short of the next term, a new campaign best, or the first of their length;
-`[CANARY-GOLD]` expected rediscoveries; `[DISCOVERY]` verified first
-occurrences, once each; `[ALARM]` halts. The point of the taxonomy is that
-a human reading the log while the hunt runs can see every notable event
-without a debugger: add a line for anything a person would want to know
-happened, keep it in one of these categories, and never let a category
-fire twice for the same fact. Timestamps on everything; ASCII only.
+`[STAGE]` phases; `[STATUS]` the 30-second heartbeat with position, rate,
+survivor count, **the census counts per run length from the floor to the
+current frontier** (`census 7:280 8:71 9:28 10:8`, via
+`huntlib.hlog.census_str`), the number of finds, live model odds, the next
+rung and ETA; `[MILESTONE]` decade crossings *and* model-odds crossings
+(the hunt has passed the point where the model put the next term with
+25/50/75/90% probability — "past the median" is worth a line), also
+carrying the census counts; `[RUNG]` a rung of the progress ladder passed,
+with the next rung named; `[NEAR]` a value **one short of an open term**,
+individually logged with its campaign ordinal (`run-10 #7 of the
+campaign`), flagged as a new campaign best or the first of its length —
+and *nothing shorter*: runs below that are counted in `[STATUS]` and never
+get a line; `[CANARY-GOLD]` expected rediscoveries; `[DISCOVERY]` verified
+first occurrences, once each; `[ALARM]` halts. The point of the taxonomy
+is that a human reading the log while the hunt runs can see every notable
+event without a debugger and is not buried under the ones that are not:
+add a line for anything a person would want to know happened, keep it in
+one of these categories, never let a category fire twice for the same
+fact, and never narrate what the census counts already say. Timestamps on
+everything; ASCII only.
 
 ## Numeric hygiene
 
@@ -174,8 +209,9 @@ has read one project can navigate all of them.
 
 **`RESULTS.md`** — every verified find in discovery order: the exact
 integers, the verification performed, the factor witness, the evidence
-file path, and the least-claim basis. Near-miss/census data and its
-caveats. Ends with an "In progress" or "Final state" section.
+file path, and the least-claim basis. The census as **counts per run
+length** (from the checkpoint / `[STATUS]`), with caveats — never as
+per-value listings. Ends with an "In progress" or "Final state" section.
 
 **`BENCHMARKS.md`** — the SCORE ledger (frozen fingerprint stated) and
 wall-clock tables at the scored rate.

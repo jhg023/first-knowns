@@ -1,10 +1,14 @@
 # evidence/
 
-Verified finds land here, one JSON per k, named
-`ladder_hit_run<n>_k<k>.json`, plus a rolling `ladder_discoveries.json`
-and a `ladder_nearmiss.jsonl` census of runs at or above 7.
+Verified FIRST OCCURRENCES land here -- one JSON per discovery, named
+`ladder_hit_run<n>_k<k>.json`, plus the rolling ledger
+`ladder_discoveries.json`. Nothing else does: the campaign's census
+(every later run-10 value, every run-7/8/9) is counted in the checkpoint
+and shown in each 30-second `[STATUS]` line, never written here
+(CONVENTIONS.md, "The census is counted, not narrated").
 
-**Nothing is here yet: the campaign has been built and gated, not run.**
+Files present are the campaign's finds so far; a fresh clone before the
+first find has only this README.
 
 Each file is meant to be checkable by anyone with a bignum library and no
 trust in this codebase. The shape:

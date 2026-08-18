@@ -77,3 +77,14 @@ this repo (`*/evidence/`) contains the exact integers plus a factor
 witness for the claim-breaking composite, so anyone can confirm the find
 with a few lines of any bignum system — no trust in this codebase
 required.
+
+**Evidence is for first occurrences only.** A hunt meets many values
+that are *not* new terms — run-7s and run-8s in a hunt for a(11), run-17s
+in a hunt for a(20). Those are the campaign's **census**, and the census
+is counted, not narrated: the launcher keeps a count per run length in
+its checkpoint and prints it in every 30-second `[STATUS]` line
+(`census 7:280 8:71 9:28 10:8`); a value one short of an open term gets a
+single `[NEAR]` line; anything shorter gets no line and no file. What you
+will find in `evidence/` is one JSON per verified discovery and the
+ledger — nothing else. The full rule is in
+[CONVENTIONS.md](CONVENTIONS.md) § The discovery protocol.

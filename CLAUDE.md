@@ -68,15 +68,23 @@ each README stays.
 5. **Discoveries are records, not announcements.** The pipeline writes
    evidence JSONs; humans decide what happens next. Never auto-submit
    to OEIS or anywhere else.
-5a. **A discovery is a first occurrence, logged once.** The launcher's
-   frontier promotes itself at runtime when a longer run is verified and
-   is stored in the checkpoint; every later value at or below the
-   frontier is a census event — verified and evidenced when it beats the
-   literature, but logged as `[NEAR]` with a running count per run
-   length, never as a second discovery. Notable events (decade and
-   model-odds crossings, near misses, new bests, first-of-a-length) each
-   get a log line in the CONVENTIONS taxonomy so a human can follow the
-   hunt from the log alone. See CONVENTIONS.md "The discovery protocol".
+5a. **A discovery is a first occurrence, logged once; the census is
+   counted, not narrated.** The launcher's frontier promotes itself at
+   runtime when a longer run is verified and is stored in the checkpoint
+   (saved at the end of that segment). Only discoveries are evidenced:
+   **the evidence directory holds first occurrences only.** Every other
+   value is census, and there are two kinds — a run **one short of an open
+   term** (run 10 while a(11) is open) gets one `[NEAR]` line with its
+   ordinal, verified but not evidenced; a run whose successor is already
+   settled (run-7, run-8, run-9 once a(10) has landed, run-10 once a(11)
+   has landed, and so on) is **counted only** — it appears in the census
+   counts of the 30-second `[STATUS]` heartbeat and nowhere else: no line,
+   no file, no near-miss record. Every launcher's `[STATUS]` carries those
+   counts per run length (`census 7:280 8:71 9:28 10:8`, from
+   `huntlib.hlog.census_str`). Notable events (decade and model-odds
+   crossings, one-short values, new bests, first-of-a-length) each get a
+   log line in the CONVENTIONS taxonomy so a human can follow the hunt
+   from the log alone. See CONVENTIONS.md "The discovery protocol".
 5b. **Campaigns run indefinitely by default.** No default depth cap; a
    launcher stops on its own only at the end of the last rung (the
    engine's enforced ceiling). Progress is read off rungs — named depths
@@ -100,7 +108,12 @@ each README stays.
    - [ ] status word (ACTIVE / COMPLETE / PAUSED — open to others)
          identical in the project README and the top-level table row
    - [ ] evidence/ directory with verifiable JSONs (exact integers +
-         factor witnesses); runtime checkpoints gitignored
+         factor witnesses) for FIRST OCCURRENCES ONLY -- census is counts
+         in the checkpoint and the log, never files; runtime checkpoints
+         gitignored
+   - [ ] a 30-second `[STATUS]` heartbeat carrying the census counts per
+         run length (huntlib.hlog.census_str), and `event_kind` drilled
+         in the selftest (DISCOVERY / NEAR one-short / CENSUS counted)
    - [ ] self-contained: no references to unpublished work, no personal
          or machine-specific information (scan before committing:
          usernames, local paths, emails, OS details)

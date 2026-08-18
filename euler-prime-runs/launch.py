@@ -33,12 +33,16 @@
 # rule 5a).  A164926(n) is the least prime with run EXACTLY n, so every run
 # length is its own term: the first run-r prime with a(r) unsettled is the
 # [DISCOVERY] of a(r), the launcher records it in the checkpoint (`found`)
-# and every later run-r prime is a CENSUS event -- verified and evidenced
-# exactly like a find, but logged as [NEAR] with a running count per run
-# length, never as a second discovery.  What is settled comes from the
-# literature (KNOWN), from earlier campaigns (CAMPAIGN_FOUND, SETTLED_ELSEWHERE)
-# and from this campaign's own finds; nothing has to be hand-edited between
-# a find and the next survivor.
+# and writes its evidence.  Everything else is CENSUS, and the census is
+# COUNTED, not narrated: a run-r prime with a(r+1) still OPEN is one value
+# short of an open term and gets one [NEAR] line (verified 3-way, no
+# evidence); a run-r prime with a(r+1) already settled is counted in the
+# checkpoint and appears only in the census counts of every 30-second
+# [STATUS] line -- no line of its own, no file.  The evidence directory
+# holds first occurrences only.  What is settled comes from the literature
+# (KNOWN), from earlier campaigns (CAMPAIGN_FOUND, SETTLED_ELSEWHERE) and
+# from this campaign's own finds; nothing has to be hand-edited between a
+# find and the next survivor.
 #
 # ASCII only; graceful Ctrl+C (checkpoint, no stacktrace).
 
@@ -56,7 +60,7 @@ import sys as _sys
 import pathlib as _pathlib
 _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
 from huntlib import checkpoint as _ckpt  # noqa: E402
-from huntlib.hlog import log  # noqa: E402
+from huntlib.hlog import log, census_str  # noqa: E402
 from huntlib.primes import factor_witness  # noqa: E402
 
 from euler_reference import A21_UPPER, KNOWN, OPEN_N, run_length as oracle_run
@@ -120,8 +124,12 @@ SETTLED_ELSEWHERE = {21: A21_UPPER}
 FRONTIER_RUN = max(CAMPAIGN_FOUND)             # largest run settled by a
 #                                                campaign at start; the LIVE
 #                                                frontier is top_settled(c)
-NEAR_FROM = 13                                 # runs at or above this are
-#                                                counted and logged as [NEAR]
+NEAR_FROM = 13                                 # the census floor: runs at or
+#                                                above this are counted per
+#                                                length (checkpoint near_counts,
+#                                                shown in every [STATUS]); only
+#                                                a run one short of an OPEN term
+#                                                is logged individually
 # A campaign runs INDEFINITELY (CONVENTIONS.md): the only depth at which it
 # stops on its own is the enforced ceiling P_CEIL, the last rung.  --to caps
 # a run deliberately (leg 3 used --to 2e22: conditional on the empty sweep
@@ -226,14 +234,24 @@ def settled_at(c, r):
 
 
 def event_kind(c, r, n):
-    """DISCOVERY / CENSUS / NEAR / None for a survivor with run r under the
-    filter n.  DISCOVERY: run >= n and a(r) open (a first occurrence).
-    CENSUS: run >= n and a(r) settled -- verified and evidenced like a find,
-    counted, never a discovery again.  NEAR: NEAR_FROM <= run < n."""
-    if r >= n:
-        return "DISCOVERY" if settled_at(c, r) is None else "CENSUS"
+    """DISCOVERY / NEAR / CENSUS / None for a survivor with run r under the
+    filter n -- the one place the discovery-once and census rules live
+    (CONVENTIONS.md).
+
+    DISCOVERY: run >= n and a(r) open -- a first occurrence; full protocol,
+    evidence written, logged once.  NEAR: a(r+1) is OPEN -- the prime is one
+    value short of an open term; verified 3-way and logged as one [NEAR]
+    line with its census ordinal, never evidenced.  CENSUS: a(r+1) already
+    settled -- noise as an individual, COUNTED in the checkpoint and shown
+    in every [STATUS] / [MILESTONE], no line, no record.  None: below the
+    census floor.  With a(17)-a(19) and a(21) settled and a(20) open, a
+    run-19 prime is NEAR (one short of a(20)), run-17/18 are census, and a
+    run-21 is NEAR too (one short of a(22)); the moment a(20) lands the
+    run-19s drop to census and a run-20 is census as well (a(21) settled)."""
+    if r >= n and settled_at(c, r) is None:
+        return "DISCOVERY"
     if r >= NEAR_FROM:
-        return "NEAR"
+        return "NEAR" if settled_at(c, r + 1) is None else "CENSUS"
     return None
 
 
@@ -441,6 +459,11 @@ def canary_prelude(engine_factory, n):
 # ------------------------------- the hunt ----------------------------------
 
 def record_discovery(ev, label):
+    """Write the evidence JSON for a FIRST OCCURRENCE (or the settled a(21)
+    canary) and upsert the ledger entry for p.  Called for discoveries
+    only: the evidence directory holds first occurrences, never census
+    values (CONVENTIONS.md).  Keyed by p, so the segment redone on resume
+    rewrites the same records instead of appending duplicates."""
     os.makedirs("evidence", exist_ok=True)
     with open(os.path.join("evidence", f"euler_hit_run{ev['run']}_p{ev['p']}.json"), "w") as f:
         json.dump(ev, f, indent=1)
@@ -448,7 +471,9 @@ def record_discovery(ev, label):
     if os.path.exists(DISC):
         with open(DISC) as f:
             allrec = json.load(f)
+    allrec = [d for d in allrec if int(d.get("p", -1)) != int(ev["p"])]
     allrec.append({**ev, "label": label, "t": time.time()})
+    allrec.sort(key=lambda d: int(d["p"]))
     with open(DISC, "w") as f:
         json.dump(allrec, f, indent=1)
 
@@ -564,86 +589,86 @@ def hunt(args):
                 plist = surv
             else:                                    # CPU reference: chunks
                 plist = sorted(p for ch in surv for p in ch)
+            evidenced = False                        # a discovery this segment
             for p in plist:
                 c["survivors"] += 1
                 r = mr_run_length(p, cap=100)
-                if r >= n:
+                if r < NEAR_FROM:
+                    continue
+                # every run at or above the census floor is COUNTED; the
+                # counts are the census and live in [STATUS]/[MILESTONE]
+                nc = c.setdefault("near_counts", {})
+                nc[str(r)] = nc.get(str(r), 0) + 1
+                cnt = nc[str(r)]
+                new_best = r > c["best_near"]
+                if new_best:
+                    c["best_near"], c["best_near_p"] = r, p
+                kind = event_kind(c, r, n)
+                if p == A21_UPPER:
+                    # known literature value: in-flight canary, never a
+                    # discovery, never a stop trigger -- but the settled
+                    # a(21), so it keeps its evidence
                     ev, msg = three_way_verify(p, r, n)
                     if ev is None:
                         raise CorruptEngineError(f"verify failed at {p}: {msg}")
-                    nc = c.setdefault("near_counts", {})
-                    nc[str(r)] = nc.get(str(r), 0) + 1
-                    cnt = nc[str(r)]
-                    kind = event_kind(c, r, n)
-                    if p == A21_UPPER:
-                        # known literature value: in-flight canary, never
-                        # a discovery, never a stop trigger
-                        record_discovery(ev, "Waldvogel-Leikauf run-21 value"
-                                             " -- in-flight canary (known)")
-                        c["a21_canary"] = True
-                        log("CANARY-GOLD", f"run-21 value {p} rediscovered "
-                            "in-flight (literature value; not a discovery)")
-                    elif kind == "DISCOVERY":
-                        # the FIRST prime with run exactly r while a(r) is
-                        # open: a(r) itself.  Logged once; from here on
-                        # run-r primes are census.
-                        label = "A164926(%d) CANDIDATE -- first occurrence" % r
-                        record_discovery(ev, label)
-                        settle(c, r, p)
-                        c["hits"] = c.get("hits", 0) + 1
-                        log("DISCOVERY", "=" * 60)
-                        log("DISCOVERY", f"run == {r} at p = {p}  ({label})")
-                        log("DISCOVERY", f"a({r}) = {p}")
-                        log("DISCOVERY", f"breaker x={r}: factor {ev['breaker_factor']}")
-                        log("DISCOVERY", "verified 3-way; evidence JSON written")
-                        log("DISCOVERY", f"a({r}) is settled; further run-{r} "
-                            f"primes are census, not discoveries; next open "
-                            f"term a({next_target(c, n)})")
-                        log("DISCOVERY", "=" * 60)
-                        if args.stop_on_discovery:
-                            save_ckpt(c)
-                            log("STAGE", "frontier-extending discovery "
-                                "confirmed -- stopping (--stop-on-discovery)")
-                            return 0
-                    else:
-                        # CENSUS: a(r) is settled.  Fully verified and
-                        # evidenced like a find, counted, never a discovery.
-                        label = "run-%d census #%d (a(%d) settled at %d)" % (
-                            r, cnt, r, settled_at(c, r))
-                        record_discovery(ev, label)
-                        tail = ""
-                        if r + 1 == next_target(c, n):
-                            tail += "  -- ONE value short of a(%d)!" % (r + 1)
-                        if r > c["best_near"]:
-                            tail += "  -- new campaign best"
-                        if cnt == 1:
-                            tail += "  -- first run-%d of the campaign" % r
-                        log("NEAR", f"run {r} at p = {p}  ({label}; "
-                            f"verified 3-way, evidence written){tail}")
-                        if r > c["best_near"]:
-                            c["best_near"], c["best_near_p"] = r, p
-                elif r >= NEAR_FROM:
-                    nc = c.setdefault("near_counts", {})
-                    nc[str(r)] = nc.get(str(r), 0) + 1
-                    with open(os.path.join("evidence", "euler_nearmiss.jsonl"), "a") as fh:
-                        fh.write(json.dumps({"p": int(p), "run": int(r),
-                                             "t": time.time()}) + "\n")
-                    tail = ""
-                    if r > c["best_near"]:
+                    record_discovery(ev, "Waldvogel-Leikauf run-21 value"
+                                         " -- in-flight canary (known)")
+                    evidenced = True
+                    c["a21_canary"] = True
+                    log("CANARY-GOLD", f"run-21 value {p} rediscovered "
+                        "in-flight (literature value; not a discovery)")
+                elif kind == "DISCOVERY":
+                    # the FIRST prime with run exactly r while a(r) is open:
+                    # a(r) itself.  Full protocol, evidence, logged once;
+                    # from here on run-r primes are census.
+                    ev, msg = three_way_verify(p, r, n)
+                    if ev is None:
+                        raise CorruptEngineError(f"verify failed at {p}: {msg}")
+                    label = "A164926(%d) CANDIDATE -- first occurrence" % r
+                    record_discovery(ev, label)
+                    evidenced = True
+                    settle(c, r, p)
+                    c["hits"] = c.get("hits", 0) + 1
+                    log("DISCOVERY", "=" * 60)
+                    log("DISCOVERY", f"run == {r} at p = {p}  ({label})")
+                    log("DISCOVERY", f"a({r}) = {p}")
+                    log("DISCOVERY", f"breaker x={r}: factor {ev['breaker_factor']}")
+                    log("DISCOVERY", "verified 3-way; evidence JSON written")
+                    log("DISCOVERY", f"a({r}) is settled; further run-{r} "
+                        f"primes are census (counted in [STATUS]); next open "
+                        f"term a({next_target(c, n)})")
+                    log("DISCOVERY", "=" * 60)
+                    if args.stop_on_discovery:
+                        save_ckpt(c)
+                        log("STAGE", "frontier-extending discovery "
+                            "confirmed -- stopping (--stop-on-discovery)")
+                        return 0
+                elif kind == "NEAR":
+                    # one value short of an OPEN term: verified 3-way as a
+                    # running engine health check, logged once with its
+                    # census ordinal, never evidenced
+                    ev, msg = three_way_verify(p, r, n)
+                    if ev is None:
+                        raise CorruptEngineError(f"verify failed at {p}: {msg}")
+                    tail = "  -- ONE value short of a(%d)!" % (r + 1)
+                    if new_best:
                         tail += "  -- new campaign best"
-                    if nc[str(r)] == 1:
+                    if cnt == 1:
                         tail += "  -- first run-%d of the campaign" % r
-                    log("NEAR", f"run {r} at p = {p}  "
-                        f"(run-{r} #{nc[str(r)]} of the campaign){tail}")
-                    if r > c["best_near"]:
-                        c["best_near"], c["best_near_p"] = r, p
+                    log("NEAR", f"run {r} at p = {p}  (run-{r} #{cnt} of the "
+                        f"campaign; a({r}) settled at {settled_at(c, r)}; "
+                        f"verified 3-way){tail}")
+                # CENSUS (a(r+1) settled): counted above, nothing else
             c["next_k"] = k1
             c["wall_s"] += time.time() - t0
+            if evidenced:
+                # a settled term must never outlive the process only in
+                # memory: checkpoint and evidence agree at every segment
+                # boundary that wrote evidence
+                save_ckpt(c)
             now = time.time()
             top = top_settled(c)
-            nc = c.get("near_counts", {})
-            nears = "/".join(str(nc.get(str(r), 0))
-                             for r in range(NEAR_FROM, top + 1))
+            nears = census_str(c.get("near_counts", {}), NEAR_FROM, top)
             if now - t_last >= args.heartbeat:
                 pos = k1 * M
                 rate = (pos - p_last) / max(now - t_last, 1e-9)
@@ -666,9 +691,13 @@ def hunt(args):
                     eta_r = (depth - pos) / max(rate, 1)
                     rung = (f"rung {i}/{len(rung_ladder())} passed, next "
                             f"{label} at {depth:.2e} (ETA {eta_r/3600.0:.1f}h)  ")
+                # the 30-second heartbeat (CONVENTIONS.md): position, rate,
+                # survivors, the CENSUS COUNTS per run length from the floor
+                # to the top settled term -- the only place values below an
+                # open term's predecessor appear -- finds, odds, rung, ETA
                 log("STATUS", f"p {pos:.3e}  {pct:.2f}%  "
                     f"{rate/1e14:.2f}e14 p/s  surv {c['survivors']:,}  "
-                    f"near{NEAR_FROM}-{top} {nears}  "
+                    f"{nears}  "
                     f"finds {c.get('hits', 0)}  "
                     f"{odds}{rung}ETA {eta_s/3600.0:.1f}h ({finish})")
                 t_last, p_last = now, pos
@@ -676,7 +705,7 @@ def hunt(args):
             dec = 10 ** int(math.log10(max(k1 * M, 10)))
             if k0 * M < dec <= k1 * M:
                 log("MILESTONE", f"passed p = {dec:.0e}  survivors "
-                    f"{c['survivors']:,}  near{NEAR_FROM}-{top} {nears}  "
+                    f"{c['survivors']:,}  {nears}  "
                     f"finds {c.get('hits', 0)}")
             # rungs: the next open term's model quartiles, then the ceiling
             passed = c.setdefault("rungs_passed", [])
@@ -764,33 +793,49 @@ def selftest():
     ok = resume_drill("resume drill (n=9, split at 1e8)", GpuEngine(9),
                       P_FLOOR, 10**8, 2 * 10**8, 5) and ok
 
-    # discovery-once drill: settledness per run length, census after a find,
-    # the odds target moving over the settled a(21)
+    # discovery-once / census drill: settledness per run length; DISCOVERY
+    # beyond, NEAR (one short of an OPEN term: logged) vs CENSUS (a(r+1)
+    # settled: counted only); the classification follows a find; the odds
+    # target moving over the settled a(21); the STATUS census string
     c = fresh_ckpt(17, eng13)
     d_ok = (settled_at(c, 19) == CAMPAIGN_FOUND[19]
             and settled_at(c, 21) == A21_UPPER
             and settled_at(c, 16) == KNOWN[16]
             and settled_at(c, 20) is None
             and event_kind(c, 20, 17) == "DISCOVERY"
-            and event_kind(c, 19, 17) == "CENSUS"
-            and event_kind(c, 21, 17) == "CENSUS"
-            and event_kind(c, 15, 17) == "NEAR"
+            and event_kind(c, 19, 17) == "NEAR"        # one short of a(20)
+            and event_kind(c, 21, 17) == "NEAR"        # one short of a(22)
+            and event_kind(c, 18, 17) == "CENSUS"      # a(19) settled
+            and event_kind(c, 17, 17) == "CENSUS"      # a(18) settled
+            and event_kind(c, 15, 17) == "CENSUS"      # a(16) known
+            and event_kind(c, 13, 17) == "CENSUS"      # the floor
             and event_kind(c, 12, 17) is None
             and next_target(c, 17) == 20 and top_settled(c) == 21)
     d_ok = d_ok and settle(c, 20, 10**22) and not settle(c, 20, 2 * 10**22)
     d_ok = (d_ok and settled_at(c, 20) == 10**22
-            and event_kind(c, 20, 17) == "CENSUS"
+            and event_kind(c, 20, 17) == "CENSUS"      # a(21) settled
+            and event_kind(c, 19, 17) == "CENSUS"      # a(20) now settled
+            and event_kind(c, 21, 17) == "NEAR"        # a(22) still open
             and event_kind(c, 22, 17) == "DISCOVERY"
             and next_target(c, 17) == 22 and top_settled(c) == 21)
     d_ok = d_ok and settle(c, 22, 3 * 10**22) and top_settled(c) == 22 \
-        and next_target(c, 17) == 23 and settled_at(c, 21) == A21_UPPER
+        and next_target(c, 17) == 23 and settled_at(c, 21) == A21_UPPER \
+        and event_kind(c, 21, 17) == "CENSUS" and event_kind(c, 22, 17) == "NEAR"
+    c["near_counts"] = {"13": 6539, "17": 270, "19": 1, "21": 1}
+    cs = census_str(c["near_counts"], NEAR_FROM, top_settled(c))
+    d_ok = d_ok and cs == ("census 13:6539 14:0 15:0 16:0 17:270 18:0 19:1 "
+                           "20:0 21:1 22:0")
     if not d_ok:
-        print("FAIL discovery-once drill: settledness / census / next-target")
+        print("FAIL discovery-once drill: settledness / near / census / "
+              f"next-target / census string ({cs})")
         ok = False
     else:
-        print("PASS discovery-once drill: a(20) is a discovery once and then "
-              "census, a(21) stays settled at the literature value, the odds "
-              "target moves 20 -> 22 -> 23, a run of 22 settles a(22) only")
+        print("PASS discovery-once drill: a(20) is a discovery once; run-19 "
+              "primes are NEAR (one short of a(20), logged) until it lands "
+              "and census (counted only) after; run-17/18 are census; a(21) "
+              "stays settled at the literature value and a run-21 is NEAR "
+              "while a(22) is open; the odds target moves 20 -> 22 -> 23; "
+              "census string floor..top in the shared format")
 
     # indefinite-run drill: the rung ladder for a(20) is ascending, sits
     # between the a(19) find and the ceiling, and its median matches the
@@ -876,7 +921,10 @@ def status():
               f"(next_k = {c['next_k']:,})")
         print(f"survivors : {c['survivors']}")
         print(f"best near : run {c['best_near']} at p = {c['best_near_p']}")
-        print(f"census    : {c.get('near_counts', {})}  (count per run length)")
+        cs = census_str(c.get("near_counts", {}), NEAR_FROM, top_settled(c))
+        print(f"census    : {cs[len('census '):]}  (primes met per run "
+              f"length, floor {NEAR_FROM} to the top settled term; counted, "
+              f"not evidenced)")
         print(f"rungs     : {len(c.get('rungs_passed', []))} passed; last: "
               f"{(c.get('rungs_passed') or ['-'])[-1]}")
         print(f"found     : {c.get('found', {})}  (this campaign's first "
@@ -931,7 +979,10 @@ def main():
     ap.add_argument("--migrate-cursor", action="store_true",
                     help="re-denominate the campaign cursor in this engine's "
                          "wheel period and exit; see migrate_cursor()")
-    ap.add_argument("--heartbeat", type=float, default=30.0)
+    ap.add_argument("--heartbeat", type=float, default=30.0,
+                    help="seconds between [STATUS] lines (position, rate, the "
+                         "census counts per run length, finds, odds, next "
+                         "rung, ETA); 30 is the repo convention")
     args = ap.parse_args()
     if args.to <= 0:
         args.to = float(DEFAULT_TO)

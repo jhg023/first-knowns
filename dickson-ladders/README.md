@@ -127,13 +127,19 @@ untouched. At the n = 13 filter the host is 18% of device time and fully
 hidden; at n = 10 it binds at 2.2x, on legs that take seconds — see
 [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md).
 
-**4a. A discovery is a first occurrence, logged once.** The launcher's
-frontier promotes itself the moment a longer run is verified (and is
-stored in the checkpoint): the first k with run ≥ 10 is a(10) and a
-`[DISCOVERY]`; every later run-10 value is a census event — verified and
-evidenced exactly like a find, but logged as `[NEAR]` with a running
-count per run length. A run of 12 settles a(11) and a(12) at once, each
-logged once. Repo-wide convention: [CONVENTIONS.md](../CONVENTIONS.md).
+**4a. A discovery is a first occurrence, logged once; the census is
+counted, not narrated.** The launcher's frontier promotes itself the
+moment a longer run is verified (and is stored in the checkpoint, saved
+at the end of that segment): the first k with run ≥ 10 is a(10), a
+`[DISCOVERY]`, and the only thing that is evidenced. After that, a run-10
+value is one short of a(11) and gets a single `[NEAR]` line with its
+ordinal (verified 3-way — own chain, sympy, alternate-alignment re-sieve —
+but not evidenced), and every run-7/8/9 value is **counted only**: it
+appears in the census counts of the 30-second `[STATUS]` heartbeat
+(`census 7:280 8:71 9:28 10:8`) and nowhere else. The moment a(11) lands,
+run-10 values drop into that count too. A run of 12 settles a(11) and
+a(12) at once, each logged once. `evidence/` holds first occurrences only.
+Repo-wide convention: [CONVENTIONS.md](../CONVENTIONS.md).
 
 **5. Certificates, because this problem hands them over.** The values
 m·k²+1 pass huntlib's deterministic Miller–Rabin bound (3.317×10²⁴)
@@ -214,11 +220,20 @@ read off **rungs** — the model's Q1/median/Q3/P90 for every open term
 `--to K` caps a run deliberately and `--stop-on-discovery` halts after a
 first occurrence; both are opt-in. The **filter follows the frontier**:
 with the default `--filter-lag 1` the sieve runs at n = frontier, so once
-a(10) lands it hunts a(11) while still censusing run-10 values, steps to
-n = 11 when a(11) lands, and so on; when a step widens the wheel (11 → 12
-takes 2310 → 30030) the cursor is re-denominated by floor — an overlap
-of under one period, never a gap — and logged as a `[STAGE]` line.
-`--filter-lag 0` is the fastest hunt (n = frontier + 1, no census below).
+a(10) lands it hunts a(11) while still seeing run-10 values (one short of
+a(11): each gets a `[NEAR]` line) and counting shorter runs in `[STATUS]`,
+steps to n = 11 when a(11) lands, and so on; when a step widens the wheel
+(11 → 12 takes 2310 → 30030) the cursor is re-denominated by floor — an
+overlap of under one period, never a gap — and logged as a `[STAGE]`
+line. `--filter-lag 0` is the fastest hunt (n = frontier + 1, nothing
+below the next open term is seen).
+
+Every 30 s (`--heartbeat`) the launcher logs a `[STATUS]` line: position,
+rate, survivors, **the census counts per run length from 7 to the
+frontier** (`census 7:280 8:71 9:28 10:8` — how many run-7s, run-8s, … the
+campaign has met; the only place those values appear), finds, live model
+odds, the next rung and its ETA. `--status` prints the same counts from
+the checkpoint.
 
 The launcher preludes every fresh campaign with an exhaustive oracle
 sweep of [1, 10⁴) — which must return a(1)–a(4) and nothing else — and
@@ -230,10 +245,10 @@ cannot find what is known does not get to report what is not.
 occurrence beyond the campaign frontier (≥ 10 at start; the frontier
 promotes itself as finds land and the promotion lives in the checkpoint)
 halts the hunt, and only when the flag is given. Further k with a settled
-run length are verified, evidenced and counted as census rather than
-stopping a leg or being logged as a second discovery. Terms found in
-earlier campaigns can also be seeded into `CAMPAIGN_FOUND` in the
-launcher.
+run length are census — counted, one `[NEAR]` line if one short of the
+next open term, never evidenced — rather than stopping a leg or being
+logged as a second discovery. Terms found in earlier campaigns can also
+be seeded into `CAMPAIGN_FOUND` in the launcher.
 
 `--workers N` sets the classification pool (default: the machine's core
 count minus four; `1` is the serial path). Segments are 2⁴² candidates

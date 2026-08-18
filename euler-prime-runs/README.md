@@ -347,21 +347,35 @@ at seven heights up to the ceiling. That is not an old version, it is the
 other half of the parity gate.
 
 `--stop-on-discovery` follows the repo-wide convention (CONVENTIONS.md):
-**a discovery is a first occurrence, logged once.** A164926(n) is the
-least prime with run *exactly* n, so settledness is per run length: the
-first run-r prime while a(r) is open is a(r) and a `[DISCOVERY]`; the
-launcher records it in the checkpoint at once, and every later run-r
-prime is a census event — verified and evidenced exactly like a find, but
-logged as `[NEAR]` with a running count per run length (`run-17 census
-#12 (a(17) settled at …)`; the counts appear as `near13-21` in the status
-line), never as a second discovery, and never a stop trigger. With a(17),
-a(18), a(19) and a(21) settled the next open term is **a(20)**, which is
-what the model odds in the status line and the `[MILESTONE]` odds
-crossings (25/50/75/90%) refer to; once it lands the target moves to
-a(22) by itself. The known run-21 value at 2.345×10²⁰ was treated the same
-way — an in-flight canary, not a discovery — rediscovered on schedule
-2026-08-12 and thereby settled as a(21) (see RESULTS.md); it is carried in
-the launcher as `SETTLED_ELSEWHERE`.
+**a discovery is a first occurrence, logged once; the census is counted,
+not narrated.** A164926(n) is the least prime with run *exactly* n, so
+settledness is per run length: the first run-r prime while a(r) is open
+is a(r) and a `[DISCOVERY]` — the launcher records it in the checkpoint at
+once (and saves it at the end of that segment), and it is the only thing
+that is evidenced. Every other run-13+ prime is census, of two kinds. A
+run one short of an *open* term (a run-19 while a(20) is open) gets one
+`[NEAR]` line with its campaign ordinal, verified 3-way but not
+evidenced. A run whose successor is already settled — every run-13
+through run-18 today, and run-19s the moment a(20) lands — is **counted
+only**: it appears in the census counts of the 30-second `[STATUS]`
+heartbeat (`census 13:6539 14:2738 15:1115 16:452 17:270 18:34 19:1 20:0
+21:1`) and nowhere else — no line, no file. Neither kind is ever a stop
+trigger. With a(17), a(18), a(19) and a(21) settled the next open term is
+**a(20)**, which is what the model odds in the status line and the
+`[MILESTONE]` odds crossings (25/50/75/90%) refer to; once it lands the
+target moves to a(22) by itself. The known run-21 value at 2.345×10²⁰ was
+treated the same way — an in-flight canary, not a discovery —
+rediscovered on schedule 2026-08-12 and thereby settled as a(21) (see
+RESULTS.md); it is carried in the launcher as `SETTLED_ELSEWHERE`, and as
+a settled term it keeps its evidence file.
+
+Every 30 s (`--heartbeat`) the launcher logs a `[STATUS]` line: position,
+percent of the cap, rate, survivors, the census counts above, finds, the
+live odds for the next open term, the next rung and its ETA. `--status`
+prints the same counts from the checkpoint. `evidence/` holds first
+occurrences only — the per-value census files and the near-miss `.jsonl`
+that earlier legs wrote were retired on 2026-08-18 (git history before
+commit `3d01f95` has them; the counts in RESULTS.md are what they said).
 
 Requires Python 3.12+, numpy, sympy, CuPy + CUDA GPU (or `--engine cpu`).
 
