@@ -228,12 +228,14 @@ overlap of under one period, never a gap — and logged as a `[STAGE]`
 line. `--filter-lag 0` is the fastest hunt (n = frontier + 1, nothing
 below the next open term is seen).
 
-Every 30 s (`--heartbeat`) the launcher logs a `[STATUS]` line: position,
-rate, survivors, **the census counts per run length from 7 to the
-frontier** (`census 7:280 8:71 9:28 10:8` — how many run-7s, run-8s, … the
-campaign has met; the only place those values appear), finds, live model
-odds, the next rung and its ETA. `--status` prints the same counts from
-the checkpoint.
+Every 30 s of wall clock (`--heartbeat`) the launcher logs a `[STATUS]`
+line from its own timer thread — whatever the main loop is doing: position,
+end-to-end rate, survivors, **the census counts per run length from 7 to
+the frontier** (`census 7:280 8:71 9:28 10:8` — how many run-7s, run-8s, …
+the campaign has met; the only place those values appear), finds, live
+model odds, the next rung and its ETA — and, if no segment has closed since
+the previous line, what it is busy with and for how long, so a stall never
+looks like a hang. `--status` prints the same counts from the checkpoint.
 
 The launcher preludes every fresh campaign with an exhaustive oracle
 sweep of [1, 10⁴) — which must return a(1)–a(4) and nothing else — and

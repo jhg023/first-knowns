@@ -63,7 +63,7 @@ _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
 from sympy import factorint, isprime, primerange              # noqa: E402
 
 from huntlib import checkpoint as _ckpt                       # noqa: E402
-from huntlib.hlog import log, census_str                      # noqa: E402
+from huntlib.hlog import log, census_str, Heartbeat           # noqa: E402
 from huntlib.primes import (MR_VALID_BELOW, factor_witness,   # noqa: E402
                             mr_is_prime)
 from ladder_reference import (K_FLOOR, KNOWN, PUBLISHED_BOUNDS,  # noqa: E402
@@ -238,8 +238,14 @@ def _submit_segment(pool, surv, W, cap):
     return collect
 
 
-def full_verify(k, claimed_run, n_filter, certify=True):
-    """Independent confirmation that run(k) == claimed_run exactly."""
+def full_verify(k, claimed_run, n_filter, certify=True, witness=True):
+    """Independent confirmation that run(k) == claimed_run exactly.
+
+    Legs 1-3 always (own SPRP chain, sympy, alternate-alignment re-sieve).
+    `certify` adds the BLS75 certificates and `witness` the factor of the
+    run breaker -- both are for the EVIDENCE of a first occurrence; a
+    [NEAR] value records nothing, so it runs with both off (the witness
+    once cost 105 s on a semiprime breaker inside a live segment)."""
     r_own = sprp_run(k, cap=claimed_run + 8)
     r_sym = oracle_run(k, cap=claimed_run + 8)
     if not (r_own == r_sym == claimed_run):
@@ -270,9 +276,11 @@ def full_verify(k, claimed_run, n_filter, certify=True):
             certs[str(m)] = {str(p): int(a) for p, a in w.items()}
     breaker_m = claimed_run + 1
     breaker = breaker_m * k * k + 1
-    fw = factor_witness(breaker)
-    if fw in (1, breaker) or breaker % fw:
-        return None, "no composite witness for the run breaker"
+    fw = 0
+    if witness:
+        fw = factor_witness(breaker)
+        if fw in (1, breaker) or breaker % fw:
+            return None, "no composite witness for the run breaker"
     ev = {"k": int(k), "run": int(claimed_run),
           "values_prime_m": list(range(1, claimed_run + 1)),
           "k_factorization": {str(p): int(e) for p, e in factorint(k).items()},
@@ -568,7 +576,11 @@ def production(args):
             c["rungs_passed"].append(label)
 
     seg = SEG_J if args.seg_span is None else max(1, int(args.seg_span) // W)
-    t_last, k_last = time.time(), c["next_j"] * W
+    # the wall-clock [STATUS] heartbeat (huntlib.hlog.Heartbeat): its own
+    # thread, every --heartbeat seconds, whatever the main loop is doing;
+    # the checkpoint is saved from the main loop at segment boundaries
+    hb = Heartbeat(args.heartbeat)
+    t_save = [time.time()]
     workers = max(1, int(args.workers))
     pool = None
     if workers > 1:
@@ -635,6 +647,7 @@ def production(args):
             if kind == "DISCOVERY":
                 # ---- the first k with a run beyond the frontier.  It is
                 # a(r') for EVERY unsettled r' <= r, each logged exactly once.
+                hb.doing(f"verifying run-{r} k={k} (full protocol + certificates)")
                 ev, msg = full_verify(k, r, n)
                 if ev is None:
                     raise CorruptEngineError(f"verify failed at k={k}: {msg}")
@@ -668,7 +681,8 @@ def production(args):
                 # check (own chain, sympy, alternate-alignment re-sieve --
                 # no certificates: nothing is being recorded), logged once
                 # with its census ordinal, never evidenced.
-                ev, msg = full_verify(k, r, n, certify=False)
+                hb.doing(f"verifying run-{r} k={k} (3-way)")
+                ev, msg = full_verify(k, r, n, certify=False, witness=False)
                 if ev is None:
                     raise CorruptEngineError(f"verify failed at k={k}: {msg}")
                 cnt = c["near_counts"][str(r)]
@@ -687,12 +701,16 @@ def production(args):
         now = time.time()
         c["wall_s"] += now - t_mark
         t_mark = now
-        if evidenced:
-            # a promoted frontier must never outlive the process only in
-            # memory: the checkpoint and the evidence directory agree at
-            # every segment boundary that wrote evidence (a plain heartbeat
-            # save could be up to --heartbeat s away)
+        hb.mark(seg_j1 * W)                 # the heartbeat's position + rate
+        hb.doing("between segments")
+        if evidenced or now - t_save[0] >= args.heartbeat:
+            # the checkpoint is saved at segment BOUNDARIES only (a
+            # mid-segment save would persist counts the redone segment
+            # re-counts): every --heartbeat seconds, and at once when the
+            # segment wrote evidence -- a promoted frontier must never
+            # outlive the process only in memory
             save_ckpt(c)
+            t_save[0] = now
         fr = frontier_of(c)
         pos = seg_j1 * W
         dec = 10 ** int(math.log10(max(pos, 10)))
@@ -725,15 +743,16 @@ def production(args):
                                      + ("  -- past the median" if thr == 0.5 else ""))
         return False
 
-    def heartbeat(force=False):
-        nonlocal t_last, k_last
-        now = time.time()
-        if not force and now - t_last < args.heartbeat:
-            return
+    def status_line():
+        """The 30-second [STATUS] line (CONVENTIONS.md), composed on the
+        heartbeat thread from the main loop's state: position, end-to-end
+        rate, survivors, the CENSUS COUNTS per run length from the floor to
+        the frontier -- the only place values below the frontier appear --
+        finds, live odds, next rung + ETA; and, when no segment has closed
+        since the previous line, what the launcher is busy with and for how
+        long, so a stall reads as a stall and never as silence."""
         pos = c["next_j"] * W
-        if force and pos == k_last:
-            return                      # nothing moved since the last line
-        rate = (pos - k_last) / max(now - t_last, 1e-9)
+        rate = hb.rate()
         fr = frontier_of(c)
         odds = ""
         if logC is not None and expected_count is not None:
@@ -743,20 +762,20 @@ def production(args):
         rung = ""
         if nr is not None:
             i, label, depth = nr
-            eta_r = (depth - pos) / max(rate, 1)
+            eta = (f"{(depth - pos) / rate / 3600:.1f}h" if rate > 0 else "n/a")
             rung = (f"rung {i}/{len(all_rungs())} passed, next {label} at "
-                    f"{depth:.2e} (ETA {eta_r/3600:.1f}h)  ")
-        # the 30-second heartbeat (CONVENTIONS.md): position, rate,
-        # survivors, the CENSUS COUNTS per run length from the floor to the
-        # frontier -- the only place values below the frontier appear --
-        # finds, live odds, next rung + ETA
-        log("STATUS", f"k {pos:.4e}  n={n}  {rate:.3e} k/s  "
-                      f"surv {c['survivors']:,}  {census_now()}  "
-                      f"best run {c['best_run']}  finds {c.get('hits', 0)}  "
-                      f"{odds}{rung}")
-        t_last, k_last = now, pos
-        save_ckpt(c)
+                    f"{depth:.2e} (ETA {eta})  ")
+        stall = hb.stalled()
+        busy = ("" if stall is None else
+                f"  -- no segment closed since the last status: {stall[0]} "
+                f"for {stall[1]:.0f}s")
+        return (f"k {pos:.4e}  n={n}  {rate:.3e} k/s  "
+                f"surv {c['survivors']:,}  {census_now()}  "
+                f"best run {c['best_run']}  finds {c.get('hits', 0)}  "
+                f"{odds}{rung}{busy}")
 
+    hb.mark(c["next_j"] * W)
+    hb.start(status_line)
     pending = None          # (j0, j1, surv, collect): one segment behind
     try:
         next_j = c["next_j"]
@@ -771,17 +790,19 @@ def production(args):
             new = None
             if next_j < j_cap and want == n:   # never sieve at a stale filter
                 j0, j1 = next_j, min(next_j + seg, j_cap)
+                hb.doing(f"sieving k {j0*W:.4e}..{j1*W:.4e}")
                 surv = sieve(j0, j1)                 # device works while the
                 collect = _submit_segment(pool, surv, W, frontier_of(c) + 8)
                 new = (j0, j1, surv, collect)        # pool chews on `pending`
                 next_j = j1
             if pending is not None:
                 p_j0, p_j1, p_surv, p_collect = pending
+                hb.doing(f"classifying k {p_j0*W:.4e}..{p_j1*W:.4e} "
+                         f"({p_surv.size:,} survivors)")
                 if consume(p_j0, p_j1, p_surv, p_collect()):
                     return 0
-                heartbeat()
             pending = new
-        heartbeat(force=True)
+        hb.emit()                       # the final line, at the last position
         if user_cap is not None and user_cap < ceiling():
             log("STAGE", f"--to {user_cap:.3e} reached; survivors "
                          f"{c['survivors']}; best run {c['best_run']} at "
@@ -799,6 +820,7 @@ def production(args):
                      % (c["next_j"] * W))
         return 0
     finally:
+        hb.stop()
         if pool is not None:
             pool.shutdown(wait=False, cancel_futures=True)
 

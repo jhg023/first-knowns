@@ -60,7 +60,7 @@ import sys as _sys
 import pathlib as _pathlib
 _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
 from huntlib import checkpoint as _ckpt  # noqa: E402
-from huntlib.hlog import log, census_str  # noqa: E402
+from huntlib.hlog import log, census_str, Heartbeat  # noqa: E402
 from huntlib.primes import factor_witness  # noqa: E402
 
 from euler_reference import A21_UPPER, KNOWN, OPEN_N, run_length as oracle_run
@@ -569,11 +569,58 @@ def hunt(args):
     # periods per checkpoint segment, DERIVED from the engine's wheel: the
     # segment bounds what a kill costs, and that is p-line, not periods
     seg = max(1, int(args.seg_span) // M)
-    t_last, p_last = time.time(), c["next_k"] * M
     log("STAGE", f"production: n={n} filter, from p ~ {c['next_k']*M:.3e} "
         f"to {cap:.3e} ({'the enforced ceiling -- indefinite' if cap >= P_CEIL else '--to'}; "
         f"{len(rung_ladder())} rungs, next open term a({next_target(c, n)})) "
         f"({args.engine})")
+
+    # the wall-clock [STATUS] heartbeat (huntlib.hlog.Heartbeat): its own
+    # thread, every --heartbeat seconds, whatever the main loop is doing --
+    # sieving, classifying a segment's survivors, verifying a value; the
+    # checkpoint is saved from the main loop at segment boundaries
+    hb = Heartbeat(args.heartbeat)
+    t_save = time.time()
+
+    def status_line():
+        """Position, end-to-end rate, survivors, the CENSUS COUNTS per run
+        length from the floor to the top settled term -- the only place
+        values below an open term's predecessor appear -- finds, odds,
+        rung, ETA; and, when no segment has closed since the previous line,
+        what the launcher is busy with and for how long."""
+        pos = c["next_k"] * M
+        rate = hb.rate()
+        pct = 100.0 * pos / cap
+        odds = ""
+        o = odds_now(pos)
+        if o is not None:
+            target, pnow, logc = o
+            haz = math.exp(logc) / math.log(max(pos, 3)) ** target * rate * 3600.0
+            odds = f"P(a{target} by now) {pnow:.0%} (+{haz:.1%}/h)  "
+        if rate > 0:
+            eta_s = (cap - pos) / rate
+            eta = (f"ETA {eta_s/3600.0:.1f}h "
+                   f"({time.strftime('%a %H:%M', time.localtime(time.time() + eta_s))})")
+        else:
+            eta = "ETA n/a"
+        nr = next_rung(pos)
+        rung = ""
+        if nr is not None:
+            i, label, depth = nr
+            eta_r = (f"{(depth - pos) / rate / 3600.0:.1f}h" if rate > 0 else "n/a")
+            rung = (f"rung {i}/{len(rung_ladder())} passed, next "
+                    f"{label} at {depth:.2e} (ETA {eta_r})  ")
+        stall = hb.stalled()
+        busy = ("" if stall is None else
+                f"  -- no segment closed since the last status: {stall[0]} "
+                f"for {stall[1]:.0f}s")
+        return (f"p {pos:.3e}  {pct:.2f}%  {rate/1e14:.2f}e14 p/s  "
+                f"surv {c['survivors']:,}  "
+                f"{census_str(c.get('near_counts', {}), NEAR_FROM, top_settled(c))}  "
+                f"finds {c.get('hits', 0)}  "
+                f"{odds}{rung}{eta}{busy}")
+
+    hb.mark(c["next_k"] * M)
+    hb.start(status_line)
     try:
         while c["next_k"] < k_cap:
             k0 = c["next_k"]
@@ -584,11 +631,13 @@ def hunt(args):
                 c["next_k"] = k1
                 continue
             t0 = time.time()
+            hb.doing(f"sieving p {lo:.4e}..{hi:.4e}")
             surv = eng.survivors_pre_mr(lo, hi)
             if isinstance(surv, list):               # GPU: one sorted list
                 plist = surv
             else:                                    # CPU reference: chunks
                 plist = sorted(p for ch in surv for p in ch)
+            hb.doing(f"classifying p {lo:.4e}..{hi:.4e} ({len(plist):,} survivors)")
             evidenced = False                        # a discovery this segment
             for p in plist:
                 c["survivors"] += 1
@@ -608,6 +657,7 @@ def hunt(args):
                     # known literature value: in-flight canary, never a
                     # discovery, never a stop trigger -- but the settled
                     # a(21), so it keeps its evidence
+                    hb.doing(f"verifying run-{r} p={p} (canary)")
                     ev, msg = three_way_verify(p, r, n)
                     if ev is None:
                         raise CorruptEngineError(f"verify failed at {p}: {msg}")
@@ -621,6 +671,7 @@ def hunt(args):
                     # the FIRST prime with run exactly r while a(r) is open:
                     # a(r) itself.  Full protocol, evidence, logged once;
                     # from here on run-r primes are census.
+                    hb.doing(f"verifying run-{r} p={p} (discovery)")
                     ev, msg = three_way_verify(p, r, n)
                     if ev is None:
                         raise CorruptEngineError(f"verify failed at {p}: {msg}")
@@ -647,6 +698,7 @@ def hunt(args):
                     # one value short of an OPEN term: verified 3-way as a
                     # running engine health check, logged once with its
                     # census ordinal, never evidenced
+                    hb.doing(f"verifying run-{r} p={p} (3-way)")
                     ev, msg = three_way_verify(p, r, n)
                     if ev is None:
                         raise CorruptEngineError(f"verify failed at {p}: {msg}")
@@ -661,47 +713,18 @@ def hunt(args):
                 # CENSUS (a(r+1) settled): counted above, nothing else
             c["next_k"] = k1
             c["wall_s"] += time.time() - t0
-            if evidenced:
-                # a settled term must never outlive the process only in
-                # memory: checkpoint and evidence agree at every segment
-                # boundary that wrote evidence
-                save_ckpt(c)
+            hb.mark(k1 * M)                          # heartbeat position + rate
+            hb.doing("between segments")
             now = time.time()
+            if evidenced or now - t_save >= args.heartbeat:
+                # the checkpoint is saved at segment BOUNDARIES only: every
+                # --heartbeat seconds, and at once when the segment wrote
+                # evidence -- a settled term must never outlive the process
+                # only in memory
+                save_ckpt(c)
+                t_save = now
             top = top_settled(c)
             nears = census_str(c.get("near_counts", {}), NEAR_FROM, top)
-            if now - t_last >= args.heartbeat:
-                pos = k1 * M
-                rate = (pos - p_last) / max(now - t_last, 1e-9)
-                pct = 100.0 * pos / cap
-                odds = ""
-                o = odds_now(pos)
-                if o is not None:
-                    target, pnow, logc = o
-                    haz = math.exp(logc) / math.log(pos) ** target \
-                          * rate * 3600.0
-                    odds = (f"P(a{target} by now) {pnow:.0%} "
-                            f"(+{haz:.1%}/h)  ")
-                eta_s = (cap - pos) / max(rate, 1)
-                finish = time.strftime("%a %H:%M",
-                                       time.localtime(now + eta_s))
-                nr = next_rung(pos)
-                rung = ""
-                if nr is not None:
-                    i, label, depth = nr
-                    eta_r = (depth - pos) / max(rate, 1)
-                    rung = (f"rung {i}/{len(rung_ladder())} passed, next "
-                            f"{label} at {depth:.2e} (ETA {eta_r/3600.0:.1f}h)  ")
-                # the 30-second heartbeat (CONVENTIONS.md): position, rate,
-                # survivors, the CENSUS COUNTS per run length from the floor
-                # to the top settled term -- the only place values below an
-                # open term's predecessor appear -- finds, odds, rung, ETA
-                log("STATUS", f"p {pos:.3e}  {pct:.2f}%  "
-                    f"{rate/1e14:.2f}e14 p/s  surv {c['survivors']:,}  "
-                    f"{nears}  "
-                    f"finds {c.get('hits', 0)}  "
-                    f"{odds}{rung}ETA {eta_s/3600.0:.1f}h ({finish})")
-                t_last, p_last = now, pos
-                save_ckpt(c)
             dec = 10 ** int(math.log10(max(k1 * M, 10)))
             if k0 * M < dec <= k1 * M:
                 log("MILESTONE", f"passed p = {dec:.0e}  survivors "
@@ -732,6 +755,7 @@ def hunt(args):
                             f"{thr:.0%} at p = {k1*M:.3e}"
                             + ("  -- past the median" if thr == 0.5 else ""))
         save_ckpt(c)
+        hb.emit()                                    # the final line
         log("STAGE", (f"the enforced ceiling {P_CEIL:.0e} is the last rung and "
                       f"it has been reached" if cap >= P_CEIL else
                       f"--to {cap:.3e} reached")
@@ -742,6 +766,8 @@ def hunt(args):
         save_ckpt(c)
         log("STAGE", "interrupted -- checkpoint saved; rerun to resume")
         return 0
+    finally:
+        hb.stop()
 
 
 # ------------------------------- selftest ----------------------------------

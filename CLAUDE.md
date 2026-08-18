@@ -81,10 +81,17 @@ each README stays.
    counts of the 30-second `[STATUS]` heartbeat and nowhere else: no line,
    no file, no near-miss record. Every launcher's `[STATUS]` carries those
    counts per run length (`census 7:280 8:71 9:28 10:8`, from
-   `huntlib.hlog.census_str`). Notable events (decade and model-odds
-   crossings, one-short values, new bests, first-of-a-length) each get a
-   log line in the CONVENTIONS taxonomy so a human can follow the hunt
-   from the log alone. See CONVENTIONS.md "The discovery protocol".
+   `huntlib.hlog.census_str`). **`[STATUS]` is logged every 30 seconds of
+   wall clock, from `huntlib.hlog.Heartbeat` on its own thread — never
+   from inside the segment loop**, which goes silent for as long as a
+   segment, a classification or a verification takes; when nothing has
+   moved the line says what the launcher is doing and for how long, and
+   no verification step may run unbounded (bounded rho then ECM for the
+   factor witness; `[NEAR]` values skip witness and certificates). Notable
+   events (decade and model-odds crossings, one-short values, new bests,
+   first-of-a-length) each get a log line in the CONVENTIONS taxonomy so a
+   human can follow the hunt from the log alone. See CONVENTIONS.md "The
+   discovery protocol".
 5b. **Campaigns run indefinitely by default.** No default depth cap; a
    launcher stops on its own only at the end of the last rung (the
    engine's enforced ceiling). Progress is read off rungs — named depths
@@ -111,9 +118,12 @@ each README stays.
          factor witnesses) for FIRST OCCURRENCES ONLY -- census is counts
          in the checkpoint and the log, never files; runtime checkpoints
          gitignored
-   - [ ] a 30-second `[STATUS]` heartbeat carrying the census counts per
-         run length (huntlib.hlog.census_str), and `event_kind` drilled
-         in the selftest (DISCOVERY / NEAR one-short / CENSUS counted)
+   - [ ] a 30-second WALL-CLOCK `[STATUS]` heartbeat on its own thread
+         (huntlib.hlog.Heartbeat: mark() at segment boundaries, doing()
+         around long steps, checkpoint saves from the main loop only)
+         carrying the census counts per run length
+         (huntlib.hlog.census_str), and `event_kind` drilled in the
+         selftest (DISCOVERY / NEAR one-short / CENSUS counted)
    - [ ] self-contained: no references to unpublished work, no personal
          or machine-specific information (scan before committing:
          usernames, local paths, emails, OS details)

@@ -369,10 +369,13 @@ rediscovered on schedule 2026-08-12 and thereby settled as a(21) (see
 RESULTS.md); it is carried in the launcher as `SETTLED_ELSEWHERE`, and as
 a settled term it keeps its evidence file.
 
-Every 30 s (`--heartbeat`) the launcher logs a `[STATUS]` line: position,
-percent of the cap, rate, survivors, the census counts above, finds, the
-live odds for the next open term, the next rung and its ETA. `--status`
-prints the same counts from the checkpoint. `evidence/` holds first
+Every 30 s of wall clock (`--heartbeat`) the launcher logs a `[STATUS]`
+line from its own timer thread — whatever the main loop is doing: position,
+percent of the cap, end-to-end rate, survivors, the census counts above,
+finds, the live odds for the next open term, the next rung and its ETA —
+and, if no segment has closed since the previous line, what it is busy with
+and for how long, so a stall never looks like a hang. `--status` prints the
+same counts from the checkpoint. `evidence/` holds first
 occurrences only — the per-value census files and the near-miss `.jsonl`
 that earlier legs wrote were retired on 2026-08-18 (git history before
 commit `3d01f95` has them; the counts in RESULTS.md are what they said).

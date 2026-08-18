@@ -106,13 +106,33 @@ function per project (`event_kind`), and each selftest drills it: beyond
 the frontier → DISCOVERY, one short → NEAR, below → CENSUS, under the
 floor → nothing.
 
-**The 30-second heartbeat is mandatory (repo-wide).** Every launcher
-logs a `[STATUS]` line every 30 s by default (`--heartbeat`), and that
-line carries the census counts per run length from the floor to the
-frontier in the shared format produced by `huntlib.hlog.census_str`
-(`census 7:280 8:71 9:28 10:8`) — the one place a human reads how many
-run-7s, run-8s, run-9s the campaign has met. `--status` prints the same
-counts from the checkpoint.
+**The 30-second heartbeat is mandatory, and it runs on the wall clock
+(repo-wide).** Every launcher logs a `[STATUS]` line every 30 s of wall
+clock by default (`--heartbeat`), and that line carries the census counts
+per run length from the floor to the frontier in the shared format
+produced by `huntlib.hlog.census_str` (`census 7:280 8:71 9:28 10:8`) —
+the one place a human reads how many run-7s, run-8s, run-9s the campaign
+has met. `--status` prints the same counts from the checkpoint.
+
+The heartbeat is emitted by **`huntlib.hlog.Heartbeat` on its own timer
+thread — never from inside the segment loop.** A launcher that only
+checks the clock between segments goes silent for as long as one
+segment, one classification pass, or one verification takes (a 105 s
+run-breaker factorization inside a live segment once produced an 86 s
+gap between status lines), and silence is indistinguishable from a hang.
+The main loop tells the heartbeat where it is (`hb.mark(pos)` at every
+segment boundary) and what it is doing (`hb.doing("verifying run-10
+k=…")`); the line reports the end-to-end rate over the last ≥ 30 s of
+wall clock — stall time included, so a slow segment lowers the number
+rather than hiding — and, when no segment has closed since the previous
+line, appends `-- no segment closed since the last status: <what> for
+<n>s`, so a stall reads as a stall. The checkpoint is never saved from
+the heartbeat thread (a mid-segment save would persist counts the redone
+segment re-counts); it is saved from the main loop at segment boundaries,
+every heartbeat interval and at once when a segment wrote evidence.
+Nothing in a verification path may run unbounded: the factor witness is
+trial division, a bounded rho, then sympy's ECM; a `[NEAR]` value, which
+records nothing, skips the witness and the certificates entirely.
 
 **Campaigns run indefinitely; rungs mark progress (repo-wide).** A
 launcher started with no arguments runs until it reaches the end of the
@@ -155,11 +175,13 @@ finds are scored against them after.
 
 ## Logging taxonomy
 
-`[STAGE]` phases; `[STATUS]` the 30-second heartbeat with position, rate,
-survivor count, **the census counts per run length from the floor to the
-current frontier** (`census 7:280 8:71 9:28 10:8`, via
+`[STAGE]` phases; `[STATUS]` the 30-second **wall-clock** heartbeat
+(`huntlib.hlog.Heartbeat`, its own thread) with position, end-to-end
+rate, survivor count, **the census counts per run length from the floor
+to the current frontier** (`census 7:280 8:71 9:28 10:8`, via
 `huntlib.hlog.census_str`), the number of finds, live model odds, the next
-rung and ETA; `[MILESTONE]` decade crossings *and* model-odds crossings
+rung and ETA, and what the launcher is busy with whenever no segment has
+closed since the previous line; `[MILESTONE]` decade crossings *and* model-odds crossings
 (the hunt has passed the point where the model put the next term with
 25/50/75/90% probability — "past the median" is worth a line), also
 carrying the census counts; `[RUNG]` a rung of the progress ladder passed,

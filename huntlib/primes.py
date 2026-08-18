@@ -47,11 +47,19 @@ def mr_is_prime(m):
     return True
 
 
+RHO_ITERS = 200_000        # bounded Brent rho: finds factors to ~1e10 fast
+
+
 def factor_witness(m):
-    """A nontrivial factor of composite m (trial division, then Brent rho).
+    """A nontrivial factor of composite m: trial division to 1e6, then a
+    BOUNDED Brent rho, then sympy's factorint (ECM) for whatever is left.
 
     Used to make every 'this value is composite' claim in an evidence file
-    independently checkable with one multiplication.
+    independently checkable with one multiplication.  Bounded because an
+    unbounded rho on a run breaker that happens to be a semiprime with a
+    16-digit smallest factor took 105 s inside a live campaign (rho needs
+    ~sqrt(p) steps; ECM does not), and a verification step must never
+    stall the hunt for minutes.
     """
     for q in _SMALL + (41, 43, 47):
         if m % q == 0 and m != q:
@@ -61,13 +69,21 @@ def factor_witness(m):
         if m % d == 0:
             return d
         d += 2
-    while True:                                # Pollard rho, Brent variant
+    if d * d > m:
+        return 1                                # m is prime (or 1)
+    for _ in range(4):                          # Pollard rho, Brent variant
         y, cadd, fac = random.randrange(1, m), random.randrange(1, m), 1
         x = y
-        while fac == 1:
+        for _ in range(RHO_ITERS):
             x = (x * x + cadd) % m
             y = (y * y + cadd) % m
             y = (y * y + cadd) % m
             fac = math.gcd(abs(x - y), m)
-        if fac != m:
+            if fac != 1:
+                break
+        if 1 < fac < m:
             return fac
+    from sympy import factorint                 # ECM et al.: seconds, not minutes
+    fac = factorint(m)
+    smallest = min(fac)
+    return smallest if smallest < m else 1
