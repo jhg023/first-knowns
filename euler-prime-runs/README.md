@@ -27,9 +27,10 @@ term of this stretch still unknown — **a(20)** — exceeds that, which puts
 it above a(19) and a(21) both. Conditional on the empty sweep, the model
 puts a(20) at median 1.75×10²² (quartiles 8.5×10²¹ / 3.8×10²²): ~9 days of
 sweeping to the median at the realized rate, ~3 weeks to Q3. Anyone can
-resume it — `python launch.py --stop-on-discovery --to 2e22` picks up at
-3.7439×10²¹ behind the canary prelude, and no campaign state lives outside
-this repo.
+resume it — `python launch.py` picks up at 3.7439×10²¹ behind the canary
+prelude and runs indefinitely (to the 10²⁴ ceiling, the last rung; `--to`
+and `--stop-on-discovery` are opt-in stops), and no campaign state lives
+outside this repo.
 
 The engine was rebuilt 2026-08-15 (bit-sieve stage 1a, then a 31# wheel)
 for ~19x and sharpened four times on 2026-08-16, by 1.294x, 1.055x, 1.329x
@@ -308,15 +309,22 @@ rate, and it sits well inside the enforced 10²⁴ ceiling.
 
 ```
 python launch.py --selftest    # full gate battery + drills (~15 min)
-python launch.py --stop-on-discovery --to 2e22
-                               # THE HUNT: resumes at the frontier
+python launch.py               # THE HUNT: resumes at the frontier
                                # (3.7439e21, where the a(19) find halted
-                               # it), sweeps for a(20), halts after a
-                               # frontier-extending find
+                               # it), sweeps for a(20) and runs
+                               # INDEFINITELY -- to the 1e24 ceiling, the
+                               # last rung.  --to 2e22 was leg 3's cap;
+                               # --stop-on-discovery halts after a first
+                               # occurrence.  Both are opt-in.
 python launch.py --status      # scoreboard
 python score.py                # gates x fingerprinted benchmarks
 python euler_model.py          # rebuild the odds model + its gates
 ```
+
+Progress is read off **rungs**: the model's Q1/median/Q3/P90 for the next
+open term (a(20): 1.3×10²¹ / 6.0×10²¹ / 1.9×10²² / 4.5×10²², unconditional,
+derived at start from the singular series) plus the ceiling, logged
+`[RUNG]` as each is passed and shown with an ETA in every `[STATUS]`.
 
 **One engine, one cursor, no flags.** Every candidate is carried as the
 pair (k, off) with p = k·37# + off, which is as valid at 10⁵ as at 10²³,

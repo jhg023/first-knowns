@@ -122,19 +122,17 @@ FRONTIER_RUN = max(CAMPAIGN_FOUND)             # largest run settled by a
 #                                                frontier is top_settled(c)
 NEAR_FROM = 13                                 # runs at or above this are
 #                                                counted and logged as [NEAR]
-DEFAULT_TO = 20000 * 10**18                     # 2e22: leg 3, the a(20) hunt.
-                                               # a(19) was found at 3.744e21
-                                               # and the sweep halted there.
-                                               # Conditional on that sweep
-                                               # being empty of run-20 primes,
-                                               # a(20)'s median is 1.75e22
-                                               # (quartiles 8.5e21 / 3.83e22),
-                                               # so 2e22 carries ~54% of the
-                                               # distribution at ~10 days of
-                                               # the realized 1.85e16 p/s.
-                                               # --to overrides; stop-on-
-                                               # discovery means the cap only
-                                               # matters if nothing is found.
+# A campaign runs INDEFINITELY (CONVENTIONS.md): the only depth at which it
+# stops on its own is the enforced ceiling P_CEIL, the last rung.  --to caps
+# a run deliberately (leg 3 used --to 2e22: conditional on the empty sweep
+# to 3.744e21, a(20)'s median is 1.75e22 with quartiles 8.5e21 / 3.83e22,
+# so 2e22 carried ~54% of the distribution at the realized 1.85e16 p/s).
+# Progress is read off RUNGS -- the model's Q1/median/Q3/P90 of the next
+# open term, derived at start from the singular series stated before the
+# run, plus the ceiling -- logged as [RUNG] when passed and shown with an
+# ETA in every [STATUS].
+DEFAULT_TO = P_CEIL
+RUNG_QUANTILES = ((0.25, "Q1"), (0.50, "median"), (0.75, "Q3"), (0.90, "P90"))
 
 
 class CorruptEngineError(RuntimeError):
@@ -203,7 +201,7 @@ def fresh_ckpt(n, eng):
     return {"key": ckpt_key(n, eng), "M": int(eng.M), "next_k": 0,
             "canaries_done": False, "survivors": 0, "events": [],
             "best_near": 0, "best_near_p": 0, "near_counts": {}, "hits": 0,
-            "found": {}, "odds_marks": [],
+            "found": {}, "odds_marks": [], "rungs_passed": [],
             "wall_s": 0.0, "started": time.time()}
 
 
@@ -263,6 +261,26 @@ def next_target(c, n):
     while settled_at(c, r) is not None:
         r += 1
     return r
+
+
+def rungs_for(target, logc, expected_count, lo=1e10, hi=None):
+    """[(label, depth)] for one open term: the depths where the model puts
+    P(a(target) <= depth) at 25/50/75/90%, by bisection on E(P)."""
+    hi = float(P_CEIL) if hi is None else hi
+    out = []
+    for q, name in RUNG_QUANTILES:
+        want = -math.log(1.0 - q)                    # E at which 1-e^-E = q
+        a, b = math.log(lo), math.log(hi)
+        if expected_count(target, hi, logc) < want:
+            continue                                 # not reached below the ceiling
+        for _ in range(80):
+            m = 0.5 * (a + b)
+            if expected_count(target, math.exp(m), logc) < want:
+                a = m
+            else:
+                b = m
+        out.append((f"a({target}) {name}", math.exp(b)))
+    return out
 
 
 def check_cursor(c, eng):
@@ -501,12 +519,36 @@ def hunt(args):
     cap = int(args.to)
     M = eng.M
     k_cap = cap // M + 1
+
+    def rung_ladder():
+        """The next open term's model quartiles below the ceiling, then the
+        ceiling itself as the last rung."""
+        out = []
+        target = next_target(c, n)
+        if expected_count is not None and target in logc_table:
+            out = rungs_for(target, logc_table[target], expected_count)
+        out.append((f"enforced ceiling {P_CEIL:.0e}", float(P_CEIL)))
+        return out
+
+    def next_rung(pos):
+        passed = c.setdefault("rungs_passed", [])
+        for i, (label, depth) in enumerate(rung_ladder()):
+            if label not in passed and depth > pos:
+                return i, label, depth
+        return None
+    # rungs already behind the cursor (a resume from before rungs existed)
+    # are recorded silently
+    for label, depth in rung_ladder():
+        if depth <= c["next_k"] * M and label not in c.setdefault("rungs_passed", []):
+            c["rungs_passed"].append(label)
     # periods per checkpoint segment, DERIVED from the engine's wheel: the
     # segment bounds what a kill costs, and that is p-line, not periods
     seg = max(1, int(args.seg_span) // M)
     t_last, p_last = time.time(), c["next_k"] * M
     log("STAGE", f"production: n={n} filter, from p ~ {c['next_k']*M:.3e} "
-        f"to {cap:.3e} ({args.engine})")
+        f"to {cap:.3e} ({'the enforced ceiling -- indefinite' if cap >= P_CEIL else '--to'}; "
+        f"{len(rung_ladder())} rungs, next open term a({next_target(c, n)})) "
+        f"({args.engine})")
     try:
         while c["next_k"] < k_cap:
             k0 = c["next_k"]
@@ -617,11 +659,18 @@ def hunt(args):
                 eta_s = (cap - pos) / max(rate, 1)
                 finish = time.strftime("%a %H:%M",
                                        time.localtime(now + eta_s))
+                nr = next_rung(pos)
+                rung = ""
+                if nr is not None:
+                    i, label, depth = nr
+                    eta_r = (depth - pos) / max(rate, 1)
+                    rung = (f"rung {i}/{len(rung_ladder())} passed, next "
+                            f"{label} at {depth:.2e} (ETA {eta_r/3600.0:.1f}h)  ")
                 log("STATUS", f"p {pos:.3e}  {pct:.2f}%  "
                     f"{rate/1e14:.2f}e14 p/s  surv {c['survivors']:,}  "
                     f"near{NEAR_FROM}-{top} {nears}  "
                     f"finds {c.get('hits', 0)}  "
-                    f"{odds}ETA {eta_s/3600.0:.1f}h ({finish})")
+                    f"{odds}{rung}ETA {eta_s/3600.0:.1f}h ({finish})")
                 t_last, p_last = now, pos
                 save_ckpt(c)
             dec = 10 ** int(math.log10(max(k1 * M, 10)))
@@ -629,6 +678,17 @@ def hunt(args):
                 log("MILESTONE", f"passed p = {dec:.0e}  survivors "
                     f"{c['survivors']:,}  near{NEAR_FROM}-{top} {nears}  "
                     f"finds {c.get('hits', 0)}")
+            # rungs: the next open term's model quartiles, then the ceiling
+            passed = c.setdefault("rungs_passed", [])
+            ladder = rung_ladder()
+            for i, (label, depth) in enumerate(ladder):
+                if depth <= k1 * M and label not in passed:
+                    passed.append(label)
+                    nr = next_rung(k1 * M)
+                    nxt = ("last rung -- the campaign ends here" if nr is None
+                           else f"next: {nr[1]} at p = {nr[2]:.3e}")
+                    log("RUNG", f"passed rung {i+1}/{len(ladder)}: {label} "
+                        f"(p = {depth:.3e}) at p = {k1*M:.4e}  -- {nxt}")
             # model odds crossing a quartile for the next open term: once
             # per threshold per target, persisted so a resume does not repeat
             o = odds_now(k1 * M)
@@ -643,8 +703,11 @@ def hunt(args):
                             f"{thr:.0%} at p = {k1*M:.3e}"
                             + ("  -- past the median" if thr == 0.5 else ""))
         save_ckpt(c)
-        log("STAGE", f"cap {cap:.3e} reached; survivors {c['survivors']}; "
-            f"best near-miss run {c['best_near']} at {c['best_near_p']}")
+        log("STAGE", (f"the enforced ceiling {P_CEIL:.0e} is the last rung and "
+                      f"it has been reached" if cap >= P_CEIL else
+                      f"--to {cap:.3e} reached")
+            + f"; survivors {c['survivors']}; best near-miss run "
+              f"{c['best_near']} at {c['best_near_p']}")
         return 0
     except KeyboardInterrupt:
         save_ckpt(c)
@@ -729,6 +792,29 @@ def selftest():
               "census, a(21) stays settled at the literature value, the odds "
               "target moves 20 -> 22 -> 23, a run of 22 settles a(22) only")
 
+    # indefinite-run drill: the rung ladder for a(20) is ascending, sits
+    # between the a(19) find and the ceiling, and its median matches the
+    # README's conditional-free model to within the bisection
+    try:
+        from euler_model import expected_count as _ec
+        with open("model_results.json") as fh:
+            _lc = {int(k): v["logC"] for k, v in json.load(fh)["singular"].items()}
+        ladder = rungs_for(20, _lc[20], _ec)
+        depths = [d for _, d in ladder]
+        r_ok = (len(ladder) == 4 and depths == sorted(depths)
+                and 10**20 < depths[0] < depths[-1] < P_CEIL
+                and abs(_ec(20, depths[1], _lc[20]) - math.log(2)) < 1e-6)
+    except Exception as e:                            # noqa: BLE001
+        r_ok, ladder = False, str(e)
+    if not r_ok:
+        print(f"FAIL indefinite-run drill: rung ladder for a(20) ({ladder})")
+        ok = False
+    else:
+        print("PASS indefinite-run drill: a(20) rungs Q1/median/Q3/P90 = "
+              + "/".join(f"{d:.2e}" for d in depths)
+              + f" ascending, below the ceiling {P_CEIL:.0e} (the last rung); "
+                "E(median) = ln 2")
+
     # planted-discovery drill: a genuine run-13 survivor pushed through the
     # n=17 protocol MUST be rejected
     hits = GpuEngine(13).hunt(P_FLOOR, KNOWN[13] + 1000)
@@ -791,6 +877,8 @@ def status():
         print(f"survivors : {c['survivors']}")
         print(f"best near : run {c['best_near']} at p = {c['best_near_p']}")
         print(f"census    : {c.get('near_counts', {})}  (count per run length)")
+        print(f"rungs     : {len(c.get('rungs_passed', []))} passed; last: "
+              f"{(c.get('rungs_passed') or ['-'])[-1]}")
         print(f"found     : {c.get('found', {})}  (this campaign's first "
               f"occurrences; next open term a({next_target(c, 17)}))")
         print(f"finds     : {c.get('hits', 0)}")
@@ -829,8 +917,9 @@ def main():
                          "rediscoveries and census repeats never trigger it")
     ap.add_argument("--n", type=int, default=17)
     ap.add_argument("--to", type=float, default=0.0,
-                    help="depth cap (default %.0e, the current leg; the hard "
-                         "ceiling is %.0e)" % (DEFAULT_TO, P_CEIL))
+                    help="depth cap in p (default: none -- the campaign runs "
+                         "to the enforced ceiling %.0e, the last rung; leg 3 "
+                         "used 2e22)" % P_CEIL)
     ap.add_argument("--engine", choices=["gpu", "cpu"], default="gpu",
                     help="gpu (default) is the production engine and spans "
                          "the whole range; cpu is the numpy reference, for "

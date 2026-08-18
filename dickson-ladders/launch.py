@@ -69,7 +69,10 @@ CKPT = "campaign_checkpoint.json"
 DISC = os.path.join("evidence", "ladder_discoveries.json")
 NEAR = os.path.join("evidence", "ladder_nearmiss.jsonl")
 
-CONFIG_KEY = "dickson-ladders/v1/n={n}/W={W}/q2={q2}/jceil=4e18"
+# The key pins what would change the meaning of the cursor and never
+# changes inside a campaign; the filter n and the wheel W are stored IN the
+# checkpoint instead, because the campaign moves them itself (below).
+CONFIG_KEY = "dickson-ladders/v2/q2={q2}/jceil=4e18"
 
 # Terms this campaign has settled.  A term joins the table the moment it
 # is verified, which demotes its run length from "discovery" to "census":
@@ -77,9 +80,21 @@ CONFIG_KEY = "dickson-ladders/v1/n={n}/W={W}/q2={q2}/jceil=4e18"
 CAMPAIGN_FOUND = {}
 FRONTIER_N = max(max(KNOWN), *([max(CAMPAIGN_FOUND)] if CAMPAIGN_FOUND else [0]))
 
-# Leg 1 of the hunt.  a(10) median 1.7e15, a(11) median 7.2e16 (see
-# ladder_model.py); 2e17 carries a(11) past its Q3.  --to overrides.
-DEFAULT_TO = 2 * 10**17
+# A campaign runs INDEFINITELY (CONVENTIONS.md): there is no depth at which
+# it stops on its own except the enforced ceiling of its wheel, which is
+# the last rung.  --to caps a run deliberately; --stop-on-discovery is the
+# other deliberate stop.  Progress is read off RUNGS: the model's quartiles
+# for every open term (model_results.json, stated before the run), logged
+# as [RUNG] when passed, with the next rung and its ETA in every [STATUS].
+MODEL_FILE = "model_results.json"
+# The sieve filter FOLLOWS THE FRONTIER: filter = max(--n, frontier + 1 -
+# FILTER_LAG).  With the default lag of 1 the filter equals the frontier,
+# so once a(10) lands the sieve runs at n = 10 -- hunting a(11) while still
+# censusing run-10 values -- and steps to 11 when a(11) lands, and so on;
+# lag 0 is the fastest possible hunt (filter = frontier + 1) and sees no
+# census below it.  A step that widens the wheel re-denominates the cursor
+# with FLOOR (an overlap of at most one new period, never a gap).
+FILTER_LAG = 1
 SEG_J = 1 << 42                # j per checkpoint segment: ~1 s of device
 #                                time at the v2 rate on any wheel (in k it
 #                                is 1e16 at n = 10, 1.3e17 at n = 13; v1 used
@@ -243,15 +258,12 @@ def full_verify(k, claimed_run, n_filter, certify=True):
 
 # ------------------------------ checkpoint ---------------------------------
 
-def ckpt_key(n, eng):
-    """Derived from the ENGINE's own wheel and depth, never recomputed
-    independently of it -- a key that can disagree with the engine is a
-    cursor waiting to be misread."""
-    return CONFIG_KEY.format(n=n, W=eng.W, q2=eng.q2)
+def ckpt_key(q2=Q2_DEFAULT):
+    return CONFIG_KEY.format(q2=q2)
 
 
-def load_ckpt(n, eng):
-    return _ckpt.load(CKPT, ckpt_key(n, eng), warn=lambda m: log("WARN", m))
+def load_ckpt(q2=Q2_DEFAULT):
+    return _ckpt.load(CKPT, ckpt_key(q2), warn=lambda m: log("WARN", m))
 
 
 def save_ckpt(c):
@@ -259,12 +271,45 @@ def save_ckpt(c):
 
 
 def fresh_ckpt(n, eng):
-    return {"key": ckpt_key(n, eng), "W": eng.W,
+    return {"key": ckpt_key(eng.q2), "n": int(n), "W": eng.W,
             "next_j": max(1, -(-K_FLOOR // eng.W)),
             "canaries_done": False, "survivors": 0,
             "near_counts": {}, "best_run": 0, "best_k": 0, "hits": 0,
-            "found": {}, "odds_marks": [],
+            "found": {}, "odds_marks": [], "rungs_passed": [],
             "wall_s": 0.0, "started": time.time()}
+
+
+def filter_for(c, n_min, lag=FILTER_LAG):
+    """The sieve filter the campaign should be running: at least --n, and
+    following the frontier one step behind (lag 1) or on it (lag 0)."""
+    return max(int(n_min), frontier_of(c) + 1 - int(lag))
+
+
+def redenominate(next_j, W_old, W_new):
+    """The cursor after a wheel change: FLOOR, so the new sweep starts at or
+    below the old position -- an overlap of under one new period, never a
+    gap (no candidate of the new wheel at or above the old position is
+    skipped; below one period the first candidate IS the next one).
+    Exhaustiveness is the whole claim; a re-swept period is cheap."""
+    return max(1, (int(next_j) * int(W_old)) // int(W_new))
+
+
+def load_rungs(path=MODEL_FILE):
+    """[(label, depth_k)] ascending: the model's Q1/median/Q3/P90 for every
+    open term, from the predictions stated before the run.  The enforced
+    ceiling of the running wheel is appended at run time as the last rung."""
+    rungs = []
+    try:
+        with open(path) as fh:
+            preds = json.load(fh)["predictions"]
+    except Exception:
+        return rungs
+    for n_s, v in preds.items():
+        for q in ("Q1", "median", "Q3", "P90"):
+            if q in v:
+                rungs.append((f"a({int(n_s)}) {q}", float(v[q])))
+    rungs.sort(key=lambda t: t[1])
+    return rungs
 
 
 def frontier_of(c):
@@ -311,11 +356,12 @@ def settled_at(c, r):
 
 
 def check_cursor(c, eng):
-    if c.get("W") != eng.W:
+    if c.get("W") != eng.W or wheel_modulus(int(c.get("n", -1))) != eng.W:
         raise CorruptEngineError(
-            f"[ALARM] cursor was written for wheel {c.get('W')} but the "
-            f"engine runs {eng.W}; next_j counts multiples of the wheel, so "
-            f"reading it against another one moves the frontier silently")
+            f"[ALARM] cursor was written for wheel {c.get('W')} (filter "
+            f"{c.get('n')}) but the engine runs {eng.W}; next_j counts "
+            f"multiples of the wheel, so reading it against another one "
+            f"moves the frontier silently")
 
 
 def refuse_unreadable_cursor(eng, fresh):
@@ -333,7 +379,7 @@ def refuse_unreadable_cursor(eng, fresh):
         stored = json.load(fh).get("key")
     raise CorruptEngineError(
         f"[ALARM] checkpoint key {stored!r} does not match the running "
-        f"configuration {ckpt_key(eng.n, eng)!r}. Refusing to start a fresh "
+        f"configuration {ckpt_key(eng.q2)!r}. Refusing to start a fresh "
         f"sweep over a range that may already be covered; pass --fresh to "
         f"discard it deliberately.")
 
@@ -410,13 +456,18 @@ def production(args):
     def make_engine(m):
         return Eng(m, q2=Q2_DEFAULT)
 
-    n = args.n
-    eng = make_engine(n)
-    c = None if args.fresh else load_ckpt(n, eng)
+    # ---- cursor: the checkpoint says which filter the campaign is on
+    c = None if args.fresh else load_ckpt()
     if c is None:
+        eng = make_engine(args.n)
         refuse_unreadable_cursor(eng, args.fresh)
-        c = fresh_ckpt(n, eng)
+        c = fresh_ckpt(args.n, eng)
+        n = args.n
+    else:
+        n = int(c.get("n", args.n))
+        eng = make_engine(n)
     check_cursor(c, eng)
+    W = eng.W
 
     if not c["canaries_done"]:
         log("STAGE", "prelude: oracle low pass + a(7)/a(8)/a(9) rediscovery")
@@ -443,9 +494,35 @@ def production(args):
     except Exception:
         expected_count = None
 
-    cap_k = int(args.to)
-    W = eng.W
-    j_cap = cap_k // W + 1
+    # ---- depth: indefinite by default -- the enforced ceiling of the
+    # running wheel is the last rung; --to caps a run deliberately
+    user_cap = None if args.to is None else int(args.to)
+    rungs = load_rungs()
+
+    def ceiling():
+        return J_CEIL * W
+
+    def cap_now():
+        return ceiling() if user_cap is None else min(user_cap, ceiling())
+
+    def j_cap_now():
+        return min(cap_now() // W + 1, J_CEIL)
+
+    def all_rungs():
+        return rungs + [(f"enforced ceiling of the {W} wheel", float(ceiling()))]
+
+    def next_rung(pos):
+        passed = c.get("rungs_passed", [])
+        for i, (label, depth) in enumerate(all_rungs()):
+            if label not in passed and depth > pos:
+                return i, label, depth
+        return None
+    # rungs already behind the cursor (a resume from before rungs existed)
+    # are recorded silently
+    for label, depth in all_rungs():
+        if depth <= c["next_j"] * W and label not in c.setdefault("rungs_passed", []):
+            c["rungs_passed"].append(label)
+
     seg = SEG_J if args.seg_span is None else max(1, int(args.seg_span) // W)
     t_last, k_last = time.time(), c["next_j"] * W
     workers = max(1, int(args.workers))
@@ -454,8 +531,11 @@ def production(args):
         from concurrent.futures import ProcessPoolExecutor
         pool = ProcessPoolExecutor(max_workers=workers)
     log("STAGE", f"production: n={n} filter, wheel {W}, k from "
-                 f"{c['next_j']*W:.4e} to {cap_k:.3e} ({args.engine}, "
-                 f"{workers} classification worker{'s' if workers > 1 else ''})")
+                 f"{c['next_j']*W:.4e} to {cap_now():.3e} "
+                 f"({'--to' if user_cap is not None else 'the enforced ceiling'};"
+                 f" {len(all_rungs())} rungs, filter lag {args.filter_lag}) "
+                 f"({args.engine}, {workers} classification worker"
+                 f"{'s' if workers > 1 else ''})")
 
     def sieve(j0, j1):
         surv = eng.survivors_j(j0, j1)
@@ -465,11 +545,31 @@ def production(args):
                     if surv else np.empty(0, dtype="uint64"))
         return surv
 
+    def switch_filter(new_n):
+        """Rebuild the engine at a new filter; re-denominate the cursor if
+        the wheel widened.  Called only with no segment in flight."""
+        nonlocal eng, n, W, seg
+        old_n, old_W, old_j = n, W, c["next_j"]
+        eng = make_engine(new_n)
+        n, W = new_n, eng.W
+        new_j = old_j if W == old_W else redenominate(old_j, old_W, W)
+        c["n"], c["W"], c["next_j"] = n, W, new_j
+        if args.seg_span is not None:
+            seg = max(1, int(args.seg_span) // W)
+        overlap = old_j * old_W - new_j * W
+        log("STAGE", f"filter {old_n} -> {n} (frontier a({frontier_of(c)}), "
+                     f"lag {args.filter_lag}); wheel {old_W} -> {W}; cursor "
+                     f"k {old_j*old_W:.4e} -> {new_j*W:.4e}"
+                     + (f" (overlap {overlap:.3e}, floor: never a gap)"
+                        if W != old_W else " (same wheel, cursor unchanged)")
+                     + f"; ceiling now {ceiling():.3e}")
+        save_ckpt(c)
+
     t_mark = time.time()
 
     def consume(seg_j0, seg_j1, surv, runs):
         """Bookkeeping for one classified segment, survivors ascending.
-        Returns True if the campaign should stop (frontier find)."""
+        Returns True if the campaign should stop (--stop-on-discovery)."""
         nonlocal t_mark
         for j, r in zip(surv.tolist(), runs):
             k = int(j) * W
@@ -546,15 +646,26 @@ def production(args):
         fr = frontier_of(c)
         nc = c.get("near_counts", {})
         nears = "/".join(str(nc.get(str(r), 0)) for r in range(NEAR_FROM, fr + 1))
-        dec = 10 ** int(math.log10(max(seg_j1 * W, 10)))
-        if seg_j0 * W < dec <= seg_j1 * W:
+        pos = seg_j1 * W
+        dec = 10 ** int(math.log10(max(pos, 10)))
+        if seg_j0 * W < dec <= pos:
             log("MILESTONE", f"passed k = {dec:.0e}  survivors "
                              f"{c['survivors']:,}  near{NEAR_FROM}-{fr} {nears}  "
                              f"best run {c['best_run']}  finds {c.get('hits', 0)}")
+        # rungs: the model's quartiles for the open terms, then the ceiling
+        passed = c.setdefault("rungs_passed", [])
+        for i, (label, depth) in enumerate(all_rungs()):
+            if depth <= pos and label not in passed:
+                passed.append(label)
+                nr = next_rung(pos)
+                nxt = ("last rung -- the campaign ends here" if nr is None else
+                       f"next: {nr[1]} at k = {nr[2]:.3e}")
+                log("RUNG", f"passed rung {i+1}/{len(all_rungs())}: {label} "
+                            f"(k = {depth:.3e}) at k = {pos:.4e}  -- {nxt}")
         # model odds crossing a quartile: the hunt is past where the model
         # put a(fr+1) with that probability -- once per threshold per frontier
         if logC is not None and expected_count is not None:
-            E = expected_count(fr + 1, seg_j1 * W, logC)
+            E = expected_count(fr + 1, pos, logC)
             pnow = 1.0 - math.exp(-E)
             marks = c.setdefault("odds_marks", [])
             for thr in (0.25, 0.50, 0.75, 0.90):
@@ -562,7 +673,7 @@ def production(args):
                 if pnow >= thr and key not in marks:
                     marks.append(key)
                     log("MILESTONE", f"model: P(a({fr+1}) by now) crossed "
-                                     f"{thr:.0%} at k = {seg_j1*W:.3e}"
+                                     f"{thr:.0%} at k = {pos:.3e}"
                                      + ("  -- past the median" if thr == 0.5 else ""))
         return False
 
@@ -572,6 +683,8 @@ def production(args):
         if not force and now - t_last < args.heartbeat:
             return
         pos = c["next_j"] * W
+        if force and pos == k_last:
+            return                      # nothing moved since the last line
         rate = (pos - k_last) / max(now - t_last, 1e-9)
         fr = frontier_of(c)
         nc = c.get("near_counts", {})
@@ -581,27 +694,38 @@ def production(args):
         if logC is not None and expected_count is not None:
             E = expected_count(fr + 1, pos, logC)
             odds = f"P(a{fr+1} by now) {1-math.exp(-E):.0%}  "
-        eta = (cap_k - pos) / max(rate, 1)
-        log("STATUS", f"k {pos:.4e}  {100.0*pos/cap_k:.2f}%  "
-                      f"{rate:.3e} k/s  surv {c['survivors']:,}  "
-                      f"near{NEAR_FROM}-{fr} {nears}  "
+        nr = next_rung(pos)
+        rung = ""
+        if nr is not None:
+            i, label, depth = nr
+            eta_r = (depth - pos) / max(rate, 1)
+            rung = (f"rung {i}/{len(all_rungs())} passed, next {label} at "
+                    f"{depth:.2e} (ETA {eta_r/3600:.1f}h)  ")
+        log("STATUS", f"k {pos:.4e}  n={n}  {rate:.3e} k/s  "
+                      f"surv {c['survivors']:,}  near{NEAR_FROM}-{fr} {nears}  "
                       f"best run {c['best_run']}  finds {c.get('hits', 0)}  "
-                      f"{odds}ETA {eta/3600:.1f}h")
+                      f"{odds}{rung}")
         t_last, k_last = now, pos
         save_ckpt(c)
 
     pending = None          # (j0, j1, surv, collect): one segment behind
     try:
         next_j = c["next_j"]
-        while next_j < j_cap or pending is not None:
-            if next_j < j_cap:
+        while True:
+            want = filter_for(c, args.n, args.filter_lag)
+            if want != n and pending is None:
+                switch_filter(want)          # no segment in flight: safe
+                next_j = c["next_j"]
+            j_cap = j_cap_now()
+            if next_j >= j_cap and pending is None:
+                break
+            new = None
+            if next_j < j_cap and want == n:   # never sieve at a stale filter
                 j0, j1 = next_j, min(next_j + seg, j_cap)
                 surv = sieve(j0, j1)                 # device works while the
                 collect = _submit_segment(pool, surv, W, frontier_of(c) + 8)
                 new = (j0, j1, surv, collect)        # pool chews on `pending`
                 next_j = j1
-            else:
-                new = None
             if pending is not None:
                 p_j0, p_j1, p_surv, p_collect = pending
                 if consume(p_j0, p_j1, p_surv, p_collect()):
@@ -609,8 +733,15 @@ def production(args):
                 heartbeat()
             pending = new
         heartbeat(force=True)
-        log("STAGE", f"cap {cap_k:.3e} reached; survivors {c['survivors']}; "
-                     f"best run {c['best_run']} at k = {c['best_k']}")
+        if user_cap is not None and user_cap < ceiling():
+            log("STAGE", f"--to {user_cap:.3e} reached; survivors "
+                         f"{c['survivors']}; best run {c['best_run']} at "
+                         f"k = {c['best_k']}")
+        else:
+            log("STAGE", f"the enforced ceiling {ceiling():.3e} of the {W} "
+                         f"wheel is the last rung and it has been reached; "
+                         f"survivors {c['survivors']}; best run "
+                         f"{c['best_run']} at k = {c['best_k']}")
         return 0
     except KeyboardInterrupt:
         save_ckpt(c)
@@ -659,6 +790,36 @@ def selftest():
     else:
         print(f"PASS resume drill: split stream == whole stream "
               f"({whole.size} survivors)")
+
+    # --- indefinite-run drill: rungs, filter following, re-denomination --
+    rungs = load_rungs()
+    r_ok = (len(rungs) >= 8 and all(rungs[i][1] <= rungs[i + 1][1]
+                                    for i in range(len(rungs) - 1))
+            and any(lab.startswith("a(13) median") for lab, _ in rungs))
+    c0 = fresh_ckpt(10, GpuEngine(10))
+    r_ok = r_ok and filter_for(c0, 10) == 10 and filter_for(c0, 10, lag=0) == 10
+    settle(c0, 10, 10**15)                          # a(10) lands: frontier 10
+    r_ok = r_ok and filter_for(c0, 10) == 10 and filter_for(c0, 10, lag=0) == 11
+    settle(c0, 11, 10**17)                          # frontier 11
+    r_ok = r_ok and filter_for(c0, 10) == 11 and filter_for(c0, 10, lag=0) == 12
+    # wheel widening 2310 -> 30030 re-denominates by FLOOR: overlap, no gap
+    W1, W2 = wheel_modulus(11), wheel_modulus(12)
+    for j in (1, 7, 12345, 4 * 10**18 // W2 * 3):
+        j2 = redenominate(j, W1, W2)
+        # no candidate of the wider wheel at or above the old position is
+        # skipped: j2 <= ceil(old_k / W2); and never below the first one
+        r_ok = r_ok and 1 <= j2 <= -(-(j * W1) // W2)
+    r_ok = r_ok and W1 == 2310 and W2 == 30030 \
+        and redenominate(30030, 2310, 30030) == 2310
+    if not r_ok:
+        print("FAIL indefinite-run drill: rungs / filter following / "
+              "re-denomination")
+        ok = False
+    else:
+        print(f"PASS indefinite-run drill: {len(rungs)} model rungs ascending, "
+              f"the filter follows the frontier (lag 1: 10 -> 10 -> 11; lag 0: "
+              f"10 -> 11 -> 12), and a 2310 -> 30030 wheel change moves the "
+              f"cursor by floor (overlap < one period, never a gap)")
 
     # --- discovery-once drill: the frontier promotes, repeats are census ---
     c = fresh_ckpt(10, GpuEngine(10))
@@ -747,7 +908,10 @@ def status():
         c = json.load(f)
     W = c.get("W", 1)
     print(f"key       : {c['key']}")
+    print(f"filter    : n = {c.get('n')}  wheel {W}")
     print(f"frontier  : k = {c['next_j'] * W:.6e}  (next_j {c['next_j']:,})")
+    print(f"rungs     : {len(c.get('rungs_passed', []))} passed; last: "
+          f"{(c.get('rungs_passed') or ['-'])[-1]}")
     print(f"survivors : {c['survivors']:,} classified in "
           f"{c['wall_s']/3600:.2f} h")
     print(f"best run  : {c['best_run']} at k = {c['best_k']}")
@@ -770,8 +934,15 @@ def main():
                          "frontier (a(%d) at start; promoted as finds land); "
                          "census repeats never trigger it" % FRONTIER_N)
     ap.add_argument("--n", type=int, default=FRONTIER_N + 1,
-                    help="filter: sieve for k with run >= n")
-    ap.add_argument("--to", type=float, default=float(DEFAULT_TO))
+                    help="the STARTING filter (sieve for k with run >= n); "
+                         "the filter then follows the frontier (--filter-lag)")
+    ap.add_argument("--filter-lag", type=int, default=FILTER_LAG,
+                    help="filter = max(--n, frontier + 1 - lag): 1 (default) "
+                         "keeps censusing the last settled length while "
+                         "hunting the next; 0 is the fastest hunt")
+    ap.add_argument("--to", type=float, default=None,
+                    help="depth cap in k (default: none -- the campaign runs "
+                         "to the enforced ceiling of its wheel, the last rung)")
     ap.add_argument("--engine", choices=["gpu", "cpu"], default="gpu")
     ap.add_argument("--seg-span", type=float, default=None,
                     help="k per checkpoint segment (default: %d j)" % SEG_J)
@@ -783,8 +954,11 @@ def main():
         return selftest()
     if args.status:
         return status()
-    if args.to > J_CEIL * wheel_modulus(args.n):
+    if args.to is not None and args.to > J_CEIL * wheel_modulus(args.n):
         log("ALARM", "requested depth is past the enforced ceiling")
+        return 2
+    if args.filter_lag < 0:
+        log("ALARM", "--filter-lag must be >= 0")
         return 2
     try:
         return production(args)

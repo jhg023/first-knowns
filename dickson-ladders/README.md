@@ -188,13 +188,26 @@ ledger of how that gap closed, with every reject and its price, is
 
 ```
 python launch.py --selftest    # full gate battery + drills
-python launch.py --stop-on-discovery
-                               # THE HUNT: resumes at the frontier,
-                               # halts after a frontier-extending find
+python launch.py               # THE HUNT: resumes at the frontier and
+                               # runs INDEFINITELY -- to the enforced
+                               # ceiling of its wheel, the last rung
 python launch.py --status      # scoreboard
 python score.py                # gates x fingerprinted benchmarks
 python ladder_model.py         # rebuild the odds model + its gates
 ```
+
+The campaign never stops on its own before the last rung. Progress is
+read off **rungs** — the model's Q1/median/Q3/P90 for every open term
+(16 of them, from `model_results.json`) plus the ceiling — logged
+`[RUNG]` as each is passed and shown with an ETA in every `[STATUS]`.
+`--to K` caps a run deliberately and `--stop-on-discovery` halts after a
+first occurrence; both are opt-in. The **filter follows the frontier**:
+with the default `--filter-lag 1` the sieve runs at n = frontier, so once
+a(10) lands it hunts a(11) while still censusing run-10 values, steps to
+n = 11 when a(11) lands, and so on; when a step widens the wheel (11 → 12
+takes 2310 → 30030) the cursor is re-denominated by floor — an overlap
+of under one period, never a gap — and logged as a `[STAGE]` line.
+`--filter-lag 0` is the fastest hunt (n = frontier + 1, no census below).
 
 The launcher preludes every fresh campaign with an exhaustive oracle
 sweep of [1, 10⁴) — which must return a(1)–a(4) and nothing else — and
@@ -205,10 +218,11 @@ cannot find what is known does not get to report what is not.
 `--stop-on-discovery` follows the repo-wide convention: only a first
 occurrence beyond the campaign frontier (≥ 10 at start; the frontier
 promotes itself as finds land and the promotion lives in the checkpoint)
-halts the hunt. Further k with a settled run length are verified,
-evidenced and counted as census rather than stopping a leg or being
-logged as a second discovery. Terms found in earlier campaigns can also be
-seeded into `CAMPAIGN_FOUND` in the launcher.
+halts the hunt, and only when the flag is given. Further k with a settled
+run length are verified, evidenced and counted as census rather than
+stopping a leg or being logged as a second discovery. Terms found in
+earlier campaigns can also be seeded into `CAMPAIGN_FOUND` in the
+launcher.
 
 `--workers N` sets the classification pool (default: the machine's core
 count minus four; `1` is the serial path). Segments are 2⁴² candidates

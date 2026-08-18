@@ -77,6 +77,14 @@ each README stays.
    model-odds crossings, near misses, new bests, first-of-a-length) each
    get a log line in the CONVENTIONS taxonomy so a human can follow the
    hunt from the log alone. See CONVENTIONS.md "The discovery protocol".
+5b. **Campaigns run indefinitely by default.** No default depth cap; a
+   launcher stops on its own only at the end of the last rung (the
+   engine's enforced ceiling). Progress is read off rungs — named depths
+   from the odds model's predictions, logged `[RUNG]` as passed and shown
+   with an ETA in `[STATUS]`. `--to` and `--stop-on-discovery` are the
+   only stops and both are opt-in. If a find changes what should be
+   sieved for, the launcher moves itself (and logs it) rather than
+   crawling at a stale setting. See CONVENTIONS.md.
 6. **New projects** copy the skeleton, import huntlib for
    infrastructure, keep all mathematics in-project, and add a row to the
    top-level README's project table. Only projects with verified

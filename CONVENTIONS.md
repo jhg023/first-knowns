@@ -12,7 +12,7 @@ understood one project can audit all of them.
 | `*_reference.py` | **The oracle.** A slow, obviously-correct implementation using only trusted library primitives (sympy). Holds the frozen table of known values from the literature. Never optimized, never clever. Gates G1/G2 live here: the oracle must reproduce every frozen known from scratch. |
 | `*_search.py` | **The CPU engine.** An independent fast implementation (numpy). Gated against the oracle on windows where both can run (survivor sets must match exactly), and required to re-derive known values end-to-end. |
 | `*_gpu.py` | **The GPU engine.** CuPy RawKernel(s) implementing the same mathematics a third time. Never trusted alone: a parity gate pins its output stream bit-for-bit against the CPU engine on *populated* windows at multiple heights (an empty-vs-empty comparison is vacuous and does not count), including the numeric-ceiling zone. The GPU proposes; the host verifies. |
-| `launch.py` | **The campaign.** Checkpointed (atomic writes, config-keyed cursors, resume redoes at most one segment), canary-alarmed (the stream must rediscover designated known values in-flight or halt), with a discovery protocol (below), timestamped dopamine logging, and graceful Ctrl+C. |
+| `launch.py` | **The campaign.** Checkpointed (atomic writes, config-keyed cursors, resume redoes at most one segment), canary-alarmed (the stream must rediscover designated known values in-flight or halt), with a discovery protocol (below), timestamped dopamine logging, graceful Ctrl+C — and **indefinite by default**: it runs until the last rung (the enforced ceiling), never stopping on its own before that (below). |
 | `score.py` | **The un-gameable benchmark.** Prints `SCORE` (end-to-end Mitems/s on a frozen workload) only if every gate is green AND the run reproduces a frozen work fingerprint — exact result count + checksum. An engine that skips work or breaks correctness scores 0. Optimize under the score, never around it. |
 
 Plus documentation: `README.md` (problem, mathematics, model, usage),
@@ -83,11 +83,32 @@ meets them; the counts per length are the campaign's census and belong in
 `[STATUS]` and `[MILESTONE]` lines. Where this rule lives in code is one
 function (`event_kind` in dickson-ladders), and the selftest drills it.
 
+**Campaigns run indefinitely; rungs mark progress (repo-wide).** A
+launcher started with no arguments runs until it reaches the end of the
+*last rung* and never stops on its own before that. There is no default
+depth cap: the only natural end is the engine's enforced ceiling (the
+numeric-hygiene constant), which is the last rung. Every launcher carries
+a ladder of **rungs** — depths with names, taken from the odds model's
+predictions stated before the run (Q1 / median / Q3 / P90 of every open
+term) with the ceiling appended — logs a `[RUNG]` line as each is passed
+("passed rung 5/17: a(11) median (7.18e16) — next: a(11) Q3 at 1.88e17"),
+persists the passed rungs in the checkpoint, and shows the next rung with
+its ETA in every `[STATUS]`. Rungs are for reading progress off the log,
+not for stopping. The two deliberate stops are `--to` (a depth cap the
+operator chose) and `--stop-on-discovery`; both are opt-in and neither is
+a default. When a find changes what the campaign should be sieving for
+(here: the filter follows the frontier, and a wider wheel re-denominates
+the cursor by floor so coverage overlaps and never gaps), the launcher
+makes that move itself and logs it as a `[STAGE]` line, so an unattended
+run keeps hunting the next open term instead of crawling at a stale
+setting.
+
 **The stop-on-discovery convention (repo-wide).** Every launcher
 accepts `--stop-on-discovery`: once the discovery protocol confirms a
 *frontier-extending* find — a first occurrence, in the sense above — the
 campaign checkpoints, writes the evidence, logs a `[STAGE]` line, and
-exits cleanly so a human can react before more GPU time is spent.
+exits cleanly so a human can react before more GPU time is spent. It is
+opt-in; without it the campaign records the find and keeps running.
 Rediscoveries of known values (canaries) and census repeats never
 trigger the stop.
 
@@ -108,7 +129,8 @@ count, the census counts per run length from the near-miss floor to the
 current frontier, the number of finds, live model odds, ETA;
 `[MILESTONE]` decade crossings *and* model-odds crossings (the hunt has
 passed the point where the model put the next term with 25/50/75/90%
-probability — "past the median" is worth a line); `[NEAR]`
+probability — "past the median" is worth a line); `[RUNG]` a rung of the
+progress ladder passed, with the next rung named; `[NEAR]`
 individually-logged near misses and census repeats with their campaign
 ordinal (`run-9 #12 of the campaign`), flagged when they are one value
 short of the next term, a new campaign best, or the first of their length;
