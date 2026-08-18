@@ -7,8 +7,12 @@ Verified FIRST OCCURRENCES land here -- one JSON per discovery, named
 and shown in each 30-second `[STATUS]` line, never written here
 (CONVENTIONS.md, "The census is counted, not narrated").
 
-Files present are the campaign's finds so far; a fresh clone before the
-first find has only this README.
+Present: **a(10)** (`ladder_hit_run10_k9328409578841430.json`) and
+**a(11)** (`ladder_hit_run11_k433871469806557860.json`), the campaign's
+two first occurrences, plus the ledger. Both were re-verified from these
+files -- independent protocol re-run, every stored certificate re-checked,
+sympy on every value, breaker witness -- before they were published to
+RESULTS.md.
 
 Each file is meant to be checkable by anyone with a bignum library and no
 trust in this codebase. The shape:

@@ -82,8 +82,10 @@ CONFIG_KEY = "dickson-ladders/v2/q2={q2}/jceil=4e18"
 # is verified, which demotes its run length from "discovery" to "census":
 # the SECOND k with run >= 10 is a census repeat, not a new a(10).  (The
 # runtime frontier in the checkpoint promotes itself the same way; this
-# table seeds a FRESH checkpoint.)
-CAMPAIGN_FOUND = {}
+# table seeds a FRESH checkpoint, so that a --fresh run does not re-report
+# what is already in RESULTS.md as a discovery.)
+CAMPAIGN_FOUND = {10: 9_328_409_578_841_430,
+                  11: 433_871_469_806_557_860}
 FRONTIER_N = max(max(KNOWN), *([max(CAMPAIGN_FOUND)] if CAMPAIGN_FOUND else [0]))
 
 # A campaign runs INDEFINITELY (CONVENTIONS.md): there is no depth at which
@@ -880,12 +882,16 @@ def selftest():
     r_ok = (len(rungs) >= 8 and all(rungs[i][1] <= rungs[i + 1][1]
                                     for i in range(len(rungs) - 1))
             and any(lab.startswith("a(13) median") for lab, _ in rungs))
+    # frontier-relative, so landing a term does not falsify the drill
     c0 = fresh_ckpt(10, GpuEngine(10))
-    r_ok = r_ok and filter_for(c0, 10) == 10 and filter_for(c0, 10, lag=0) == 10
-    settle(c0, 10, 10**15)                          # a(10) lands: frontier 10
-    r_ok = r_ok and filter_for(c0, 10) == 10 and filter_for(c0, 10, lag=0) == 11
-    settle(c0, 11, 10**17)                          # frontier 11
-    r_ok = r_ok and filter_for(c0, 10) == 11 and filter_for(c0, 10, lag=0) == 12
+    F = FRONTIER_N
+    r_ok = r_ok and filter_for(c0, F) == F and filter_for(c0, F, lag=0) == F + 1
+    settle(c0, F + 1, 10**15)                       # a(F+1) lands
+    r_ok = r_ok and filter_for(c0, F) == F + 1 \
+        and filter_for(c0, F, lag=0) == F + 2
+    settle(c0, F + 2, 10**17)                       # a(F+2) lands
+    r_ok = r_ok and filter_for(c0, F) == F + 2 \
+        and filter_for(c0, F, lag=0) == F + 3
     # wheel widening 2310 -> 30030 re-denominates by FLOOR: overlap, no gap
     W1, W2 = wheel_modulus(11), wheel_modulus(12)
     for j in (1, 7, 12345, 4 * 10**18 // W2 * 3):
@@ -901,41 +907,51 @@ def selftest():
         ok = False
     else:
         print(f"PASS indefinite-run drill: {len(rungs)} model rungs ascending, "
-              f"the filter follows the frontier (lag 1: 10 -> 10 -> 11; lag 0: "
-              f"10 -> 11 -> 12), and a 2310 -> 30030 wheel change moves the "
-              f"cursor by floor (overlap < one period, never a gap)")
+              f"the filter follows the frontier (lag 1: {F} -> {F+1} -> {F+2}; "
+              f"lag 0: {F+1} -> {F+2} -> {F+3}), and a 2310 -> 30030 wheel "
+              f"change moves the cursor by floor (overlap < one period, never "
+              f"a gap)")
 
     # --- discovery-once / census drill: the frontier promotes and the
     # classification follows it: beyond = DISCOVERY, at = NEAR (one short,
     # logged), below = CENSUS (counted only), under the floor = None ------
+    # relative to the frontier, so the drill keeps its meaning as terms land
     c = fresh_ckpt(10, GpuEngine(10))
-    steps = [(8, "CENSUS"), (9, "NEAR"), (10, "DISCOVERY"), (NEAR_FROM, "CENSUS"),
-             (NEAR_FROM - 1, None)]
-    seq_ok = frontier_of(c) == FRONTIER_N and all(
+    F = FRONTIER_N
+    steps = [(F - 2, "CENSUS"), (F - 1, "CENSUS"), (F, "NEAR"),
+             (F + 1, "DISCOVERY"), (NEAR_FROM, "CENSUS"), (NEAR_FROM - 1, None)]
+    seq_ok = frontier_of(c) == F and all(
         event_kind(c, r) == kind for r, kind in steps)
-    settle(c, 10, 10**15)                          # a(10) lands
-    seq_ok = seq_ok and frontier_of(c) == 10 and event_kind(c, 10) == "NEAR" \
-        and event_kind(c, 9) == "CENSUS" and event_kind(c, 11) == "DISCOVERY"
-    newly = settle(c, 12, 3 * 10**15)              # a run of 12 settles 11 AND 12
-    seq_ok = seq_ok and newly == [11, 12] and frontier_of(c) == 12 \
-        and event_kind(c, 12) == "NEAR" and event_kind(c, 10) == "CENSUS" \
-        and event_kind(c, 13) == "DISCOVERY" \
-        and settled_at(c, 11) == 3 * 10**15 and settled_at(c, 9) == KNOWN[9] \
+    settle(c, F + 1, 10**15)                       # a(F+1) lands
+    seq_ok = seq_ok and frontier_of(c) == F + 1 \
+        and event_kind(c, F + 1) == "NEAR" and event_kind(c, F) == "CENSUS" \
+        and event_kind(c, F + 2) == "DISCOVERY"
+    newly = settle(c, F + 3, 3 * 10**15)           # one run settles F+2 AND F+3
+    seq_ok = seq_ok and newly == [F + 2, F + 3] and frontier_of(c) == F + 3 \
+        and event_kind(c, F + 3) == "NEAR" and event_kind(c, F + 1) == "CENSUS" \
+        and event_kind(c, F + 4) == "DISCOVERY" \
+        and settled_at(c, F + 2) == 3 * 10**15 and settled_at(c, 9) == KNOWN[9] \
         and event_kind(c, NEAR_FROM - 1) is None
-    # the STATUS census string covers floor..frontier in the shared format
-    c["near_counts"] = {"7": 280, "9": 28, "12": 1}
-    cs = census_str(c["near_counts"], NEAR_FROM, frontier_of(c))
+    # the STATUS census format itself, on fixed input (independent of where
+    # the frontier happens to stand, so a landed term cannot silently
+    # weaken this into a tautology)
+    cs = census_str({"7": 280, "9": 28, "12": 1}, 7, 12)
     seq_ok = seq_ok and cs == "census 7:280 8:0 9:28 10:0 11:0 12:1"
+    # and that the launcher asks for floor..frontier
+    live = census_str(c.get("near_counts", {}), NEAR_FROM, frontier_of(c))
+    seq_ok = seq_ok and live.startswith("census %d:" % NEAR_FROM) \
+        and live.endswith(" %d:0" % (F + 3))
     if not seq_ok:
         print("FAIL discovery-once drill: frontier/near/census classification "
               f"or census string ({cs})")
         ok = False
     else:
-        print("PASS discovery-once drill: a(10) is a discovery once; run-10 "
-              "values are then NEAR (one short, logged) and run-9 drops to "
-              "census (counted only); a run of 12 settles a(11) and a(12) "
-              "together and the frontier promotes 9 -> 10 -> 12; census "
-              "string floor..frontier in the shared format")
+        print(f"PASS discovery-once drill: a({F+1}) is a discovery once; "
+              f"run-{F+1} values are then NEAR (one short, logged) and "
+              f"run-{F} drops to census (counted only); one run of {F+3} "
+              f"settles a({F+2}) and a({F+3}) together and the frontier "
+              f"promotes {F} -> {F+1} -> {F+3}; census string is "
+              f"floor..frontier in the shared format")
 
     # --- pool drill: pooled classification == serial, in survivor order ----
     from concurrent.futures import ProcessPoolExecutor
@@ -1057,7 +1073,15 @@ def main():
                     help="halt after a verified FIRST OCCURRENCE beyond the "
                          "frontier (a(%d) at start; promoted as finds land); "
                          "census repeats never trigger it" % FRONTIER_N)
-    ap.add_argument("--n", type=int, default=FRONTIER_N + 1,
+    # The starting filter tracks the SAME rule filter_for uses, so a fresh
+    # run and a resumed one agree: at the default lag of 1 that is the
+    # frontier itself (sieve for run >= 11 with a(11) settled), which keeps
+    # run-11 values visible as one-short-of-a(12) [NEAR] lines.  Pinning it
+    # to FRONTIER_N + 1 instead would silently force lag-0 the moment a term
+    # lands -- and, since the wheel follows the filter, would step 2310 ->
+    # 30030 under a campaign that was mid-sweep.
+    ap.add_argument("--n", type=int,
+                    default=max(NEAR_FROM, FRONTIER_N + 1 - FILTER_LAG),
                     help="the STARTING filter (sieve for k with run >= n); "
                          "the filter then follows the frontier (--filter-lag)")
     ap.add_argument("--filter-lag", type=int, default=FILTER_LAG,

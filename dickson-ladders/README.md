@@ -11,17 +11,25 @@ sequence is `nonn,hard,more`; its last computational advance was in
 **October 2014**, and the four terms this project targets — a(10) through
 a(13) — have never had an upper bound published for them.
 
-**Status: ACTIVE** — the engine is built, gated, benchmarked and
-optimized (v2: 913x the first gated engine on the production shape,
-[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)); the first production leg has
-not been started yet (hunts are started deliberately by the repository
-owner, never by an agent). The standing frontier is still where Hiroaki
-Yamanouchi left it in 2014: **a(9) = 3,332,396,388,090**, with
-a(10) > 1.54665×10¹³ and a(11) > 1.076691×10¹⁴. The model puts a(10) at
-median 1.68×10¹⁵ — under a second at the measured end-to-end rate — a(11)
-at 7.18×10¹⁶ (about half a minute), a(12) at 1.83×10¹⁹ (minutes) and
-a(13) at 2.14×10²¹, about **four hours**. Predictions are stated in full
-below *before* the run, which is the only time they are worth anything.
+**Results so far: a(10) = 9,328,409,578,841,430 and
+a(11) = 433,871,469,806,557,860**, both found and verified 2026-08-18 —
+the first computational advance on this sequence since October 2014, when
+Hiroaki Yamanouchi computed a(9) = 3,332,396,388,090 and left
+a(10) > 1.54665×10¹³. Each was verified four ways, including a
+Brillhart–Lehmer–Selfridge primality certificate for every one of its
+values, and each was re-verified from its evidence file before
+publication. Details in [RESULTS.md](RESULTS.md).
+
+**Status: ACTIVE** — the campaign is running and hunting **a(12)**, the
+next open term, past the model's median for it. The engine is v2 (913x the
+first gated engine on the production shape,
+[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)). The model put a(10) at median
+1.68×10¹⁵ and a(11) at 7.18×10¹⁶; both landed late, at quantiles 0.915 and
+0.923 — see the model scoring below and in RESULTS.md. It puts a(12) at
+1.83×10¹⁹ and a(13) at 2.14×10²¹. Predictions are stated in full below and
+were fixed *before* the run, which is the only time they are worth
+anything. Hunts are started deliberately by the repository owner, never by
+an agent.
 
 ## The problem
 
@@ -200,6 +208,21 @@ median, half a minute to a(11), minutes to a(12), and 3.6 hours to
 a(13)** (P90 19 hours). At the v1 rate a(13) was months to years; the
 ledger of how that gap closed, with every reject and its price, is
 [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md).
+
+**How the finds scored** (out of sample, against the table above):
+
+| term | found at | model median | E at the find | quantile |
+|------|----------|--------------|---------------|----------|
+| a(10) | 9.33×10¹⁵ | 1.68×10¹⁵ | 2.47 | 0.915 |
+| a(11) | 4.34×10¹⁷ | 7.18×10¹⁶ | 2.57 | 0.923 |
+
+Both are late draws — 5.5× and 6.0× past their medians, where the median
+wait is E = ln 2 ≈ 0.69. Pooling them as Exp(1) draws gives a
+maximum-likelihood optimism factor of 2.5× with a 95% interval of roughly
+[0.9, 20.8]; that contains 1, so it is not evidence the singular series is
+wrong, and two events cannot resolve a bias of that size. a(12) is the one
+that would make it interesting: three late draws in a row would be worth
+taking seriously.
 
 ## Running it
 
