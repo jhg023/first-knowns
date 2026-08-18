@@ -101,6 +101,60 @@ pooled, host/GPU 1.34 (16 workers), 0.77 (32), 0.69 (48), 0.61 (60) on 32
 physical cores; pipelined 3 segments 3.9 s against 3.0 s GPU-only. A
 `pool drill` in the selftest pins pooled == serial, in order.
 
+### Pool size 60 -> 8 -- the sweep above optimized a number that was not free
+
+The sweep read "more workers, better ratio" and took `cpu_count - 4` = 60
+processes. It measured throughput only, and throughput was not the
+binding constraint: **the campaign hard-hung the machine ~30 s after every
+start** -- fans running, HDMI link dead, hard power-off required, and
+nothing in the Windows event log (no TDR 4101, no bugcheck, no minidump,
+no WHEA, no thermal event). Everything the hunt actually consumes is
+modest, and was measured while diagnosing: one launch is 21 ms of device
+time across 9 kernels (the TDR watchdog is 2 s), every queue write is
+bounds-guarded, the engine holds ~0.8 GB of 24 GB of VRAM, and the pool
+holds ~7-9 GB of 64 GB. What is *not* modest is 60 fresh interpreters
+importing numpy and sympy in the same instant, which is peak host draw and
+lands exactly while the device is flat out on the next segment. `--workers
+8` ran clean; the default is now `min(8, cpu_count - 2)`.
+
+Eight is the known-stable setting, and it is NOT the throughput optimum --
+recorded here so the tradeoff is explicit rather than rediscovered.
+Measured on the live campaign (n = 11, k ~ 9.5e18, cap 19, 40-digit
+values), sampling worker CPU and device utilization over the same window:
+
+| quantity | measured |
+|---|---|
+| survivors classified | 70,082 /s (253M over 3,612 s) |
+| host cost per survivor | ~105 us |
+| pool at 8 workers | ~92% duty, **7.4 cores** (+0.5 parent) |
+| device utilization | alternates 98% / 12%, **mean 41%** |
+| per 1.0e16-k segment | pool ~4.0 s vs device ~1.8 s |
+| end-to-end | 2.35e15 k/s |
+
+So at eight workers the pipeline is **host-bound by 2.3x and the device
+idles 60% of the time**. The knee is ~18 workers, where the device binds
+again and the rate should reach ~6e15 k/s (~2.5x). The default stays at 8
+because the failure it prevents is worse than the throughput it costs, and
+because the spawn burst scales with the worker count -- raising toward the
+knee is a deliberate, watched change, not a default.
+
+**A methodology note that cost real time here.** The first sizing of this
+used the engine's `profile` path to time a launch: 21.2 ms across 9
+kernels, which gave 5.4 s of device time per segment and the conclusion
+"five cores is plenty". That is ~3x too slow, because `profile` runs the
+kernels **eagerly with CUDA events between them**, i.e. it disables exactly
+the graph replay production uses. The live device time is ~1.8 s per
+segment. OPTIMIZATION.md Rule 1 says measure the split before optimizing;
+the corollary this adds is that **an instrumented path is not the
+production path** -- take phase splits from a running campaign (worker duty
++ `utilization.gpu` sampling) when one is available.
+
+Two rules came out of this and are worth stating plainly: a tuning sweep
+that only measures throughput cannot see the constraint that actually
+binds (OPTIMIZATION.md Rule 7), and **a hunt that runs for days on
+somebody's desktop does not get to take the whole machine**
+(CONVENTIONS.md).
+
 ### The 2^32 shapes stopped resolving changes -- SCORE13 added
 
 At v2 speed a 2^32 window is one to four launches and ~1-5 ms; identical

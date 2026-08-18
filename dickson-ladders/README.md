@@ -252,10 +252,31 @@ next open term, never evidenced — rather than stopping a leg or being
 logged as a second discovery. Terms found in earlier campaigns can also
 be seeded into `CAMPAIGN_FOUND` in the launcher.
 
-`--workers N` sets the classification pool (default: the machine's core
-count minus four; `1` is the serial path). Segments are 2⁴² candidates
-(about a second of device time on any wheel); `--seg-span` in k
-overrides.
+`--workers N` sets the classification pool (default **8**, or fewer on a
+small machine; `1` is the serial path). The default used to be *core count
+minus four* — 60 processes on a 64-thread machine — and the spawn burst (60
+interpreters importing numpy and sympy at once, while the device is flat
+out) hard-hung the development machine ~30 s into every campaign start,
+fans running and the display link dead. **A hunt runs for days on
+somebody's desktop: it does not get to take the whole machine.** Eight is
+the known-stable setting, not the fast one.
+
+It is deliberately conservative, and the price is measured. On a live
+campaign at n = 11, k ≈ 9.5×10¹⁸: the sweep classifies ~70,000 survivors/s
+at ~105 µs each, so the pool carries **~7.4 cores**; eight workers run at
+~92% duty while the **device sits idle 60% of the time** (utilization
+alternates 98%/12%, mean 41%). Per 10¹⁶-k segment that is ~4.0 s of pool
+against ~1.8 s of device — **host-bound by 2.3×**. The knee is around
+**18 workers**, where the device becomes the binding side again and
+throughput would rise ~2.5× to ~6×10¹⁵ k/s.
+
+So raising `--workers` toward that knee is real throughput, and the spawn
+burst scales with the number — 16 is a quarter of what hung the machine.
+Raise it a few at a time and watch, rather than returning to a number that
+fills the machine. Per-survivor cost also grows with depth (more digits per
+Miller–Rabin test), and a shallow re-run is hungrier still: at the n = 10
+filter the host needs ~19 cores. Segments are 2⁴² candidates;
+`--seg-span` in k overrides.
 
 Requires Python 3.12+, numpy, sympy, CuPy + CUDA GPU (or `--engine cpu`,
 which is the gating reference and orders of magnitude too slow to hunt

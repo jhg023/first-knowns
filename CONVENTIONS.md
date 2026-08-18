@@ -154,6 +154,25 @@ makes that move itself and logs it as a `[STAGE]` line, so an unattended
 run keeps hunting the next open term instead of crawling at a stale
 setting.
 
+**A hunt does not get to take the whole machine (repo-wide).** Campaigns
+run for days on somebody's desktop, so a launcher sizes its host
+parallelism from what the pipeline actually needs and leaves the rest
+alone. Size it by measurement — classification cost per survivor times
+survivors per segment, against the device time for that segment — and
+leave margin, rather than by "cores minus a few". dickson-ladders learned
+this the expensive way: a pool sized `cpu_count - 4` — 60 processes on a
+64-thread machine, against a workload that needs about eight — hard-hung
+the machine about 30 s into every campaign start, fans running and the
+display link dead, with nothing in the event log. The default is now
+`min(8, cpu_count - 2)`, and `--workers` raises it deliberately. Note what
+that costs and say so in the log: eight workers leave that pipeline
+host-bound with the device idle 60% of the time, so the safe default is
+**not** the fast one (OPTIMIZATION_LOG.md). A default that cannot take the
+machine down, plus a documented knob and a measured statement of what the
+knob is worth, beats a default tuned to the last drop of throughput. The general lesson belongs in
+[OPTIMIZATION.md](OPTIMIZATION.md)'s ledger too: **a tuning sweep that
+measures only throughput cannot see a constraint that is not throughput.**
+
 **The stop-on-discovery convention (repo-wide).** Every launcher
 accepts `--stop-on-discovery`: once the discovery protocol confirms a
 *frontier-extending* find — a first occurrence, in the sense above — the

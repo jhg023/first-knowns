@@ -116,7 +116,20 @@ CHUNK = 1024                   # survivors per classification task
 # results are consumed in ASCENDING order in the parent and the cursor only
 # advances past a fully classified segment, so the least-claim ordering the
 # checkpoint depends on is untouched.  --workers 1 is the old serial path.
-WORKERS_DEFAULT = max(1, (os.cpu_count() or 2) - 4)
+#
+# SMALL BY DEFAULT, and the reason is measured.  Classification costs ~86 us
+# per survivor at k ~ 1e18 (n = 11, cap 19, 38-digit values) and a segment
+# holds ~3e5 survivors -- 26 core-seconds against 5.4 s of device time, so
+# the pool needs FIVE cores to stay a segment ahead.  The old default
+# (cpu_count - 4) was 60 processes on the 64-thread development machine:
+# twelve times the requirement, and on Windows every one of them is a fresh
+# interpreter importing numpy and sympy at the same moment.  That spawn
+# burst -- peak host draw, landing while the device is flat out on the next
+# segment -- hard-hung the machine about 30 s into every campaign start
+# (fans running, display link dead, nothing in the event log; --workers 8
+# ran clean).  A hunt runs for days on somebody's desktop: it may not take
+# the whole machine, and it gains nothing by trying.
+WORKERS_DEFAULT = max(1, min(8, (os.cpu_count() or 2) - 2))
 
 
 class CorruptEngineError(RuntimeError):
@@ -1063,7 +1076,10 @@ def main():
                          "census counts per run length, finds, odds, next "
                          "rung); 30 is the repo convention")
     ap.add_argument("--workers", type=int, default=WORKERS_DEFAULT,
-                    help="classification processes (1 = serial, in-process)")
+                    help="classification processes (default %d: the pool only "
+                         "needs ~5 cores to stay a segment ahead, and a hunt "
+                         "must not take the whole machine; 1 = serial, "
+                         "in-process)" % WORKERS_DEFAULT)
     args = ap.parse_args()
     if args.selftest:
         return selftest()
