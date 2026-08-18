@@ -41,11 +41,11 @@ def fingerprint_benchmark(work_fn, span, count_expect, checksum_expect,
     """
     rates, out = [], None
     for _ in range(runs):
-        t0 = time.time()
-        out = work_fn()
-        if sync:
+        t0 = time.perf_counter()          # not time.time(): a fast engine
+        out = work_fn()                   # crosses a frozen window in under
+        if sync:                          # the wall clock's resolution
             sync()
-        rates.append(span / (time.time() - t0))
+        rates.append(span / max(time.perf_counter() - t0, 1e-9))
     count = int(out.size)
     checksum = int(np.bitwise_xor.reduce(out)) if out.size else 0
     ok = (count == count_expect and

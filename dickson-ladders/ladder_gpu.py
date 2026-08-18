@@ -76,15 +76,27 @@ BLOCK = 256
 
 # ---- tuning constants (v2).  Snapshotted onto the instance in __init__;
 # ---- nothing compiles against the class attribute after that.
-NS_DEFAULT = 32          # primes in the bit-sieve stage 1a
-T_DEFAULT = 64           # 64-candidate blocks per stage-1a thread
-RATIO_DEFAULT = 2.0      # a stage-1b round ends when survival within it
+S1A_TARGET = 1.2e-3      # stage 1a takes the fewest primes that bring the
+#                          survival below this; NS is DERIVED from it, not
+#                          tuned per filter (n = 13 -> 16 primes, n = 10 ->
+#                          23), because the sweep optimum was NS = 16 at
+#                          n = 13 and ~20 at n = 10 -- the same survival
+NS_MAX = 32              # and never more: the pattern table's footprint is
+#                          a cliff (12 KB -> 48 KB measured 2.6x slower)
+T_MAX = 1024             # 64-candidate blocks per stage-1a thread, at most.
+#                          T is DERIVED per launch: the largest T (per-thread
+#                          setup amortized furthest; kernel-only 1.13x from
+#                          T = 16 to 1024) that still puts MIN_BLOCKS_PER_SM
+#                          thread blocks on every SM, so small windows keep
+#                          the device full.  T=None derives; an int pins it.
+MIN_BLOCKS_PER_SM = 4
+RATIO_DEFAULT = 4.0      # a stage-1b round ends when survival within it
 #                          drops below 1/RATIO (geometric schedule; 0 = one
 #                          shot).  The tail is where the divergence lives:
 #                          a lane that reaches q ~ 4096 has 6000 primes to
 #                          walk while its warp-mates idle, so rounds are
 #                          cut by POPULATION, not by prime count.
-LAUNCH_DEFAULT = 1 << 30  # candidates per launch (2^28: 1.95x/2.34x slower)
+LAUNCH_DEFAULT = 1 << 33  # candidates per launch (SCORE13: 2^30 is 0.69x)
 GRID_1B_MAX = 4096       # cap on a round kernel's grid (grid-stride)
 
 
@@ -155,22 +167,25 @@ void build_pat(const int ns,
 # 64 mod q, table row offset).  One residue register per prime.
 _S1A_HEAD = r'''
 extern "C" __global__ void __launch_bounds__(256)
-sieve1a(const unsigned long long j0, const unsigned long long count,
-        const unsigned int T,
+sieve1a(const unsigned long long* __restrict__ args,   /* j0, count, T */
         const unsigned long long* __restrict__ pat,
         unsigned long long* __restrict__ out,
         unsigned int* __restrict__ nout, const unsigned int cap)
 {
+    const unsigned long long j0 = args[0], count = args[1];
+    const unsigned int T = (unsigned int)args[2];
     const unsigned long long tid = blockIdx.x * (unsigned long long)blockDim.x
                                    + threadIdx.x;
     const unsigned long long base = tid * (64ULL * T);
     if (base >= count) return;
     const unsigned long long jb = j0 + base;
     const unsigned long long rem = count - base;
-    unsigned int nblk = T, tailbits = 64u;
+    unsigned int nblk = T;
+    unsigned long long tailmask = ~0ULL;
     if (rem < 64ULL * T) {
         nblk = (unsigned int)((rem + 63ULL) >> 6);
-        tailbits = (unsigned int)(rem - 64ULL * (nblk - 1u));
+        const unsigned int tailbits = (unsigned int)(rem - 64ULL * (nblk - 1u));
+        if (tailbits < 64u) tailmask = (~0ULL) >> (64u - tailbits);
     }
 '''
 _S1A_INIT = r'''
@@ -193,8 +208,7 @@ _S1A_STEP = r'''
 '''
 _S1A_TAIL = r'''
         unsigned long long alive = ~acc;
-        if (b == nblk - 1u && tailbits < 64u)
-            alive &= (~0ULL) >> (64u - tailbits);
+        if (b == nblk - 1u) alive &= tailmask;
         while (alive) {
             const unsigned int u = (unsigned int)__ffsll((long long)alive) - 1u;
             alive &= alive - 1ULL;
@@ -218,20 +232,37 @@ def _sieve1a_src(entries):
 
 
 # ------------------------------------------------------------ stage 1b ---
-# Queue-driven, grid-striding; tests primes [i0, i1) with the same
-# per-candidate residue walk as v1, forwards survivors.  Counts arrive as
-# device pointers so rounds chain without host round-trips.
-_S1B_SRC = r'''
-extern "C" __global__
-void sieve1b(const unsigned int* __restrict__ nin_ptr,
+# Queue-driven; tests primes [i0, i1), forwards survivors.  Counts arrive
+# as device pointers so rounds chain without host round-trips.  Two
+# thread shapes (dense: one thread per candidate; sparse: one warp per
+# candidate, lanes split the primes and vote) are generated from one
+# template.  The per-prime test is one Barrett j mod q and one probe of
+# the device-built kill-bit table.  (The v1 residue walk in this position
+# measured 0.69x on SCORE13 -- OPTIMIZATION_LOG.md; it survives only in
+# the v1 parity kernel below.)
+_S1B_TEST_BITS = r"""
+                const unsigned long long q = primes[i];
+                const unsigned long long qhat = __umul64hi(j, magic[i]);
+                unsigned long long jq = j - qhat * q;
+                if (jq >= q) jq -= q;
+                if (jq >= q) jq -= q;
+                const unsigned int s = (unsigned int)jq;
+                if ((bits[boff[i] + (s >> 5)] >> (s & 31u)) & 1u) dead = true;
+"""
+_S1B_ARGS = r"""(const unsigned int* __restrict__ nin_ptr,
              const unsigned long long* __restrict__ qin,
              const unsigned int cap_in,
              const int i0, const int i1, const int nfilter,
              const unsigned long long* __restrict__ primes,
              const unsigned long long* __restrict__ magic,
              const unsigned long long* __restrict__ wmod,
+             const unsigned int* __restrict__ boff,
+             const unsigned int* __restrict__ bits,
              unsigned long long* __restrict__ qout,
-             unsigned int* __restrict__ nout, const unsigned int cap)
+             unsigned int* __restrict__ nout, const unsigned int cap)"""
+_S1B_DENSE = r"""
+extern "C" __global__
+void sieve1b__ARGS__
 {
     unsigned int total = *nin_ptr;
     if (total > cap_in) total = cap_in;
@@ -240,27 +271,8 @@ void sieve1b(const unsigned int* __restrict__ nin_ptr,
         const unsigned long long j = qin[idx];
         bool dead = false;
         for (int i = i0; i < i1; ++i) {
-            const unsigned long long q = primes[i];
-            unsigned long long qhat = __umul64hi(j, magic[i]);
-            unsigned long long jq = j - qhat * q;
-            if (jq >= q) jq -= q;
-            if (jq >= q) jq -= q;
-            unsigned long long t = wmod[i] * jq;
-            qhat = __umul64hi(t, magic[i]);
-            t -= qhat * q;
-            if (t >= q) t -= q;
-            if (t >= q) t -= q;
-            t = t * t;
-            qhat = __umul64hi(t, magic[i]);
-            t -= qhat * q;
-            if (t >= q) t -= q;
-            if (t >= q) t -= q;
-            unsigned long long r = t + 1;
-            if (r >= q) r -= q;
-            for (int m = 0; m < nfilter; ++m) {
-                if (r == 0ULL) { dead = true; break; }
-                r += t;
-                if (r >= q) r -= q;
+            {
+__TEST__
             }
             if (dead) break;
         }
@@ -270,27 +282,16 @@ void sieve1b(const unsigned int* __restrict__ nin_ptr,
         }
     }
 }
-'''
-
-
-# Deep-tail variant: ONE WARP PER CANDIDATE, lanes split the primes.  In
-# the geometric schedule the deep rounds hold a few thousand candidates
-# that each walk thousands of primes; one thread per candidate leaves the
-# GPU nearly empty and every lane latency-bound on its own dependent
-# chain.  Here lane l tests primes i0+l, i0+l+32, ... and the warp votes
-# every VOTE_EVERY iterations so a killed candidate stops early.  Same
-# per-prime residue walk as above.
-_S1B_WARP_SRC = r'''
+"""
+# Sparse variant: ONE WARP PER CANDIDATE, lanes split the primes.  In the
+# geometric schedule the deep rounds hold a few thousand candidates that
+# each walk thousands of primes; one thread per candidate leaves the GPU
+# nearly empty and every lane latency-bound on its own dependent chain.
+# Lane l tests primes i0+l, i0+l+32, ... and the warp votes every
+# VOTE_EVERY iterations so a killed candidate stops early.
+_S1B_SPARSE = r"""
 extern "C" __global__
-void sieve1b_warp(const unsigned int* __restrict__ nin_ptr,
-                  const unsigned long long* __restrict__ qin,
-                  const unsigned int cap_in,
-                  const int i0, const int i1, const int nfilter,
-                  const unsigned long long* __restrict__ primes,
-                  const unsigned long long* __restrict__ magic,
-                  const unsigned long long* __restrict__ wmod,
-                  unsigned long long* __restrict__ qout,
-                  unsigned int* __restrict__ nout, const unsigned int cap)
+void sieve1b_warp__ARGS__
 {
     unsigned int total = *nin_ptr;
     if (total > cap_in) total = cap_in;
@@ -305,28 +306,7 @@ void sieve1b_warp(const unsigned int* __restrict__ nin_ptr,
             #pragma unroll 1
             for (int v = 0; v < __VOTE_EVERY__; ++v, i += 32) {
                 if (i < i1) {
-                    const unsigned long long q = primes[i];
-                    unsigned long long qhat = __umul64hi(j, magic[i]);
-                    unsigned long long jq = j - qhat * q;
-                    if (jq >= q) jq -= q;
-                    if (jq >= q) jq -= q;
-                    unsigned long long t = wmod[i] * jq;
-                    qhat = __umul64hi(t, magic[i]);
-                    t -= qhat * q;
-                    if (t >= q) t -= q;
-                    if (t >= q) t -= q;
-                    t = t * t;
-                    qhat = __umul64hi(t, magic[i]);
-                    t -= qhat * q;
-                    if (t >= q) t -= q;
-                    if (t >= q) t -= q;
-                    unsigned long long r = t + 1;
-                    if (r >= q) r -= q;
-                    for (int m = 0; m < nfilter; ++m) {
-                        if (r == 0ULL) { dead = true; break; }
-                        r += t;
-                        if (r >= q) r -= q;
-                    }
+__TEST__
                 }
             }
             if (__any_sync(0xffffffffu, dead)) { dead = true; break; }
@@ -338,8 +318,17 @@ void sieve1b_warp(const unsigned int* __restrict__ nin_ptr,
         }
     }
 }
-'''
-VOTE_EVERY_DEFAULT = 4
+"""
+
+
+def _s1b_src(sparse, vote):
+    src = (_S1B_SPARSE if sparse else _S1B_DENSE)
+    return (src.replace("__ARGS__", _S1B_ARGS)
+               .replace("__TEST__", _S1B_TEST_BITS)
+               .replace("__VOTE_EVERY__", str(int(vote))))
+
+
+VOTE_EVERY_DEFAULT = 1
 WARP_POP_DEFAULT = 1 << 16   # a round whose expected population per launch
 #                              is below this uses the warp-per-candidate
 #                              kernel (deep, sparse) instead of the
@@ -349,7 +338,7 @@ WARP_POP_DEFAULT = 1 << 16   # a round whose expected population per launch
 class GpuEngine:
     """CuPy sieve over j, where k = W*j.  v2: bit-sieve + compaction rounds."""
 
-    def __init__(self, n, q2=Q2_DEFAULT, ns=NS_DEFAULT, T=T_DEFAULT,
+    def __init__(self, n, q2=Q2_DEFAULT, ns=None, T=None,
                  ratio=RATIO_DEFAULT, launch=LAUNCH_DEFAULT,
                  warp_pop=WARP_POP_DEFAULT, vote=VOTE_EVERY_DEFAULT):
         if cp is None:
@@ -362,13 +351,16 @@ class GpuEngine:
         self.NP = int(primes.size)
         # snapshot the tuning constants; everything below compiles against
         # the snapshot, never the module constant
-        self.NS = int(min(ns, self.NP))
-        self.T = int(T)
+        self.NS = None if ns is None else int(min(ns, self.NP))
+        self.T = None if T is None else int(T)
+        sms = int(cp.cuda.Device().attributes["MultiProcessorCount"])
+        self._min_threads = MIN_BLOCKS_PER_SM * sms * BLOCK
         self.RATIO = float(ratio)
         self.LAUNCH = int(launch)
         self.WARP_POP = float(warp_pop)
         self.VOTE = int(vote)
-        if self.NS < 1 or self.T < 1 or self.LAUNCH < 64 or self.VOTE < 1:
+        if (self.T is not None and self.T < 1) or self.LAUNCH < 64 \
+                or self.VOTE < 1:
             raise ValueError("bad tuning constants")
 
         self.d_primes = cp.asarray(primes)
@@ -392,6 +384,15 @@ class GpuEngine:
         # killed-residue counts per prime, from the table itself (one
         # derivation, used for the queue sizing below)
         self.wq = self._popcounts(words, boff)
+        # ---- survival through the primes, from the table itself (one
+        # derivation, used for NS, the round schedule, the grids, the queues)
+        surv = np.cumprod(1.0 - self.wq / primes.astype(np.float64))
+        self.survival = np.concatenate([[1.0], surv])   # [i] = through i primes
+        if self.NS is None:
+            self.NS = int(min(max(int(np.searchsorted(-self.survival,
+                                                      -S1A_TARGET)), 1),
+                              NS_MAX, self.NP))
+        self.s1a_survival = float(self.survival[self.NS])
 
         # ---- stage-1a pattern table for the first NS primes
         rows = primes[:self.NS].astype(np.int64)
@@ -408,16 +409,9 @@ class GpuEngine:
                    for i in range(self.NS)]
         self.src_1a = _sieve1a_src(entries)
         self.k_1a = cp.RawKernel(self.src_1a, "sieve1a")
-        self.k_1b = cp.RawKernel(_S1B_SRC, "sieve1b")
-        self.k_1bw = cp.RawKernel(
-            _S1B_WARP_SRC.replace("__VOTE_EVERY__", str(self.VOTE)),
-            "sieve1b_warp")
-
-        # ---- survival through the primes, from the table itself (one
-        # derivation, used for the round schedule, the grids and the queues)
-        surv = np.cumprod(1.0 - self.wq / primes.astype(np.float64))
-        self.survival = np.concatenate([[1.0], surv])   # [i] = through i primes
-        self.s1a_survival = float(self.survival[self.NS])
+        self.k_1b = cp.RawKernel(_s1b_src(False, self.VOTE), "sieve1b")
+        self.k_1bw = cp.RawKernel(_s1b_src(True, self.VOTE), "sieve1b_warp")
+        self.d_boff = d_boff
 
         # ---- compaction schedule over the stage-1b primes: a round ends
         # when the population entering it has fallen by RATIO
@@ -448,13 +442,28 @@ class GpuEngine:
         # ---- queues, sized analytically from the stage-1a survival rate
         # (OPTIMIZATION.md 2.6): both ping-pong buffers get the SAME
         # capacity, so a round's output can never exceed its input and only
-        # the stage-1a count needs the overflow check.
-        cap = int(2.0 * self.LAUNCH * self.s1a_survival) + (1 << 14)
+        # the stage-1a count needs the overflow check.  Two SLOTS, each with
+        # its own stream, queues, counters and scalar args: chain i+1 is
+        # enqueued before chain i is read back, so the device never idles
+        # on the host (the per-launch sync bubble measured 15% of wall).
+        cap = int(1.25 * self.LAUNCH * self.s1a_survival) + (1 << 16)
         self.queue_cap = int(min(max(cap, 1 << 14), 1 << 26))
-        self._d_q1 = cp.empty(self.queue_cap, dtype=cp.uint64)
-        self._d_q2 = cp.empty(self.queue_cap, dtype=cp.uint64)
-        # one counter per stage: [0] = stage 1a, [1 + r] = round r
-        self._d_cnt = cp.zeros(2 + len(self.rounds), dtype=cp.uint32)
+        self._slots = []
+        for _ in range(2):
+            self._slots.append({
+                "stream": cp.cuda.Stream(non_blocking=True),
+                "q1": cp.empty(self.queue_cap, dtype=cp.uint64),
+                "q2": cp.empty(self.queue_cap, dtype=cp.uint64),
+                # one counter per stage: [0] = stage 1a, [1 + r] = round r
+                "cnt": cp.zeros(2 + len(self.rounds), dtype=cp.uint32),
+                # stage-1a scalars live on the device so a full-size launch
+                # is a CUDA-graph replay (one args upload, one graph launch)
+                "args": cp.zeros(4, dtype=cp.uint64),
+                "graph": None, "graph_qin": None,
+                "count": 0, "qin": None, "prof": None})
+        self._use_graph = True     # False: eager launches (measurement only)
+        self._serial = False       # True: finish each launch before the next
+        #                            (measurement only)
 
     def _popcounts(self, words, boff):
         bits = self.d_bits.get()
@@ -465,57 +474,91 @@ class GpuEngine:
         return out
 
     # ---------------------------------------------------------------- sieve
-    def _launch(self, j0, count):
-        """One launch: stage 1a -> rounds -> host, once.
+    def _T_for(self, count):
+        if self.T is not None:
+            return self.T
+        return int(min(T_MAX, max(1, count // (64 * self._min_threads))))
 
-        With self.profile set to a list, CUDA events bracket every kernel
-        and the per-launch timings are appended (measurement only; the
-        production path never sets it).
-        """
-        prof = getattr(self, "profile", None)
-        ev = (lambda: cp.cuda.Event()) if prof is not None else None
-        d_cnt = self._d_cnt
+    def _enqueue(self, slot, count, marks=None):
+        """Enqueue the chain (counters zero -> stage 1a -> rounds) on the
+        current stream for a launch of `count` candidates whose scalars are
+        already in the slot's args.  With `marks` a list, an event is
+        recorded after every kernel (profiling only)."""
+        d_cnt = slot["cnt"]
         d_cnt.fill(0)
         cap = np.uint32(self.queue_cap)
-        threads = (count + 64 * self.T - 1) // (64 * self.T)
+        T = self._T_for(count)
+        threads = (count + 64 * T - 1) // (64 * T)
         grid = (threads + BLOCK - 1) // BLOCK
-        if ev:
-            e0 = ev(); e0.record()
         self.k_1a((grid,), (BLOCK,),
-                  (np.uint64(j0), np.uint64(count), np.uint32(self.T),
-                   self.d_pat, self._d_q1, d_cnt[0:1], cap))
-        marks = []
-        if ev:
-            e1 = ev(); e1.record(); marks.append(e1)
-        qin, nin = self._d_q1, d_cnt[0:1]
+                  (slot["args"], self.d_pat, slot["q1"], d_cnt[0:1], cap))
+        if marks is not None:
+            e = cp.cuda.Event(); e.record(); marks.append(e)
+        qin, nin = slot["q1"], d_cnt[0:1]
         for r, (i0, i1) in enumerate(self.rounds):
-            qout = self._d_q2 if qin is self._d_q1 else self._d_q1
+            qout = slot["q2"] if qin is slot["q1"] else slot["q1"]
             nout = d_cnt[1 + r:2 + r]
             kern = self.k_1bw if self.round_warp[r] else self.k_1b
             kern((self.round_grid[r],), (BLOCK,),
                  (nin, qin, cap, np.int32(i0), np.int32(i1),
                   np.int32(self.n), self.d_primes, self.d_magic,
-                  self.d_wmod, qout, nout, cap))
+                  self.d_wmod, self.d_boff, self.d_bits, qout, nout, cap))
             qin, nin = qout, nout
-            if ev:
-                e = ev(); e.record(); marks.append(e)
-        counts = d_cnt.get()
-        if int(counts[0]) > self.queue_cap:
-            raise RuntimeError(f"stage-1a queue overflow: {int(counts[0])} > "
-                               f"{self.queue_cap}; shrink the launch")
-        got = int(counts[len(self.rounds)])
-        arr = None
-        if got:
-            # atomics scramble the order; the survivors of a launch are few
-            # (~1e-7 of it), so they are sorted on the host
-            arr = qin[:got].get()
-            arr.sort()
-        if ev:
-            e3 = ev(); e3.record(); e3.synchronize()
-            seq = [e0] + marks + [e3]
-            prof.append({"stage": [cp.cuda.get_elapsed_time(a, b)
-                                   for a, b in zip(seq[:-1], seq[1:])],
-                         "counts": counts.tolist()})
+            if marks is not None:
+                e = cp.cuda.Event(); e.record(); marks.append(e)
+        return qin
+
+    def _start(self, slot, j0, count):
+        """Enqueue one launch on a slot and return without waiting.
+
+        A full-size launch (count == LAUNCH) replays a CUDA graph captured
+        on the slot's first use; the window's ragged last launch, and any
+        launch with self.profile set to a list (CUDA events around every
+        kernel, measurement only), run the same kernels eagerly.
+        """
+        prof = getattr(self, "profile", None)
+        slot["count"] = count
+        with slot["stream"]:
+            slot["args"].set(np.array([j0, count, self._T_for(count), 0],
+                                      dtype=np.uint64))
+            if prof is not None:
+                e0 = cp.cuda.Event(); e0.record()
+                marks = []
+                slot["qin"] = self._enqueue(slot, count, marks)
+                slot["prof"] = (e0, marks)
+            elif count == self.LAUNCH and self._use_graph:
+                if slot["graph"] is None:
+                    slot["stream"].begin_capture()
+                    slot["graph_qin"] = self._enqueue(slot, count)
+                    slot["graph"] = slot["stream"].end_capture()
+                slot["graph"].launch(stream=slot["stream"])
+                slot["qin"] = slot["graph_qin"]
+            else:
+                slot["qin"] = self._enqueue(slot, count)
+
+    def _finish(self, slot):
+        """Wait for a slot's launch and return its sorted survivors."""
+        prof = getattr(self, "profile", None)
+        with slot["stream"]:
+            counts = slot["cnt"].get()
+            if int(counts[0]) > self.queue_cap:
+                raise RuntimeError(f"stage-1a queue overflow: {int(counts[0])}"
+                                   f" > {self.queue_cap}; shrink the launch")
+            got = int(counts[len(self.rounds)])
+            arr = None
+            if got:
+                # atomics scramble the order; the survivors of a launch are
+                # few (~1e-7 of it), so they are sorted on the host
+                arr = slot["qin"][:got].get()
+                arr.sort()
+            if prof is not None and slot["prof"] is not None:
+                e0, marks = slot["prof"]
+                e3 = cp.cuda.Event(); e3.record(); e3.synchronize()
+                seq = [e0] + marks + [e3]
+                prof.append({"stage": [cp.cuda.get_elapsed_time(x, y)
+                                       for x, y in zip(seq[:-1], seq[1:])],
+                             "counts": counts.tolist()})
+                slot["prof"] = None
         return arr
 
     def survivors_j(self, j_lo, j_hi, launch=None):
@@ -529,12 +572,27 @@ class GpuEngine:
             raise ValueError("launch larger than the queues were sized for")
         out = []
         j0 = int(j_lo)
+        pending, i = None, 0
         while j0 < int(j_hi):
             count = min(launch, int(j_hi) - j0)
-            got = self._launch(j0, count)
+            slot = self._slots[i & 1]
+            self._start(slot, j0, count)         # device runs chain i ...
+            if pending is not None:              # ... while the host reads
+                got = self._finish(pending)      #     back chain i-1
+                if got is not None:
+                    out.append(got)
+            pending = slot
+            if self._serial:
+                got = self._finish(pending)
+                if got is not None:
+                    out.append(got)
+                pending = None
+            j0 += count
+            i += 1
+        if pending is not None:
+            got = self._finish(pending)
             if got is not None:
                 out.append(got)
-            j0 += count
         if not out:
             return np.empty(0, dtype=np.uint64)
         return np.concatenate(out)
@@ -751,7 +809,7 @@ def g13_slicing_independence():
     n, j_lo, span = 10, 7 * 10**9 + 12345, 8 * 10**6
     eng = GpuEngine(n, q2=1024)
     whole = eng.survivors_j(j_lo, j_lo + span)
-    strip = 64 * eng.T
+    strip = 64 * eng._T_for(span)
     for cut in (span // 3, span // 2, span - 1, 63, 64, 65, strip - 1,
                 strip, strip + 1, 3 * strip + 17):
         a = eng.survivors_j(j_lo, j_lo + cut)
@@ -760,7 +818,7 @@ def g13_slicing_independence():
         if not np.array_equal(whole, joined):
             return False, f"G13 FAIL: split at {cut} != whole"
     for launch in (BLOCK // 2, BLOCK + 1, 100_003, strip, strip + 1,
-                   64 * BLOCK * eng.T + 64):
+                   BLOCK * strip + 64):
         sliced = eng.survivors_j(j_lo, j_lo + span, launch=launch)
         if not np.array_equal(whole, sliced):
             return False, f"G13 FAIL: launch size {launch} != whole"
@@ -769,11 +827,18 @@ def g13_slicing_independence():
         alt = GpuEngine(n, q2=1024, T=T)
         if not np.array_equal(whole, alt.survivors_j(j_lo, j_lo + span)):
             return False, f"G13 FAIL: T={T} != whole"
+    # a small LAUNCH makes the window several full launches (the captured
+    # CUDA graph, replayed) plus a ragged last one (the eager path)
+    small = GpuEngine(n, q2=1024, launch=1 << 20)
+    if not np.array_equal(whole, small.survivors_j(j_lo, j_lo + span)):
+        return False, "G13 FAIL: graph-replayed launches != whole"
+    if any(sl["graph"] is None for sl in small._slots):
+        return False, "G13 FAIL: the graph path was not exercised on both slots"
     if whole.size == 0:
         return False, "G13 FAIL: vacuous (empty window)"
     return True, (f"G13 ok: stream independent of slicing over 10 cuts, "
-                  f"6 launch sizes and 3 strip widths ({whole.size} "
-                  f"survivors)")
+                  f"6 launch sizes, 3 strip widths and graph-vs-eager "
+                  f"launches ({whole.size} survivors)")
 
 
 def g14_kernel_matches_bigint():

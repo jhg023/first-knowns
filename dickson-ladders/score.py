@@ -7,21 +7,30 @@ fails the fingerprint; an engine that breaks the mathematics fails the
 gates.  Either way it scores nothing.  Optimize under the score, never
 around it.
 
-Two shapes, because one configuration is not a benchmark:
+Three shapes, because one configuration is not a benchmark:
 
   SCORE    n = 10 filter, wheel 2310,  j in [1e12, +2^32)
   SCORE12  n = 12 filter, wheel 30030, j in [6e11, +2^32)
+  SCORE13  n = 13 filter, wheel 30030, j in [7e16, +2^38)
 
-They disagree about what matters -- the n=12 shape has 4x fewer
+The first two disagree about what matters -- the n=12 shape has 4x fewer
 survivors per candidate and 13x more k-line per candidate -- so a change
 that helps one and hurts the other is visible instead of averaged away.
+The third is the production configuration for the a(13) campaign, sited
+at the model's a(13) median (k ~ 2.1e21), and 64x wider: the v2 engine
+crosses a 2^32 window in ~5 ms, which is one to four launches and near
+the floor of what that window can resolve, so LAUNCH-sized changes are
+judged on SCORE13 (BENCHMARKS.md).  The frozen 2^32 shapes are never
+amended; a shape that stops resolving a change gets a sibling.
 
 The rate reported is END-TO-END k-line per second: span * W / wall, the
 quantity the hunt is actually paid in.  Divided by 1e6 for the SCORE.
 
-Frozen 2026-08-18 on the v1 kernel.  A deliberate coverage change (new
-wheel, new sieve depth) legitimately moves a fingerprint: update it in
-the same commit and say why in OPTIMIZATION_LOG.md.
+SCORE/SCORE12 frozen 2026-08-18 on the v1 kernel; SCORE13 frozen the same
+day on v2 and cross-checked bit-for-bit against v1 (56 s at v1 speed).
+A deliberate coverage change (new wheel, new sieve depth) legitimately
+moves a fingerprint: update it in the same commit and say why in
+OPTIMIZATION_LOG.md.
 """
 
 import pathlib as _pathlib
@@ -40,6 +49,7 @@ SHAPES = [
     # label, n, j0, span, expected count, expected xor
     ("SCORE",   10, 10**12,      1 << 32, 1213, 1003170806905),
     ("SCORE12", 12, 6 * 10**11,  1 << 32,  292, 2752794123),
+    ("SCORE13", 13, 7 * 10**16,  1 << 38, 2739, 70000110051605722),
 ]
 
 
@@ -59,7 +69,7 @@ def main():
     ok_all = True
     for label, n, j0, span, count, xor in SHAPES:
         eng = GpuEngine(n)
-        eng.survivors_j(j0, j0 + (1 << 20))               # warm the context
+        eng.survivors_j(j0, j0 + span)                    # warm on the window
 
         def work():
             return eng.survivors_j(j0, j0 + span)
