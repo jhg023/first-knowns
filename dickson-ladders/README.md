@@ -11,15 +11,17 @@ sequence is `nonn,hard,more`; its last computational advance was in
 **October 2014**, and the four terms this project targets — a(10) through
 a(13) — have never had an upper bound published for them.
 
-**Status: ACTIVE** — the engine is built, gated and benchmarked; the
-first production leg has not been started yet (hunts are started
-deliberately by the repository owner, never by an agent). The standing
-frontier is still where Hiroaki Yamanouchi left it in 2014:
-**a(9) = 3,332,396,388,090**, with a(10) > 1.54665×10¹³ and
-a(11) > 1.076691×10¹⁴. The model puts a(10) at median 1.68×10¹⁵ — about
-**4 minutes** at the measured line rate — and a(11) at 7.18×10¹⁶, about
-3 hours. Predictions are stated in full below *before* the run, which is
-the only time they are worth anything.
+**Status: ACTIVE** — the engine is built, gated, benchmarked and
+optimized (v2: 913x the first gated engine on the production shape,
+[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)); the first production leg has
+not been started yet (hunts are started deliberately by the repository
+owner, never by an agent). The standing frontier is still where Hiroaki
+Yamanouchi left it in 2014: **a(9) = 3,332,396,388,090**, with
+a(10) > 1.54665×10¹³ and a(11) > 1.076691×10¹⁴. The model puts a(10) at
+median 1.68×10¹⁵ — under a second at the measured end-to-end rate — a(11)
+at 7.18×10¹⁶ (about half a minute), a(12) at 1.83×10¹⁹ (minutes) and
+a(13) at 2.14×10²¹, about **four hours**. Predictions are stated in full
+below *before* the run, which is the only time they are worth anything.
 
 ## The problem
 
@@ -92,23 +94,46 @@ them. The two engines exploit that fact in deliberately different ways —
 - the **CPU engine** (`ladder_search.py`) builds the root table with
   sympy's `sqrt_mod`, converts it to j-residues, and marks arithmetic
   progressions with numpy slice strides;
-- the **GPU engine** (`ladder_gpu.py`) builds **no table at all**. Per
-  candidate it computes t = k² mod q by Barrett reduction and then walks
-  r ← r + t from r = t+1, n times, killing on r = 0. That walk is
-  m·k²+1 mod q for m = 1..n with no multiplication and no memory traffic
-  beyond (q, magic, W mod q).
+- the **GPU engine** (`ladder_gpu.py`) never takes a square root. It
+  derives every kill decision on the device from the residue *walk* —
+  t = k² mod q by Barrett reduction, then r ← r + t from r = t+1, n
+  times, killing on r = 0, which is m·k²+1 mod q for m = 1..n with no
+  multiplication — evaluated once per (prime, residue) into a bit table
+  that the sieve then consumes: the first 16-23 primes as 64-bit kill
+  patterns OR-ed once per 64 candidates (stage 1a), the rest as one
+  Barrett plus one bit probe per surviving candidate in compaction
+  rounds (stage 1b). The v1 kernel, which walked every candidate against
+  every prime, is kept in the file as the parity reference for **G15**
+  and is unreachable from the campaign.
 
-They share no subroutine, so **G6** — bit-for-bit parity on populated
-windows from j = 10⁶ up to the enforced ceiling — is a real check rather
-than a tautology.
+They share no subroutine — square roots and numpy strides on one side,
+the walk, Barrett arithmetic and bit patterns on the other — so **G6**
+(bit-for-bit parity on populated windows from j = 10⁶ up to the enforced
+ceiling) and **G14** (the GPU stream against big-integer divisibility of
+the actual values, no engine on the other side) are real checks rather
+than tautologies.
 
-**4. Host classification, designed cheap on day one.** Survivors are
-classified by run length with a strong-probable-prime chain that tests
-m = 1 first and stops at the first composite; 61% of survivors die on
-the first test. The sibling project learned the hard way that a fast
-kernel turns the host into the bottleneck (its host share went from 2%
-to 52% while nobody was watching), so this one measures the split from
-the first commit — see [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md).
+**4. Host classification, designed cheap on day one and pipelined on
+day two.** Survivors are classified by run length with a
+strong-probable-prime chain that tests m = 1 first and stops at the first
+composite; 61% of survivors die on the first test. The sibling project
+learned the hard way that a fast kernel turns the host into the
+bottleneck (its host share went from 2% to 52% while nobody was
+watching), so this one measured the split from the first commit, and
+when the v2 kernel made the host 92% of the wall the launcher grew a
+process pool that classifies segment i−1 while the device sieves segment
+i, consuming results in ascending order so the least-claim ordering is
+untouched. At the n = 13 filter the host is 18% of device time and fully
+hidden; at n = 10 it binds at 2.2x, on legs that take seconds — see
+[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md).
+
+**4a. A discovery is a first occurrence, logged once.** The launcher's
+frontier promotes itself the moment a longer run is verified (and is
+stored in the checkpoint): the first k with run ≥ 10 is a(10) and a
+`[DISCOVERY]`; every later run-10 value is a census event — verified and
+evidenced exactly like a find, but logged as `[NEAR]` with a running
+count per run length. A run of 12 settles a(11) and a(12) at once, each
+logged once. Repo-wide convention: [CONVENTIONS.md](../CONVENTIONS.md).
 
 **5. Certificates, because this problem hands them over.** The values
 m·k²+1 pass huntlib's deterministic Miller–Rabin bound (3.317×10²⁴)
@@ -151,11 +176,13 @@ where one exists):
 | a(12) | 5.33×10¹⁸ | **1.83×10¹⁹** | 4.75×10¹⁹ | 9.51×10¹⁹ |
 | a(13) | 6.34×10²⁰ | **2.14×10²¹** | 5.50×10²¹ | 1.09×10²² |
 
-At the v1 line rate (6.54×10¹² k/s at n = 10, 8.78×10¹³ k/s at n = 12 —
-see [BENCHMARKS.md](BENCHMARKS.md)) that is **4.3 minutes to the a(10)
-median, 3.1 hours to a(11), 2.4 days to a(12)**. a(13) is out of reach
-for the v1 kernel at ~9 months, and closing that gap is the whole
-optimization brief in [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md).
+At the v2 rate (1.63×10¹⁷ k/s on the production n = 13 shape; the
+end-to-end n = 10 rate is host-bound at 2.45×10¹⁵ k/s — see
+[BENCHMARKS.md](BENCHMARKS.md)) that is **under a second to the a(10)
+median, half a minute to a(11), minutes to a(12), and 3.6 hours to
+a(13)** (P90 19 hours). At the v1 rate a(13) was months to years; the
+ledger of how that gap closed, with every reject and its price, is
+[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md).
 
 ## Running it
 
@@ -175,11 +202,18 @@ then makes the production engine **rediscover a(7), a(8) and a(9)
 end-to-end as first occurrences**, sweeping from the floor. A stream that
 cannot find what is known does not get to report what is not.
 
-`--stop-on-discovery` follows the repo-wide convention: only a run beyond
-the campaign frontier (currently ≥ 10) halts the hunt. Once a term is
-settled it joins `CAMPAIGN_FOUND` in the launcher, and further k with
-that run length are verified, evidenced and counted as census rather than
-stopping a leg.
+`--stop-on-discovery` follows the repo-wide convention: only a first
+occurrence beyond the campaign frontier (≥ 10 at start; the frontier
+promotes itself as finds land and the promotion lives in the checkpoint)
+halts the hunt. Further k with a settled run length are verified,
+evidenced and counted as census rather than stopping a leg or being
+logged as a second discovery. Terms found in earlier campaigns can also be
+seeded into `CAMPAIGN_FOUND` in the launcher.
+
+`--workers N` sets the classification pool (default: the machine's core
+count minus four; `1` is the serial path). Segments are 2⁴² candidates
+(about a second of device time on any wheel); `--seg-span` in k
+overrides.
 
 Requires Python 3.12+, numpy, sympy, CuPy + CUDA GPU (or `--engine cpu`,
 which is the gating reference and orders of magnitude too slow to hunt

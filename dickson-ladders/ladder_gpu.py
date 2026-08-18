@@ -32,10 +32,17 @@ The engine (v2, the bit-sieve restructure of OPTIMIZATION.md 2.1/2.2):
             one pattern word per prime per block, and extracts survivors
             from the complement with find-first-set.  NS primes.
   stage 1b  Survivors of 1a (a queue) are tested against the remaining
-            primes to q2 in COMPACTION ROUNDS of ROUND primes: every
-            round restarts with all lanes alive, so warps do not idle
-            behind their slowest lane.  Counts stay on the device; the
-            chain reaches the host once per launch.
+            primes to q2 in COMPACTION ROUNDS cut geometrically by
+            population (each round ends when survival within it has
+            fallen RATIO-fold), so every round restarts with all lanes
+            alive and warps do not idle behind their slowest lane.  The
+            test is one Barrett j mod q and one probe of the kill-bit
+            table.  Dense rounds run one thread per candidate; sparse
+            deep rounds run one WARP per candidate with the lanes
+            splitting the primes and voting.  Counts stay on the device;
+            a launch is a captured CUDA graph, two launches are in
+            flight on two streams, and the chain reaches the host once
+            per launch.
   v1        The original one-thread-per-candidate kernel is kept BELOW,
             unreachable from the campaign, as the parity reference for
             G15 (v2 stream == v1 stream, bit for bit).
@@ -96,7 +103,7 @@ RATIO_DEFAULT = 4.0      # a stage-1b round ends when survival within it
 #                          a lane that reaches q ~ 4096 has 6000 primes to
 #                          walk while its warp-mates idle, so rounds are
 #                          cut by POPULATION, not by prime count.
-LAUNCH_DEFAULT = 1 << 33  # candidates per launch (SCORE13: 2^30 is 0.69x)
+LAUNCH_DEFAULT = 1 << 34  # candidates per launch (SCORE13: 2^33 0.93x, 2^32 0.84x)
 GRID_1B_MAX = 4096       # cap on a round kernel's grid (grid-stride)
 
 

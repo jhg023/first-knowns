@@ -68,6 +68,15 @@ each README stays.
 5. **Discoveries are records, not announcements.** The pipeline writes
    evidence JSONs; humans decide what happens next. Never auto-submit
    to OEIS or anywhere else.
+5a. **A discovery is a first occurrence, logged once.** The launcher's
+   frontier promotes itself at runtime when a longer run is verified and
+   is stored in the checkpoint; every later value at or below the
+   frontier is a census event — verified and evidenced when it beats the
+   literature, but logged as `[NEAR]` with a running count per run
+   length, never as a second discovery. Notable events (decade and
+   model-odds crossings, near misses, new bests, first-of-a-length) each
+   get a log line in the CONVENTIONS taxonomy so a human can follow the
+   hunt from the log alone. See CONVENTIONS.md "The discovery protocol".
 6. **New projects** copy the skeleton, import huntlib for
    infrastructure, keep all mathematics in-project, and add a row to the
    top-level README's project table. Only projects with verified

@@ -31,6 +31,17 @@ strong test fails.  Both are proofs of compositeness.  So "this is the
 LEAST k" rests on rigorous ground throughout, and "these n values are
 prime" rests on certificates.
 
+Discovery means FIRST OCCURRENCE, once (CONVENTIONS.md).  The frontier --
+the largest run length settled so far -- starts at the literature (a(9))
+plus CAMPAIGN_FOUND and is PROMOTED AT RUNTIME the moment a longer run is
+verified: that k is a(r) for every unsettled r up to its run, each is
+logged as [DISCOVERY] exactly once and stored in the checkpoint, and every
+later k with a run at or below the frontier is a CENSUS event -- still
+verified and evidenced when it beats the literature, but logged as [NEAR]
+with a running count per run length, never as a discovery again.  A
+campaign that finds a(10) in its first minutes and keeps running therefore
+reports one discovery, then counts run-10 values as it meets them.
+
 ASCII only; graceful Ctrl+C (checkpoint, no stacktrace).
 """
 
@@ -69,8 +80,10 @@ FRONTIER_N = max(max(KNOWN), *([max(CAMPAIGN_FOUND)] if CAMPAIGN_FOUND else [0])
 # Leg 1 of the hunt.  a(10) median 1.7e15, a(11) median 7.2e16 (see
 # ladder_model.py); 2e17 carries a(11) past its Q3.  --to overrides.
 DEFAULT_TO = 2 * 10**17
-SEG_SPAN = 2 * 10**15          # k per checkpoint segment (~seconds of GPU
-#                                at the v2 rate; was 2e13 for v1)
+SEG_J = 1 << 42                # j per checkpoint segment: ~1 s of device
+#                                time at the v2 rate on any wheel (in k it
+#                                is 1e16 at n = 10, 1.3e17 at n = 13; v1 used
+#                                a fixed 2e13 k).  --seg-span (in k) overrides.
 NEAR_FROM = 7                  # runs at or above this are logged + censused
 CHUNK = 1024                   # survivors per classification task
 # Host classification runs in a process pool, one segment behind the GPU:
@@ -250,7 +263,51 @@ def fresh_ckpt(n, eng):
             "next_j": max(1, -(-K_FLOOR // eng.W)),
             "canaries_done": False, "survivors": 0,
             "near_counts": {}, "best_run": 0, "best_k": 0, "hits": 0,
+            "found": {}, "odds_marks": [],
             "wall_s": 0.0, "started": time.time()}
+
+
+def frontier_of(c):
+    """The campaign frontier: the largest run length settled so far, from
+    the literature, from CAMPAIGN_FOUND, and from this campaign's own
+    verified first occurrences (persisted in the checkpoint as `found`).
+    Everything above it is undiscovered; everything at or below it is
+    census."""
+    found = c.get("found", {}) if c else {}
+    return max([FRONTIER_N] + [int(r) for r in found])
+
+
+def event_kind(c, r):
+    """DISCOVERY / CENSUS / NEAR / None for a survivor with run r -- the one
+    place the discovery-once rule lives.  DISCOVERY: beyond the frontier
+    (a first occurrence).  CENSUS: at or below it but beyond the literature
+    (verified + evidenced, counted, never a discovery again).  NEAR: a
+    literature-grade run length worth counting."""
+    if r > frontier_of(c):
+        return "DISCOVERY"
+    if r >= NEAR_FROM:
+        return "CENSUS" if r > FRONTIER_N else "NEAR"
+    return None
+
+
+def settle(c, r, k):
+    """Promote the frontier: k is a(r') for every unsettled r' <= r (run >= r
+    implies run >= r', and the sweep is ascending).  Returns the r' list."""
+    fr = frontier_of(c)
+    found = c.setdefault("found", {})
+    newly = list(range(fr + 1, r + 1))
+    for rr in newly:
+        found[str(rr)] = int(k)
+    return newly
+
+
+def settled_at(c, r):
+    """Where a(r) was settled: literature, CAMPAIGN_FOUND, or this campaign."""
+    if r in KNOWN:
+        return KNOWN[r]
+    if r in CAMPAIGN_FOUND:
+        return CAMPAIGN_FOUND[r]
+    return c.get("found", {}).get(str(r))
 
 
 def check_cursor(c, eng):
@@ -374,15 +431,22 @@ def production(args):
 
     logC = None
     try:
-        from ladder_model import expected_count, log_singular_series
-        logC = log_singular_series(FRONTIER_N + 1)[0]
+        from ladder_model import log_singular_series
+        from ladder_model import expected_count as _expected_count
+        _logc_cache = {}
+
+        def expected_count(target, pos, _unused):
+            if target not in _logc_cache:
+                _logc_cache[target] = log_singular_series(target)[0]
+            return _expected_count(target, pos, _logc_cache[target])
+        logC = True
     except Exception:
         expected_count = None
 
     cap_k = int(args.to)
     W = eng.W
     j_cap = cap_k // W + 1
-    seg = max(1, int(args.seg_span) // W)
+    seg = SEG_J if args.seg_span is None else max(1, int(args.seg_span) // W)
     t_last, k_last = time.time(), c["next_j"] * W
     workers = max(1, int(args.workers))
     pool = None
@@ -410,56 +474,96 @@ def production(args):
         for j, r in zip(surv.tolist(), runs):
             k = int(j) * W
             c["survivors"] += 1
-            if r > c["best_run"]:
+            fr = frontier_of(c)
+            new_best = r > c["best_run"]
+            if new_best:
                 c["best_run"], c["best_k"] = r, k
             if r >= NEAR_FROM:
                 nc = c.setdefault("near_counts", {})
                 nc[str(r)] = nc.get(str(r), 0) + 1
-            if r > FRONTIER_N:
+            kind = event_kind(c, r)
+            if kind == "DISCOVERY":
+                # ---- the first k with a run beyond the frontier.  It is
+                # a(r') for EVERY unsettled r' <= r, each logged exactly once.
                 ev, msg = full_verify(k, r, n)
                 if ev is None:
                     raise CorruptEngineError(f"verify failed at k={k}: {msg}")
-                prior = []
-                if os.path.exists(DISC):
-                    with open(DISC) as fh:
-                        prior = [d for d in json.load(fh)
-                                 if d["run"] == r and d["k"] < k]
-                if prior:
-                    label = "run-%d #%d (a(%d) settled at %d)" % (
-                        r, len(prior) + 1, r, min(d["k"] for d in prior))
-                else:
-                    label = "A247965(%d) CANDIDATE" % r
+                label = "A247965(%d) CANDIDATE -- first occurrence" % r
                 path = record_discovery(ev, label)
+                newly = settle(c, r, k)
+                c["hits"] = c.get("hits", 0) + 1
                 log("DISCOVERY", "=" * 60)
                 log("DISCOVERY", f"run == {r} at k = {k}  ({label})")
+                for rr in newly:
+                    log("DISCOVERY", f"a({rr}) = {k}" +
+                        ("" if rr == r else f"  (settled by the same k: run "
+                                            f"{r} >= {rr})"))
                 log("DISCOVERY", f"breaker m={ev['breaker_m']}: factor "
                                  f"{ev['breaker_factor']}")
                 log("DISCOVERY", f"verified 4 ways incl. BLS75 "
                                  f"certificates; evidence {path}")
+                log("DISCOVERY", f"frontier is now a({r}); further run-{r} "
+                                 f"values are census, not discoveries")
                 log("DISCOVERY", "=" * 60)
-                c["hits"] = c.get("hits", 0) + 1
-                if not prior and args.stop_on_discovery:
+                if args.stop_on_discovery:
                     save_ckpt(c)
                     log("STAGE", "frontier-extending discovery confirmed "
                                  "-- stopping (--stop-on-discovery)")
                     return True
-            elif r >= NEAR_FROM:
-                os.makedirs("evidence", exist_ok=True)
-                with open(NEAR, "a") as fh:
-                    fh.write(json.dumps({"k": k, "run": int(r),
-                                         "t": time.time()}) + "\n")
-                log("NEAR", f"run {r} at k = {k}"
-                           + ("  -- ONE value short of a(%d)!" %
-                              (FRONTIER_N + 1) if r == FRONTIER_N else ""))
+            elif kind is not None:
+                # ---- CENSUS / NEAR: a run at or below the frontier.  Beyond
+                # the literature it is verified and evidenced like a find
+                # (census-grade), but it is counted, never rediscovered.
+                cnt = c["near_counts"][str(r)]
+                where = settled_at(c, r)
+                if kind == "CENSUS":
+                    ev, msg = full_verify(k, r, n)
+                    if ev is None:
+                        raise CorruptEngineError(f"verify failed at k={k}: {msg}")
+                    label = "run-%d census #%d (a(%d) settled at %d)" % (
+                        r, cnt, r, where)
+                    record_discovery(ev, label)
+                    detail = f"({label}; verified 4 ways, evidence written)"
+                else:
+                    os.makedirs("evidence", exist_ok=True)
+                    with open(NEAR, "a") as fh:
+                        fh.write(json.dumps({"k": k, "run": int(r),
+                                             "t": time.time()}) + "\n")
+                    detail = f"(run-{r} #{cnt} of the campaign)"
+                tail = ""
+                if r == fr:
+                    tail += "  -- ONE value short of a(%d)!" % (fr + 1)
+                if new_best:
+                    tail += "  -- new campaign best"
+                if cnt == 1:
+                    tail += "  -- first run-%d of the campaign" % r
+                log("NEAR", f"run {r} at k = {k}  {detail}{tail}")
         # the cursor advances only past a FULLY classified segment
         c["next_j"] = seg_j1
         now = time.time()
         c["wall_s"] += now - t_mark
         t_mark = now
+        fr = frontier_of(c)
+        nc = c.get("near_counts", {})
+        nears = "/".join(str(nc.get(str(r), 0)) for r in range(NEAR_FROM, fr + 1))
         dec = 10 ** int(math.log10(max(seg_j1 * W, 10)))
         if seg_j0 * W < dec <= seg_j1 * W:
             log("MILESTONE", f"passed k = {dec:.0e}  survivors "
-                             f"{c['survivors']:,}  best run {c['best_run']}")
+                             f"{c['survivors']:,}  near{NEAR_FROM}-{fr} {nears}  "
+                             f"best run {c['best_run']}  finds {c.get('hits', 0)}")
+        # model odds crossing a quartile: the hunt is past where the model
+        # put a(fr+1) with that probability -- once per threshold per frontier
+        if logC is not None and expected_count is not None:
+            E = expected_count(fr + 1, seg_j1 * W, logC)
+            pnow = 1.0 - math.exp(-E)
+            marks = c.setdefault("odds_marks", [])
+            for thr in (0.25, 0.50, 0.75, 0.90):
+                key = f"a{fr+1}:{thr:.2f}"
+                if pnow >= thr and key not in marks:
+                    marks.append(key)
+                    log("MILESTONE", f"model: P(a({fr+1}) by now) crossed "
+                                     f"{thr:.0%} at k = {seg_j1*W:.3e}"
+                                     + ("  -- past the median" if thr == 0.5 else ""))
         return False
 
     def heartbeat(force=False):
@@ -469,19 +573,20 @@ def production(args):
             return
         pos = c["next_j"] * W
         rate = (pos - k_last) / max(now - t_last, 1e-9)
+        fr = frontier_of(c)
         nc = c.get("near_counts", {})
         nears = "/".join(str(nc.get(str(r), 0))
-                         for r in range(NEAR_FROM, FRONTIER_N + 1))
+                         for r in range(NEAR_FROM, fr + 1))
         odds = ""
         if logC is not None and expected_count is not None:
-            E = expected_count(FRONTIER_N + 1, pos, logC)
-            odds = f"P(a{FRONTIER_N+1} by now) {1-math.exp(-E):.0%}  "
+            E = expected_count(fr + 1, pos, logC)
+            odds = f"P(a{fr+1} by now) {1-math.exp(-E):.0%}  "
         eta = (cap_k - pos) / max(rate, 1)
         log("STATUS", f"k {pos:.4e}  {100.0*pos/cap_k:.2f}%  "
                       f"{rate:.3e} k/s  surv {c['survivors']:,}  "
-                      f"near{NEAR_FROM}-{FRONTIER_N} {nears}  "
-                      f"best run {c['best_run']}  {odds}"
-                      f"ETA {eta/3600:.1f}h")
+                      f"near{NEAR_FROM}-{fr} {nears}  "
+                      f"best run {c['best_run']}  finds {c.get('hits', 0)}  "
+                      f"{odds}ETA {eta/3600:.1f}h")
         t_last, k_last = now, pos
         save_ckpt(c)
 
@@ -492,7 +597,7 @@ def production(args):
             if next_j < j_cap:
                 j0, j1 = next_j, min(next_j + seg, j_cap)
                 surv = sieve(j0, j1)                 # device works while the
-                collect = _submit_segment(pool, surv, W, FRONTIER_N + 8)
+                collect = _submit_segment(pool, surv, W, frontier_of(c) + 8)
                 new = (j0, j1, surv, collect)        # pool chews on `pending`
                 next_j = j1
             else:
@@ -554,6 +659,23 @@ def selftest():
     else:
         print(f"PASS resume drill: split stream == whole stream "
               f"({whole.size} survivors)")
+
+    # --- discovery-once drill: the frontier promotes, repeats are census ---
+    c = fresh_ckpt(10, GpuEngine(10))
+    steps = [(9, "NEAR"), (10, "DISCOVERY")]
+    seq_ok = frontier_of(c) == FRONTIER_N and all(
+        event_kind(c, r) == kind for r, kind in steps)
+    settle(c, 10, 10**15)                          # a(10) lands
+    seq_ok = seq_ok and frontier_of(c) == 10 and event_kind(c, 10) == "CENSUS"         and event_kind(c, 9) == "NEAR" and event_kind(c, 11) == "DISCOVERY"
+    newly = settle(c, 12, 3 * 10**15)              # a run of 12 settles 11 AND 12
+    seq_ok = seq_ok and newly == [11, 12] and frontier_of(c) == 12         and event_kind(c, 12) == "CENSUS" and event_kind(c, 13) == "DISCOVERY"         and settled_at(c, 11) == 3 * 10**15 and settled_at(c, 9) == KNOWN[9]         and event_kind(c, NEAR_FROM - 1) is None
+    if not seq_ok:
+        print("FAIL discovery-once drill: frontier/census/near classification")
+        ok = False
+    else:
+        print("PASS discovery-once drill: a(10) is a discovery once, later "
+              "run-10 values are census, a run of 12 settles a(11) and a(12) "
+              "together, and the frontier promotes 9 -> 10 -> 12")
 
     # --- pool drill: pooled classification == serial, in survivor order ----
     from concurrent.futures import ProcessPoolExecutor
@@ -629,8 +751,10 @@ def status():
     print(f"survivors : {c['survivors']:,} classified in "
           f"{c['wall_s']/3600:.2f} h")
     print(f"best run  : {c['best_run']} at k = {c['best_k']}")
-    print(f"near      : {c.get('near_counts', {})}")
-    print(f"hits      : {c.get('hits', 0)}")
+    print(f"near      : {c.get('near_counts', {})}  (count per run length)")
+    print(f"found     : {c.get('found', {})}  (this campaign's first "
+          f"occurrences; frontier a({frontier_of(c)}))")
+    print(f"finds     : {c.get('hits', 0)}")
     for n, b in sorted(PUBLISHED_BOUNDS.items()):
         print(f"published : a({n}) > {b:,}")
     return 0
@@ -642,12 +766,15 @@ def main():
     ap.add_argument("--status", action="store_true")
     ap.add_argument("--fresh", action="store_true")
     ap.add_argument("--stop-on-discovery", action="store_true",
-                    help="halt after a verified find beyond a(%d)" % FRONTIER_N)
+                    help="halt after a verified FIRST OCCURRENCE beyond the "
+                         "frontier (a(%d) at start; promoted as finds land); "
+                         "census repeats never trigger it" % FRONTIER_N)
     ap.add_argument("--n", type=int, default=FRONTIER_N + 1,
                     help="filter: sieve for k with run >= n")
     ap.add_argument("--to", type=float, default=float(DEFAULT_TO))
     ap.add_argument("--engine", choices=["gpu", "cpu"], default="gpu")
-    ap.add_argument("--seg-span", type=float, default=float(SEG_SPAN))
+    ap.add_argument("--seg-span", type=float, default=None,
+                    help="k per checkpoint segment (default: %d j)" % SEG_J)
     ap.add_argument("--heartbeat", type=float, default=30.0)
     ap.add_argument("--workers", type=int, default=WORKERS_DEFAULT,
                     help="classification processes (1 = serial, in-process)")

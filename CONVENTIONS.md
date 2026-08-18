@@ -65,15 +65,31 @@ an engine bug by definition and halts the campaign (exit 2). Discoveries
 are never announced from inside the pipeline — a human reviews the
 evidence first.
 
+**A discovery is a FIRST OCCURRENCE, and it is logged once (repo-wide).**
+Every hunt has a *frontier*: the largest run length (or term index)
+settled so far, seeded from the literature and from the launcher's table
+of terms found in earlier campaigns, and **promoted at runtime** the
+moment a longer run is verified — the launcher stores the promotion in
+the checkpoint, so it survives a resume and needs no hand edit. Only the
+first value beyond the frontier is a `[DISCOVERY]`; it is a(r') for every
+unsettled r' up to its run (a run of 12 settles a(11) and a(12) at once,
+each logged once). Every later value whose run is at or below the frontier
+is a **census** event: if it beats the literature it is still verified and
+evidenced exactly like a find, but it is logged as `[NEAR]` with a running
+count per run length (`run-10 census #7 (a(10) settled at K)`), never as a
+discovery again. A campaign that finds a(10) in its first minutes and
+keeps running reports one discovery and then counts run-10 values as it
+meets them; the counts per length are the campaign's census and belong in
+`[STATUS]` and `[MILESTONE]` lines. Where this rule lives in code is one
+function (`event_kind` in dickson-ladders), and the selftest drills it.
+
 **The stop-on-discovery convention (repo-wide).** Every launcher
 accepts `--stop-on-discovery`: once the discovery protocol confirms a
-*frontier-extending* find — a value strictly beyond every previously
-recorded one — the campaign checkpoints, writes the evidence, logs a
-`[STAGE]` line, and exits cleanly so a human can react before more GPU
-time is spent. What counts as the frontier is a named constant in the
-launcher. Rediscoveries of known values (canaries), and census-grade
-repeats of run lengths the campaign has already settled, are still
-fully verified and evidenced but never trigger the stop.
+*frontier-extending* find — a first occurrence, in the sense above — the
+campaign checkpoints, writes the evidence, logs a `[STAGE]` line, and
+exits cleanly so a human can react before more GPU time is spent.
+Rediscoveries of known values (canaries) and census repeats never
+trigger the stop.
 
 ## The odds model
 
@@ -87,11 +103,21 @@ finds are scored against them after.
 
 ## Logging taxonomy
 
-`[STAGE]` phases; `[STATUS]` heartbeat with position, rate, live model
-odds, ETA; `[MILESTONE]` decade crossings; `[NEAR]` individually-logged
-near misses with campaign ordinals; `[CANARY-GOLD]` expected
-rediscoveries; `[DISCOVERY]` verified finds; `[ALARM]` halts. Timestamps
-on everything; ASCII only.
+`[STAGE]` phases; `[STATUS]` heartbeat with position, rate, survivor
+count, the census counts per run length from the near-miss floor to the
+current frontier, the number of finds, live model odds, ETA;
+`[MILESTONE]` decade crossings *and* model-odds crossings (the hunt has
+passed the point where the model put the next term with 25/50/75/90%
+probability — "past the median" is worth a line); `[NEAR]`
+individually-logged near misses and census repeats with their campaign
+ordinal (`run-9 #12 of the campaign`), flagged when they are one value
+short of the next term, a new campaign best, or the first of their length;
+`[CANARY-GOLD]` expected rediscoveries; `[DISCOVERY]` verified first
+occurrences, once each; `[ALARM]` halts. The point of the taxonomy is that
+a human reading the log while the hunt runs can see every notable event
+without a debugger: add a line for anything a person would want to know
+happened, keep it in one of these categories, and never let a category
+fire twice for the same fact. Timestamps on everything; ASCII only.
 
 ## Numeric hygiene
 
