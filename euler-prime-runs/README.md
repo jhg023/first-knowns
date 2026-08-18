@@ -339,13 +339,21 @@ at seven heights up to the ceiling. That is not an old version, it is the
 other half of the parity gate.
 
 `--stop-on-discovery` follows the repo-wide convention (CONVENTIONS.md):
-only a run beyond the campaign frontier halts the hunt. With a(19)
-settled the frontier is now **≥ 20**, so run-17/18/19 repeats are
-verified, evidenced, and counted as census (`near13-19` in the status
-line) rather than stopping a leg. The known run-21 value at 2.345×10²⁰
-was treated the same way — an in-flight canary, not a discovery —
-rediscovered on schedule 2026-08-12 and thereby settled as a(21) (see
-RESULTS.md).
+**a discovery is a first occurrence, logged once.** A164926(n) is the
+least prime with run *exactly* n, so settledness is per run length: the
+first run-r prime while a(r) is open is a(r) and a `[DISCOVERY]`; the
+launcher records it in the checkpoint at once, and every later run-r
+prime is a census event — verified and evidenced exactly like a find, but
+logged as `[NEAR]` with a running count per run length (`run-17 census
+#12 (a(17) settled at …)`; the counts appear as `near13-21` in the status
+line), never as a second discovery, and never a stop trigger. With a(17),
+a(18), a(19) and a(21) settled the next open term is **a(20)**, which is
+what the model odds in the status line and the `[MILESTONE]` odds
+crossings (25/50/75/90%) refer to; once it lands the target moves to
+a(22) by itself. The known run-21 value at 2.345×10²⁰ was treated the same
+way — an in-flight canary, not a discovery — rediscovered on schedule
+2026-08-12 and thereby settled as a(21) (see RESULTS.md); it is carried in
+the launcher as `SETTLED_ELSEWHERE`.
 
 Requires Python 3.12+, numpy, sympy, CuPy + CUDA GPU (or `--engine cpu`).
 
