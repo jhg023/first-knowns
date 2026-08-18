@@ -151,6 +151,17 @@ rests on rigorous ground for the whole swept range, and "these n values
 are prime" rests on certificates. **G11** drills the verifier with a
 forged witness and a falsified factorization; both must be rejected.
 
+The witness search takes its bases from the primes in ascending order, as
+many as it takes, not from a fixed short list — and the reason is
+structural, not paranoia. For every prime q dividing k (and k is a wheel
+multiple), N = m·k²+1 ≡ 1 (mod q), and reciprocity with (N−1)/2 even makes
+q a quadratic residue mod N; 2 itself is a residue for every even m. So the
+wheel primes can never witness p = 2, and a list of the first eleven primes
+left only five or six coin flips per value: it ran out on a genuine run-10
+census value at m = 2 (every prime below 41 a residue) and aborted a
+campaign with a false alarm. **G12** replays that value: the eleven-prime
+list must fail and the open-ended search must certify it.
+
 ## The odds model
 
 `ladder_model.py` computes the Bateman–Horn prediction with a

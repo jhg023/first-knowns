@@ -47,7 +47,9 @@ will be believable, and they are checkable today:
   deterministic-MR bound**: a(9)'s nine values (up to 10²⁶) each carry a
   Brillhart–Lehmer–Selfridge witness set that re-verifies from scratch,
   and the verifier rejects both a forged witness and a falsified
-  factorization (G11).
+  factorization (G11). The witness search is open-ended over the primes,
+  because the wheel primes can never witness p = 2 here (README, item 5);
+  G12 replays a genuine run-10 value whose m = 2 certificate needs base 41.
 
 ## The least-claim, and what it will rest on
 

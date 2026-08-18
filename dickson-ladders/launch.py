@@ -55,7 +55,7 @@ import time
 from math import gcd
 
 _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
-from sympy import factorint, isprime                          # noqa: E402
+from sympy import factorint, isprime, primerange              # noqa: E402
 
 from huntlib import checkpoint as _ckpt                       # noqa: E402
 from huntlib.hlog import log                                  # noqa: E402
@@ -130,7 +130,10 @@ def factor_n_minus_1(m, k):
     return fac
 
 
-def certificate(N, fac, bases=(2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31)):
+CERT_BASE_CAP = 10_000         # witness bases: the primes below this, ascending
+
+
+def certificate(N, fac, base_cap=CERT_BASE_CAP):
     """Witnesses {p: a_p} proving N prime, or None.
 
     Brillhart-Lehmer-Selfridge Theorem 1: with N-1 fully factored, N is
@@ -142,12 +145,24 @@ def certificate(N, fac, bases=(2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31)):
     practical: a single universal base fails whenever it happens to be a
     p-th power residue, and with six prime factors that is most of the
     time.
+
+    The bases are the primes in ascending order, as many as it takes.  For
+    a prime N a base fails the p-condition exactly when it is a p-th power
+    residue -- one base in p at random -- and p = 2 is the hard case here
+    for a STRUCTURAL reason: k is a multiple of the wheel, so for every
+    prime q | k, N = m*k^2 + 1 == 1 (mod q) and quadratic reciprocity (with
+    (N-1)/2 = m*k^2/2 even) gives (q/N) = (N/q) = 1; 2 itself is a residue
+    whenever N == 1 (mod 8), i.e. for every even m (and every m once
+    4 | k).  So the wheel primes never witness p = 2, and a fixed list of
+    the first eleven primes left only five or six coin flips per value --
+    it ran out on a genuine run-10 census value at m = 2 (every prime
+    below 41 a residue) and aborted the campaign with a false ALARM.
     """
     out = {}
     for p in fac:
-        for a in bases:
+        for a in primerange(2, base_cap):
             if pow(a, N - 1, N) != 1:
-                continue
+                return None            # Fermat fails: N is composite, no proof exists
             if gcd(pow(a, (N - 1) // p, N) - 1, N) == 1:
                 out[p] = a
                 break
@@ -387,6 +402,11 @@ def refuse_unreadable_cursor(eng, fresh):
 # ------------------------------- discovery ---------------------------------
 
 def record_discovery(ev, label):
+    """Write the per-hit evidence JSON and upsert the ledger entry for k.
+
+    Keyed by k, so redoing a segment (the one in flight at an interrupt or
+    a crash is redone on resume) rewrites the same records instead of
+    appending duplicates."""
     os.makedirs("evidence", exist_ok=True)
     path = os.path.join("evidence", f"ladder_hit_run{ev['run']}_k{ev['k']}.json")
     with open(path, "w") as f:
@@ -398,6 +418,7 @@ def record_discovery(ev, label):
     rec = dict(ev)
     rec["label"] = label
     rec["t"] = time.time()
+    allrec = [d for d in allrec if int(d.get("k", -1)) != int(ev["k"])]
     allrec.append(rec)
     allrec.sort(key=lambda d: d["k"])
     with open(DISC, "w") as f:
@@ -567,10 +588,22 @@ def production(args):
 
     t_mark = time.time()
 
+    # k already in the near-miss record: a redone segment (the one in flight
+    # at an interrupt or a crash) must not append its lines a second time
+    near_seen = set()
+    if os.path.exists(NEAR):
+        with open(NEAR) as fh:
+            for line in fh:
+                try:
+                    near_seen.add(int(json.loads(line)["k"]))
+                except (ValueError, KeyError, TypeError):
+                    pass
+
     def consume(seg_j0, seg_j1, surv, runs):
         """Bookkeeping for one classified segment, survivors ascending.
         Returns True if the campaign should stop (--stop-on-discovery)."""
         nonlocal t_mark
+        evidenced = False       # a discovery/census in this segment
         for j, r in zip(surv.tolist(), runs):
             k = int(j) * W
             c["survivors"] += 1
@@ -590,6 +623,7 @@ def production(args):
                     raise CorruptEngineError(f"verify failed at k={k}: {msg}")
                 label = "A247965(%d) CANDIDATE -- first occurrence" % r
                 path = record_discovery(ev, label)
+                evidenced = True
                 newly = settle(c, r, k)
                 c["hits"] = c.get("hits", 0) + 1
                 log("DISCOVERY", "=" * 60)
@@ -623,12 +657,15 @@ def production(args):
                     label = "run-%d census #%d (a(%d) settled at %d)" % (
                         r, cnt, r, where)
                     record_discovery(ev, label)
+                    evidenced = True
                     detail = f"({label}; verified 4 ways, evidence written)"
                 else:
-                    os.makedirs("evidence", exist_ok=True)
-                    with open(NEAR, "a") as fh:
-                        fh.write(json.dumps({"k": k, "run": int(r),
-                                             "t": time.time()}) + "\n")
+                    if k not in near_seen:
+                        os.makedirs("evidence", exist_ok=True)
+                        with open(NEAR, "a") as fh:
+                            fh.write(json.dumps({"k": k, "run": int(r),
+                                                 "t": time.time()}) + "\n")
+                        near_seen.add(k)
                     detail = f"(run-{r} #{cnt} of the campaign)"
                 tail = ""
                 if r == fr:
@@ -643,6 +680,12 @@ def production(args):
         now = time.time()
         c["wall_s"] += now - t_mark
         t_mark = now
+        if evidenced:
+            # a promoted frontier / census count must never outlive the
+            # process only in memory: the checkpoint and the evidence
+            # directory agree at every segment boundary that wrote evidence
+            # (a plain heartbeat save could be up to --heartbeat s away)
+            save_ckpt(c)
         fr = frontier_of(c)
         nc = c.get("near_counts", {})
         nears = "/".join(str(nc.get(str(r), 0)) for r in range(NEAR_FROM, fr + 1))
@@ -895,6 +938,29 @@ def selftest():
         print(f"PASS G11: certificate verifier accepts the genuine proof and "
               f"rejects a forged witness ({why}) and a wrong factorization "
               f"({why2})")
+
+    # --- G12: the witness search must not run out of bases -----------------
+    # A genuine run-10 census value of the campaign: at m = 2 every prime
+    # below 41 is a quadratic residue mod N (k is a wheel multiple and m is
+    # even -- see certificate()), so a fixed list of the first eleven primes
+    # finds no witness for p = 2 -- exactly the false ALARM that once
+    # aborted the hunt.  The open-ended search must certify it and the
+    # verifier must accept the result.
+    k = 37715882280469470
+    N = 2 * k * k + 1
+    fac = factor_n_minus_1(2, k)
+    short = certificate(N, fac, base_cap=32)          # the old eleven primes
+    w = certificate(N, fac)
+    okw, whyw = ((False, "no certificate") if w is None
+                 else verify_certificate(N, fac, w))
+    if short is not None or not okw:
+        print(f"FAIL G12: base-exhaustion drill (eleven-prime list finds a "
+              f"witness: {short is not None}; open-ended search: {whyw})")
+        ok = False
+    else:
+        print(f"PASS G12: run-10 census value certified at m=2 with p=2 "
+              f"witness {w[2]} after the first eleven primes all fail; "
+              f"verifier re-check ok")
 
     print("SELFTEST ALL GREEN" if ok else "SELFTEST FAILED")
     return 0 if ok else 1
