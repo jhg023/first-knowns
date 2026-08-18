@@ -67,11 +67,18 @@ CAMPAIGN_FOUND = {}
 FRONTIER_N = max(max(KNOWN), *([max(CAMPAIGN_FOUND)] if CAMPAIGN_FOUND else [0]))
 
 # Leg 1 of the hunt.  a(10) median 1.7e15, a(11) median 7.2e16 (see
-# ladder_model.py); 2e17 carries a(11) past its Q3 and costs under a day
-# at the measured line rate.  --to overrides.
+# ladder_model.py); 2e17 carries a(11) past its Q3.  --to overrides.
 DEFAULT_TO = 2 * 10**17
-SEG_SPAN = 2 * 10**13          # k per checkpoint segment
+SEG_SPAN = 2 * 10**15          # k per checkpoint segment (~seconds of GPU
+#                                at the v2 rate; was 2e13 for v1)
 NEAR_FROM = 7                  # runs at or above this are logged + censused
+CHUNK = 1024                   # survivors per classification task
+# Host classification runs in a process pool, one segment behind the GPU:
+# the pool classifies segment i-1 while the device sieves segment i.  The
+# results are consumed in ASCENDING order in the parent and the cursor only
+# advances past a fully classified segment, so the least-claim ordering the
+# checkpoint depends on is untouched.  --workers 1 is the old serial path.
+WORKERS_DEFAULT = max(1, (os.cpu_count() or 2) - 4)
 
 
 class CorruptEngineError(RuntimeError):
@@ -148,6 +155,34 @@ def sprp_run(k, cap):
     while r < cap and mr_is_prime((r + 1) * k * k + 1):
         r += 1
     return r
+
+
+def _classify_chunk(task):
+    """Pool worker: run lengths of a chunk of survivors, in the given order.
+
+    Module-level and self-contained so it survives Windows spawn; touches
+    no GPU, so workers never contend with the parent's device work.
+    """
+    W, cap, js = task
+    return [sprp_run(int(j) * W, cap) for j in js]
+
+
+def _submit_segment(pool, surv, W, cap):
+    """Chunk a segment's survivors and hand them to the pool (or classify
+    inline when there is no pool).  Returns a callable that yields the run
+    lengths in survivor order."""
+    js = surv.tolist()
+    if pool is None:
+        return lambda: _classify_chunk((W, cap, js))
+    futs = [pool.submit(_classify_chunk, (W, cap, js[i:i + CHUNK]))
+            for i in range(0, len(js), CHUNK)]
+
+    def collect():
+        out = []
+        for f in futs:                       # in order: ascending j
+            out.extend(f.result())           # exceptions propagate
+        return out
+    return collect
 
 
 def full_verify(k, claimed_run, n_filter, certify=True):
@@ -349,97 +384,138 @@ def production(args):
     j_cap = cap_k // W + 1
     seg = max(1, int(args.seg_span) // W)
     t_last, k_last = time.time(), c["next_j"] * W
+    workers = max(1, int(args.workers))
+    pool = None
+    if workers > 1:
+        from concurrent.futures import ProcessPoolExecutor
+        pool = ProcessPoolExecutor(max_workers=workers)
     log("STAGE", f"production: n={n} filter, wheel {W}, k from "
-                 f"{c['next_j']*W:.4e} to {cap_k:.3e} ({args.engine})")
-    try:
-        while c["next_j"] < j_cap:
-            j0 = c["next_j"]
-            j1 = min(j0 + seg, j_cap)
-            t0 = time.time()
-            surv = eng.survivors_j(j0, j1)
-            if not hasattr(surv, "tolist"):              # CPU engine: chunks
-                import numpy as np
-                surv = (np.concatenate([x for x in surv])
-                        if surv else np.empty(0, dtype="uint64"))
-            for j in surv.tolist():
-                k = int(j) * W
-                c["survivors"] += 1
-                r = sprp_run(k, cap=FRONTIER_N + 8)
-                if r > c["best_run"]:
-                    c["best_run"], c["best_k"] = r, k
-                if r >= NEAR_FROM:
-                    nc = c.setdefault("near_counts", {})
-                    nc[str(r)] = nc.get(str(r), 0) + 1
-                if r > FRONTIER_N:
-                    ev, msg = full_verify(k, r, n)
-                    if ev is None:
-                        raise CorruptEngineError(f"verify failed at k={k}: {msg}")
-                    prior = []
-                    if os.path.exists(DISC):
-                        with open(DISC) as fh:
-                            prior = [d for d in json.load(fh)
-                                     if d["run"] == r and d["k"] < k]
-                    if prior:
-                        label = "run-%d #%d (a(%d) settled at %d)" % (
-                            r, len(prior) + 1, r, min(d["k"] for d in prior))
-                    else:
-                        label = "A247965(%d) CANDIDATE" % r
-                    path = record_discovery(ev, label)
-                    log("DISCOVERY", "=" * 60)
-                    log("DISCOVERY", f"run == {r} at k = {k}  ({label})")
-                    log("DISCOVERY", f"breaker m={ev['breaker_m']}: factor "
-                                     f"{ev['breaker_factor']}")
-                    log("DISCOVERY", f"verified 4 ways incl. BLS75 "
-                                     f"certificates; evidence {path}")
-                    log("DISCOVERY", "=" * 60)
-                    c["hits"] = c.get("hits", 0) + 1
-                    if not prior and args.stop_on_discovery:
-                        save_ckpt(c)
-                        log("STAGE", "frontier-extending discovery confirmed "
-                                     "-- stopping (--stop-on-discovery)")
-                        return 0
-                elif r >= NEAR_FROM:
-                    os.makedirs("evidence", exist_ok=True)
-                    with open(NEAR, "a") as fh:
-                        fh.write(json.dumps({"k": k, "run": int(r),
-                                             "t": time.time()}) + "\n")
-                    log("NEAR", f"run {r} at k = {k}"
-                               + ("  -- ONE value short of a(%d)!" %
-                                  (FRONTIER_N + 1) if r == FRONTIER_N else ""))
-            c["next_j"] = j1
-            c["wall_s"] += time.time() - t0
-            now = time.time()
-            if now - t_last >= args.heartbeat:
-                pos = j1 * W
-                rate = (pos - k_last) / max(now - t_last, 1e-9)
-                nc = c.get("near_counts", {})
-                nears = "/".join(str(nc.get(str(r), 0))
-                                 for r in range(NEAR_FROM, FRONTIER_N + 1))
-                odds = ""
-                if logC is not None and expected_count is not None:
-                    E = expected_count(FRONTIER_N + 1, pos, logC)
-                    odds = f"P(a{FRONTIER_N+1} by now) {1-math.exp(-E):.0%}  "
-                eta = (cap_k - pos) / max(rate, 1)
-                log("STATUS", f"k {pos:.4e}  {100.0*pos/cap_k:.2f}%  "
-                              f"{rate:.3e} k/s  surv {c['survivors']:,}  "
-                              f"near{NEAR_FROM}-{FRONTIER_N} {nears}  "
-                              f"best run {c['best_run']}  {odds}"
-                              f"ETA {eta/3600:.1f}h")
-                t_last, k_last = now, pos
-                save_ckpt(c)
-            dec = 10 ** int(math.log10(max(j1 * W, 10)))
-            if j0 * W < dec <= j1 * W:
-                log("MILESTONE", f"passed k = {dec:.0e}  survivors "
-                                 f"{c['survivors']:,}  best run {c['best_run']}")
+                 f"{c['next_j']*W:.4e} to {cap_k:.3e} ({args.engine}, "
+                 f"{workers} classification worker{'s' if workers > 1 else ''})")
+
+    def sieve(j0, j1):
+        surv = eng.survivors_j(j0, j1)
+        if not hasattr(surv, "tolist"):                  # CPU engine: chunks
+            import numpy as np
+            surv = (np.concatenate([x for x in surv])
+                    if surv else np.empty(0, dtype="uint64"))
+        return surv
+
+    t_mark = time.time()
+
+    def consume(seg_j0, seg_j1, surv, runs):
+        """Bookkeeping for one classified segment, survivors ascending.
+        Returns True if the campaign should stop (frontier find)."""
+        nonlocal t_mark
+        for j, r in zip(surv.tolist(), runs):
+            k = int(j) * W
+            c["survivors"] += 1
+            if r > c["best_run"]:
+                c["best_run"], c["best_k"] = r, k
+            if r >= NEAR_FROM:
+                nc = c.setdefault("near_counts", {})
+                nc[str(r)] = nc.get(str(r), 0) + 1
+            if r > FRONTIER_N:
+                ev, msg = full_verify(k, r, n)
+                if ev is None:
+                    raise CorruptEngineError(f"verify failed at k={k}: {msg}")
+                prior = []
+                if os.path.exists(DISC):
+                    with open(DISC) as fh:
+                        prior = [d for d in json.load(fh)
+                                 if d["run"] == r and d["k"] < k]
+                if prior:
+                    label = "run-%d #%d (a(%d) settled at %d)" % (
+                        r, len(prior) + 1, r, min(d["k"] for d in prior))
+                else:
+                    label = "A247965(%d) CANDIDATE" % r
+                path = record_discovery(ev, label)
+                log("DISCOVERY", "=" * 60)
+                log("DISCOVERY", f"run == {r} at k = {k}  ({label})")
+                log("DISCOVERY", f"breaker m={ev['breaker_m']}: factor "
+                                 f"{ev['breaker_factor']}")
+                log("DISCOVERY", f"verified 4 ways incl. BLS75 "
+                                 f"certificates; evidence {path}")
+                log("DISCOVERY", "=" * 60)
+                c["hits"] = c.get("hits", 0) + 1
+                if not prior and args.stop_on_discovery:
+                    save_ckpt(c)
+                    log("STAGE", "frontier-extending discovery confirmed "
+                                 "-- stopping (--stop-on-discovery)")
+                    return True
+            elif r >= NEAR_FROM:
+                os.makedirs("evidence", exist_ok=True)
+                with open(NEAR, "a") as fh:
+                    fh.write(json.dumps({"k": k, "run": int(r),
+                                         "t": time.time()}) + "\n")
+                log("NEAR", f"run {r} at k = {k}"
+                           + ("  -- ONE value short of a(%d)!" %
+                              (FRONTIER_N + 1) if r == FRONTIER_N else ""))
+        # the cursor advances only past a FULLY classified segment
+        c["next_j"] = seg_j1
+        now = time.time()
+        c["wall_s"] += now - t_mark
+        t_mark = now
+        dec = 10 ** int(math.log10(max(seg_j1 * W, 10)))
+        if seg_j0 * W < dec <= seg_j1 * W:
+            log("MILESTONE", f"passed k = {dec:.0e}  survivors "
+                             f"{c['survivors']:,}  best run {c['best_run']}")
+        return False
+
+    def heartbeat(force=False):
+        nonlocal t_last, k_last
+        now = time.time()
+        if not force and now - t_last < args.heartbeat:
+            return
+        pos = c["next_j"] * W
+        rate = (pos - k_last) / max(now - t_last, 1e-9)
+        nc = c.get("near_counts", {})
+        nears = "/".join(str(nc.get(str(r), 0))
+                         for r in range(NEAR_FROM, FRONTIER_N + 1))
+        odds = ""
+        if logC is not None and expected_count is not None:
+            E = expected_count(FRONTIER_N + 1, pos, logC)
+            odds = f"P(a{FRONTIER_N+1} by now) {1-math.exp(-E):.0%}  "
+        eta = (cap_k - pos) / max(rate, 1)
+        log("STATUS", f"k {pos:.4e}  {100.0*pos/cap_k:.2f}%  "
+                      f"{rate:.3e} k/s  surv {c['survivors']:,}  "
+                      f"near{NEAR_FROM}-{FRONTIER_N} {nears}  "
+                      f"best run {c['best_run']}  {odds}"
+                      f"ETA {eta/3600:.1f}h")
+        t_last, k_last = now, pos
         save_ckpt(c)
+
+    pending = None          # (j0, j1, surv, collect): one segment behind
+    try:
+        next_j = c["next_j"]
+        while next_j < j_cap or pending is not None:
+            if next_j < j_cap:
+                j0, j1 = next_j, min(next_j + seg, j_cap)
+                surv = sieve(j0, j1)                 # device works while the
+                collect = _submit_segment(pool, surv, W, FRONTIER_N + 8)
+                new = (j0, j1, surv, collect)        # pool chews on `pending`
+                next_j = j1
+            else:
+                new = None
+            if pending is not None:
+                p_j0, p_j1, p_surv, p_collect = pending
+                if consume(p_j0, p_j1, p_surv, p_collect()):
+                    return 0
+                heartbeat()
+            pending = new
+        heartbeat(force=True)
         log("STAGE", f"cap {cap_k:.3e} reached; survivors {c['survivors']}; "
                      f"best run {c['best_run']} at k = {c['best_k']}")
         return 0
     except KeyboardInterrupt:
         save_ckpt(c)
-        log("STAGE", "interrupted; checkpoint saved at k = %.4e"
+        log("STAGE", "interrupted; checkpoint saved at k = %.4e (the "
+                     "segment in flight is redone on resume)"
                      % (c["next_j"] * W))
         return 0
+    finally:
+        if pool is not None:
+            pool.shutdown(wait=False, cancel_futures=True)
 
 
 # -------------------------------- selftest ---------------------------------
@@ -478,6 +554,25 @@ def selftest():
     else:
         print(f"PASS resume drill: split stream == whole stream "
               f"({whole.size} survivors)")
+
+    # --- pool drill: pooled classification == serial, in survivor order ----
+    from concurrent.futures import ProcessPoolExecutor
+    eng = GpuEngine(10)
+    j_lo, span = 10**12, 12 * 10**9
+    surv = eng.survivors_j(j_lo, j_lo + span)
+    serial = _classify_chunk((eng.W, FRONTIER_N + 8, surv.tolist()))
+    with ProcessPoolExecutor(max_workers=4) as pool:
+        pooled = _submit_segment(pool, surv, eng.W, FRONTIER_N + 8)()
+    if surv.size < 2 * CHUNK:
+        print("FAIL pool drill: window too small to span several chunks")
+        ok = False
+    elif pooled != serial:
+        print("FAIL pool drill: pooled run lengths != serial (or misordered)")
+        ok = False
+    else:
+        print(f"PASS pool drill: pooled classification == serial, in order "
+              f"({surv.size} survivors over {-(-surv.size // CHUNK)} chunks, "
+              f"max run {max(serial)})")
 
     # --- positive control: a genuine known passes the full protocol --------
     ev, msg = full_verify(KNOWN[7], 7, 7)
@@ -554,6 +649,8 @@ def main():
     ap.add_argument("--engine", choices=["gpu", "cpu"], default="gpu")
     ap.add_argument("--seg-span", type=float, default=float(SEG_SPAN))
     ap.add_argument("--heartbeat", type=float, default=30.0)
+    ap.add_argument("--workers", type=int, default=WORKERS_DEFAULT,
+                    help="classification processes (1 = serial, in-process)")
     args = ap.parse_args()
     if args.selftest:
         return selftest()
