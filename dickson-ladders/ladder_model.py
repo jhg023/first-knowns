@@ -87,7 +87,7 @@ def depth_for(n, logC, target, lo=2.0):
     return a
 
 
-def model(ns=tuple(range(4, 14))):
+def model(ns=tuple(range(4, 15))):
     return {n: dict(zip(("logC", "tail"), log_singular_series(n))) for n in ns}
 
 

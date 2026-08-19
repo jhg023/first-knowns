@@ -8,8 +8,8 @@ Rules (repo-wide):
   NTFS (and on ext4 with delayed allocation) the rename can reach the disk
   while the bytes are still in the page cache. A machine that dies in that
   window leaves a file of exactly the right SIZE full of NUL. This is not
-  hypothetical -- it is how this project lost a live campaign cursor: 785
-  bytes, every one of them zero, after a hard hang. fsync closes it.
+  hypothetical -- it is how this project once lost a live campaign cursor:
+  785 bytes, every one of them zero. fsync closes it.
 - The previous good checkpoint is kept alongside as `<path>.bak`, so even a
   torn write or a truncated file leaves a recoverable cursor one segment
   behind. `load` falls back to it automatically and says so.

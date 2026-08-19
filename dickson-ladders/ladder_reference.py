@@ -49,7 +49,7 @@ KNOWN = {1: 1,
 # n, which is what makes it a hunt.
 PUBLISHED_BOUNDS = {10: 15_466_500_000_000, 11: 107_669_100_000_000}
 
-OPEN_N = [10, 11, 12, 13]
+OPEN_N = [10, 11, 12, 13, 14]
 
 # Below this k the wheel argument above has an exception zone (a value can
 # BE the small prime that would otherwise divide it), so the engines refuse

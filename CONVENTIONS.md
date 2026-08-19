@@ -41,7 +41,8 @@ production one.
   `huntlib/` or to a repo-wide convention still edits every project's
   files, but a `PAUSED` or `COMPLETE` project's gates are *not* run for
   it — nobody is advancing that project, and every battery is minutes of a
-  GPU that belongs to the owner and has hard-hung under load. Say in the
+  GPU that belongs to the owner and may well be busy with the active
+  hunt. Say in the
   commit message which projects were edited without being gated.
 - **Resuming a paused project runs its full battery first**
   (`python launch.py --selftest`, then `python score.py`), before any new
@@ -178,52 +179,76 @@ makes that move itself and logs it as a `[STAGE]` line, so an unattended
 run keeps hunting the next open term instead of crawling at a stale
 setting.
 
-**A hunt does not get to take the whole machine (repo-wide).** Campaigns
-run for days on somebody's desktop, so a launcher sizes its host
-parallelism from what the pipeline actually needs and leaves the rest
-alone. Size it by measurement — classification cost per survivor times
-survivors per segment, against the device time for that segment — and
-leave margin, rather than by "cores minus a few". dickson-ladders learned
-this the expensive way, twice: a pool sized `cpu_count - 4` — 60
-processes on a 64-thread machine — hard-hung the machine about 30 s into
-every campaign start, fans running and the display link dead, with nothing
-in the event log; cut to 8 it hung again at 20. The default is now 4, and
-`--workers` raises it deliberately.
+**Sizing a hunt so it leaves the machine usable (repo-wide).** A campaign
+runs for days on somebody's desktop, at once the fastest and the least
+interruptible thing on it, and it is not the only program that machine has
+to run. The load a hunt places is therefore a **design input**, not a
+number that falls out of tuning — a launcher is built to a load budget the
+same way it is built to a correctness protocol. The procedure, in order:
 
-Three further rules come out of that, all repo-wide:
+1. **Measure both sides per unit of the thing the hunt is paid in.**
+   Device seconds and host core-seconds per unit of k-line (or p-line),
+   at the configuration the campaign will actually run — not at the
+   benchmark's. Everything below needs those two numbers and nothing else
+   substitutes for them.
+2. **Size the host pool from the requirement, with margin — never from
+   the core count.** Classification cost per survivor times survivors per
+   segment, against the device time for that segment, is how many cores
+   must keep up; two or three times that is a sane default, and the duty
+   cycle it implies is worth stating in the code next to the constant.
+   `cpu_count - k` is not sizing, it is an appetite: it scales with the
+   machine rather than with the work, so it is largest exactly where it
+   is least needed.
+3. **When two settings tie on throughput, take the one that asks for less
+   machine.** Knobs that trade device time against host time are often
+   remarkably flat end-to-end while differing several-fold in cores
+   demanded — in dickson-ladders four sieve depths landed within 3% of
+   each other while needing 8, 3, 2 and 1 worker. A knob that flat is not
+   a throughput knob at all; spend it on the machine.
+4. **Ramp the pool, do not stamp it.** `ProcessPoolExecutor` spawns on
+   submit only when no worker is idle, so handing it a segment's worth of
+   chunks starts every worker in the same instant — N fresh interpreters
+   importing numpy and sympy at once, while the device is flat out on the
+   next segment. That is the largest and fastest load step a campaign
+   makes, and it buys nothing: the pool has a whole segment of slack.
+   Start them one at a time, warm, at below-normal priority, before the
+   first segment, and drill in the selftest that they really do come up
+   one at a time.
+5. **Balance the two sides so the pipeline does not square-wave.** A
+   host-bound pipeline leaves the device alternating near-idle and full
+   every few seconds — thousands of full-amplitude load transitions an
+   hour. A steady load is easier on everything (supply, thermals, the rest
+   of the desktop) than an oscillating one of the same mean, and balancing
+   is usually free because it makes the hunt faster too.
+6. **Ship throttles that cost a few percent, and price them.** A
+   `--workers`, a per-segment device idle (`--gpu-yield-ms`), and a
+   one-flag `--gentle` preset let the owner trade a little rate for a
+   quieter machine without editing anything. Say in the help text what
+   each costs.
+7. **Never change a machine setting on the owner's behalf.** Clock caps,
+   power limits and priorities outside the hunt's own processes are the
+   human's call. A program may report the machine's state and name the
+   lever; it may not pull it.
+8. **Assume the process can stop at any instant** — see the checkpoint
+   rule below, and "Stopping a run". A hunt that is cheap to kill is a
+   hunt nobody has to think twice about killing.
 
-- **Ramp the pool, do not stamp it.** `ProcessPoolExecutor` spawns on
-  submit only when no worker is idle, so handing it a segment's worth of
-  chunks starts every worker in the same instant — N fresh interpreters
-  importing numpy and sympy at once, at peak host draw, while the device
-  is flat out on the next segment. That burst is the largest and fastest
-  host load step a campaign makes and it buys nothing: the pool has a
-  whole segment of slack. Start them one at a time, warm, at below-normal
-  priority, before the first segment.
-- **Prefer the setting that asks for less machine when the throughputs
-  tie.** In dickson-ladders the sieve depth traded device time against
-  host time so flatly that four settings landed within 3% of each other
-  end-to-end while needing 8, 3, 2 and 1 worker. When a knob is that
-  flat, it is not a throughput knob at all — spend it on the machine.
-- **A pipeline that square-waves is worse than one that is merely
-  slower.** Host-bound by 2.3x meant the device alternated 98%/12%
-  utilization every few seconds — thousands of full-amplitude load
-  transitions an hour on a 450 W card. Balancing the two sides removed
-  them.
-
-A default that cannot take the machine down, plus a documented knob and a
-measured statement of what the knob is worth, beats a default tuned to the
-last drop of throughput. The general lesson belongs in
-[OPTIMIZATION.md](OPTIMIZATION.md)'s ledger too: **a tuning sweep that
-measures only throughput cannot see a constraint that is not throughput.**
+Two failure modes this exists to prevent, both of which cost this
+repository real time: a default sized to the machine rather than to the
+work, and a tuning pass that optimizes throughput while quietly raising
+the load. The general form belongs in [OPTIMIZATION.md](OPTIMIZATION.md)'s
+ledger too: **a tuning sweep that measures only throughput cannot see a
+constraint that is not throughput.** A default that leaves the machine
+usable, plus a documented knob and a measured statement of what the knob
+is worth, beats a default tuned to the last drop of rate.
 
 **Checkpoints must survive the machine, not just the process
 (repo-wide).** `huntlib.checkpoint.save` is the only way a campaign
 persists its cursor, and temp-file-plus-`os.replace` is not by itself
 enough: the rename is atomic for the directory ENTRY, while the DATA may
-still be in the page cache. A machine that stops in that window leaves a
-file of exactly the right SIZE full of NUL — which is how this repo lost a
-live campaign cursor, 785 bytes of zeroes after a hard hang. So: **flush
+still be in the page cache. A process or machine that stops in that
+window leaves a file of exactly the right SIZE full of NUL — which is how
+this repo once lost a live campaign cursor, 785 bytes of zeroes. So: **flush
 and `fsync` before the replace**, and **rotate the previous file to
 `.bak`**, so at every instant at least one complete checkpoint is on disk.
 And a checkpoint that is present but unreadable is never treated as

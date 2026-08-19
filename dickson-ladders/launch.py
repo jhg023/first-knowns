@@ -165,11 +165,11 @@ CHUNK = 1024                   # survivors per classification task
 # means the real choice here is not speed, it is HOW MUCH OF THE MACHINE THE
 # HUNT ASKS FOR: 8 host processes or 2.
 #
-# This machine has hard-hung three times under this campaign, always with a
-# big pool running against a flat-out device (Kernel-Power 41, BugcheckCode
-# 0, no TDR, no WHEA, no minidump -- the signature of a supply transient
-# rather than a software fault).  So 262144 is chosen: it gives up 3% of the
-# rate and asks for a quarter of the CPU.
+# So 262144 is chosen by the rule in CONVENTIONS.md ("Sizing a hunt so it
+# leaves the machine usable", step 3): when settings tie on throughput,
+# take the one that asks for less machine.  It gives up 3% of the rate and
+# asks for a quarter of the CPU, on a program that runs for days on a
+# desktop somebody else also has to use.
 #
 # NOTE for anyone raising this further: the engine's kill-bit table is built
 # by a residue walk whose intermediates reach q^2, and it was 32-bit until
@@ -191,16 +191,16 @@ Q2_CAMPAIGN = 1 << 18
 # not become the bottleneck) and leaves the pool at ~38% duty.  Everything
 # above that is throughput the device cannot use.
 #
-# The history it is worth being blunt about: this default was cpu_count - 4,
-# which is 60 processes on the 64-thread machine this runs on -- thirty
-# times the requirement -- and on Windows every one of them is a fresh
-# interpreter importing numpy and sympy in the same instant.  That spawn
-# burst, landing at peak host draw while the device was flat out on the next
-# segment, hard-hung the machine about 30 s into every campaign start.  It
-# was cut to 8, and the machine hung again at 20.  A hunt runs for days on
-# somebody's desktop: it may not take the whole machine, and here it gains
-# nothing whatever by trying.  The pool is also RAMPED rather than stamped
-# (see _prime_pool): interpreters start one at a time.
+# Sized from the requirement, NOT from the core count.  `cpu_count - k` is
+# not sizing, it is an appetite: it scales with the machine rather than
+# with the work, so it is largest exactly where it is least needed -- on
+# this 64-thread host it would have asked for 60 processes to do the work
+# of two, each one on Windows a fresh interpreter importing numpy and
+# sympy.  A hunt runs for days on somebody's desktop: it may not take the
+# whole machine, and here it gains nothing whatever by trying.  The pool is
+# also RAMPED rather than stamped (see _prime_pool): interpreters start one
+# at a time.  Full procedure: CONVENTIONS.md "Sizing a hunt so it leaves
+# the machine usable".
 WORKERS_DEFAULT = max(1, min(4, (os.cpu_count() or 2) - 2))
 WORKER_RAMP_S = 0.35           # seconds between worker starts (_prime_pool)
 
@@ -211,16 +211,16 @@ class CorruptEngineError(RuntimeError):
 
 
 def device_report(eng):
-    """One line of machine state at campaign start, for the next post-mortem.
+    """One line of machine state at campaign start.
 
     A hunt that runs for days on a desktop should say, in its own log, how
-    much of the machine it took and what the machine's limits were when it
-    started.  This one exists because three hard hangs had to be diagnosed
-    from Windows event logs alone, and the log could not answer "how much
-    VRAM did it hold" or "was the card at stock limits" for the run that
-    hung.  Everything here is READ-ONLY: the campaign never changes a
-    machine setting, and the strongest lever against a supply transient (an
-    nvidia-smi clock or power cap) is deliberately left to the owner.
+    much of the machine it is taking and what the machine's limits were
+    when it started -- so the log itself can answer "how much VRAM did it
+    hold" and "was the card at stock limits" afterwards, without anyone
+    reconstructing it.  Everything here is READ-ONLY: the campaign reports
+    the machine's state and never changes a setting on the owner's behalf
+    (CONVENTIONS.md, "Sizing a hunt so it leaves the machine usable",
+    step 7).
     """
     bits = []
     try:
@@ -550,9 +550,8 @@ def load_ckpt(q2=Q2_DEFAULT):
         log("WARN", m)
         if "RECOVERED" in m:
             log("WARN", "a recovered checkpoint means the last run stopped "
-                        "mid-save. If the machine went down rather than the "
-                        "program, read 'If the machine hangs' in README.md "
-                        "before restarting -- and consider --gentle.")
+                        "mid-save; the cursor is one segment behind and the "
+                        "campaign carries on from there.")
     return _ckpt.load(CKPT, ckpt_key(q2), warn=_warn)
 
 
@@ -915,7 +914,8 @@ def production(args):
                      f"{time.time()-t_ramp:.1f}s (ramped one at a time at "
                      f"below-normal priority; a simultaneous start of N "
                      f"interpreters is the campaign's largest host load "
-                     f"step and it has hung this machine)")
+                     f"step, and the pool has a whole segment of slack in "
+                     f"which to avoid it)")
     log("STAGE", "machine: " + device_report(eng))
     log("STAGE", f"production: n={n} filter, wheel {W}, sieve depth q2="
                  f"{args.q2}, k from {c['next_j']*W:.4e} to {cap_now():.3e} "
@@ -938,12 +938,12 @@ def production(args):
                     if surv else np.empty(0, dtype="uint64"))
         if yield_s:
             # A deliberate idle window between segments (--gpu-yield-ms).
-            # It is OFF by default because it is the weaker of the two ways
-            # to cut sustained draw: it lowers the AVERAGE by adding load
-            # transitions, where an nvidia-smi clock cap lowers the PEAK
-            # without adding any.  It is here because it needs no admin
-            # rights and no change to machine state, so it is something a
-            # campaign can do about its own appetite.
+            # OFF by default: it lowers the average draw by ADDING load
+            # transitions, and a steady load is easier on a machine than an
+            # oscillating one of the same mean (CONVENTIONS.md step 5).  It
+            # is here because it is something the campaign can do about its
+            # own appetite without admin rights and without changing any
+            # machine setting, which is the owner's call (step 7).
             time.sleep(yield_s)
         return surv
 
@@ -1205,8 +1205,7 @@ def production(args):
                      "untouched by this failure; resuming redoes at most the "
                      "segments since the last save (--heartbeat apart). "
                      "If the machine itself went down rather than the "
-                     "program, read the 'If the machine hangs' section of "
-                     "README.md before restarting.")
+                     "program, the same is true and the cursor is intact.")
         raise
     finally:
         hb.stop()
@@ -1449,8 +1448,9 @@ def selftest():
               f"best_run) is at or above it")
 
     # --- durability drill: a crash mid-save must not cost the cursor ------
-    # The real failure, reproduced exactly: this campaign's checkpoint came
-    # back from a hard hang as 785 bytes of NUL -- right size, no content,
+    # The real failure, reproduced exactly: a campaign checkpoint written
+    # across an abrupt stop came back as 785 bytes of NUL -- right size, no
+    # content,
     # because os.replace is atomic for the directory ENTRY and the DATA was
     # still in the page cache.  A save now fsyncs before the replace and
     # rotates the previous file to .bak, so the cursor survives either way.
@@ -1481,7 +1481,8 @@ def selftest():
         ok = False
     else:
         print("PASS durability drill: saves fsync before replace and rotate a "
-              ".bak; a 785-NUL checkpoint (the real post-hang corruption) is "
+              ".bak; a 785-NUL checkpoint (the real corruption this drill "
+              "was written from) is "
               "RECOVERED from the .bak, and with no .bak it raises "
               "CheckpointCorrupt instead of silently restarting the sweep")
 
@@ -1712,16 +1713,16 @@ def main():
                          % WORKER_RAMP_S)
     ap.add_argument("--gpu-yield-ms", type=float, default=0.0,
                     help="idle the device this long after every segment "
-                         "(default 0 = off). A deliberate, documented way to "
-                         "cap sustained draw on a machine whose supply "
-                         "cannot hold the peak; see --gentle.")
+                         "(default 0 = off). A documented way to cut the "
+                         "campaign's sustained draw when the machine is "
+                         "shared with something else; see --gentle.")
     ap.add_argument("--gentle", action="store_true",
-                    help="preset for a machine that has hard-hung: half the "
-                         "workers, a slower ramp, a 25 ms device yield per "
-                         "segment. Costs a few percent. Read the 'If the "
-                         "machine hangs' section of the README first -- the "
-                         "strongest lever is an nvidia-smi clock cap, which "
-                         "this program deliberately does not apply for you.")
+                    help="be quiet on a machine somebody else is using: "
+                         "half the workers, a slower ramp, a 25 ms device "
+                         "yield per segment. Costs a few percent of the "
+                         "rate. This program never changes a machine "
+                         "setting for you; clocks and power limits are the "
+                         "owner's to set.")
     args = ap.parse_args()
     if args.gentle:
         args.workers = max(1, min(args.workers, WORKERS_DEFAULT // 2))

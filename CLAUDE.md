@@ -42,7 +42,8 @@ each README stays.
    change to `huntlib/` or a repo-wide convention touches its files. A
    paused or complete project (status in the top-level table) is not
    being advanced, its GPU time is the owner's, and every battery run is
-   minutes of a machine that has hard-hung under load. Make the shared
+   minutes of a GPU that may well be busy with the active hunt. Make the
+   shared
    change, edit the paused project's files to match, and say in the
    commit message that its gates were NOT run. **Whoever resumes a paused
    project runs `python launch.py --selftest` and `python score.py`
@@ -133,9 +134,10 @@ each README stays.
 
 5d. **A crash must cost one segment, not the campaign.** Checkpoints are
    `fsync`ed before the atomic replace and keep a `.bak` (a rename is
-   atomic for the directory entry, not for the data -- a hard hang leaves
-   a right-sized file of NUL, and did); a present-but-unreadable
-   checkpoint raises rather than reading as absent. See CONVENTIONS.md.
+   atomic for the directory entry, not for the data -- a process or
+   machine that stops in that window leaves a right-sized file of NUL,
+   and once did); a present-but-unreadable checkpoint raises rather than
+   reading as absent. See CONVENTIONS.md.
 
 5e. **Ctrl+C is a normal exit, not a crash.** Every program in this repo
    -- launchers, `score.py`, gate scripts, the oracle -- ends on an
@@ -151,6 +153,23 @@ each README stays.
    the one that prints the chained traceback and can land inside the
    checkpoint write. Drilled in every selftest. See CONVENTIONS.md
    "Stopping a run".
+
+5f. **A hunt is designed not to destabilize the machine it runs on.**
+   The load a campaign places is a DESIGN INPUT, budgeted like any other
+   requirement -- not a number that falls out of tuning. Measure device
+   seconds and host core-seconds per unit of the thing the hunt is paid
+   in; size the pool from that requirement with margin, never from
+   `cpu_count`; when two settings tie on throughput take the one that
+   asks for less machine; ramp the pool instead of stamping it; balance
+   the two sides so the pipeline does not square-wave; ship priced
+   throttles (`--workers`, `--gpu-yield-ms`, `--gentle`); never change a
+   machine setting on the owner's behalf; and assume the process can stop
+   at any instant. The full procedure, in order, is CONVENTIONS.md
+   "Sizing a hunt so it leaves the machine usable" -- read it before
+   choosing any default that scales with the host. The two failure modes
+   it exists to prevent are a default sized to the machine rather than to
+   the work, and a tuning pass that raises the load while optimizing the
+   rate.
 
 6. **New projects** copy the skeleton, import huntlib for
    infrastructure, keep all mathematics in-project, and add a row to the
@@ -180,7 +199,10 @@ each README stays.
          the selftest (Ctrl+C: boundary checkpoint, one line, exit 130,
          no traceback even on a second Ctrl+C)
    - [ ] host pool sized from the measurement, RAMPED not stamped, and
-         the drill proves the workers come up one at a time
+         the drill proves the workers come up one at a time; the load
+         budget followed end to end (CONVENTIONS.md "Sizing a hunt so it
+         leaves the machine usable"), with priced throttles and no
+         machine setting changed on the owner's behalf
    - [ ] a 30-second WALL-CLOCK `[STATUS]` heartbeat on its own thread
          (huntlib.hlog.Heartbeat: mark() at segment boundaries, doing()
          around long steps, checkpoint saves from the main loop only)

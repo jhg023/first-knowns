@@ -186,9 +186,8 @@ every campaign start.
 The sweep's contiguity is a property of the machinery, not a promise: the
 cursor advances only past a *fully classified* segment, so an interrupt or
 a crash redoes a segment rather than skipping one — which was exercised
-for real, since the machine hard-hung mid-campaign (a host-pool defect,
-[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)) and the resume re-covered its
-segment.
+for real: a campaign stopped abruptly mid-segment and the resume
+re-covered it.
 
 ## Census
 

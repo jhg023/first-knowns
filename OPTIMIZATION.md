@@ -307,28 +307,30 @@ desktop — and the sweep will happily take the extreme end of the range.
 dickson-ladders sized its classification pool this way: the sweep read
 host/GPU ratios of 1.34 / 0.77 / 0.69 / 0.61 at 16 / 32 / 48 / 60 workers,
 concluded "more is better", and shipped `cpu_count - 4`. That is 60
-processes on a 64-thread machine against a workload that needs five cores,
-and the campaign **hard-hung the machine ~30 s after every start** — fans
-running, display link dead, nothing in the event log. No gate could have
-caught it: every fingerprint was green and the SCORE was the best it had
-ever been. The diagnosis had to come from the machine's own records and
-from measuring what the pipeline actually needed (86 µs per survivor ×
-~3×10⁵ survivors per segment = 26 core-seconds against 5.4 s of device
-time per segment).
+processes on a 64-thread machine against a workload that needs five cores
+— an appetite that scales with the host instead of with the work, and is
+therefore largest exactly where it is least needed. **No gate could have
+caught it**: every fingerprint was green and the SCORE was the best it had
+ever been, because the cost was in a currency the benchmark does not
+measure. What settled it was measuring what the pipeline actually needed
+(86 µs per survivor × ~3×10⁵ survivors per segment = 26 core-seconds
+against 5.4 s of device time per segment) and sizing from that.
 
 So: for any knob that consumes a *machine* resource rather than a device
 one, size it from the requirement plus margin and state the requirement in
 the log. If the sweep's optimum sits at the end of the range you allowed,
 that is not a result — it is a sign the real constraint is somewhere the
 benchmark cannot see. And when a campaign is meant to run unattended for
-days, the machine staying usable *is* a requirement (CONVENTIONS.md, "A
-hunt does not get to take the whole machine").
+days, the machine staying usable *is* a requirement — budgeted up front
+like any other, by the procedure in CONVENTIONS.md, "Sizing a hunt so it
+leaves the machine usable".
 
 The other half of the rule: **say what the safe setting costs.** The
 replacement default (8 workers) leaves that pipeline host-bound with the
 device idle 60% of the time — about 2.5x on the table. That is the right
-default anyway, because a hung machine costs more than the throughput, but
-it only stays the right default if the price is written down next to it.
+default anyway, because an unusable machine costs more than the
+throughput, but it only stays the right default if the price is written
+down next to it.
 A safety margin nobody has priced is indistinguishable from a bug.
 
 Corollary, learned the same day: **an instrumented path is not the

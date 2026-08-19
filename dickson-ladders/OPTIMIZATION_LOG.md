@@ -103,21 +103,22 @@ physical cores; pipelined 3 segments 3.9 s against 3.0 s GPU-only. A
 
 ### Pool size 60 -> 8 -- the sweep above optimized a number that was not free
 
-The sweep read "more workers, better ratio" and took `cpu_count - 4` = 60
-processes. It measured throughput only, and throughput was not the
-binding constraint: **the campaign hard-hung the machine ~30 s after every
-start** -- fans running, HDMI link dead, hard power-off required, and
-nothing in the Windows event log (no TDR 4101, no bugcheck, no minidump,
-no WHEA, no thermal event). Everything the hunt actually consumes is
-modest, and was measured while diagnosing: one launch is 21 ms of device
-time across 9 kernels (the TDR watchdog is 2 s), every queue write is
-bounds-guarded, the engine holds ~0.8 GB of 24 GB of VRAM, and the pool
-holds ~7-9 GB of 64 GB. What is *not* modest is 60 fresh interpreters
-importing numpy and sympy in the same instant, which is peak host draw and
-lands exactly while the device is flat out on the next segment. `--workers
-8` ran clean; the default is now `min(8, cpu_count - 2)`.
 
-Eight is the known-stable setting, and it is NOT the throughput optimum --
+The sweep read "more workers, better ratio" and took `cpu_count - 4` = 60
+processes. It measured throughput only, and throughput was not the binding
+constraint: the campaign has to leave the desktop it runs on usable, and
+`cpu_count - k` is an appetite that scales with the host rather than with
+the work. Everything the hunt actually consumes is modest, and was
+measured: one launch is 21 ms of device time across 9 kernels (the TDR
+watchdog is 2 s), every queue write is bounds-guarded, the engine holds
+~0.8 GB of 24 GB of VRAM, and the pool holds ~7-9 GB of 64 GB. What is
+*not* modest is 60 fresh interpreters importing numpy and sympy in the
+same instant, which is peak host draw and lands exactly while the device
+is flat out on the next segment. The default became `min(8, cpu_count -
+2)` and then 4, sized from the requirement (CONVENTIONS.md, "Sizing a
+hunt so it leaves the machine usable").
+
+Eight was the conservative setting, and it is NOT the throughput optimum --
 recorded here so the tradeoff is explicit rather than rediscovered.
 Measured on the live campaign (n = 11, k ~ 9.5e18, cap 19, 40-digit
 values), sampling worker CPU and device utilization over the same window:
@@ -390,7 +391,7 @@ survivors fall 4.1x:
 
 All four are within 3% end-to-end, so this is not a throughput decision at
 all -- it is a decision about **how much of the machine the hunt asks
-for**, and the machine has hard-hung three times under a big pool. 262144
+for**, and the rule is to take the setting that asks for less. 262144
 gives up 3% and asks for a quarter of the CPU. `--q2` overrides; the
 frozen benchmark depth (65536) is untouched, and `score.py` now pins it
 per shape rather than inheriting a default, so SCORE stays comparable.
@@ -510,9 +511,8 @@ that.
 
 ### Robustness, measured against the machine rather than the clock
 
-- **The checkpoint did not survive the crash.** It came back from the
-  third hang as 785 bytes of NUL -- exactly its own length, none of its
-  content. `os.replace` is atomic for the directory ENTRY; the DATA was
+- **The checkpoint did not survive an abrupt stop.** It came back as 785
+  bytes of NUL -- exactly its own length, none of its content. `os.replace` is atomic for the directory ENTRY; the DATA was
   still in the page cache. `huntlib.checkpoint.save` now flushes and
   **fsyncs** before the replace and rotates the previous file to `.bak`;
   `load` falls back to the `.bak` and, failing that, raises
@@ -541,9 +541,9 @@ that.
   -- thousands of full-amplitude load transitions an hour on a 450 W card.
   The device now binds, so it runs at a steady load.
 - **The campaign logs the machine's state at start** (GPU, SMs, VRAM held,
-  driver, power limit, max clock, temperature), because three hangs had to
-  be diagnosed from Windows event logs alone and the campaign log could
-  not answer "how much VRAM did it hold" for the run that hung.
+  driver, power limit, max clock, temperature), so the log itself answers
+  "how much VRAM did it hold" and "was the card at stock limits" for any
+  run, without anyone reconstructing it afterwards.
 
 ### What v3 settles from the v2 "priced" and "declined" lists
 

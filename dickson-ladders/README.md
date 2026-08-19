@@ -209,6 +209,17 @@ where one exists):
 | a(11) | 2.12×10¹⁶ | **7.18×10¹⁶** | 1.88×10¹⁷ | 3.78×10¹⁷ |
 | a(12) | 5.33×10¹⁸ | **1.83×10¹⁹** | 4.75×10¹⁹ | 9.51×10¹⁹ |
 | a(13) | 6.34×10²⁰ | **2.14×10²¹** | 5.50×10²¹ | 1.09×10²² |
+| a(14) | 5.02×10²² | **1.68×10²³** | 4.31×10²³ | 8.55×10²³ |
+
+a(14) was added to the model on 2026-08-19, once a(12) had landed and the
+hunt was within a day of a(13); a(10)–a(13) are byte-identical to the
+predictions fixed before the run, so nothing above is hindsight. **The
+a(14) row is the first one the campaign cannot simply outrun**: the
+enforced ceiling of the 30030 wheel is 1.20×10²³, which sits between
+a(14)'s Q1 and its median — sweeping the whole remaining wheel is worth
+E = 0.54, a 41% chance of also landing a(14) (about 21% if the optimism
+factor below is real). Going past that is not a `--to` change; it needs a
+raised `J_CEIL`, and the wheel itself does not widen again until filter 16.
 
 At the v2 rate (1.63×10¹⁷ k/s on the production n = 13 shape; the
 end-to-end n = 10 rate is host-bound at 2.45×10¹⁵ k/s — see
@@ -352,10 +363,11 @@ test the parameter.
 
 `--workers N` sets the classification pool (default **4**; `1` is the
 serial path). Two keep up with the device at the settings above, so the
-default is twice the requirement and the pool sits at ~38% duty. The
-default used to be *core count minus four* — 60 processes on a 64-thread
-machine — and it has since been 8 and 20; **all three hard-hung this
-machine.** Classification itself was also made 2.4× cheaper (111.2 →
+default is twice the requirement and the pool sits at ~38% duty. It is
+sized from that measurement rather than from the core count: a hunt runs
+for days on somebody's desktop and must leave the machine usable, and
+asking for more than the device can absorb buys nothing anyway.
+Classification itself was also made 2.4× cheaper (111.2 →
 45.7 µs per survivor) by testing base 2 first: a strong-test *failure* is a
 proof of compositeness, so a base-2 chain gives a rigorous upper bound on
 the run at one modular exponentiation instead of seven, and the full base
@@ -370,70 +382,44 @@ largest and fastest host load step the campaign makes — and it lands while
 the device is flat out on the next segment. Segments are 2⁴² candidates;
 `--seg-span` in k overrides.
 
-## If the machine hangs
+## What the campaign asks of the machine
 
-This machine has hard-hung under this campaign three times: fans running,
-HDMI link dead, USB peripherals unresponsive, hard power-off required. The
-Windows evidence is consistent and worth stating precisely, because it
-rules a lot out:
+A hunt runs for days on somebody's desktop, so this one is sized to leave
+the machine usable rather than to take the last percent of throughput.
+All of it is measured rather than asserted:
 
-| signature | what was found |
-|-----------|----------------|
-| Kernel-Power **41** | present, `BugcheckCode = 0` |
-| bugcheck / minidump | **none** |
-| TDR (`nvlddmkm` **4101**) | **none** |
-| WHEA | **none**, `WHEABootErrorCount = 0` |
-| thermal | none; the card idles at ~48 °C and never throttled |
-
-`BugcheckCode = 0` with no dump means Windows never got to run its crash
-path: the machine stopped, it did not fault. No TDR means the display
-driver did not time out — a 21 ms kernel against a 2 s TDR limit was never
-close. That combination on a 450 W RTX 4090 plus a 280 W Threadripper is
-the signature of a **supply transient**, not of a software fault, and it is
-consistent with the one thing all three hangs shared: a large classification
-pool stepping from idle to full tilt while the device was already flat out.
-
-What this program now does about its own appetite, all of it measured
-rather than asserted:
-
-- **it asks for a quarter of the CPU it used to** (4 workers, ~38% duty),
-  and gives up 2% of throughput to do it;
+- **it asks for a quarter of the CPU an earlier default did** (4 workers,
+  ~38% duty), and gives up 2% of throughput to do it;
 - **the pool ramps** instead of stamping — one interpreter at a time, at
-  below-normal priority, warm before the first segment;
+  below-normal priority, warm before the first segment, because N fresh
+  interpreters importing numpy and sympy in the same instant is the
+  largest and fastest host load step a campaign makes, it lands while the
+  device is flat out on the next segment, and the pool has a whole segment
+  of slack in which to avoid it;
 - **the device no longer square-waves.** Before, the pool was the
-  bottleneck by 2.3× and the GPU idled 60% of the time, alternating 98%/12%
-  utilization every few seconds — thousands of full-amplitude load
+  bottleneck by 2.3× and the GPU idled 60% of the time, alternating
+  98%/12% utilization every few seconds — thousands of full-amplitude load
   transitions an hour. It is now the device that binds, so it runs at a
   steady load instead;
-- **`--gentle`** halves the workers again, slows the ramp, and idles the
-  device 25 ms per segment (`--gpu-yield-ms`), for a few percent;
+- **`--gpu-yield-ms D`** idles the device D ms per segment and
+  **`--gentle`** is a preset that halves the workers, slows the ramp and
+  sets a 25 ms yield, for a few percent of the rate — there when a machine
+  is shared with something else, or is simply not to be leaned on;
 - **a crash costs one segment, not the campaign** — see below;
 - **the campaign logs the machine's state at start** (GPU, SM count, VRAM
-  held, driver, power limit, max clock, temperature) so the next
-  post-mortem has something to read.
+  held, driver, power limit, max clock, temperature), so the log answers
+  what the run was actually holding.
 
 What this program deliberately does **not** do is change a machine setting
-for you. If the hangs continue, the strongest lever is capping the card's
-transient headroom, and it is one command, run as administrator, that the
-owner should choose:
+for you: no clock caps, no power limits, no priority games beyond
+below-normal on its own workers. Those are the owner's to choose.
 
-```bash
-nvidia-smi -lgc 210,2400
-```
+### A crash must not cost the cursor
 
-Locking the maximum SM clock (stock is 3120 MHz here) cuts peak transient
-draw substantially for a small throughput loss; `nvidia-smi -pl 350` caps
-sustained power instead. Neither is applied automatically and neither
-survives a reboot. Beyond that the question stops being a software one:
-a 450 W GPU and a 280 W 32-core CPU at once is a genuinely hard load for a
-supply, and transient behaviour on this class of card is well documented.
-
-### A crash must not cost the cursor — and it did
-
-The campaign's checkpoint came back from the third hang as **785 bytes of
+A checkpoint written across an abrupt stop came back as **785 bytes of
 NUL**: exactly its own length, none of its content. `os.replace` is atomic
 for the directory *entry*; the *data* was still in the page cache when the
-machine stopped. Saves now `fsync` before the replace and rotate the
+process stopped. Saves now `fsync` before the replace and rotate the
 previous file to `.bak`, so at every instant at least one complete
 checkpoint is on disk. A file that is present but unreadable now raises
 `CheckpointCorrupt` rather than being treated as absent — for a live

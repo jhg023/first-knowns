@@ -43,8 +43,9 @@ The projects share a skeleton and a library:
 
 - [`CONVENTIONS.md`](CONVENTIONS.md) — the project template every hunt
   follows: oracle / CPU engine / GPU engine / checkpointed launcher /
-  fingerprinted benchmark, the gate discipline, and the discovery
-  protocol.
+  fingerprinted benchmark, the gate discipline, the discovery protocol,
+  how a run stops, and how a hunt is sized so that a machine running one
+  for days stays usable for everything else.
 - [`OPTIMIZATION.md`](OPTIMIZATION.md) — how to make a hunt fast without
   making it wrong: the measurement process (measure the phase split
   first, interleave every A/B, separate engine changes from
