@@ -112,3 +112,71 @@ way; they are binding here from the start:
 - Time with `perf_counter`, not `time.time()`: a fast engine crosses a
   frozen window in under the wall clock's resolution (this bit huntlib
   once and is fixed there).
+
+## v3 (2026-08-18, RTX 4090): the campaign, priced separately from the engine
+
+v3 changed the engine barely at all (two re-swept constants) and the
+CAMPAIGN a great deal, so the two are reported separately. **The SCORE
+shapes measure the engine.** They deliberately do not move when the
+campaign is re-configured, which is the point of freezing them -- and it
+is why the table below is nearly flat while the hunt got 28x faster.
+
+| shape | final capture | paired v3/v2 |
+|-------|---------------|--------------|
+| `SCORE` (n = 10) | 5,216,285,202 | 1.42x, paired spread 0.57-2.04 -- **does not resolve** |
+| `SCORE12` (n = 12) | 51,519,020,515 | 0.83x, paired spread 0.57-2.04 -- **does not resolve** |
+| `SCORE13` (n = 13) | 97,184,320,989 | **1.046x** (min 1.036, max 1.084) |
+
+The two 2^32 shapes are now pure noise between identical configurations
+(OPTIMIZATION.md 2.13); `SCORE13` is the anchor and the PAIRED number is
+1.046x, which is the sum of RATIO 4 -> 2 and T_MAX 1024 -> 2048.
+
+**Read the ratio, not the absolute, and here is why in this project's own
+numbers.** `SCORE13` was captured six times on 2026-08-18 -- once before
+the engine change and five times after -- and came out 104.5e9, 108.2e9,
+98.6e9, 97.2e9, 107.3e9 and 97.2e9, for a change a paired A/B puts at
+1.046x. The
+absolutes span 11%, straddle the baseline in both directions, and would
+support any conclusion you like; the machine spent the day running its own
+experiments alongside a desktop compositor. Only measurements where both
+arms alternate inside one process are worth anything here -- which is
+OPTIMIZATION.md Rule 3, restated in this project's own data. The frozen
+fingerprints reproduced on every one of those runs.
+
+`score.py` now pins each shape's sieve depth (65536) explicitly rather than
+inheriting the engine default, because the campaign no longer runs at the
+default depth. A frozen shape should not be able to drift because a
+constant moved elsewhere.
+
+### What the campaign is worth, which is not what SCORE is worth
+
+The hunt is paid in k-line per second **end-to-end**, device and host
+together, at the configuration it actually runs. Per 1e18 of k-line at
+k ~ 1e19:
+
+| configuration | device | host | workers | end-to-end |
+|---------------|--------|------|---------|------------|
+| v2 (filter 11, wheel 2310, q2 65536, all-bases) | 142.3 s | 3,308 core-s | 8 | 413 s = **2.42e15 k/s** |
+| v3 (filter 12, wheel 30030, q2 262144, two-pass) | 14.78 s | 25.6 core-s | 4 | 14.78 s = **6.77e16 k/s** |
+
+**27.9x**, on half the host processes, with the device now the binding
+side rather than idling 60% of the time. The live v2 campaign logged
+2.35e15 k/s, which brackets the v2 row above.
+
+Rungs at the v3 rate, from `model_results.json`: a(12) median 1.83e19 is
+about **4.5 minutes** of sweep and its P90 9.51e19 about **23 minutes**;
+a(13) median 2.14e21 is about **8.8 hours** and its P90 1.09e22 about
+**45 hours**. At the v2 rate those were 2.2 hours, 11 hours, 10 days and
+50 days.
+
+**Measured against a real campaign.** The v3 configuration then found
+a(12) = 55,119,263,286,518,170,740 at k = 5.51e19 after **9 min 45 s** of
+wall clock, and was stopped at k = 8.73e19 after 13.5 min (33,199,184
+survivors classified). That is 1.08e17 k/s end-to-end including the
+prelude, the [NEAR]/[DISCOVERY] verifications and the filter switch --
+1.6x the 6.77e16 k/s of the A/B row above, which was measured at filter
+12 on a machine also running the old campaign. The projection above said
+4.5 minutes to a(12)'s median; the sweep passed it at about **3 minutes**
+and the find itself sat 3.0x past the median, at 9 min 45 s. The
+projection was conservative on rate; the wait past the median is the
+model's variance, not the benchmark's.

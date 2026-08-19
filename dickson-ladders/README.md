@@ -11,25 +11,33 @@ sequence is `nonn,hard,more`; its last computational advance was in
 **October 2014**, and the four terms this project targets — a(10) through
 a(13) — have never had an upper bound published for them.
 
-**Results so far: a(10) = 9,328,409,578,841,430 and
-a(11) = 433,871,469,806,557,860**, both found and verified 2026-08-18 —
-the first computational advance on this sequence since October 2014, when
-Hiroaki Yamanouchi computed a(9) = 3,332,396,388,090 and left
-a(10) > 1.54665×10¹³. Each was verified four ways, including a
+**Results so far: a(10) = 9,328,409,578,841,430,
+a(11) = 433,871,469,806,557,860 and
+a(12) = 55,119,263,286,518,170,740**, all three found and verified
+2026-08-18 — the first computational advance on this sequence since
+October 2014, when Hiroaki Yamanouchi computed a(9) = 3,332,396,388,090
+and left a(10) > 1.54665×10¹³. Each was verified four ways, including a
 Brillhart–Lehmer–Selfridge primality certificate for every one of its
 values, and each was re-verified from its evidence file before
 publication. Details in [RESULTS.md](RESULTS.md).
 
-**Status: ACTIVE** — the campaign is running and hunting **a(12)**, the
-next open term, past the model's median for it. The engine is v2 (913x the
-first gated engine on the production shape,
-[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)). The model put a(10) at median
-1.68×10¹⁵ and a(11) at 7.18×10¹⁶; both landed late, at quantiles 0.915 and
-0.923 — see the model scoring below and in RESULTS.md. It puts a(12) at
-1.83×10¹⁹ and a(13) at 2.14×10²¹. Predictions are stated in full below and
-were fixed *before* the run, which is the only time they are worth
-anything. Hunts are started deliberately by the repository owner, never by
-an agent.
+**Status: ACTIVE** — the campaign is hunting **a(13)**, the deepest term
+the model makes a prediction for.
+The engine is v2 (913x the first gated engine on the production shape) and
+the campaign around it was re-configured on 2026-08-18 for a measured
+**27.9×** end-to-end, from 2.4×10¹⁵ to **6.8×10¹⁶ k/s**
+([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v3). Most of that was not the
+engine: the hunt was sieving one step behind the frontier, on a wheel 13×
+finer than a(12) can possibly need. **a(12) is what it bought** — found
+9 minutes 45 seconds into the re-configured campaign, at a depth the old
+configuration would have needed about six and a half hours to reach.
+The model put a(10) at median 1.68×10¹⁵, a(11) at 7.18×10¹⁶ and a(12) at
+1.83×10¹⁹; all three landed late, at quantiles 0.915, 0.923 and 0.787 —
+see the model scoring below and in RESULTS.md. It puts a(13) at 2.14×10²¹,
+about five hours of sweep from where the cursor now stands. Predictions
+are stated in full below and were fixed *before* the run, which is the
+only time they are worth anything. Hunts are started deliberately by the
+repository owner, never by an agent.
 
 ## The problem
 
@@ -139,14 +147,15 @@ hidden; at n = 10 it binds at 2.2x, on legs that take seconds — see
 counted, not narrated.** The launcher's frontier promotes itself the
 moment a longer run is verified (and is stored in the checkpoint, saved
 at the end of that segment): the first k with run ≥ 10 is a(10), a
-`[DISCOVERY]`, and the only thing that is evidenced. After that, a run-10
-value is one short of a(11) and gets a single `[NEAR]` line with its
-ordinal (verified 3-way — own chain, sympy, alternate-alignment re-sieve —
-but not evidenced), and every run-7/8/9 value is **counted only**: it
-appears in the census counts of the 30-second `[STATUS]` heartbeat
-(`census 7:280 8:71 9:28 10:8`) and nowhere else. The moment a(11) lands,
-run-10 values drop into that count too. A run of 12 settles a(11) and
-a(12) at once, each logged once. `evidence/` holds first occurrences only.
+`[DISCOVERY]`, and the only thing that is evidenced. With a(12) settled, a
+run-12 value is one short of a(13) and gets a single `[NEAR]` line with
+its ordinal (verified 3-way — own chain, sympy, alternate-alignment
+re-sieve — but not evidenced), and every run-7…11 value is **counted
+only**: it appears in the census counts of the 30-second `[STATUS]`
+heartbeat (`census 7:1368 8:352 9:78 10:27 11:2 12:1`) and nowhere else.
+The moment a(13) lands, run-12 values drop into that count too. A run of
+14 settles a(13) and a(14) at once, each logged once. `evidence/` holds
+first occurrences only.
 Repo-wide convention: [CONVENTIONS.md](../CONVENTIONS.md).
 
 **5. Certificates, because this problem hands them over.** The values
@@ -205,7 +214,9 @@ At the v2 rate (1.63×10¹⁷ k/s on the production n = 13 shape; the
 end-to-end n = 10 rate is host-bound at 2.45×10¹⁵ k/s — see
 [BENCHMARKS.md](BENCHMARKS.md)) that is **under a second to the a(10)
 median, half a minute to a(11), minutes to a(12), and 3.6 hours to
-a(13)** (P90 19 hours). At the v1 rate a(13) was months to years; the
+a(13)** (P90 19 hours). The first three of those are now history rather
+than forecast: a(10), a(11) and a(12) all landed, each a few times past
+its median (table below). At the v1 rate a(13) was months to years; the
 ledger of how that gap closed, with every reject and its price, is
 [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md).
 
@@ -215,14 +226,17 @@ ledger of how that gap closed, with every reject and its price, is
 |------|----------|--------------|---------------|----------|
 | a(10) | 9.33×10¹⁵ | 1.68×10¹⁵ | 2.47 | 0.915 |
 | a(11) | 4.34×10¹⁷ | 7.18×10¹⁶ | 2.57 | 0.923 |
+| a(12) | 5.51×10¹⁹ | 1.83×10¹⁹ | 1.54 | 0.787 |
 
-Both are late draws — 5.5× and 6.0× past their medians, where the median
-wait is E = ln 2 ≈ 0.69. Pooling them as Exp(1) draws gives a
-maximum-likelihood optimism factor of 2.5× with a 95% interval of roughly
-[0.9, 20.8]; that contains 1, so it is not evidence the singular series is
-wrong, and two events cannot resolve a bias of that size. a(12) is the one
-that would make it interesting: three late draws in a row would be worth
-taking seriously.
+All three are late draws — 5.5×, 6.0× and 3.0× past their medians, where
+the median wait is E = ln 2 ≈ 0.69. Pooling them as Exp(1) draws gives a
+maximum-likelihood optimism factor of **2.2×** with a 95% interval of
+roughly **[0.9, 10.6]**; that still contains 1, so it is still not
+evidence the singular series is wrong. The third draw was the mildest of
+the three and *lowered* the estimate (it was 2.5× on two), while the
+one-sided tail — P(ΣE ≥ 6.58) for three Exp(1) draws — tightened to
+**0.04**. Three late draws in a row are worth watching; a(13) is the one
+that decides it.
 
 ## Running it
 
@@ -237,19 +251,37 @@ python ladder_model.py         # rebuild the odds model + its gates
 ```
 
 The campaign never stops on its own before the last rung. Progress is
-read off **rungs** — the model's Q1/median/Q3/P90 for every open term
-(16 of them, from `model_results.json`) plus the ceiling — logged
-`[RUNG]` as each is passed and shown with an ETA in every `[STATUS]`.
+read off **rungs** — the model's Q1/median/Q3/P90 for every **open** term
+(from `model_results.json`) plus the ceiling — logged `[RUNG]` as each is
+passed and shown with an ETA in every `[STATUS]`. **A rung retires with
+its term:** the moment a term is found, its unreached quartiles leave the
+ladder, a `[RUNG]` line says so, and both the next rung and the live odds
+in `[STATUS]` re-aim at the next open term. (Before that was true, the
+hunt found a(12) at k = 5.51e19 and went on advertising `next a(12) P90 at
+9.51e+19` while it swept for a(13).)
 `--to K` caps a run deliberately and `--stop-on-discovery` halts after a
-first occurrence; both are opt-in. The **filter follows the frontier**:
-with the default `--filter-lag 1` the sieve runs at n = frontier, so once
-a(10) lands it hunts a(11) while still seeing run-10 values (one short of
-a(11): each gets a `[NEAR]` line) and counting shorter runs in `[STATUS]`,
-steps to n = 11 when a(11) lands, and so on; when a step widens the wheel
-(11 → 12 takes 2310 → 30030) the cursor is re-denominated by floor — an
-overlap of under one period, never a gap — and logged as a `[STAGE]`
-line. `--filter-lag 0` is the fastest hunt (n = frontier + 1, nothing
-below the next open term is seen).
+first occurrence; both are opt-in. The **filter follows the frontier**,
+and how far behind it follows is the single largest lever in the project.
+
+The filter sets the wheel: W(n) is the product of the primes ≤ n+1,
+because run(k) ≥ n forces q | k for every prime q ≤ n+1 (m runs over a
+complete residue system mod q, so some m has m·k² ≡ −1, and that value is
+larger than q above the floor). With the default **`--filter-lag 0`** the
+sieve asks only for the next open term — n = frontier + 1, which is **13**
+now that a(12) has landed — so it rides the **30030** wheel rather than
+the 2310 one: **13× fewer candidates per unit of k-line and 13× fewer
+survivors to classify.** Nothing about the least-claim weakens, because
+a(13) *is* a multiple of 30030 by that same argument, so the coarser wheel
+skips no candidate that could be a(13). (W(13) = W(12) = 30030, both being
+the primes ≤ 14, so the a(12) find moved the filter without moving the
+wheel or the cursor.)
+
+`--filter-lag 1` runs a step behind instead: the sieve stays at n =
+frontier, so run-12 values (one short of a(13)) still appear and get their
+`[NEAR]` line and the census fills in below the frontier. That is
+bookkeeping, and it costs a factor of thirteen. When a step widens the
+wheel the cursor is re-denominated by floor — an overlap of under one
+period, never a gap — and logged as a `[STAGE]` line.
 
 Every 30 s of wall clock (`--heartbeat`) the launcher logs a `[STATUS]`
 line from its own timer thread — whatever the main loop is doing: position,
@@ -259,6 +291,15 @@ the campaign has met; the only place those values appear), finds, live
 model odds, the next rung and its ETA — and, if no segment has closed since
 the previous line, what it is busy with and for how long, so a stall never
 looks like a hang. `--status` prints the same counts from the checkpoint.
+
+**Ctrl+C ends the run, it does not crash it.** The launcher writes a
+checkpoint **at the last fully classified segment** — not the live cursor,
+whose counters are updated per candidate and would double-count the census
+when the segment is redone — logs one `[STAGE]` line saying where it
+stopped, and exits **130**. No traceback, including when a second Ctrl+C
+lands while the checkpoint is being written: the shutdown ignores further
+interrupts until the file is on disk (`huntlib.shutdown`; CONVENTIONS.md
+"Stopping a run"). Resuming redoes only the segment that was in flight.
 
 The launcher preludes every fresh campaign with an exhaustive oracle
 sweep of [1, 10⁴) — which must return a(1)–a(4) and nothing else — and
@@ -275,31 +316,130 @@ next open term, never evidenced — rather than stopping a leg or being
 logged as a second discovery. Terms found in earlier campaigns can also
 be seeded into `CAMPAIGN_FOUND` in the launcher.
 
-`--workers N` sets the classification pool (default **8**, or fewer on a
-small machine; `1` is the serial path). The default used to be *core count
-minus four* — 60 processes on a 64-thread machine — and the spawn burst (60
-interpreters importing numpy and sympy at once, while the device is flat
-out) hard-hung the development machine ~30 s into every campaign start,
-fans running and the display link dead. **A hunt runs for days on
-somebody's desktop: it does not get to take the whole machine.** Eight is
-the known-stable setting, not the fast one.
+**`--q2 D` sets the sieve depth** (default **262144**, against the frozen
+benchmark depth of 65536). Depth is the dial between the two sides of the
+pipe: deeper sieving costs device time and removes survivors the host would
+otherwise have to classify. Measured at n = 12, k ≈ 10¹⁹, per 10¹⁸ of
+k-line:
 
-It is deliberately conservative, and the price is measured. On a live
-campaign at n = 11, k ≈ 9.5×10¹⁸: the sweep classifies ~70,000 survivors/s
-at ~105 µs each, so the pool carries **~7.4 cores**; eight workers run at
-~92% duty while the **device sits idle 60% of the time** (utilization
-alternates 98%/12%, mean 41%). Per 10¹⁶-k segment that is ~4.0 s of pool
-against ~1.8 s of device — **host-bound by 2.3×**. The knee is around
-**18 workers**, where the device becomes the binding side again and
-throughput would rise ~2.5× to ~6×10¹⁵ k/s.
+| `--q2` | device | survivors | host core-s | pool needed | end-to-end |
+|--------|--------|-----------|-------------|-------------|------------|
+| 65536 | 14.35 s | 2,293,610 | 104.8 | 8 workers | 6.97×10¹⁶ k/s |
+| 131072 | 14.93 s | 1,106,720 | 50.6 | 4 workers | 6.70×10¹⁶ k/s |
+| **262144** | **14.78 s** | **560,509** | **25.6** | **2 workers** | **6.77×10¹⁶ k/s** |
+| 524288 | 16.07 s | 292,700 | 13.4 | 1 worker | 6.22×10¹⁶ k/s |
 
-So raising `--workers` toward that knee is real throughput, and the spawn
-burst scales with the number — 16 is a quarter of what hung the machine.
-Raise it a few at a time and watch, rather than returning to a number that
-fills the machine. Per-survivor cost also grows with depth (more digits per
-Miller–Rabin test), and a shallow re-run is hungrier still: at the n = 10
-filter the host needs ~19 cores. Segments are 2⁴² candidates;
+The device is nearly **flat** from 65536 to 262144 — the extra primes land in deep
+compaction rounds whose populations are already tiny — so four times the
+depth costs the device 3% and takes four times the work off the host. All
+four rows are within 3% end-to-end, which means the real choice is not
+speed but **how much of the machine the hunt asks for**: eight host
+processes, or two.
+
+Deepening the sieve is also what found a **correctness bug that had been
+latent since the engine was written**. The walk that builds the kill-bit
+table squares a residue, so its intermediates reach q²; it was written in
+32-bit, exact only for q < 2¹⁶ — and because every gate in the file used
+the default depth of 65536, no test had ever evaluated a prime whose square
+leaves u32. At 262144 the table came out wrong above 2¹⁶ in *both*
+directions, so the sieve killed candidates it should have kept, and the
+a(7) canary went missing on the first smoke run. The walk is u64 now (exact
+to q < 2³¹) and `g16_deep_sieve_arithmetic` gates the table against
+big-integer divisibility at the campaign depth, sampling primes on both
+sides of 2¹⁶. The lesson is in [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md):
+a gate that only ever runs at one point in a parameter's range does not
+test the parameter.
+
+`--workers N` sets the classification pool (default **4**; `1` is the
+serial path). Two keep up with the device at the settings above, so the
+default is twice the requirement and the pool sits at ~38% duty. The
+default used to be *core count minus four* — 60 processes on a 64-thread
+machine — and it has since been 8 and 20; **all three hard-hung this
+machine.** Classification itself was also made 2.4× cheaper (111.2 →
+45.7 µs per survivor) by testing base 2 first: a strong-test *failure* is a
+proof of compositeness, so a base-2 chain gives a rigorous upper bound on
+the run at one modular exponentiation instead of seven, and the full base
+set is re-run only when that bound reaches a length the campaign would
+actually record. **Every run length written down still comes from the full
+base set.**
+
+The pool is started **one interpreter at a time** (`--worker-ramp`, default
+0.35 s) at below-normal priority, warm before the first segment, because N
+fresh interpreters importing numpy and sympy in the same instant is the
+largest and fastest host load step the campaign makes — and it lands while
+the device is flat out on the next segment. Segments are 2⁴² candidates;
 `--seg-span` in k overrides.
+
+## If the machine hangs
+
+This machine has hard-hung under this campaign three times: fans running,
+HDMI link dead, USB peripherals unresponsive, hard power-off required. The
+Windows evidence is consistent and worth stating precisely, because it
+rules a lot out:
+
+| signature | what was found |
+|-----------|----------------|
+| Kernel-Power **41** | present, `BugcheckCode = 0` |
+| bugcheck / minidump | **none** |
+| TDR (`nvlddmkm` **4101**) | **none** |
+| WHEA | **none**, `WHEABootErrorCount = 0` |
+| thermal | none; the card idles at ~48 °C and never throttled |
+
+`BugcheckCode = 0` with no dump means Windows never got to run its crash
+path: the machine stopped, it did not fault. No TDR means the display
+driver did not time out — a 21 ms kernel against a 2 s TDR limit was never
+close. That combination on a 450 W RTX 4090 plus a 280 W Threadripper is
+the signature of a **supply transient**, not of a software fault, and it is
+consistent with the one thing all three hangs shared: a large classification
+pool stepping from idle to full tilt while the device was already flat out.
+
+What this program now does about its own appetite, all of it measured
+rather than asserted:
+
+- **it asks for a quarter of the CPU it used to** (4 workers, ~38% duty),
+  and gives up 2% of throughput to do it;
+- **the pool ramps** instead of stamping — one interpreter at a time, at
+  below-normal priority, warm before the first segment;
+- **the device no longer square-waves.** Before, the pool was the
+  bottleneck by 2.3× and the GPU idled 60% of the time, alternating 98%/12%
+  utilization every few seconds — thousands of full-amplitude load
+  transitions an hour. It is now the device that binds, so it runs at a
+  steady load instead;
+- **`--gentle`** halves the workers again, slows the ramp, and idles the
+  device 25 ms per segment (`--gpu-yield-ms`), for a few percent;
+- **a crash costs one segment, not the campaign** — see below;
+- **the campaign logs the machine's state at start** (GPU, SM count, VRAM
+  held, driver, power limit, max clock, temperature) so the next
+  post-mortem has something to read.
+
+What this program deliberately does **not** do is change a machine setting
+for you. If the hangs continue, the strongest lever is capping the card's
+transient headroom, and it is one command, run as administrator, that the
+owner should choose:
+
+```bash
+nvidia-smi -lgc 210,2400
+```
+
+Locking the maximum SM clock (stock is 3120 MHz here) cuts peak transient
+draw substantially for a small throughput loss; `nvidia-smi -pl 350` caps
+sustained power instead. Neither is applied automatically and neither
+survives a reboot. Beyond that the question stops being a software one:
+a 450 W GPU and a 280 W 32-core CPU at once is a genuinely hard load for a
+supply, and transient behaviour on this class of card is well documented.
+
+### A crash must not cost the cursor — and it did
+
+The campaign's checkpoint came back from the third hang as **785 bytes of
+NUL**: exactly its own length, none of its content. `os.replace` is atomic
+for the directory *entry*; the *data* was still in the page cache when the
+machine stopped. Saves now `fsync` before the replace and rotate the
+previous file to `.bak`, so at every instant at least one complete
+checkpoint is on disk. A file that is present but unreadable now raises
+`CheckpointCorrupt` rather than being treated as absent — for a live
+frontier those two demand opposite responses, and the old behaviour would
+have quietly restarted the sweep at the floor. Both paths are drilled in
+`--selftest` against the exact 785-NUL corruption.
 
 Requires Python 3.12+, numpy, sympy, CuPy + CUDA GPU (or `--engine cpu`,
 which is the gating reference and orders of magnitude too slow to hunt

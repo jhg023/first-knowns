@@ -39,17 +39,23 @@ import sys as _sys
 import numpy as np
 
 _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
+from huntlib import shutdown as _shutdown  # noqa: E402
 from huntlib import scoring                                   # noqa: E402
 import ladder_gpu                                             # noqa: E402
 import ladder_reference                                       # noqa: E402
 import ladder_search                                          # noqa: E402
 from ladder_gpu import GpuEngine                              # noqa: E402
 
+# The sieve DEPTH is part of a frozen shape, not a default to inherit.
+# The campaign runs deeper than the benchmark (launch.py Q2_CAMPAIGN) because
+# depth trades device time for host time, and that trade is a campaign
+# decision; the benchmark's job is to stay comparable across engine
+# generations, so it pins its own.
 SHAPES = [
-    # label, n, j0, span, expected count, expected xor
-    ("SCORE",   10, 10**12,      1 << 32, 1213, 1003170806905),
-    ("SCORE12", 12, 6 * 10**11,  1 << 32,  292, 2752794123),
-    ("SCORE13", 13, 7 * 10**16,  1 << 38, 2739, 70000110051605722),
+    # label, n, q2, j0, span, expected count, expected xor
+    ("SCORE",   10, 65536, 10**12,      1 << 32, 1213, 1003170806905),
+    ("SCORE12", 12, 65536, 6 * 10**11,  1 << 32,  292, 2752794123),
+    ("SCORE13", 13, 65536, 7 * 10**16,  1 << 38, 2739, 70000110051605722),
 ]
 
 
@@ -67,8 +73,8 @@ def main():
         return 1
 
     ok_all = True
-    for label, n, j0, span, count, xor in SHAPES:
-        eng = GpuEngine(n)
+    for label, n, q2, j0, span, count, xor in SHAPES:
+        eng = GpuEngine(n, q2=q2)
         eng.survivors_j(j0, j0 + span)                    # warm on the window
 
         def work():
@@ -90,5 +96,7 @@ def main():
     return 0 if ok_all else 1
 
 
+# Ctrl+C is a normal exit everywhere in this repo (CONVENTIONS.md
+# "Stopping a run"): one path out, no traceback, exit 130.
 if __name__ == "__main__":
-    _sys.exit(main())
+    _sys.exit(_shutdown.graceful(main))

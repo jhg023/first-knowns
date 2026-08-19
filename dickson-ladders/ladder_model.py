@@ -180,6 +180,13 @@ def main():
     return ok
 
 
+# Ctrl+C is a normal exit everywhere in this repo (CONVENTIONS.md
+# "Stopping a run"): one path out, no traceback, exit 130.  huntlib is
+# imported HERE, in the script path only, so the module itself keeps the
+# dependencies its gates are argued from and nothing else.
 if __name__ == "__main__":
-    import sys
-    sys.exit(0 if main() else 1)
+    import pathlib as _pl
+    import sys as _s
+    _s.path.insert(0, str(_pl.Path(__file__).resolve().parents[1]))
+    from huntlib import shutdown as _shutdown
+    _s.exit(_shutdown.graceful(lambda: 0 if main() else 1))

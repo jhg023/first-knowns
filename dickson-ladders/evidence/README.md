@@ -3,15 +3,17 @@
 Verified FIRST OCCURRENCES land here -- one JSON per discovery, named
 `ladder_hit_run<n>_k<k>.json`, plus the rolling ledger
 `ladder_discoveries.json`. Nothing else does: the campaign's census
-(every later run-10 value, every run-7/8/9) is counted in the checkpoint
+(every later run-12 value, every shorter run) is counted in the checkpoint
 and shown in each 30-second `[STATUS]` line, never written here
 (CONVENTIONS.md, "The census is counted, not narrated").
 
-Present: **a(10)** (`ladder_hit_run10_k9328409578841430.json`) and
-**a(11)** (`ladder_hit_run11_k433871469806557860.json`), the campaign's
-two first occurrences, plus the ledger. Both were re-verified from these
+Present: **a(10)** (`ladder_hit_run10_k9328409578841430.json`),
+**a(11)** (`ladder_hit_run11_k433871469806557860.json`) and **a(12)**
+(`ladder_hit_run12_k55119263286518170740.json`) -- the campaign's three
+first occurrences -- plus the ledger. Each was re-verified from these
 files -- independent protocol re-run, every stored certificate re-checked,
-sympy on every value, breaker witness -- before they were published to
+sympy on every value, the stored factorization of k re-multiplied and its
+factors re-proved prime, breaker witness -- before it was published to
 RESULTS.md.
 
 Each file is meant to be checkable by anyone with a bignum library and no

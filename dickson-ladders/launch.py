@@ -47,7 +47,9 @@ a(10) in its first minutes and keeps running therefore reports one
 discovery, logs run-10 values one line each while a(11) is open, and
 counts run-7/8/9 values silently.
 
-ASCII only; graceful Ctrl+C (checkpoint, no stacktrace).
+ASCII only.  Ctrl+C is a normal exit: huntlib.shutdown writes the last
+SEGMENT BOUNDARY, logs one [STAGE] line and leaves with 130 -- no traceback,
+and a second Ctrl+C cannot land inside the checkpoint write.
 """
 
 import argparse
@@ -63,9 +65,11 @@ _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
 from sympy import factorint, isprime, primerange              # noqa: E402
 
 from huntlib import checkpoint as _ckpt                       # noqa: E402
+from huntlib.checkpoint import CheckpointCorrupt              # noqa: E402
 from huntlib.hlog import log, census_str, Heartbeat           # noqa: E402
+from huntlib import shutdown as _shutdown                     # noqa: E402
 from huntlib.primes import (MR_VALID_BELOW, factor_witness,   # noqa: E402
-                            mr_is_prime)
+                            mr_is_prime, sprp_base2)
 from ladder_reference import (K_FLOOR, KNOWN, PUBLISHED_BOUNDS,  # noqa: E402
                               run_length as oracle_run, wheel_modulus)
 from ladder_search import CpuEngine, J_CEIL, Q2_DEFAULT       # noqa: E402
@@ -85,7 +89,8 @@ CONFIG_KEY = "dickson-ladders/v2/q2={q2}/jceil=4e18"
 # table seeds a FRESH checkpoint, so that a --fresh run does not re-report
 # what is already in RESULTS.md as a discovery.)
 CAMPAIGN_FOUND = {10: 9_328_409_578_841_430,
-                  11: 433_871_469_806_557_860}
+                  11: 433_871_469_806_557_860,
+                  12: 55_119_263_286_518_170_740}
 FRONTIER_N = max(max(KNOWN), *([max(CAMPAIGN_FOUND)] if CAMPAIGN_FOUND else [0]))
 
 # A campaign runs INDEFINITELY (CONVENTIONS.md): there is no depth at which
@@ -94,7 +99,10 @@ FRONTIER_N = max(max(KNOWN), *([max(CAMPAIGN_FOUND)] if CAMPAIGN_FOUND else [0])
 # other deliberate stop.  Progress is read off RUNGS: the model's quartiles
 # for every open term (model_results.json, stated before the run), logged
 # as [RUNG] when passed, with the next rung and its ETA in every [STATUS].
-MODEL_FILE = "model_results.json"
+# next to launch.py, not next to the working directory: a campaign or a
+# drill started from elsewhere used to load NO rungs at all and say so
+# only by printing a one-rung ladder
+MODEL_FILE = str(_pathlib.Path(__file__).with_name("model_results.json"))
 # The sieve filter FOLLOWS THE FRONTIER: filter = max(--n, frontier + 1 -
 # FILTER_LAG).  With the default lag of 1 the filter equals the frontier,
 # so once a(10) lands the sieve runs at n = 10 -- hunting a(11) while still
@@ -103,7 +111,27 @@ MODEL_FILE = "model_results.json"
 # possible hunt (filter = frontier + 1) and sees nothing below the next
 # open term.  A step that widens the wheel re-denominates the cursor with
 # FLOOR (an overlap of at most one new period, never a gap).
-FILTER_LAG = 1
+FILTER_LAG = 0
+# LAG 0 IS THE DEFAULT AND IT IS THE WHOLE BALLGAME, so the reason is here.
+# The filter sets the wheel: W(n) is the product of the primes <= n + 1,
+# because run(k) >= n forces q | k for every prime q <= n + 1 (m ranges over
+# a complete set of residues mod q, so some m has m*k^2 == -1, and that
+# value exceeds q above the floor).  Hunting a(12) at filter 12 therefore
+# sieves the 30030 wheel instead of the 2310 one: 13x fewer candidates per
+# unit of k-line AND 13x fewer survivors to classify.  Measured at k = 1e19,
+# per 1e18 of k-line: filter 11 costs 142 s of device and 2.98e7 survivors;
+# filter 12 costs 14.6 s and 2.30e6.  That is 13x end-to-end, and it is the
+# largest single lever in this project.
+#
+# What lag 1 bought, and what it costs: at lag 1 the sieve runs one step
+# behind the frontier, so run-11 values (one short of a(12)) still appear
+# and get their [NEAR] line, and shorter runs are still counted in the
+# census.  That census is bookkeeping; a(12) is the hunt.  Nothing about
+# the least-claim weakens at lag 0 -- a(12) is a multiple of 30030 by the
+# argument above, so the coarser wheel skips no candidate that could be
+# a(12) -- but the [STATUS] census stops filling in below the frontier and
+# [NEAR] lines become rare.  --filter-lag 1 restores the old behaviour at
+# 1/13 the speed.
 SEG_J = 1 << 42                # j per checkpoint segment: ~1 s of device
 #                                time at the v2 rate on any wheel (in k it
 #                                is 1e16 at n = 10, 1.3e17 at n = 13; v1 used
@@ -113,29 +141,125 @@ NEAR_FROM = 7                  # the census floor: runs at or above this are
 #                                shown in every [STATUS]); only a run equal
 #                                to the frontier is logged individually
 CHUNK = 1024                   # survivors per classification task
+
+# ---- sieve depth: the knob that decides HOW MUCH MACHINE the hunt needs --
+# The engines' default q2 (65536) is the frozen benchmark depth and it stays
+# frozen there so SCORE keeps meaning the same thing across engine
+# generations.  The CAMPAIGN is a different question: it pays for both the
+# device sieve AND the host classification of whatever survives, and q2 sets
+# the ratio between them.
+#
+# Measured at n = 12, k = 1e19, paired and interleaved (Rule 3), per 1e18 of
+# k-line, with the two-pass sprp_run below at its measured 45.7 us:
+#
+#     q2        device    survivors    host core-s    pool needed    end-to-end
+#     65536     14.35 s   2,293,610      104.8 s        8 workers    6.97e16 k/s
+#     131072    14.93 s   1,106,720       50.6 s        4 workers    6.70e16 k/s
+#     262144    14.78 s     560,509       25.6 s        2 workers    6.77e16 k/s
+#     524288    16.07 s     292,700       13.4 s        1 worker     6.22e16 k/s
+#
+# The device is nearly FLAT from 65536 to 262144 (the extra primes land in
+# deep compaction rounds whose populations are already tiny), so four times
+# the sieve depth costs the device 3% and takes four times the work off the
+# host.  End-to-end the four settings are within 3% of each other -- which
+# means the real choice here is not speed, it is HOW MUCH OF THE MACHINE THE
+# HUNT ASKS FOR: 8 host processes or 2.
+#
+# This machine has hard-hung three times under this campaign, always with a
+# big pool running against a flat-out device (Kernel-Power 41, BugcheckCode
+# 0, no TDR, no WHEA, no minidump -- the signature of a supply transient
+# rather than a software fault).  So 262144 is chosen: it gives up 3% of the
+# rate and asks for a quarter of the CPU.
+#
+# NOTE for anyone raising this further: the engine's kill-bit table is built
+# by a residue walk whose intermediates reach q^2, and it was 32-bit until
+# this depth was first tried -- which silently corrupted the sieve above
+# q = 2^16 and lost a(7) from the canary.  It is u64 now (exact to
+# ladder_gpu.Q2_MAX = 2^31) and g16 gates it at this depth.
+
+Q2_CAMPAIGN = 1 << 18
+
 # Host classification runs in a process pool, one segment behind the GPU:
 # the pool classifies segment i-1 while the device sieves segment i.  The
 # results are consumed in ASCENDING order in the parent and the cursor only
 # advances past a fully classified segment, so the least-claim ordering the
 # checkpoint depends on is untouched.  --workers 1 is the old serial path.
 #
-# SMALL BY DEFAULT, and the reason is measured.  Classification costs ~86 us
-# per survivor at k ~ 1e18 (n = 11, cap 19, 38-digit values) and a segment
-# holds ~3e5 survivors -- 26 core-seconds against 5.4 s of device time, so
-# the pool needs FIVE cores to stay a segment ahead.  The old default
-# (cpu_count - 4) was 60 processes on the 64-thread development machine:
-# twelve times the requirement, and on Windows every one of them is a fresh
-# interpreter importing numpy and sympy at the same moment.  That spawn
-# burst -- peak host draw, landing while the device is flat out on the next
-# segment -- hard-hung the machine about 30 s into every campaign start
-# (fans running, display link dead, nothing in the event log; --workers 8
-# ran clean).  A hunt runs for days on somebody's desktop: it may not take
-# the whole machine, and it gains nothing by trying.
-WORKERS_DEFAULT = max(1, min(8, (os.cpu_count() or 2) - 2))
+# SMALL BY DEFAULT, and the reason is measured.  At the settings above the
+# pool needs TWO cores to stay a segment ahead of the device; the default is
+# 4, which is 2x the requirement (a segment whose survivors run long must
+# not become the bottleneck) and leaves the pool at ~38% duty.  Everything
+# above that is throughput the device cannot use.
+#
+# The history it is worth being blunt about: this default was cpu_count - 4,
+# which is 60 processes on the 64-thread machine this runs on -- thirty
+# times the requirement -- and on Windows every one of them is a fresh
+# interpreter importing numpy and sympy in the same instant.  That spawn
+# burst, landing at peak host draw while the device was flat out on the next
+# segment, hard-hung the machine about 30 s into every campaign start.  It
+# was cut to 8, and the machine hung again at 20.  A hunt runs for days on
+# somebody's desktop: it may not take the whole machine, and here it gains
+# nothing whatever by trying.  The pool is also RAMPED rather than stamped
+# (see _prime_pool): interpreters start one at a time.
+WORKERS_DEFAULT = max(1, min(4, (os.cpu_count() or 2) - 2))
+WORKER_RAMP_S = 0.35           # seconds between worker starts (_prime_pool)
+
 
 
 class CorruptEngineError(RuntimeError):
     pass
+
+
+def device_report(eng):
+    """One line of machine state at campaign start, for the next post-mortem.
+
+    A hunt that runs for days on a desktop should say, in its own log, how
+    much of the machine it took and what the machine's limits were when it
+    started.  This one exists because three hard hangs had to be diagnosed
+    from Windows event logs alone, and the log could not answer "how much
+    VRAM did it hold" or "was the card at stock limits" for the run that
+    hung.  Everything here is READ-ONLY: the campaign never changes a
+    machine setting, and the strongest lever against a supply transient (an
+    nvidia-smi clock or power cap) is deliberately left to the owner.
+    """
+    bits = []
+    try:
+        import cupy as cp
+        dev = cp.cuda.Device()
+        props = cp.cuda.runtime.getDeviceProperties(dev.id)
+        free, total = cp.cuda.runtime.memGetInfo()
+        name = props["name"].decode() if isinstance(props["name"], bytes) \
+            else str(props["name"])
+        held = 0
+        for a in ("d_bits", "d_pat", "d_primes", "d_magic", "d_wmod"):
+            arr = getattr(eng, a, None)
+            if arr is not None:
+                held += int(getattr(arr, "nbytes", 0))
+        for slot in getattr(eng, "_slots", []):
+            for key in ("q1", "q2", "cnt", "args"):
+                held += int(getattr(slot.get(key), "nbytes", 0) or 0)
+        bits.append(f"{name}, {props['multiProcessorCount']} SMs")
+        bits.append(f"VRAM {(total-free)/2**30:.1f}/{total/2**30:.1f} GiB used "
+                    f"(this engine holds {held/2**30:.2f} GiB)")
+    except Exception:
+        pass
+    try:
+        import subprocess
+        out = subprocess.run(
+            ["nvidia-smi", "--query-gpu=power.limit,power.max_limit,"
+             "clocks.max.sm,temperature.gpu,driver_version",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=10)
+        if out.returncode == 0 and out.stdout.strip():
+            pl, pmax, clk, temp, drv = [x.strip() for x in
+                                        out.stdout.strip().splitlines()[0]
+                                        .split(",")]
+            cap = "" if pl == pmax else "  (CAPPED)"
+            bits.append(f"driver {drv}, power limit {pl}/{pmax} W{cap}, "
+                        f"max SM clock {clk} MHz, {temp} C")
+    except Exception:
+        pass
+    return "; ".join(bits) if bits else "device state unavailable"
 
 
 # ------------------------ certificates (BLS75 Thm 1) ------------------------
@@ -218,9 +342,44 @@ def verify_certificate(N, fac, witnesses):
 
 # ------------------------- verification (four-way) --------------------------
 
+# Below this run length nothing is recorded anywhere: the census counts
+# start at NEAR_FROM (7), [NEAR] and [DISCOVERY] are higher still, and
+# `best_run` is guarded to the same floor in consume().  So a run PROVED
+# shorter than this never has to be resolved exactly.
+SPRP_EXACT_FROM = 5
+
+
 def sprp_run(k, cap):
+    """The strong-probable-prime run length of k, exact wherever it counts.
+
+    Two passes, and the reason the first one is legitimate is that a strong
+    test has an ASYMMETRIC verdict: a failure is a PROOF of compositeness,
+    a pass is only evidence.  So a base-2-only chain (one modular
+    exponentiation per value instead of seven) yields a rigorous UPPER
+    BOUND on the run -- it can stop too late, never too early.  If that
+    bound lands below SPRP_EXACT_FROM the true run is below it too, proved,
+    and nothing that gets recorded depends on which of 0..4 it is.  If the
+    bound reaches SPRP_EXACT_FROM the chain is redone with the full huntlib
+    base set and the exact value returned.
+
+    This is not a probabilistic shortcut: every run length this campaign
+    writes down still comes from the full base set.  It costs 1.34 modular
+    exponentiations per survivor against 3.27 -- measured 103 us -> 36 us
+    at k ~ 1e19, which is what lets the classification pool run on ~1.4
+    cores instead of ~4 (OPTIMIZATION_LOG.md #24).
+
+    Why the prime case dominated: 24% of survivors at this depth have
+    m*k^2+1 prime at m = 1, and a PRIME is what makes mr_is_prime evaluate
+    all seven bases -- a composite is rejected by the first.
+    """
+    kk = k * k
     r = 0
-    while r < cap and mr_is_prime((r + 1) * k * k + 1):
+    while r < cap and sprp_base2((r + 1) * kk + 1):
+        r += 1
+    if r < SPRP_EXACT_FROM:
+        return r                       # proved short; nothing records it
+    r = 0
+    while r < cap and mr_is_prime((r + 1) * kk + 1):
         r += 1
     return r
 
@@ -233,6 +392,74 @@ def _classify_chunk(task):
     """
     W, cap, js = task
     return [sprp_run(int(j) * W, cap) for j in js]
+
+
+def _worker_init():
+    """Pool worker startup: drop below normal priority, then import.
+
+    A classification worker is pure background arithmetic with a whole
+    segment of slack; it has no business competing with the display driver,
+    the CUDA host thread or the desktop for a time slice.  Dropping it a
+    class costs the hunt nothing measurable and keeps the machine usable --
+    and a machine whose driver threads are never starved is a machine that
+    does not appear to have "locked up" when it is merely descheduled.
+    Best effort: a platform that will not take the hint is not an error.
+    """
+    _shutdown.ignore_in_worker()   # the PARENT decides when the run ends:
+    # a worker that kills itself on the console's Ctrl+C can break the pool
+    # underneath a parent that is still writing its checkpoint
+    try:
+        if _sys.platform == "win32":
+            import ctypes
+            BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
+            h = ctypes.windll.kernel32.GetCurrentProcess()
+            ctypes.windll.kernel32.SetPriorityClass(
+                h, BELOW_NORMAL_PRIORITY_CLASS)
+        else:
+            os.nice(5)
+    except Exception:
+        pass
+    import numpy  # noqa: F401   -- pay the import here, inside the ramp,
+    import sympy  # noqa: F401      never inside the first real segment
+
+
+def _worker_ping():
+    return os.getpid()
+
+
+def _worker_hold(t):
+    """Occupy a worker for t seconds.  See _prime_pool."""
+    time.sleep(t)
+    return os.getpid()
+
+
+def _prime_pool(pool, workers, ramp_s=WORKER_RAMP_S):
+    """Start the pool's interpreters ONE AT A TIME, and return with all of
+    them up and warm.  Returns the number of distinct workers started.
+
+    ProcessPoolExecutor spawns lazily, and -- this is the part that has to
+    be right -- it spawns on submit ONLY IF no worker is idle.  So pinging
+    and waiting ramps nothing: the single worker that exists answers every
+    ping and the pool never grows.  Each worker has to be HELD busy while
+    the next one is asked for, which is what the hold task is.
+
+    Why bother: submitting a segment's worth of chunks in a loop starts
+    every worker in the same instant, and on Windows every one of them is a
+    fresh interpreter importing numpy and sympy.  N of those at once is the
+    largest, fastest host load step the campaign ever makes, and it lands
+    while the device is flat out on the next segment.  It is also completely
+    unnecessary -- the pool has a whole segment of slack.  Ramped, the host
+    comes up as a staircase, and every import is paid before the first real
+    segment instead of inside it.
+    """
+    hold = ramp_s * workers + 1.0        # still busy when the next is asked
+    futs = []
+    for i in range(workers):
+        futs.append(pool.submit(_worker_hold, hold))
+        if i + 1 < workers:
+            time.sleep(ramp_s)
+    return len({f.result() for f in futs})
+
 
 
 def _submit_segment(pool, surv, W, cap):
@@ -311,7 +538,22 @@ def ckpt_key(q2=Q2_DEFAULT):
 
 
 def load_ckpt(q2=Q2_DEFAULT):
-    return _ckpt.load(CKPT, ckpt_key(q2), warn=lambda m: log("WARN", m))
+    """Load the cursor, and say so loudly if it had to come from the .bak.
+
+    Recovering from the backup means the previous run did not shut down
+    cleanly -- the main checkpoint was mid-write when the process, or the
+    machine, stopped.  The campaign carries on (one segment is redone), but
+    the owner should be told, because on this machine that has three times
+    meant the machine itself went down rather than the program.
+    """
+    def _warn(m):
+        log("WARN", m)
+        if "RECOVERED" in m:
+            log("WARN", "a recovered checkpoint means the last run stopped "
+                        "mid-save. If the machine went down rather than the "
+                        "program, read 'If the machine hangs' in README.md "
+                        "before restarting -- and consider --gentle.")
+    return _ckpt.load(CKPT, ckpt_key(q2), warn=_warn)
 
 
 def save_ckpt(c):
@@ -343,9 +585,14 @@ def redenominate(next_j, W_old, W_new):
 
 
 def load_rungs(path=MODEL_FILE):
-    """[(label, depth_k)] ascending: the model's Q1/median/Q3/P90 for every
-    open term, from the predictions stated before the run.  The enforced
-    ceiling of the running wheel is appended at run time as the last rung."""
+    """[(term, label, depth_k)] ascending: the model's Q1/median/Q3/P90 for
+    every predicted term, from the predictions stated before the run.  The
+    enforced ceiling of the running wheel is appended at run time as the
+    last rung (term None -- it belongs to no term and never retires).
+
+    `term` is the n each rung is a prediction ABOUT, and it is carried
+    because a rung stops being a progress marker the moment that term
+    lands: see live_rungs."""
     rungs = []
     try:
         with open(path) as fh:
@@ -355,9 +602,21 @@ def load_rungs(path=MODEL_FILE):
     for n_s, v in preds.items():
         for q in ("Q1", "median", "Q3", "P90"):
             if q in v:
-                rungs.append((f"a({int(n_s)}) {q}", float(v[q])))
-    rungs.sort(key=lambda t: t[1])
+                rungs.append((int(n_s), f"a({int(n_s)}) {q}", float(v[q])))
+    rungs.sort(key=lambda t: t[2])
     return rungs
+
+
+def open_rungs(rungs, frontier):
+    """The rungs still worth aiming at: the model's quartiles for terms
+    ABOVE the frontier.  A term's rungs retire the moment it is settled --
+    a prediction of where a(12) should appear is not progress once a(12)
+    is a number in the evidence directory."""
+    return [(t, lab, d) for (t, lab, d) in rungs if t > frontier]
+
+
+def passed_labels(c):
+    return c.get("rungs_passed", [])
 
 
 def frontier_of(c):
@@ -434,8 +693,18 @@ def refuse_unreadable_cursor(eng, fresh):
     """
     if fresh or not os.path.exists(CKPT):
         return
-    with open(CKPT) as fh:
-        stored = json.load(fh).get("key")
+    try:
+        with open(CKPT) as fh:
+            stored = json.load(fh).get("key")
+    except Exception as e:
+        raise CorruptEngineError(
+            f"[ALARM] {CKPT} exists but cannot be read ({e}), and no usable "
+            f"{CKPT}.bak stands behind it. A hard crash during a save can "
+            f"leave a right-sized file of NUL bytes -- that is exactly what "
+            f"happened here once, and it is why saves are now fsynced and "
+            f"backed up. The cursor in it is gone; pass --fresh to restart "
+            f"the sweep (contiguous from the floor) or restore a cursor by "
+            f"hand.")
     raise CorruptEngineError(
         f"[ALARM] checkpoint key {stored!r} does not match the running "
         f"configuration {ckpt_key(eng.q2)!r}. Refusing to start a fresh "
@@ -521,10 +790,10 @@ def production(args):
         from ladder_gpu import GpuEngine as Eng
 
     def make_engine(m):
-        return Eng(m, q2=Q2_DEFAULT)
+        return Eng(m, q2=args.q2)
 
     # ---- cursor: the checkpoint says which filter the campaign is on
-    c = None if args.fresh else load_ckpt()
+    c = None if args.fresh else load_ckpt(args.q2)
     if c is None:
         eng = make_engine(args.n)
         refuse_unreadable_cursor(eng, args.fresh)
@@ -536,6 +805,30 @@ def production(args):
     check_cursor(c, eng)
     W = eng.W
 
+    # ---- what Ctrl+C saves.  NOT the live `c`: its counters are updated
+    # per survivor, so a mid-segment save persists census that the redone
+    # segment counts a second time -- the same reason the periodic save is
+    # pinned to segment boundaries.  `boundary` is a copy of the cursor as
+    # of the last FULLY classified segment; the interrupt writes that, so
+    # an interrupted run costs at most the segment in flight and never
+    # double-counts.  (huntlib.shutdown runs this deaf to further signals,
+    # so a second Ctrl+C cannot land inside the write.)
+    boundary = [json.loads(json.dumps(c))]
+
+    def mark_boundary():
+        """Called wherever `c` is consistent: end of a segment, after a
+        filter switch, after the prelude."""
+        boundary[0] = json.loads(json.dumps(c))
+
+    def _save_on_interrupt():
+        b = boundary[0]
+        save_ckpt(b)
+        return ("checkpoint saved at the last segment boundary, k = %.4e "
+                "(the segment in flight is redone on resume)"
+                % (b["next_j"] * b["W"]))
+
+    _shutdown.on_interrupt(_save_on_interrupt)
+
     if not c["canaries_done"]:
         log("STAGE", "prelude: oracle low pass + a(7)/a(8)/a(9) rediscovery")
         firsts = low_pass()
@@ -546,6 +839,7 @@ def production(args):
         canary_prelude(make_engine)
         c["canaries_done"] = True
         save_ckpt(c)
+        mark_boundary()
 
     logC = None
     try:
@@ -575,18 +869,30 @@ def production(args):
     def j_cap_now():
         return min(cap_now() // W + 1, J_CEIL)
 
-    def all_rungs():
-        return rungs + [(f"enforced ceiling of the {W} wheel", float(ceiling()))]
+    def live_rungs():
+        """The ladder as it stands NOW: the model's quartiles for the terms
+        that are still OPEN, then the enforced ceiling.
+
+        A rung is a prediction of where a term should appear, so the moment
+        that term is found its remaining quartiles stop being progress
+        markers -- keeping them made [STATUS] advertise `next a(12) P90 at
+        9.51e19` for as long as the hunt kept running after a(12) was found
+        at 5.51e19, pointing the operator at a depth that no longer meant
+        anything.  Retiring is by the LIVE frontier, so it happens the
+        instant a find is verified and needs nothing stored."""
+        live = open_rungs(rungs, frontier_of(c))
+        return live + [(None, f"enforced ceiling of the {W} wheel",
+                        float(ceiling()))]
 
     def next_rung(pos):
         passed = c.get("rungs_passed", [])
-        for i, (label, depth) in enumerate(all_rungs()):
+        for i, (term, label, depth) in enumerate(live_rungs()):
             if label not in passed and depth > pos:
                 return i, label, depth
         return None
     # rungs already behind the cursor (a resume from before rungs existed)
     # are recorded silently
-    for label, depth in all_rungs():
+    for _t, label, depth in live_rungs():
         if depth <= c["next_j"] * W and label not in c.setdefault("rungs_passed", []):
             c["rungs_passed"].append(label)
 
@@ -600,13 +906,29 @@ def production(args):
     pool = None
     if workers > 1:
         from concurrent.futures import ProcessPoolExecutor
-        pool = ProcessPoolExecutor(max_workers=workers)
-    log("STAGE", f"production: n={n} filter, wheel {W}, k from "
-                 f"{c['next_j']*W:.4e} to {cap_now():.3e} "
+        pool = ProcessPoolExecutor(max_workers=workers,
+                                   initializer=_worker_init)
+        hb.doing(f"starting {workers} classification workers, one at a time")
+        t_ramp = time.time()
+        up = _prime_pool(pool, workers, args.worker_ramp)
+        log("STAGE", f"classification pool: {up} workers up and warm in "
+                     f"{time.time()-t_ramp:.1f}s (ramped one at a time at "
+                     f"below-normal priority; a simultaneous start of N "
+                     f"interpreters is the campaign's largest host load "
+                     f"step and it has hung this machine)")
+    log("STAGE", "machine: " + device_report(eng))
+    log("STAGE", f"production: n={n} filter, wheel {W}, sieve depth q2="
+                 f"{args.q2}, k from {c['next_j']*W:.4e} to {cap_now():.3e} "
                  f"({'--to' if user_cap is not None else 'the enforced ceiling'};"
-                 f" {len(all_rungs())} rungs, filter lag {args.filter_lag}) "
+                 f" {len(live_rungs())} rungs to a({frontier_of(c)+1})+, "
+                 f"filter lag {args.filter_lag}) "
                  f"({args.engine}, {workers} classification worker"
-                 f"{'s' if workers > 1 else ''})")
+                 f"{'s' if workers > 1 else ''}"
+                 + (f", {args.gpu_yield_ms:.0f} ms device yield per segment"
+                    if args.gpu_yield_ms else "")
+                 + (", GENTLE" if args.gentle else "") + ")")
+
+    yield_s = float(args.gpu_yield_ms) / 1000.0
 
     def sieve(j0, j1):
         surv = eng.survivors_j(j0, j1)
@@ -614,6 +936,15 @@ def production(args):
             import numpy as np
             surv = (np.concatenate([x for x in surv])
                     if surv else np.empty(0, dtype="uint64"))
+        if yield_s:
+            # A deliberate idle window between segments (--gpu-yield-ms).
+            # It is OFF by default because it is the weaker of the two ways
+            # to cut sustained draw: it lowers the AVERAGE by adding load
+            # transitions, where an nvidia-smi clock cap lowers the PEAK
+            # without adding any.  It is here because it needs no admin
+            # rights and no change to machine state, so it is something a
+            # campaign can do about its own appetite.
+            time.sleep(yield_s)
         return surv
 
     def switch_filter(new_n):
@@ -635,6 +966,7 @@ def production(args):
                         if W != old_W else " (same wheel, cursor unchanged)")
                      + f"; ceiling now {ceiling():.3e}")
         save_ckpt(c)
+        mark_boundary()
 
     t_mark = time.time()
 
@@ -652,7 +984,9 @@ def production(args):
             k = int(j) * W
             c["survivors"] += 1
             fr = frontier_of(c)
-            new_best = r > c["best_run"]
+            # the floor sprp_run resolves exactly (a shorter run is
+            # proved short but not pinned down, and is recorded nowhere)
+            new_best = r > c["best_run"] and r >= SPRP_EXACT_FROM
             if new_best:
                 c["best_run"], c["best_k"] = r, k
             if r >= NEAR_FROM:
@@ -685,6 +1019,25 @@ def production(args):
                                  f"are now [NEAR] (one short of a({r+1})), "
                                  f"shorter runs are counted in [STATUS] only")
                 log("DISCOVERY", "=" * 60)
+                # the ladder re-aims at the next open term.  The settled
+                # terms' unreached quartiles are predictions of where
+                # something ALREADY FOUND should have appeared: they are
+                # retired here rather than left to be "passed", so no
+                # [STATUS] line ever points at a depth for a settled term.
+                fr2 = frontier_of(c)
+                gone = [(lab, d) for (t, lab, d) in rungs
+                        if t <= fr2 and d > k and lab not in passed_labels(c)]
+                nr = next_rung(k)
+                nxt = ("no rung left but the ceiling" if nr is None else
+                       f"next: {nr[1]} at k = {nr[2]:.3e}")
+                log("RUNG", f"a({r}) settled: {len(gone)} unreached rung"
+                            f"{'' if len(gone) == 1 else 's'} retired"
+                            + ("" if not gone else
+                               " (" + ", ".join(f"{lab} at k = {d:.3e}"
+                                                for lab, d in gone) + ")")
+                            + f"; the ladder is now {len(live_rungs())} rung"
+                            f"{'' if len(live_rungs()) == 1 else 's'} to "
+                            f"a({fr2+1})+ -- {nxt}")
                 if args.stop_on_discovery:
                     save_ckpt(c)
                     log("STAGE", "frontier-extending discovery confirmed "
@@ -716,6 +1069,7 @@ def production(args):
         now = time.time()
         c["wall_s"] += now - t_mark
         t_mark = now
+        mark_boundary()                     # what a Ctrl+C from here saves
         hb.mark(seg_j1 * W)                 # the heartbeat's position + rate
         hb.doing("between segments")
         if evidenced or now - t_save[0] >= args.heartbeat:
@@ -733,15 +1087,18 @@ def production(args):
             log("MILESTONE", f"passed k = {dec:.0e}  survivors "
                              f"{c['survivors']:,}  {census_now()}  "
                              f"best run {c['best_run']}  finds {c.get('hits', 0)}")
-        # rungs: the model's quartiles for the open terms, then the ceiling
+        # rungs: the model's quartiles for the terms still OPEN, then the
+        # ceiling.  A find retires the rest of that term's rungs (live_rungs)
+        # and the ladder renumbers around what is left.
         passed = c.setdefault("rungs_passed", [])
-        for i, (label, depth) in enumerate(all_rungs()):
+        ladder = live_rungs()
+        for i, (term, label, depth) in enumerate(ladder):
             if depth <= pos and label not in passed:
                 passed.append(label)
                 nr = next_rung(pos)
                 nxt = ("last rung -- the campaign ends here" if nr is None else
                        f"next: {nr[1]} at k = {nr[2]:.3e}")
-                log("RUNG", f"passed rung {i+1}/{len(all_rungs())}: {label} "
+                log("RUNG", f"passed rung {i+1}/{len(ladder)}: {label} "
                             f"(k = {depth:.3e}) at k = {pos:.4e}  -- {nxt}")
         # model odds crossing a quartile: the hunt is past where the model
         # put a(fr+1) with that probability -- once per threshold per frontier
@@ -778,7 +1135,7 @@ def production(args):
         if nr is not None:
             i, label, depth = nr
             eta = (f"{(depth - pos) / rate / 3600:.1f}h" if rate > 0 else "n/a")
-            rung = (f"rung {i}/{len(all_rungs())} passed, next {label} at "
+            rung = (f"rung {i}/{len(live_rungs())} passed, next {label} at "
                     f"{depth:.2e} (ETA {eta})  ")
         stall = hb.stalled()
         busy = ("" if stall is None else
@@ -817,6 +1174,13 @@ def production(args):
                 if consume(p_j0, p_j1, p_surv, p_collect()):
                     return 0
             pending = new
+        # A run that ENDS must persist where it got to.  Every other exit
+        # saves (segment boundary every --heartbeat, evidence at once,
+        # Ctrl+C, --stop-on-discovery) and this one did not, so a --to run
+        # threw away everything it had swept and the next one started over
+        # from the floor -- silently, because a re-sweep looks exactly like
+        # a sweep.  Caught by running --to twice and reading --status.
+        save_ckpt(c)
         hb.emit()                       # the final line, at the last position
         if user_cap is not None and user_cap < ceiling():
             log("STAGE", f"--to {user_cap:.3e} reached; survivors "
@@ -828,12 +1192,22 @@ def production(args):
                          f"survivors {c['survivors']}; best run "
                          f"{c['best_run']} at k = {c['best_k']}")
         return 0
-    except KeyboardInterrupt:
-        save_ckpt(c)
-        log("STAGE", "interrupted; checkpoint saved at k = %.4e (the "
-                     "segment in flight is redone on resume)"
-                     % (c["next_j"] * W))
-        return 0
+    except CorruptEngineError:
+        raise                                  # an ALARM, handled in main()
+    except Exception as e:
+        # Anything else -- a CUDA error after a driver reset, a device that
+        # fell off the bus, an OOM.  DO NOT SAVE: the counts in `c` may be
+        # part-way through a segment, and the file on disk is the last
+        # SEGMENT BOUNDARY, which is exactly what resume wants.  Say where
+        # that is, so the log answers the only question the owner will have.
+        log("ALARM", f"{type(e).__name__}: {e}")
+        log("ALARM", "the checkpoint on disk is at a segment boundary and is "
+                     "untouched by this failure; resuming redoes at most the "
+                     "segments since the last save (--heartbeat apart). "
+                     "If the machine itself went down rather than the "
+                     "program, read the 'If the machine hangs' section of "
+                     "README.md before restarting.")
+        raise
     finally:
         hb.stop()
         if pool is not None:
@@ -879,19 +1253,33 @@ def selftest():
 
     # --- indefinite-run drill: rungs, filter following, re-denomination --
     rungs = load_rungs()
-    r_ok = (len(rungs) >= 8 and all(rungs[i][1] <= rungs[i + 1][1]
+    r_ok = (len(rungs) >= 8 and all(rungs[i][2] <= rungs[i + 1][2]
                                     for i in range(len(rungs) - 1))
-            and any(lab.startswith("a(13) median") for lab, _ in rungs))
+            and any(lab.startswith("a(13) median") for _t, lab, _d in rungs))
+    # a settled term's rungs RETIRE: the ladder never points [STATUS] at a
+    # depth predicted for a term that has already been found.  Drilled
+    # frontier-relative on fixed input so landing a term cannot weaken it.
+    terms = sorted({t for t, _lab, _d in rungs})
+    t0 = terms[0]
+    r_ok = (r_ok
+            and open_rungs(rungs, t0 - 1) == rungs               # none settled
+            and all(t > t0 for t, _lab, _d in open_rungs(rungs, t0))
+            and len(open_rungs(rungs, t0)) < len(rungs)          # some retired
+            and open_rungs(rungs, terms[-1]) == [])              # all settled
     # frontier-relative, so landing a term does not falsify the drill
     c0 = fresh_ckpt(10, GpuEngine(10))
     F = FRONTIER_N
-    r_ok = r_ok and filter_for(c0, F) == F and filter_for(c0, F, lag=0) == F + 1
+    # both lags explicitly, and the DEFAULT pinned: lag 0 is what puts the
+    # campaign on the next open term, and so on the coarser wheel
+    r_ok = r_ok and FILTER_LAG == 0 and filter_for(c0, F) == F + 1
+    r_ok = (r_ok and filter_for(c0, F, lag=1) == F
+            and filter_for(c0, F, lag=0) == F + 1)
     settle(c0, F + 1, 10**15)                       # a(F+1) lands
-    r_ok = r_ok and filter_for(c0, F) == F + 1 \
-        and filter_for(c0, F, lag=0) == F + 2
+    r_ok = (r_ok and filter_for(c0, F, lag=1) == F + 1
+        and filter_for(c0, F, lag=0) == F + 2)
     settle(c0, F + 2, 10**17)                       # a(F+2) lands
-    r_ok = r_ok and filter_for(c0, F) == F + 2 \
-        and filter_for(c0, F, lag=0) == F + 3
+    r_ok = (r_ok and filter_for(c0, F, lag=1) == F + 2
+        and filter_for(c0, F, lag=0) == F + 3)
     # wheel widening 2310 -> 30030 re-denominates by FLOOR: overlap, no gap
     W1, W2 = wheel_modulus(11), wheel_modulus(12)
     for j in (1, 7, 12345, 4 * 10**18 // W2 * 3):
@@ -906,11 +1294,63 @@ def selftest():
               "re-denomination")
         ok = False
     else:
-        print(f"PASS indefinite-run drill: {len(rungs)} model rungs ascending, "
-              f"the filter follows the frontier (lag 1: {F} -> {F+1} -> {F+2}; "
+        print(f"PASS indefinite-run drill: {len(rungs)} model rungs ascending "
+              f"and retiring with their term (a({t0}) settled leaves "
+              f"{len(open_rungs(rungs, t0))}), "
+              f"the default lag is 0 and the filter follows the frontier "
+              f"(lag 1: {F} -> {F+1} -> {F+2}; "
               f"lag 0: {F+1} -> {F+2} -> {F+3}), and a 2310 -> 30030 wheel "
               f"change moves the cursor by floor (overlap < one period, never "
               f"a gap)")
+
+    # --- graceful-shutdown drill: Ctrl+C is a NORMAL exit ---------------
+    # Binding repo-wide (CONVENTIONS.md "Stopping a run"): one path out,
+    # deaf to further signals while the checkpoint is written, exit 130,
+    # and never a traceback.  The second Ctrl+C is the one that used to
+    # bite -- it lands inside the handler and Python prints the pair.
+    import signal as _sig
+    saved = {n: _sig.getsignal(getattr(_sig, n))
+             for n in ("SIGINT", "SIGTERM", "SIGBREAK") if hasattr(_sig, n)}
+    saved_cbs = list(_shutdown._callbacks)
+    _shutdown._callbacks.clear()
+    _shutdown._shutting_down = False
+    order, deaf = [], []
+
+    def _cb_first():
+        order.append("first")
+        return "checkpoint saved at the last segment boundary"
+
+    def _cb_second():
+        deaf.append(_sig.getsignal(_sig.SIGINT))     # deaf BEFORE any write?
+        order.append("second")
+
+    def _cb_second_ctrl_c():
+        raise KeyboardInterrupt                      # the operator, again
+
+    _shutdown.on_interrupt(_cb_first)
+    _shutdown.on_interrupt(_cb_second)
+    _shutdown.on_interrupt(_cb_second_ctrl_c)
+
+    def _interrupted():
+        raise KeyboardInterrupt
+
+    rc = _shutdown.graceful(_interrupted)
+    sd_ok = (rc == _shutdown.EXIT_INTERRUPTED == 130
+             and order == ["second", "first"]        # LIFO, all of them ran
+             and deaf == [_sig.SIG_IGN]              # deaf before the save
+             and _shutdown.graceful(lambda: 7) == 7)  # a normal exit passes
+    for n, h in saved.items():
+        _sig.signal(getattr(_sig, n), h)
+    _shutdown._callbacks[:] = saved_cbs
+    _shutdown._shutting_down = False
+    if not sd_ok:
+        print(f"FAIL graceful-shutdown drill: rc={rc} order={order} "
+              f"deaf={deaf}")
+        ok = False
+    else:
+        print("PASS graceful-shutdown drill: an interrupt runs every "
+              "registered save (LIFO) with SIGINT already ignored, survives "
+              "a second Ctrl+C inside the handler, and exits 130")
 
     # --- discovery-once / census drill: the frontier promotes and the
     # classification follows it: beyond = DISCOVERY, at = NEAR (one short,
@@ -971,6 +1411,145 @@ def selftest():
         print(f"PASS pool drill: pooled classification == serial, in order "
               f"({surv.size} survivors over {-(-surv.size // CHUNK)} chunks, "
               f"max run {max(serial)})")
+
+    # --- classification drill: the two-pass chain == the all-bases chain --
+    # sprp_run runs a base-2-only chain first and only redoes it with the
+    # full huntlib base set when that chain reaches SPRP_EXACT_FROM.  That
+    # is sound because a strong-test FAILURE IS A PROOF of compositeness,
+    # so the cheap chain is a rigorous upper bound -- but "sound" is an
+    # argument, and this is the measurement.  Every survivor of a real
+    # window, both ways, on the engine's own run_length (which never took
+    # the shortcut), plus the direction of any disagreement.
+    eng = GpuEngine(12, q2=Q2_CAMPAIGN)
+    # the campaign depth leaves ~5.6e5 survivors per 1e18 of k-line, so the
+    # window has to be wide to be populated at all
+    surv = eng.survivors_j(10**12, 10**12 + 6 * 10**10)[:1200]
+    cap = FRONTIER_N + 8
+    two = [sprp_run(int(j) * eng.W, cap) for j in surv.tolist()]
+    full = [eng.run_length(int(j) * eng.W, cap=cap) for j in surv.tolist()]
+    cheap_hi = all(a >= b for a, b in zip(two, full))
+    if surv.size < 500:
+        print("FAIL classification drill: window under-populated (vacuous)")
+        ok = False
+    elif two != full:
+        bad = [(int(j) * eng.W, a, b) for j, a, b
+               in zip(surv.tolist(), two, full) if a != b]
+        print(f"FAIL classification drill: {len(bad)} of {surv.size} disagree "
+              f"with the all-bases chain, e.g. {bad[:3]}")
+        ok = False
+    elif not cheap_hi:
+        print("FAIL classification drill: the cheap chain UNDERSTATED a run")
+        ok = False
+    else:
+        print(f"PASS classification drill: two-pass sprp_run == the all-bases "
+              f"run_length on all {surv.size} survivors of a real window "
+              f"(runs to {max(full)}); exact at and above "
+              f"SPRP_EXACT_FROM={SPRP_EXACT_FROM}, and every run the campaign "
+              f"records (census floor {NEAR_FROM}, [NEAR], [DISCOVERY], "
+              f"best_run) is at or above it")
+
+    # --- durability drill: a crash mid-save must not cost the cursor ------
+    # The real failure, reproduced exactly: this campaign's checkpoint came
+    # back from a hard hang as 785 bytes of NUL -- right size, no content,
+    # because os.replace is atomic for the directory ENTRY and the DATA was
+    # still in the page cache.  A save now fsyncs before the replace and
+    # rotates the previous file to .bak, so the cursor survives either way.
+    import shutil
+    import tempfile
+    from huntlib import checkpoint as _cp
+    d_ = tempfile.mkdtemp()
+    try:
+        pth = os.path.join(d_, "c.json")
+        _cp.save(pth, {"key": "K", "next_j": 1})
+        _cp.save(pth, {"key": "K", "next_j": 2})
+        d_ok = (_cp.load(pth, "K")["next_j"] == 2
+                and json.load(open(pth + ".bak"))["next_j"] == 1)
+        with open(pth, "wb") as fh:                  # the observed corruption
+            fh.write(bytes(785))            # 785 NUL bytes, as found
+        d_ok = d_ok and _cp.load(pth, "K")["next_j"] == 1   # recovered
+        os.remove(pth + ".bak")
+        try:
+            _cp.load(pth, "K")
+            d_ok = False                             # must not be silent
+        except _cp.CheckpointCorrupt:
+            pass
+        d_ok = d_ok and _cp.load(os.path.join(d_, "absent.json"), "K") is None
+    finally:
+        shutil.rmtree(d_, ignore_errors=True)
+    if not d_ok:
+        print("FAIL durability drill: fsync/.bak rotation or corrupt handling")
+        ok = False
+    else:
+        print("PASS durability drill: saves fsync before replace and rotate a "
+              ".bak; a 785-NUL checkpoint (the real post-hang corruption) is "
+              "RECOVERED from the .bak, and with no .bak it raises "
+              "CheckpointCorrupt instead of silently restarting the sweep")
+
+    # --- persistence drill: a run that ENDS must persist where it got to --
+    # Every other exit saved (segment boundary, evidence, Ctrl+C,
+    # --stop-on-discovery) and the ordinary completion did not, so a --to
+    # run threw away everything it had swept and the next one silently
+    # started over from the floor -- a re-sweep looks exactly like a sweep.
+    # Two bounded runs in a temp directory; the second must START where the
+    # first stopped and END further on.
+    import types
+    d2 = tempfile.mkdtemp()
+    cwd = os.getcwd()
+    try:
+        os.chdir(d2)
+        seed = fresh_ckpt(12, GpuEngine(12, q2=Q2_DEFAULT))
+        seed["canaries_done"] = True          # drilled separately (G5/G8)
+        save_ckpt(seed)
+        a = types.SimpleNamespace(
+            engine="gpu", fresh=False, n=12, filter_lag=0, q2=Q2_DEFAULT,
+            to=2e16, seg_span=None, heartbeat=30.0, workers=1,
+            worker_ramp=0.0, gpu_yield_ms=0.0, gentle=False,
+            stop_on_discovery=False)
+        production(a)
+        mid = load_ckpt(Q2_DEFAULT)
+        a.to = 4e16
+        production(a)
+        end = load_ckpt(Q2_DEFAULT)
+        p_ok = (mid is not None and end is not None
+                and mid["next_j"] > seed["next_j"]
+                and end["next_j"] > mid["next_j"]
+                and end["survivors"] > mid["survivors"] > 0
+                and mid["next_j"] * mid["W"] >= 2e16
+                and end["next_j"] * end["W"] >= 4e16)
+        detail = (f"{seed['next_j']} -> "
+                  f"{mid['next_j'] if mid else None} -> "
+                  f"{end['next_j'] if end else None}")
+    finally:
+        os.chdir(cwd)
+        shutil.rmtree(d2, ignore_errors=True)
+    if not p_ok:
+        print(f"FAIL persistence drill: cursor did not advance and persist "
+              f"across two bounded runs ({detail})")
+        ok = False
+    else:
+        print(f"PASS persistence drill: two bounded runs, the second resumed "
+              f"where the first stopped and both persisted their cursor "
+              f"(next_j {detail}, survivors {mid['survivors']:,} -> "
+              f"{end['survivors']:,})")
+
+    # --- ramp drill: the pool comes up one interpreter at a time -----------
+    # N fresh interpreters importing numpy in the same instant is the
+    # campaign's largest host load step, and it landed while the device was
+    # flat out.  _prime_pool must return with every worker already up and
+    # warm, and must have taken at least the ramp interval to do it.
+    with ProcessPoolExecutor(max_workers=3, initializer=_worker_init) as pl:
+        t_r = time.time()
+        up = _prime_pool(pl, 3, ramp_s=0.05)
+        el = time.time() - t_r
+        pids = {pl.submit(_worker_ping).result() for _ in range(24)}
+    if up != 3 or el < 0.10 or len(pids) != 3:
+        print(f"FAIL ramp drill: {up} up in {el:.2f}s, {len(pids)} distinct "
+              f"pids afterwards")
+        ok = False
+    else:
+        print(f"PASS ramp drill: 3 workers started one at a time ({el:.2f}s "
+              f"at a 0.05s interval), all warm and distinct before the first "
+              f"segment")
 
     # --- positive control: a genuine known passes the full protocol --------
     ev, msg = full_verify(KNOWN[7], 7, 7)
@@ -1042,8 +1621,20 @@ def status():
     if not os.path.exists(CKPT):
         print("no campaign checkpoint yet")
         return 0
-    with open(CKPT) as f:
-        c = json.load(f)
+    try:
+        with open(CKPT) as f:
+            c = json.load(f)
+    except Exception as e:
+        bak = CKPT + ".bak"
+        if not os.path.exists(bak):
+            print(f"{CKPT} is unreadable ({e}) and there is no {bak}: the "
+                  f"cursor is gone (a hard crash mid-save leaves a "
+                  f"right-sized file of NUL). --fresh restarts the sweep.")
+            return 2
+        with open(bak) as f:
+            c = json.load(f)
+        print(f"NOTE: {CKPT} is unreadable ({e}); showing {bak}, which is "
+              f"at most one segment behind")
     W = c.get("W", 1)
     print(f"key       : {c['key']}")
     print(f"filter    : n = {c.get('n')}  wheel {W}")
@@ -1074,21 +1665,29 @@ def main():
                          "frontier (a(%d) at start; promoted as finds land); "
                          "census repeats never trigger it" % FRONTIER_N)
     # The starting filter tracks the SAME rule filter_for uses, so a fresh
-    # run and a resumed one agree: at the default lag of 1 that is the
-    # frontier itself (sieve for run >= 11 with a(11) settled), which keeps
-    # run-11 values visible as one-short-of-a(12) [NEAR] lines.  Pinning it
-    # to FRONTIER_N + 1 instead would silently force lag-0 the moment a term
-    # lands -- and, since the wheel follows the filter, would step 2310 ->
-    # 30030 under a campaign that was mid-sweep.
+    # run and a resumed one agree.  At the default lag of 0 that is the
+    # frontier plus one -- sieve for run >= 12 with a(11) settled -- which
+    # puts the campaign on the 30030 wheel and is 13x the hunt (FILTER_LAG).
+    # Pinning it to a literal instead would silently disagree with
+    # filter_for the moment a term lands.
     ap.add_argument("--n", type=int,
                     default=max(NEAR_FROM, FRONTIER_N + 1 - FILTER_LAG),
                     help="the STARTING filter (sieve for k with run >= n); "
                          "the filter then follows the frontier (--filter-lag)")
     ap.add_argument("--filter-lag", type=int, default=FILTER_LAG,
-                    help="filter = max(--n, frontier + 1 - lag): 1 (default) "
-                         "keeps seeing the last settled length (one short of "
-                         "the next term, logged) while hunting the next; 0 "
-                         "is the fastest hunt")
+                    help="filter = max(--n, frontier + 1 - lag): 0 (default) "
+                         "is the fastest hunt -- the sieve asks only for the "
+                         "next open term, which coarsens the wheel and is "
+                         "worth 13x; 1 runs a step behind so the last "
+                         "settled length still shows up as one-short [NEAR] "
+                         "lines and the census fills in, at 1/13 the rate")
+    ap.add_argument("--q2", type=int, default=Q2_CAMPAIGN,
+                    help="sieve depth for the CAMPAIGN (default %d). Sets "
+                         "which side of the pipe binds: 4x deeper costs the "
+                         "device 7%%%% and takes 4.1x the work off the "
+                         "classification pool. The frozen benchmark depth "
+                         "(%d) is unaffected and stays comparable."
+                         % (Q2_CAMPAIGN, Q2_DEFAULT))
     ap.add_argument("--to", type=float, default=None,
                     help="depth cap in k (default: none -- the campaign runs "
                          "to the enforced ceiling of its wheel, the last rung)")
@@ -1100,11 +1699,34 @@ def main():
                          "census counts per run length, finds, odds, next "
                          "rung); 30 is the repo convention")
     ap.add_argument("--workers", type=int, default=WORKERS_DEFAULT,
-                    help="classification processes (default %d: the pool only "
-                         "needs ~5 cores to stay a segment ahead, and a hunt "
+                    help="classification processes (default %d: at the "
+                         "campaign sieve depth the pool needs ~4 cores to "
+                         "stay a segment ahead of the device, and a hunt "
                          "must not take the whole machine; 1 = serial, "
                          "in-process)" % WORKERS_DEFAULT)
+    ap.add_argument("--worker-ramp", type=float, default=WORKER_RAMP_S,
+                    help="seconds between worker starts (default %.2f). The "
+                         "pool is started one interpreter at a time; N fresh "
+                         "interpreters importing numpy in the same instant "
+                         "is the campaign's largest host load step."
+                         % WORKER_RAMP_S)
+    ap.add_argument("--gpu-yield-ms", type=float, default=0.0,
+                    help="idle the device this long after every segment "
+                         "(default 0 = off). A deliberate, documented way to "
+                         "cap sustained draw on a machine whose supply "
+                         "cannot hold the peak; see --gentle.")
+    ap.add_argument("--gentle", action="store_true",
+                    help="preset for a machine that has hard-hung: half the "
+                         "workers, a slower ramp, a 25 ms device yield per "
+                         "segment. Costs a few percent. Read the 'If the "
+                         "machine hangs' section of the README first -- the "
+                         "strongest lever is an nvidia-smi clock cap, which "
+                         "this program deliberately does not apply for you.")
     args = ap.parse_args()
+    if args.gentle:
+        args.workers = max(1, min(args.workers, WORKERS_DEFAULT // 2))
+        args.worker_ramp = max(args.worker_ramp, 1.0)
+        args.gpu_yield_ms = max(args.gpu_yield_ms, 25.0)
     if args.selftest:
         return selftest()
     if args.status:
@@ -1115,12 +1737,24 @@ def main():
     if args.filter_lag < 0:
         log("ALARM", "--filter-lag must be >= 0")
         return 2
+    if args.q2 < 1024:
+        log("ALARM", "--q2 below 1024 is not a sieve")
+        return 2
+    if args.gpu_yield_ms < 0:
+        log("ALARM", "--gpu-yield-ms must be >= 0")
+        return 2
     try:
         return production(args)
+    except CheckpointCorrupt as e:
+        log("ALARM", str(e))
+        return 2
     except CorruptEngineError as e:
         log("ALARM", str(e))
         return 2
 
 
 if __name__ == "__main__":
-    _sys.exit(main())
+    # the ONLY place a KeyboardInterrupt is caught: an interrupt anywhere --
+    # prelude, pool ramp, sieve, verification, final save -- takes one path
+    # out, deaf to further Ctrl+C, and never prints a traceback
+    _sys.exit(_shutdown.graceful(main))

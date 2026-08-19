@@ -69,10 +69,11 @@ import numpy as np
 from sympy import primerange
 
 _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
+from huntlib import shutdown as _shutdown  # noqa: E402
 from huntlib.gpu import barrett_magics                        # noqa: E402
 from huntlib.primes import mr_is_prime                        # noqa: E402
 from ladder_reference import K_FLOOR, KNOWN, wheel_modulus    # noqa: E402
-from ladder_search import J_CEIL, Q2_DEFAULT                  # noqa: E402
+from ladder_search import CpuEngine, J_CEIL, Q2_DEFAULT       # noqa: E402
 
 try:
     import cupy as cp
@@ -80,6 +81,12 @@ except Exception:                                    # pragma: no cover
     cp = None
 
 BLOCK = 256
+Q2_MAX = 1 << 31         # the deepest sieve this engine's arithmetic is
+#                          exact for.  The binding constraint is the residue
+#                          walk in _TABLE_SRC, whose intermediates reach q^2;
+#                          in u64 that needs q < 2^32.  Stage 1b's Barrett
+#                          (j mod q with j < 2^62) and stage 1a's are exact
+#                          over the same range.  Gated by g16, not asserted.
 
 # ---- tuning constants (v2).  Snapshotted onto the instance in __init__;
 # ---- nothing compiles against the class attribute after that.
@@ -90,53 +97,82 @@ S1A_TARGET = 1.2e-3      # stage 1a takes the fewest primes that bring the
 #                          n = 13 and ~20 at n = 10 -- the same survival
 NS_MAX = 32              # and never more: the pattern table's footprint is
 #                          a cliff (12 KB -> 48 KB measured 2.6x slower)
-T_MAX = 1024             # 64-candidate blocks per stage-1a thread, at most.
+T_MAX = 2048             # 64-candidate blocks per stage-1a thread, at most.
 #                          T is DERIVED per launch: the largest T (per-thread
-#                          setup amortized furthest; kernel-only 1.13x from
-#                          T = 16 to 1024) that still puts MIN_BLOCKS_PER_SM
-#                          thread blocks on every SM, so small windows keep
-#                          the device full.  T=None derives; an int pins it.
+#                          setup amortized furthest) that still puts
+#                          MIN_BLOCKS_PER_SM thread blocks on every SM, so
+#                          small windows keep the device full.  T=None
+#                          derives; an int pins it.  RE-SWEPT with RATIO 2
+#                          (OPTIMIZATION_LOG.md #23): 2048 is 1.025x on the
+#                          campaign shape and 1.020x on SCORE13 over 1024,
+#                          paired min 1.007/1.014.  4096 measured another
+#                          1.4% but is NOT reachable by the derivation at
+#                          LAUNCH 2^34 without halving MIN_BLOCKS_PER_SM,
+#                          which is the guarantee that a small window still
+#                          fills the device -- priced, not taken.
 MIN_BLOCKS_PER_SM = 4
-RATIO_DEFAULT = 4.0      # a stage-1b round ends when survival within it
+RATIO_DEFAULT = 2.0      # a stage-1b round ends when survival within it
 #                          drops below 1/RATIO (geometric schedule; 0 = one
 #                          shot).  The tail is where the divergence lives:
 #                          a lane that reaches q ~ 4096 has 6000 primes to
 #                          walk while its warp-mates idle, so rounds are
 #                          cut by POPULATION, not by prime count.
+#                          RE-SWEPT (OPTIMIZATION_LOG.md #22) when the
+#                          campaign moved to n = 12 at q2 = 262144, which
+#                          is 3.5x the stage-1b primes: 2 beats 4 by
+#                          1.116x there (16 rounds against 8), by 1.103x
+#                          at n = 12 / q2 = 65536 and by 1.034x on
+#                          SCORE13 -- so it is not a campaign-only
+#                          setting, and the earlier verdict (4 by 1.097x)
+#                          does not reproduce on an idle machine.
 LAUNCH_DEFAULT = 1 << 34  # candidates per launch (SCORE13: 2^33 0.93x, 2^32 0.84x)
 GRID_1B_MAX = 4096       # cap on a round kernel's grid (grid-stride)
 
 
 # --------------------------------------------------------------- tables ---
 # The residue WALK, evaluated once per (prime, residue) into a bit table.
-# 32-bit Barrett: m32 = floor(2^32 / q); every input is < 2^32.
+#
+# 64-BIT Barrett, and the width is the whole point.  This walk squares a
+# residue (t = k^2 mod q) and multiplies W mod q by s, so its intermediates
+# reach q^2.  In 32-bit that is exact only for q < 2^16 -- which is why the
+# engines' own q2 default is 65536 and why nothing here ever noticed.  Ask
+# for a deeper sieve and the products silently wrap: at q2 = 262144 the
+# table came out wrong for primes above ~2^16 (measured: q = 81899 marked 7
+# residues dead where 10 are, and not a subset), the sieve both kept
+# candidates it should kill and KILLED CANDIDATES IT SHOULD KEEP, and the
+# a(7) canary went missing -- caught by the prelude, before a campaign.
+# With 64-bit products the walk is exact for every q < 2^32, which is past
+# any sieve depth this problem will ever want.  It runs once per engine, so
+# the width costs nothing that matters.
 _TABLE_SRC = r'''
 extern "C" __global__
 void build_bits(const int nprimes, const int nfilter,
-                const unsigned int* __restrict__ primes,
-                const unsigned int* __restrict__ wmod,
-                const unsigned int* __restrict__ m32,
+                const unsigned long long* __restrict__ primes,
+                const unsigned long long* __restrict__ wmod,
+                const unsigned long long* __restrict__ magic,
                 const unsigned int* __restrict__ boff,
                 unsigned int* __restrict__ bits)
 {
     const int i = blockIdx.x;
     if (i >= nprimes) return;
-    const unsigned int q = primes[i], wm = wmod[i], mg = m32[i];
+    const unsigned long long q = primes[i], wm = wmod[i], mg = magic[i];
     const unsigned int base = boff[i];
-    for (unsigned int s = threadIdx.x; s < q; s += blockDim.x) {
-        unsigned int t = wm * s;
-        t -= __umulhi(t, mg) * q;
+    for (unsigned int s = threadIdx.x; s < (unsigned int)q; s += blockDim.x) {
+        /* t = k^2 mod q with k = W*j and j == s: both factors are < q, so
+           every product below is < 2^64 and every reduction is exact */
+        unsigned long long t = wm * (unsigned long long)s;
+        t -= __umul64hi(t, mg) * q;
         if (t >= q) t -= q;
         if (t >= q) t -= q;
         t = t * t;
-        t -= __umulhi(t, mg) * q;
+        t -= __umul64hi(t, mg) * q;
         if (t >= q) t -= q;
         if (t >= q) t -= q;
-        unsigned int r = t + 1u;
+        unsigned long long r = t + 1ULL;
         if (r >= q) r -= q;
         bool dead = false;
         for (int m = 0; m < nfilter; ++m) {
-            if (r == 0u) { dead = true; break; }
+            if (r == 0ULL) { dead = true; break; }
             r += t;
             if (r >= q) r -= q;
         }
@@ -350,6 +386,11 @@ class GpuEngine:
                  warp_pop=WARP_POP_DEFAULT, vote=VOTE_EVERY_DEFAULT):
         if cp is None:
             raise RuntimeError("CuPy/CUDA not available; use --engine cpu")
+        if not (2 < q2 <= Q2_MAX):
+            raise ValueError(
+                f"q2 {q2} is outside the range this engine's arithmetic is "
+                f"exact for (2, {Q2_MAX}]: the residue walk squares values "
+                f"below q, so q^2 must stay inside u64")
         self.n = n
         self.q2 = q2
         self.W = wheel_modulus(n)
@@ -379,15 +420,14 @@ class GpuEngine:
         p32 = primes.astype(np.uint32)
         words = ((primes.astype(np.int64) + 31) // 32)
         boff = np.concatenate([[0], np.cumsum(words)[:-1]]).astype(np.uint32)
-        m32 = np.array([(1 << 32) // int(q) for q in primes], dtype=np.uint32)
         d_p32 = cp.asarray(p32)
         d_boff = cp.asarray(boff)
         self.d_bits = cp.zeros(int(words.sum()), dtype=cp.uint32)
         mod = cp.RawModule(code=_TABLE_SRC)
         k_bits = mod.get_function("build_bits")
         k_bits((self.NP,), (256,),
-               (np.int32(self.NP), np.int32(n), d_p32, cp.asarray(wmod.astype(np.uint32)),
-                cp.asarray(m32), d_boff, self.d_bits))
+               (np.int32(self.NP), np.int32(n), self.d_primes, self.d_wmod,
+                self.d_magic, d_boff, self.d_bits))
         # killed-residue counts per prime, from the table itself (one
         # derivation, used for the queue sizing below)
         self.wq = self._popcounts(words, boff)
@@ -926,11 +966,85 @@ def g15_v2_matches_v1():
                   f"({total} survivors)")
 
 
+def g16_deep_sieve_arithmetic():
+    """The engine is exact at sieve depths PAST 2^16, and the gate looks there.
+
+    This gate exists because a bug got through every other one.  The walk
+    that builds the kill-bit table squares a residue, so its intermediates
+    reach q^2; it was written in 32-bit, which is exact only for q < 2^16.
+    Every gate in this file used the engine's own q2 default of 65536, so
+    for the whole life of the engine no test ever evaluated a prime whose
+    square left u32 -- and the first campaign to ask for a deeper sieve got
+    a table that was wrong in BOTH directions (at q = 81899 it marked 7
+    residues dead where 10 are, and not a subset), which silently kills
+    candidates that could be the term being hunted.  The a(7) canary caught
+    it; a gate should have.
+
+    So: sample primes across the WHOLE range of a deep sieve, above 2^16 as
+    well as below, and check the device-built table against big-integer
+    divisibility of the actual values -- no engine on the other side.  Then
+    check the deep stream itself against the independent CPU engine, whose
+    table comes from sympy's square roots in Python integers and cannot
+    share this failure.
+    """
+    n, q2 = 12, 1 << 18
+    eng = GpuEngine(n, q2=q2)
+    primes = eng.primes
+    words = (primes.astype(np.int64) + 31) // 32
+    boff = np.concatenate([[0], np.cumsum(words)[:-1]]).astype(np.int64)
+    bits = eng.d_bits.get()
+    idx = sorted(set([0, 1, eng.NP // 4, eng.NP // 2] +
+                     [int(np.searchsorted(primes, b))
+                      for b in (1 << 16, (1 << 16) + 1, 100003, 200003)] +
+                     [eng.NP - 2, eng.NP - 1]))
+    above = 0
+    for i in idx:
+        if not 0 <= i < eng.NP:
+            continue
+        q = int(primes[i])
+        above += q > (1 << 16)
+        seg = bits[int(boff[i]):int(boff[i]) + int(words[i])]
+        got = set(int(x) for x in
+                  np.nonzero(np.unpackbits(seg.view(np.uint8),
+                                           bitorder="little"))[0] if x < q)
+        wm = eng.W % q
+        want = set(sj for sj in range(q)
+                   if any((m * (wm * sj % q) ** 2 + 1) % q == 0
+                          for m in range(1, n + 1)))
+        if got != want:
+            return False, (f"G16 FAIL: kill-bit table for q={q} has "
+                           f"{len(got)} dead residues, divisibility says "
+                           f"{len(want)}; symmetric difference "
+                           f"{sorted(got ^ want)[:4]}")
+    if above < 3:
+        return False, "G16 FAIL: fewer than 3 sampled primes exceed 2^16"
+    # and the deep stream, against the other engine
+    ce = CpuEngine(7, q2=q2)
+    ge = GpuEngine(7, q2=q2)
+    lo, span = 10**7, 6 * 10**7
+    gs = [int(x) for x in ge.survivors_j(lo, lo + span)]
+    cs = [int(x) for ch in ce.survivors_j(lo, lo + span) for x in ch.tolist()]
+    if not cs:
+        return False, "G16 FAIL: deep parity window is empty -- vacuous"
+    if gs != cs:
+        return False, (f"G16 FAIL: at q2={q2} the GPU stream has {len(gs)} "
+                       f"survivors, the CPU engine {len(cs)}")
+    return True, (f"G16 ok: at q2={q2} the kill-bit table == big-integer "
+                  f"divisibility for {len(idx)} primes spanning the range "
+                  f"({above} of them above 2^16, where a 32-bit walk wraps), "
+                  f"and the deep GPU stream == the CPU engine's on a "
+                  f"populated window ({len(cs)} survivors)")
+
+
 GATES = [g6_parity_with_cpu, g7_planted_fake, g8_gpu_rediscovers_a7,
          g13_slicing_independence, g14_kernel_matches_bigint,
-         g15_v2_matches_v1]
+         g15_v2_matches_v1, g16_deep_sieve_arithmetic]
 
+# Ctrl+C is a normal exit everywhere in this repo (CONVENTIONS.md
+# "Stopping a run"): one path out, no traceback, exit 130.
 if __name__ == "__main__":
-    for g in GATES:
-        ok, msg = g()
-        print(("PASS " if ok else "FAIL ") + msg)
+    def _gates():
+        for g in GATES:
+            ok, msg = g()
+            print(("PASS " if ok else "FAIL ") + msg)
+    _sys.exit(_shutdown.graceful(_gates) or 0)

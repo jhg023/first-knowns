@@ -264,3 +264,301 @@ In rough order of expected value; **estimates are not evidence**.
   (one launch, ~1 ms, 0.5-2.3x noise between identical configurations)
   but they still pin the v1 fingerprints; the throughput anchor is
   SCORE13. Per OPTIMIZATION.md 2.13 that is the owner's call to change.
+
+
+---
+
+## v3 (2026-08-18): the campaign was configured 28x below its own engine
+
+The engine had been optimized hard and the CAMPAIGN had not been optimized
+at all. Every number below is per **1e18 of k-line** at k ~ 1e19, paired
+and interleaved in one process (Rule 3), fingerprints checked every run,
+on an idle machine.
+
+The starting point, measured rather than remembered -- filter 11, wheel
+2310, q2 = 65536, all-bases classification, 8 workers:
+
+| side | cost per 1e18 k |
+|------|-----------------|
+| device | 142.3 s |
+| host (2.98e7 survivors x 111.2 us) | 3,308 core-s, 413 s on 8 workers |
+| **end-to-end** | **413 s = 2.42e15 k/s** (the live campaign logged 2.35e15) |
+
+and after the changes below, **14.78 s = 6.77e16 k/s on 4 workers**: a
+measured **27.9x**, with half the host processes.
+
+### 0. First, a correctness bug -- found by the canary, not by a gate
+
+Deepening the sieve is one of the changes below, and the first campaign
+smoke run at the new depth reported:
+
+```
+[ALARM] CANARY ALARM: a(7) rediscovery failed (got [], expected 3776600100)
+```
+
+The walk that builds the kill-bit table (`_TABLE_SRC`) squares a residue,
+so its intermediates reach `q^2`. It was written in **32-bit**, which is
+exact only for `q < 2^16` -- and the engines' own `q2` default is 65536, so
+in the whole life of the engine **no test had ever evaluated a prime whose
+square leaves u32**. Ask for a deeper sieve and the products silently wrap.
+Measured at q2 = 262144: for q = 81899 the table marked 7 residues dead
+where 10 are dead, and not as a subset -- so the sieve both kept candidates
+it should kill (harmless, host cost) and **killed candidates it should
+keep**, which is how a term being hunted disappears. a(7) was one of them.
+
+Fixed by doing the walk in u64 (exact for every `q < 2^32`, and it runs
+once per engine so the width is free), and `Q2_MAX` now states the bound
+the arithmetic holds over rather than leaving it in a comment.
+
+The gate lesson is the general one, and it is worth stating plainly: **G14
+checked the kernel's decisions against big-integer divisibility, and G6
+checked the GPU stream against the CPU engine, and both were green
+throughout -- because every gate in the file used the default q2.** A gate
+that only ever runs at one point in a parameter's range does not test the
+parameter. `g16_deep_sieve_arithmetic` now checks the table against
+divisibility at q2 = 2^18 for primes sampled across the whole range, at
+least three of them above 2^16, and re-checks the deep stream against the
+CPU engine -- whose table comes from sympy's square roots in Python
+integers and cannot share the failure.
+
+Every measurement in this section was re-taken after the fix.
+
+### 1. Filter lag 1 -> 0: the wheel is the whole ballgame -- 13x
+
+`W(n)` is the product of the primes `<= n+1`, because `run(k) >= n` forces
+`q | k` for every prime `q <= n+1` (m runs over a complete residue system
+mod q, so some m has `m*k^2 == -1 (mod q)`, and that value exceeds q above
+the floor). Hunting a(12) at filter **12** therefore rides the **30030**
+wheel instead of the 2310 one: 13x fewer candidates per unit of k-line and
+13x fewer survivors to classify. The least-claim is untouched -- a(12) is
+a multiple of 30030 by that same argument, so the coarser wheel skips
+nothing that could BE a(12).
+
+Lag 1 existed so that run-11 values (one short of a(12)) still got their
+`[NEAR]` line and the census still filled in below the frontier. That is
+bookkeeping; a(12) is the hunt. `--filter-lag 1` restores it at 1/13 the
+rate.
+
+| filter | wheel | device | survivors |
+|--------|-------|--------|-----------|
+| 11 | 2310 | 142.3 s | 2.98e7 |
+| 12 | 30030 | 14.35 s | 2.29e6 |
+
+### 2. Two-pass classification -- 2.44x on the host, and it is still exact
+
+`mr_is_prime` evaluates the 7-base huntlib set. Profiling the real
+survivor stream showed **2.446 bases per value** -- not because composites
+are expensive (a composite is rejected by the FIRST base: one modular
+exponentiation, 27 us) but because **24% of survivors have m*k^2+1 prime
+at m = 1**, and a prime is what makes all seven bases run.
+
+The fix uses the asymmetry of a strong test: **a failure is a PROOF of
+compositeness; only a pass is mere evidence.** So a base-2-only chain
+(`huntlib.primes.sprp_base2`) yields a rigorous UPPER BOUND on the run --
+it can stop too late, never too early. If that bound lands below
+`SPRP_EXACT_FROM = 5` the true run is proved to be below it, and nothing
+the campaign records depends on which of 0..4 it was (census counts start
+at 7, `[NEAR]`/`[DISCOVERY]` are higher, and `best_run` is guarded to the
+same floor). If the bound reaches 5 the chain is redone with the full base
+set.
+
+This is not a probabilistic shortcut: **every run length the campaign
+writes down still comes from the full base set.**
+
+| | modpows/survivor | us/survivor |
+|---|---|---|
+| all-bases chain | 3.27 | 111.2 |
+| two-pass | 1.34 | **45.7** |
+
+Drilled in the selftest against `GpuEngine.run_length` (which never takes
+the shortcut) over every survivor of a real window: identical, and every
+cheap-chain result an upper bound.
+
+### 3. Sieve depth 65536 -> 262144: buys back three quarters of the host
+
+With the device 13x cheaper and the host 2.4x cheaper, which side binds is
+now a genuine choice, and q2 is the dial. Deep rounds hold tiny
+populations, so **the device is nearly flat from 65536 to 262144** while
+survivors fall 4.1x:
+
+| q2 | device | survivors | host core-s | pool needed | end-to-end |
+|----|--------|-----------|-------------|-------------|------------|
+| 65536 | 14.35 s | 2,293,610 | 104.8 | 8 workers | 6.97e16 k/s |
+| 131072 | 14.93 s | 1,106,720 | 50.6 | 4 workers | 6.70e16 k/s |
+| **262144** | **14.78 s** | **560,509** | **25.6** | **2 workers** | **6.77e16 k/s** |
+| 524288 | 16.07 s | 292,700 | 13.4 | 1 worker | 6.22e16 k/s |
+
+All four are within 3% end-to-end, so this is not a throughput decision at
+all -- it is a decision about **how much of the machine the hunt asks
+for**, and the machine has hard-hung three times under a big pool. 262144
+gives up 3% and asks for a quarter of the CPU. `--q2` overrides; the
+frozen benchmark depth (65536) is untouched, and `score.py` now pins it
+per shape rather than inheriting a default, so SCORE stays comparable.
+
+### 4. Constants re-swept after the structural change -- 1.14x
+
+The tuning constants were all swept at n = 13 / q2 = 65536. The campaign
+now runs n = 12 / q2 = 262144 with 3.5x the stage-1b primes, and the
+re-sweep rule paid:
+
+| # | change | campaign shape | other shapes | verdict |
+|---|--------|----------------|--------------|---------|
+| 22 | **RATIO 4 -> 2** (a round ends when survival within it halves; 8 -> 16 rounds) | **1.119x** (min 1.012; 3: 1.092) | 1.103x at n=12/q2=65536, 1.034x on SCORE13 | KEPT -- and the earlier verdict (4 by 1.097x) does not reproduce on an idle machine |
+| 23 | **T_MAX 1024 -> 2048** | **1.017x** | 1.020x on SCORE13 (min 1.014) | KEPT |
+| -- | NS 24 (derived) vs 16/20/22/26/28 | 0.854 / 0.987 / 0.995 / 0.968 / 0.945 | | derivation confirmed, unchanged |
+| -- | LAUNCH 2^34 vs 2^33 / 2^35 | 0.935 / 1.027 | | 2^35 is 2.7% for 2x the queue memory (1.65 GB) -- priced, not taken |
+| -- | WARP_POP 2^16 vs 2^14/2^18/2^20 | 0.936 / 0.999 / 1.009 | | flat, unchanged |
+| -- | T 4096 | 1.039x | 1.035x on SCORE13 | NOT REACHABLE by the derivation at LAUNCH 2^34 without halving MIN_BLOCKS_PER_SM, which is the guarantee that a small window still fills the device. Priced, not taken |
+
+Cumulative engine gain, HEAD vs now, paired and interleaved: **1.046x on
+SCORE13** (min 1.036), **1.103-1.119x at n = 12**. The 2^32 shapes
+returned 1.42x and 0.83x with paired spreads of 0.57-2.04 -- they no
+longer resolve anything (OPTIMIZATION.md 2.13), which is why the verdicts
+above are read off the campaign shape and SCORE13.
+
+### Rejected: unrolling the stage-1a block loop -- and what it taught
+
+The lever named in v2's phase split was "the per-(block, prime)
+instruction count". It is **not a lever**, and this is the measurement
+that says so.
+
+The idea was sound on paper. The body was
+
+```
+acc |= pat[po + s];   s += (64 % q);   if (s >= q) s -= q;
+```
+
+-- one load, one 64-bit OR (2 SASS) and a three-instruction modular add,
+every block, every prime. 64 is invertible mod q, so re-indexing each row
+by `v -> (64 % q) * v mod q` turns the walk into an INCREMENT: block b
+wants row entry `u + b`. Consecutive blocks then read consecutive entries,
+so U of them need ONE modular add instead of U, and padding each row with
+U-1 copies of its head removes the wrap test. At U = 4 the body goes from
+24 instructions per prime per 4 blocks to 15.
+
+It was implemented twice (U parallel accumulators; then one accumulator
+with the offset folded into the load's immediate) and both were **worse**,
+monotonically, on SCORE13 with fingerprints intact:
+
+| U | 1 | 2 | 4 | 8 |
+|---|---|---|---|---|
+| U accumulators | 1.007x | 0.717x | 0.592x | 0.455x |
+| one accumulator | 1.000x | 0.684x | 0.591x | 0.445x |
+
+Registers were not the cause (44 -> 42, no spills). Ablations found it:
+
+- **The body does not care.** Loads + ORs + the modular adds, with
+  extraction and atomics deleted: **2.57 / 2.56 / 2.44 / 2.69 ms** at
+  U = 1/2/4/8. Cutting 44% of the body's instructions changed nothing.
+  So stage 1a is **not issue-bound**, which is what v2's phase split
+  recorded.
+- **It is the push.** Timing the stage-1a kernel alone with the
+  `atomicAdd` replaced by a fixed slot: 3.16 / 2.80 / **2.62** / 2.65 ms
+  -- the unroll IS worth 1.21x once the atomic is out. With the atomic in:
+  3.66 / 5.95 / 6.52 / 9.45 ms. The single-address atomic costs 0.5-1.0 ms
+  un-unrolled and **6.80 ms** at U = 8. NVCC's automatic warp-aggregated
+  atomic is what makes the un-unrolled push nearly free, and the unrolled
+  control flow loses it. (Replacing the mid-loop `break` with a masked
+  tail did not bring it back: 0.591x -> 0.598x at U = 4.)
+- **What it IS bound by**: giving every lane the same residue, which
+  collapses each gather from ~18 distinct 32-byte sectors to 1 and changes
+  nothing else, is **1.24x**. So the body is L1-**sector**-bound, and the
+  arithmetic around the gathers is free.
+
+### Rejected: spreading the stage-1a atomic over more counters
+
+Following the above, the obvious next move is to kill the contention on
+the single counter. It is not contention. Replacing
+`atomicAdd(nout, 1u)` with `atomicAdd(nout + (blockIdx.x & (P-1)), 1u)`
+-- same warp-uniform address, more of them -- measured, at the campaign
+configuration (grid 512, 19.1M pushes per launch):
+
+| counters | 1 | 8 | 32 | 128 | 512 | none |
+|----------|---|---|----|-----|-----|------|
+| stage 1a | **4.32 ms** | 5.80 | 5.92 | 5.96 | 4.89 | 3.99 |
+
+Spreading it is **worse at every P**. The single-address form is the one
+NVCC compiles to a warp-aggregated push; anything else gives that up and
+pays per-lane. Combined with the v2 finding that a hand-written
+ballot+scan aggregation is 1.64x slower, **the push has no cheaper form**,
+and per-block queue slices (which would have been the next attempt) are
+priced at zero before being written.
+
+Corrected verdict for stage 1a, replacing v2's: **the lever is the number
+of gathers per candidate and their sector spread, not the instruction
+count and not the atomic.** The ceiling available -- free gathers AND a
+free push -- is about 2x on a phase worth 66% of device time. The two
+known ways to spend it have both already been measured and lost (the
+marched/coalesced table, 1.10x slower; CRT pair rows, 0.92x). Anyone
+picking this up should attack sectors, and should not re-derive the
+instruction-diet idea: it is priced at zero here.
+
+### Phase split at the campaign configuration (n = 12, q2 = 262144)
+
+Measured by subtraction on the production path, not through the `profile`
+hook (which disables the graph replay and overstates device time ~3x):
+
+| phase | ms/launch | share |
+|-------|-----------|-------|
+| stage 1a bit sieve | 5.07 | **66.4%** |
+| stage 1b, 16 compaction rounds | 2.67 | 35% |
+| readback + sync + host sort | ~0 | ~0 |
+
+Round 0 (q 127-173, 10 primes, 19.1M -> 9.0M) is 0.76 ms of stage 1b; the
+per-round subtraction is noisy at +-1 ms and should not be read finer than
+that.
+
+### Robustness, measured against the machine rather than the clock
+
+- **The checkpoint did not survive the crash.** It came back from the
+  third hang as 785 bytes of NUL -- exactly its own length, none of its
+  content. `os.replace` is atomic for the directory ENTRY; the DATA was
+  still in the page cache. `huntlib.checkpoint.save` now flushes and
+  **fsyncs** before the replace and rotates the previous file to `.bak`;
+  `load` falls back to the `.bak` and, failing that, raises
+  `CheckpointCorrupt` instead of quietly returning None -- which for a
+  live frontier would have restarted the sweep at the floor. Drilled in
+  the selftest on the exact 785-NUL corruption.
+- **The pool is ramped, not stamped.** `ProcessPoolExecutor` spawns on
+  submit only if no worker is idle, so a segment's worth of chunks starts
+  every worker in the same instant -- N fresh interpreters importing numpy
+  and sympy at once, at peak host draw, while the device is flat out. They
+  now start one at a time (`_prime_pool`, `--worker-ramp`) at below-normal
+  priority, warm before the first segment. Drilled.
+- **A run that ENDED never saved.** Every other exit persisted the cursor
+  -- segment boundary every `--heartbeat`, evidence at once, Ctrl+C,
+  `--stop-on-discovery` -- and ordinary completion did not, so a `--to` run
+  threw away everything it had swept and the next one started again from
+  the floor. Silently, because a re-sweep looks exactly like a sweep: the
+  only visible symptom was `--status` still reading k = 3.0e4 after two
+  completed runs, and a survivor count that happened to match because the
+  same k-line was covered twice. Found by running `--to` twice and reading
+  `--status`; now drilled in the selftest, which runs two bounded
+  campaigns in a temp directory and requires the second to resume where the
+  first stopped.
+- **The device no longer square-waves.** Host-bound by 2.3x meant the GPU
+  idled 60% of the time, alternating 98%/12% utilization every few seconds
+  -- thousands of full-amplitude load transitions an hour on a 450 W card.
+  The device now binds, so it runs at a steady load.
+- **The campaign logs the machine's state at start** (GPU, SMs, VRAM held,
+  driver, power limit, max clock, temperature), because three hangs had to
+  be diagnosed from Windows event logs alone and the campaign log could
+  not answer "how much VRAM did it hold" for the run that hung.
+
+### What v3 settles from the v2 "priced" and "declined" lists
+
+- **"Deeper sieve for the n <= 11 legs -- ~1.9x, declined until a leg is
+  long enough to care."** TAKEN, and for a different reason than it was
+  priced: the win is not throughput (3%) but host processes (4x).
+- **"Deeper sieving (q2 above 65536) at n = 13."** Still declined there.
+  `--q2` makes it a campaign choice rather than an engine constant.
+- **"Stage-1a instruction diet ... two independent accumulators to shorten
+  the OR chain; a residue step without the compare."** PRICED AT ZERO,
+  measured. Do not re-derive this.
+- **"A device-side primality test on k^2+1 to shrink the host queue."**
+  Still declined, and now by a wider margin: the host is at ~43% duty on
+  4 workers and the device binds.
+- **CRT pair rows** and **baked stage-1b round kernels** are unchanged and
+  still the two best remaining ideas -- but note that CRT pairs now have a
+  *mechanism* to be judged against (sectors per gather, not table size),
+  which is not how they were priced.

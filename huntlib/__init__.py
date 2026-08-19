@@ -9,6 +9,7 @@ benchmark. The pieces that are identical across projects live here:
     huntlib.primes      deterministic 64-bit Miller-Rabin, factor witnesses
     huntlib.gpu         Barrett reciprocal helpers for CUDA kernels
     huntlib.scoring     gates x fingerprinted-benchmark score runner
+    huntlib.shutdown    graceful Ctrl+C: checkpoint, one line, no traceback
 
 Projects import it by adding the repo root to sys.path:
 
@@ -17,4 +18,4 @@ Projects import it by adding the repo root to sys.path:
     from huntlib import hlog, checkpoint, primes
 """
 
-from . import checkpoint, gpu, hlog, primes, scoring  # noqa: F401
+from . import checkpoint, gpu, hlog, primes, scoring, shutdown  # noqa: F401

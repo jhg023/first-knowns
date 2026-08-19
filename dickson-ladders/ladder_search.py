@@ -44,6 +44,7 @@ import numpy as np
 from sympy import primerange, sqrt_mod
 
 _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
+from huntlib import shutdown as _shutdown  # noqa: E402
 from huntlib.primes import MR_VALID_BELOW, mr_is_prime      # noqa: E402
 from ladder_reference import (K_FLOOR, KNOWN, forbidden_k_residues,
                               wheel_modulus)
@@ -243,7 +244,11 @@ def g10_values_past_the_mr_bound():
 GATES = [g3_table_matches_divisibility, g4_cpu_matches_oracle,
          g10_values_past_the_mr_bound, g5_rederive_knowns]
 
+# Ctrl+C is a normal exit everywhere in this repo (CONVENTIONS.md
+# "Stopping a run"): one path out, no traceback, exit 130.
 if __name__ == "__main__":
-    for g in GATES:
-        ok, msg = g()
-        print(("PASS " if ok else "FAIL ") + msg)
+    def _gates():
+        for g in GATES:
+            ok, msg = g()
+            print(("PASS " if ok else "FAIL ") + msg)
+    _sys.exit(_shutdown.graceful(_gates) or 0)

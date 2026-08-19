@@ -42,6 +42,7 @@ from sympy import primerange
 import sys as _sys
 import pathlib as _pathlib
 _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
+from huntlib import shutdown as _shutdown  # noqa: E402
 from huntlib.primes import MR_BASES, mr_is_prime  # noqa: E402
 
 from euler_reference import A21_UPPER, KNOWN, run_length
@@ -593,6 +594,8 @@ def selftest(fast=False):
     return ok
 
 
+# Ctrl+C is a normal exit everywhere in this repo (CONVENTIONS.md
+# "Stopping a run"): one path out, no traceback, exit 130.
 if __name__ == "__main__":
     import sys
-    sys.exit(0 if selftest() else 1)
+    sys.exit(_shutdown.graceful(lambda: 0 if selftest() else 1))

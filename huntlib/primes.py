@@ -47,6 +47,39 @@ def mr_is_prime(m):
     return True
 
 
+def sprp_base2(m):
+    """Strong probable prime test to base 2 alone.  False is a PROOF.
+
+    Half of a Miller-Rabin round, and the half that carries all the weight:
+    a composite fails a strong test to base 2 with probability > 3/4, and a
+    FAILURE IS A PROOF OF COMPOSITENESS -- there is nothing probabilistic
+    about a negative.  Only a positive is evidence rather than proof.
+
+    That asymmetry is what makes this worth having next to mr_is_prime.  A
+    hunt that wants to know "is this run shorter than the shortest run I
+    would ever record" can answer it rigorously at one modular
+    exponentiation instead of seven, because the answer it needs is the
+    negative one.  See launch.py's sprp_run in dickson-ladders.
+    """
+    if m < 2:
+        return False
+    for sp in _SMALL:
+        if m % sp == 0:
+            return m == sp
+    d, s = m - 1, 0
+    while d % 2 == 0:
+        d //= 2
+        s += 1
+    x = pow(2, d, m)
+    if x == 1 or x == m - 1:
+        return True
+    for _ in range(s - 1):
+        x = x * x % m
+        if x == m - 1:
+            return True
+    return False
+
+
 RHO_ITERS = 200_000        # bounded Brent rho: finds factors to ~1e10 fast
 
 

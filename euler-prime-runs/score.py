@@ -52,6 +52,7 @@ import numpy as np
 import sys as _sys
 import pathlib as _pathlib
 _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
+from huntlib import shutdown as _shutdown                     # noqa: E402
 
 BENCH_LO = 10**16
 BENCH_SPAN = 5 * 10**14
@@ -197,5 +198,7 @@ def main():
     print(f"SCORE_WIDE {ratew/1e6:,.0f}")
 
 
+# Ctrl+C is a normal exit everywhere in this repo (CONVENTIONS.md
+# "Stopping a run"): one path out, no traceback, exit 130.
 if __name__ == "__main__":
-    main()
+    _sys.exit(_shutdown.graceful(main) or 0)

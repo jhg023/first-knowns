@@ -23,7 +23,7 @@ survive before it is recorded.
 | project | problem | status |
 |---------|---------|--------|
 | [euler-prime-runs](euler-prime-runs/) | [A164926](https://oeis.org/A164926): the least prime p whose Euler-form polynomial x²+x+p is prime for exactly n consecutive x — extending the direct lineage of Euler's famous x²+x+41 | **PAUSED — open to others** — a(17) = 348,284,517,256,411,907, a(18) = 8,461,068,614,861,832,371 and a(19) = 3,744,101,869,688,673,856,367 found & verified (the first new terms since 2009); a(21) = 234,505,015,943,235,329,417 settled by exhaustive sweep past the known bound. The sweep is contiguous to 3.744×10²¹, so the one term of this stretch still open — a(20) — exceeds that, and exceeds a(19) and a(21) with it. The hunt halted on the a(19) find 2026-08-18 and is left resumable: conditional a(20) median 1.75×10²², ~9 days on one 4090 |
-| [dickson-ladders](dickson-ladders/) | [A247965](https://oeis.org/A247965): the least k such that m·k²+1 is prime for every m = 1..n — a Dickson ladder whose n = 1 case is Landau's k²+1 problem | **ACTIVE** — a(10) = 9,328,409,578,841,430 and a(11) = 433,871,469,806,557,860 found & verified 2026-08-18 (the first advance since 2014), each with a primality certificate for all of its values and re-verified from its evidence before publication. Prior frontier: Hiroaki Yamanouchi's a(9) = 3,332,396,388,090, Oct 2014. The campaign is running on **a(12)** (model median 1.83×10¹⁹, already passed; a(13) 2.14×10²¹, ~4 hours at the measured rate). Both finds landed late — model quantiles 0.915 and 0.923 |
+| [dickson-ladders](dickson-ladders/) | [A247965](https://oeis.org/A247965): the least k such that m·k²+1 is prime for every m = 1..n — a Dickson ladder whose n = 1 case is Landau's k²+1 problem | **ACTIVE** — a(10) = 9,328,409,578,841,430, a(11) = 433,871,469,806,557,860 and a(12) = 55,119,263,286,518,170,740 found & verified 2026-08-18 (the first advance since 2014), each with a primality certificate for all of its values and re-verified from its evidence before publication. Prior frontier: Hiroaki Yamanouchi's a(9) = 3,332,396,388,090, Oct 2014. The campaign is running on **a(13)** (model median 2.14×10²¹, ~5 h of sweep from the cursor) after a 2026-08-18 re-configuration measured at **27.9×** end-to-end — 6.8×10¹⁶ k/s, on half the host processes — which is what found a(12) 9 min 45 s into the re-configured run. All three landed late — model quantiles 0.915, 0.923 and 0.787, pooled optimism 2.2× with an interval that still contains 1 |
 
 Project documentation follows a fixed template (see
 [CONVENTIONS.md](CONVENTIONS.md) § Documentation template): every
@@ -55,7 +55,7 @@ The projects share a skeleton and a library:
   before the first engine is written.
 - [`huntlib/`](huntlib/) — the shared code: deterministic Miller-Rabin,
   Barrett reciprocal helpers for CUDA kernels, atomic checkpoints,
-  tagged logging, and the un-gameable SCORE runner.
+  tagged logging, graceful shutdown, and the un-gameable SCORE runner.
 
 ## Reproducing results
 
@@ -69,6 +69,17 @@ python score.py                # correctness gates x benchmark
 
 Requirements: Python 3.12+, numpy, sympy, and CuPy with a CUDA GPU
 (every engine also has a slower CPU fallback: `--engine cpu`).
+
+**Every program here stops cleanly on Ctrl+C.** These campaigns run for
+days and a human decides when they end, so the interrupt is a supported
+exit: the launcher checkpoints **at the last fully classified segment**
+(never mid-segment — the counters are per candidate and would double-count
+on resume), logs one `[STAGE]` line saying where it stopped, and exits
+`130`. No program in this repository prints a stack trace on Ctrl+C,
+including when a second Ctrl+C arrives while the checkpoint is being
+written — the shutdown goes deaf until the file is on disk. Resuming
+redoes at most the segment that was in flight. See
+[CONVENTIONS.md](CONVENTIONS.md) § Stopping a run.
 
 ## Verification philosophy
 

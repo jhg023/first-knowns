@@ -145,7 +145,20 @@ term) with the ceiling appended â€” logs a `[RUNG]` line as each is passed
 ("passed rung 5/17: a(11) median (7.18e16) â€” next: a(11) Q3 at 1.88e17"),
 persists the passed rungs in the checkpoint, and shows the next rung with
 its ETA in every `[STATUS]`. Rungs are for reading progress off the log,
-not for stopping. The two deliberate stops are `--to` (a depth cap the
+not for stopping.
+
+**A rung retires with its term.** A rung is a prediction of where a term
+should appear, so the moment that term is *found* its unreached quartiles
+stop being progress markers and leave the ladder, which renumbers around
+what is left; the find logs a `[RUNG]` line saying which rungs retired and
+what the ladder now aims at. The live odds in `[STATUS]` follow the same
+rule — they are always `P(a(next open term) by now)`, never the odds for
+something already in the evidence directory. Getting this wrong is quiet
+and lasts for hours: dickson-ladders found a(12) at k = 5.51e19 and then
+kept telling the operator `next a(12) P90 at 9.51e+19` while it hunted
+a(13), pointing at a depth that had stopped meaning anything the moment
+the find landed. Derive the ladder from the LIVE frontier on every use
+rather than storing it, and the retirement cannot be forgotten. The two deliberate stops are `--to` (a depth cap the
 operator chose) and `--stop-on-discovery`; both are opt-in and neither is
 a default. When a find changes what the campaign should be sieving for
 (here: the filter follows the frontier, and a wider wheel re-denominates
@@ -160,18 +173,54 @@ parallelism from what the pipeline actually needs and leaves the rest
 alone. Size it by measurement â€” classification cost per survivor times
 survivors per segment, against the device time for that segment â€” and
 leave margin, rather than by "cores minus a few". dickson-ladders learned
-this the expensive way: a pool sized `cpu_count - 4` â€” 60 processes on a
-64-thread machine, against a workload that needs about eight â€” hard-hung
-the machine about 30 s into every campaign start, fans running and the
-display link dead, with nothing in the event log. The default is now
-`min(8, cpu_count - 2)`, and `--workers` raises it deliberately. Note what
-that costs and say so in the log: eight workers leave that pipeline
-host-bound with the device idle 60% of the time, so the safe default is
-**not** the fast one (OPTIMIZATION_LOG.md). A default that cannot take the
-machine down, plus a documented knob and a measured statement of what the
-knob is worth, beats a default tuned to the last drop of throughput. The general lesson belongs in
+this the expensive way, twice: a pool sized `cpu_count - 4` â€” 60
+processes on a 64-thread machine â€” hard-hung the machine about 30 s into
+every campaign start, fans running and the display link dead, with nothing
+in the event log; cut to 8 it hung again at 20. The default is now 4, and
+`--workers` raises it deliberately.
+
+Three further rules come out of that, all repo-wide:
+
+- **Ramp the pool, do not stamp it.** `ProcessPoolExecutor` spawns on
+  submit only when no worker is idle, so handing it a segment's worth of
+  chunks starts every worker in the same instant â€” N fresh interpreters
+  importing numpy and sympy at once, at peak host draw, while the device
+  is flat out on the next segment. That burst is the largest and fastest
+  host load step a campaign makes and it buys nothing: the pool has a
+  whole segment of slack. Start them one at a time, warm, at below-normal
+  priority, before the first segment.
+- **Prefer the setting that asks for less machine when the throughputs
+  tie.** In dickson-ladders the sieve depth traded device time against
+  host time so flatly that four settings landed within 3% of each other
+  end-to-end while needing 8, 3, 2 and 1 worker. When a knob is that
+  flat, it is not a throughput knob at all â€” spend it on the machine.
+- **A pipeline that square-waves is worse than one that is merely
+  slower.** Host-bound by 2.3x meant the device alternated 98%/12%
+  utilization every few seconds â€” thousands of full-amplitude load
+  transitions an hour on a 450 W card. Balancing the two sides removed
+  them.
+
+A default that cannot take the machine down, plus a documented knob and a
+measured statement of what the knob is worth, beats a default tuned to the
+last drop of throughput. The general lesson belongs in
 [OPTIMIZATION.md](OPTIMIZATION.md)'s ledger too: **a tuning sweep that
 measures only throughput cannot see a constraint that is not throughput.**
+
+**Checkpoints must survive the machine, not just the process
+(repo-wide).** `huntlib.checkpoint.save` is the only way a campaign
+persists its cursor, and temp-file-plus-`os.replace` is not by itself
+enough: the rename is atomic for the directory ENTRY, while the DATA may
+still be in the page cache. A machine that stops in that window leaves a
+file of exactly the right SIZE full of NUL â€” which is how this repo lost a
+live campaign cursor, 785 bytes of zeroes after a hard hang. So: **flush
+and `fsync` before the replace**, and **rotate the previous file to
+`.bak`**, so at every instant at least one complete checkpoint is on disk.
+And a checkpoint that is present but unreadable is never treated as
+absent: `load` falls back to the `.bak`, and failing that raises
+`CheckpointCorrupt`. For a live frontier "no checkpoint" and "corrupt
+checkpoint" demand opposite responses â€” start, and stop â€” and conflating
+them silently restarts a sweep that has already covered ground. Drill all
+of it in the selftest against a real right-sized-NUL file.
 
 **The stop-on-discovery convention (repo-wide).** Every launcher
 accepts `--stop-on-discovery`: once the discovery protocol confirms a
@@ -181,6 +230,59 @@ exits cleanly so a human can react before more GPU time is spent. It is
 opt-in; without it the campaign records the find and keeps running.
 Rediscoveries of known values (canaries) and census repeats never
 trigger the stop.
+
+## Stopping a run
+
+**Ctrl+C is a normal exit, not a crash (repo-wide).** These campaigns run
+for days and a human decides when they end, so the interrupt path is a
+*supported* path and gets the same care as any other. Every program in
+this repository — launchers, `score.py`, the gate scripts, the oracle —
+ends on an interrupt with all four of:
+
+- **a checkpoint at the last SEGMENT BOUNDARY.** Never the live cursor:
+  counters are updated per candidate, so writing a part-classified segment
+  persists census that the redone segment counts a second time. Keep a
+  copy of the state as of the last fully classified segment (`mark_boundary`
+  at the segment boundary, after a filter switch, after the prelude) and
+  write *that*. An interrupted run then costs exactly the segment in
+  flight — the same guarantee as a crash (rule 5d), and no double count.
+- **one `[STAGE]` line** naming what stopped it and where the checkpoint
+  ended up.
+- **no traceback, ever** — not from the launcher, not from a pool worker,
+  and not from a *second* Ctrl+C landing inside the shutdown.
+- **exit code 130**, the conventional "terminated by SIGINT", so a
+  supervising script can tell a deliberate stop from a failure.
+
+`huntlib.shutdown` is the whole mechanism and it is the ONLY place a
+`KeyboardInterrupt` is caught: `graceful(main)` wraps the entry point,
+`on_interrupt(cb)` registers what to save (callbacks run LIFO; a returned
+string is logged), and every pool initializer calls `ignore_in_worker()`
+first. A launcher must not catch `KeyboardInterrupt` itself — one path out
+is what makes "no traceback" checkable.
+
+**The second Ctrl+C is the one that bites.** The operator presses it, the
+launcher takes a second to write its checkpoint and stop its pool, nothing
+appears to happen, so they press it again — and that interrupt lands
+inside the exception handler, so Python prints both tracebacks ("During
+handling of the above exception, another exception occurred") and exits
+`0xC000013A`. Worse, it can land *inside the checkpoint write*, in the
+window between the `.bak` rotation and the replace, where the campaign
+cursor is in neither file. So the first thing the shutdown does is go
+deaf: `SIGINT` and `SIGBREAK` are set to `SIG_IGN` before any callback
+runs, and every callback is wrapped as well. `SIGTERM` (and `SIGBREAK`)
+route into the same path, so a supervisor asking politely also checkpoints.
+
+**Workers stay quiet and let the parent stop the run.** A console Ctrl+C
+reaches every process attached to the console on Windows and the whole
+foreground process group on POSIX, but only the parent knows what a clean
+stop looks like — and it must finish writing its checkpoint before the
+pool goes away. Pool workers therefore ignore the signal and end when the
+parent shuts the pool down.
+
+Drill it in the selftest (`graceful-shutdown drill`): every registered
+save runs, LIFO, with `SIGINT` already ignored; a callback that itself
+raises `KeyboardInterrupt` does not escape; the exit code is 130; a normal
+return passes through untouched.
 
 ## The odds model
 

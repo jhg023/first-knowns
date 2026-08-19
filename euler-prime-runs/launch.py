@@ -59,8 +59,12 @@ import numpy as np
 import sys as _sys
 import pathlib as _pathlib
 _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
+# next to launch.py, not next to the working directory: a run started from
+# elsewhere would otherwise lose its rungs and its odds silently
+MODEL_FILE = str(_pathlib.Path(__file__).with_name("model_results.json"))
 from huntlib import checkpoint as _ckpt  # noqa: E402
 from huntlib.hlog import log, census_str, Heartbeat  # noqa: E402
+from huntlib import shutdown as _shutdown  # noqa: E402
 from huntlib.primes import factor_witness  # noqa: E402
 
 from euler_reference import A21_UPPER, KNOWN, OPEN_N, run_length as oracle_run
@@ -506,6 +510,27 @@ def hunt(args):
         c = fresh_ckpt(n, eng)                      # genuinely no cursor
     check_cursor(c, eng)
 
+    # ---- what Ctrl+C saves.  NOT the live `c`: its counters are updated
+    # per survivor, so a mid-segment save persists census that the redone
+    # segment counts a second time -- the same reason the periodic save is
+    # pinned to segment boundaries.  `boundary` is a copy of the cursor as
+    # of the last FULLY classified segment; huntlib.shutdown writes that,
+    # deaf to further signals, so an interrupted run costs at most the
+    # segment in flight, never double-counts, and never tears the file.
+    boundary = [json.loads(json.dumps(c))]
+
+    def mark_boundary():
+        boundary[0] = json.loads(json.dumps(c))
+
+    def _save_on_interrupt():
+        b = boundary[0]
+        save_ckpt(b)
+        return ("checkpoint saved at the last segment boundary, p = %.4e "
+                "(the segment in flight is redone on resume)"
+                % (b["next_k"] * b["M"]))
+
+    _shutdown.on_interrupt(_save_on_interrupt)
+
     if not c["canaries_done"]:
         log("STAGE", "canary prelude: oracle low-pass + a(14)/a(15)/a(18) "
                      "+ run-21 rediscovery via the production engine")
@@ -522,12 +547,13 @@ def hunt(args):
         canary_prelude(make_engine, n)
         c["canaries_done"] = True
         save_ckpt(c)
+        mark_boundary()
 
     # model odds for the NEXT open term, which moves as finds land
     logc_table = {}
     try:
         from euler_model import expected_count
-        with open("model_results.json") as fh:
+        with open(MODEL_FILE) as fh:
             logc_table = {int(k): v["logC"] for k, v in
                           json.load(fh)["singular"].items()}
     except Exception:
@@ -713,6 +739,7 @@ def hunt(args):
                 # CENSUS (a(r+1) settled): counted above, nothing else
             c["next_k"] = k1
             c["wall_s"] += time.time() - t0
+            mark_boundary()                          # what a Ctrl+C saves
             hb.mark(k1 * M)                          # heartbeat position + rate
             hb.doing("between segments")
             now = time.time()
@@ -761,10 +788,6 @@ def hunt(args):
                       f"--to {cap:.3e} reached")
             + f"; survivors {c['survivors']}; best near-miss run "
               f"{c['best_near']} at {c['best_near_p']}")
-        return 0
-    except KeyboardInterrupt:
-        save_ckpt(c)
-        log("STAGE", "interrupted -- checkpoint saved; rerun to resume")
         return 0
     finally:
         hb.stop()
@@ -868,7 +891,7 @@ def selftest():
     # README's conditional-free model to within the bisection
     try:
         from euler_model import expected_count as _ec
-        with open("model_results.json") as fh:
+        with open(MODEL_FILE) as fh:
             _lc = {int(k): v["logC"] for k, v in json.load(fh)["singular"].items()}
         ladder = rungs_for(20, _lc[20], _ec)
         depths = [d for _, d in ladder]
@@ -885,6 +908,53 @@ def selftest():
               + "/".join(f"{d:.2e}" for d in depths)
               + f" ascending, below the ceiling {P_CEIL:.0e} (the last rung); "
                 "E(median) = ln 2")
+
+    # graceful-shutdown drill: Ctrl+C is a NORMAL exit (CONVENTIONS.md
+    # "Stopping a run") -- one path out, deaf to further signals while the
+    # checkpoint is written, exit 130, never a traceback.  The second
+    # Ctrl+C is the one that bites: it lands inside the handler.
+    import signal as _sig
+    _saved = {nm: _sig.getsignal(getattr(_sig, nm))
+              for nm in ("SIGINT", "SIGTERM", "SIGBREAK") if hasattr(_sig, nm)}
+    _saved_cbs = list(_shutdown._callbacks)
+    _shutdown._callbacks.clear()
+    _shutdown._shutting_down = False
+    order, deaf = [], []
+
+    def _cb_first():
+        order.append("first")
+        return "checkpoint saved at the last segment boundary"
+
+    def _cb_second():
+        deaf.append(_sig.getsignal(_sig.SIGINT))
+        order.append("second")
+
+    def _cb_second_ctrl_c():
+        raise KeyboardInterrupt                       # the operator, again
+
+    _shutdown.on_interrupt(_cb_first)
+    _shutdown.on_interrupt(_cb_second)
+    _shutdown.on_interrupt(_cb_second_ctrl_c)
+
+    def _interrupted():
+        raise KeyboardInterrupt
+
+    rc = _shutdown.graceful(_interrupted)
+    sd_ok = (rc == _shutdown.EXIT_INTERRUPTED == 130
+             and order == ["second", "first"]         # LIFO, all of them ran
+             and deaf == [_sig.SIG_IGN]               # deaf before the save
+             and _shutdown.graceful(lambda: 7) == 7)  # a normal exit passes
+    for nm, h in _saved.items():
+        _sig.signal(getattr(_sig, nm), h)
+    _shutdown._callbacks[:] = _saved_cbs
+    _shutdown._shutting_down = False
+    if not sd_ok:
+        print(f"FAIL graceful-shutdown drill: rc={rc} order={order} deaf={deaf}")
+        ok = False
+    else:
+        print("PASS graceful-shutdown drill: an interrupt runs every "
+              "registered save (LIFO) with SIGINT already ignored, survives "
+              "a second Ctrl+C inside the handler, and exits 130")
 
     # planted-discovery drill: a genuine run-13 survivor pushed through the
     # n=17 protocol MUST be rejected
@@ -1028,4 +1098,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # the ONLY place a KeyboardInterrupt is caught (CONVENTIONS.md
+    # "Stopping a run"): one path out, deaf to further Ctrl+C while the
+    # checkpoint is written, exit 130, never a traceback
+    sys.exit(_shutdown.graceful(main))

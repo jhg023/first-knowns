@@ -99,7 +99,46 @@ each README stays.
    with an ETA in `[STATUS]`. `--to` and `--stop-on-discovery` are the
    only stops and both are opt-in. If a find changes what should be
    sieved for, the launcher moves itself (and logs it) rather than
-   crawling at a stale setting. See CONVENTIONS.md.
+   crawling at a stale setting. A rung retires with its term: the moment
+   a term is found, its unreached quartiles leave the ladder and the
+   `[STATUS]` line aims at the next OPEN term -- both the rung and the
+   live odds. dickson-ladders found a(12) and then advertised
+   `next a(12) P90` for hours while it hunted a(13); derive the ladder
+   from the live frontier on every use so the retirement cannot be
+   forgotten. See CONVENTIONS.md.
+5c. **Optimize the campaign, not just the engine.** A hunt's rate is
+   `max(device, host/workers)` over the k-line it covers, and the biggest
+   lever in this repo has never once been the kernel: it was which filter
+   the sieve asks for (which sets the wheel, and cost 13x), how deep it
+   sieves (which decides *which side binds*, and therefore how many host
+   processes the hunt demands), and how much of each survivor's
+   classification is actually needed. Before touching a kernel, measure
+   **device seconds and host core-seconds per unit of the thing the hunt
+   is paid in**, for the configuration the campaign is actually running.
+   A 913x engine sitting in a configuration 25x off its own optimum is
+   the failure mode this rule exists to prevent.
+
+5d. **A crash must cost one segment, not the campaign.** Checkpoints are
+   `fsync`ed before the atomic replace and keep a `.bak` (a rename is
+   atomic for the directory entry, not for the data -- a hard hang leaves
+   a right-sized file of NUL, and did); a present-but-unreadable
+   checkpoint raises rather than reading as absent. See CONVENTIONS.md.
+
+5e. **Ctrl+C is a normal exit, not a crash.** Every program in this repo
+   -- launchers, `score.py`, gate scripts, the oracle -- ends on an
+   interrupt with a checkpoint at the LAST SEGMENT BOUNDARY (never the
+   live cursor: counters are per candidate, so a mid-segment save
+   double-counts the census when the segment is redone), one `[STAGE]`
+   line, exit code 130, and **no traceback -- ever**. `huntlib.shutdown`
+   is the only place a `KeyboardInterrupt` is caught: `graceful(main)`
+   wraps the entry point, `on_interrupt(cb)` registers what to save, pool
+   initializers call `ignore_in_worker()`. The shutdown goes deaf
+   (`SIGINT`/`SIGBREAK` to `SIG_IGN`) BEFORE it writes anything, because
+   the second Ctrl+C -- pressed when the first appears to do nothing -- is
+   the one that prints the chained traceback and can land inside the
+   checkpoint write. Drilled in every selftest. See CONVENTIONS.md
+   "Stopping a run".
+
 6. **New projects** copy the skeleton, import huntlib for
    infrastructure, keep all mathematics in-project, and add a row to the
    top-level README's project table. Only projects with verified
@@ -118,6 +157,17 @@ each README stays.
          factor witnesses) for FIRST OCCURRENCES ONLY -- census is counts
          in the checkpoint and the log, never files; runtime checkpoints
          gitignored
+   - [ ] campaign configuration priced the way 5c says (device s and
+         host core-s per unit k-line, per candidate setting), not just a
+         fast kernel
+   - [ ] checkpoints fsynced + `.bak` rotated, corrupt-file path drilled
+   - [ ] every entry point wrapped in `huntlib.shutdown.graceful`, the
+         boundary save registered with `on_interrupt`, pool initializers
+         calling `ignore_in_worker`, and the graceful-shutdown drill in
+         the selftest (Ctrl+C: boundary checkpoint, one line, exit 130,
+         no traceback even on a second Ctrl+C)
+   - [ ] host pool sized from the measurement, RAMPED not stamped, and
+         the drill proves the workers come up one at a time
    - [ ] a 30-second WALL-CLOCK `[STATUS]` heartbeat on its own thread
          (huntlib.hlog.Heartbeat: mark() at segment boundaries, doing()
          around long steps, checkpoint saves from the main loop only)

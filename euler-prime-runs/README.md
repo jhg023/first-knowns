@@ -375,7 +375,16 @@ percent of the cap, end-to-end rate, survivors, the census counts above,
 finds, the live odds for the next open term, the next rung and its ETA —
 and, if no segment has closed since the previous line, what it is busy with
 and for how long, so a stall never looks like a hang. `--status` prints the
-same counts from the checkpoint. `evidence/` holds first
+same counts from the checkpoint.
+
+**Ctrl+C ends the run, it does not crash it.** The launcher writes a
+checkpoint **at the last fully classified segment** — not the live cursor,
+whose counters are updated per prime and would double-count the census when
+the segment is redone — logs one `[STAGE]` line saying where it stopped,
+and exits **130**. No traceback, including when a second Ctrl+C lands while
+the checkpoint is being written: the shutdown ignores further interrupts
+until the file is on disk (`huntlib.shutdown`; CONVENTIONS.md "Stopping a
+run"). Resuming redoes only the segment that was in flight. `evidence/` holds first
 occurrences only — the per-value census files and the near-miss `.jsonl`
 that earlier legs wrote were retired on 2026-08-18 (git history before
 commit `3d01f95` has them; the counts in RESULTS.md are what they said).
