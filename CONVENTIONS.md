@@ -36,6 +36,17 @@ production one.
 
 - All gates green **before and after every change**. No exceptions for
   "obvious" changes; the log of caught regressions says otherwise.
+- **In the ACTIVE project only.** The battery is run where the work is:
+  the project whose status in the top-level table is `ACTIVE`. A change to
+  `huntlib/` or to a repo-wide convention still edits every project's
+  files, but a `PAUSED` or `COMPLETE` project's gates are *not* run for
+  it â€” nobody is advancing that project, and every battery is minutes of a
+  GPU that belongs to the owner and has hard-hung under load. Say in the
+  commit message which projects were edited without being gated.
+- **Resuming a paused project runs its full battery first**
+  (`python launch.py --selftest`, then `python score.py`), before any new
+  work. That is where every shared change made while it slept gets proved
+  on it, and it is the first item of picking the project back up.
 - **Two independent implementations of the hot path**, never one calling
   the other, pinned by parity gates on populated windows.
 - **Canaries**: production streams must organically rediscover known
@@ -152,7 +163,7 @@ should appear, so the moment that term is *found* its unreached quartiles
 stop being progress markers and leave the ladder, which renumbers around
 what is left; the find logs a `[RUNG]` line saying which rungs retired and
 what the ladder now aims at. The live odds in `[STATUS]` follow the same
-rule — they are always `P(a(next open term) by now)`, never the odds for
+rule â€” they are always `P(a(next open term) by now)`, never the odds for
 something already in the evidence directory. Getting this wrong is quiet
 and lasts for hours: dickson-ladders found a(12) at k = 5.51e19 and then
 kept telling the operator `next a(12) P90 at 9.51e+19` while it hunted
@@ -236,7 +247,7 @@ trigger the stop.
 **Ctrl+C is a normal exit, not a crash (repo-wide).** These campaigns run
 for days and a human decides when they end, so the interrupt path is a
 *supported* path and gets the same care as any other. Every program in
-this repository — launchers, `score.py`, the gate scripts, the oracle —
+this repository â€” launchers, `score.py`, the gate scripts, the oracle â€”
 ends on an interrupt with all four of:
 
 - **a checkpoint at the last SEGMENT BOUNDARY.** Never the live cursor:
@@ -245,10 +256,10 @@ ends on an interrupt with all four of:
   copy of the state as of the last fully classified segment (`mark_boundary`
   at the segment boundary, after a filter switch, after the prelude) and
   write *that*. An interrupted run then costs exactly the segment in
-  flight — the same guarantee as a crash (rule 5d), and no double count.
+  flight â€” the same guarantee as a crash (rule 5d), and no double count.
 - **one `[STAGE]` line** naming what stopped it and where the checkpoint
   ended up.
-- **no traceback, ever** — not from the launcher, not from a pool worker,
+- **no traceback, ever** â€” not from the launcher, not from a pool worker,
   and not from a *second* Ctrl+C landing inside the shutdown.
 - **exit code 130**, the conventional "terminated by SIGINT", so a
   supervising script can tell a deliberate stop from a failure.
@@ -257,12 +268,12 @@ ends on an interrupt with all four of:
 `KeyboardInterrupt` is caught: `graceful(main)` wraps the entry point,
 `on_interrupt(cb)` registers what to save (callbacks run LIFO; a returned
 string is logged), and every pool initializer calls `ignore_in_worker()`
-first. A launcher must not catch `KeyboardInterrupt` itself — one path out
+first. A launcher must not catch `KeyboardInterrupt` itself â€” one path out
 is what makes "no traceback" checkable.
 
 **The second Ctrl+C is the one that bites.** The operator presses it, the
 launcher takes a second to write its checkpoint and stop its pool, nothing
-appears to happen, so they press it again — and that interrupt lands
+appears to happen, so they press it again â€” and that interrupt lands
 inside the exception handler, so Python prints both tracebacks ("During
 handling of the above exception, another exception occurred") and exits
 `0xC000013A`. Worse, it can land *inside the checkpoint write*, in the
@@ -275,7 +286,7 @@ route into the same path, so a supervisor asking politely also checkpoints.
 **Workers stay quiet and let the parent stop the run.** A console Ctrl+C
 reaches every process attached to the console on Windows and the whole
 foreground process group on POSIX, but only the parent knows what a clean
-stop looks like — and it must finish writing its checkpoint before the
+stop looks like â€” and it must finish writing its checkpoint before the
 pool goes away. Pool workers therefore ignore the signal and end when the
 parent shuts the pool down.
 

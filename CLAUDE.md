@@ -31,11 +31,24 @@ each README stays.
 1. **Read `CONVENTIONS.md` before touching any project.** The five-file
    skeleton (oracle / CPU engine / GPU engine / launcher / score) and
    the gate discipline are binding.
-2. **Gates green before and after every change.** Run the project's
-   `python score.py`; commit only with the SCORE in the message. If a
-   deliberate coverage change alters the benchmark fingerprint, update
-   the fingerprint in the same commit and log it in the project's
-   OPTIMIZATION_LOG.md.
+2. **Gates green before and after every change — for the ACTIVE project
+   only.** Run `python score.py` in the project being worked on (today:
+   dickson-ladders); commit only with that project's SCORE in the
+   message. If a deliberate coverage change alters the benchmark
+   fingerprint, update the fingerprint in the same commit and log it in
+   that project's OPTIMIZATION_LOG.md.
+
+   **Do not run another project's gates or benchmarks**, even when a
+   change to `huntlib/` or a repo-wide convention touches its files. A
+   paused or complete project (status in the top-level table) is not
+   being advanced, its GPU time is the owner's, and every battery run is
+   minutes of a machine that has hard-hung under load. Make the shared
+   change, edit the paused project's files to match, and say in the
+   commit message that its gates were NOT run. **Whoever resumes a paused
+   project runs `python launch.py --selftest` and `python score.py`
+   there FIRST**, before any new work — that is where a shared change is
+   proved on that project, and it is a checklist item of resuming.
+   The one exception: the owner asks for it.
 3. **Never let the two engine implementations converge.** The CPU engine
    uses plain `%`; the GPU engine uses Barrett arithmetic. One must
    never call the other; parity gates depend on their independence.
@@ -183,7 +196,7 @@ each README stays.
    endings in the repo; no references to unpublished work and no
    personal or machine-specific information anywhere in the repo.
 
-## Quick commands (any project directory)
+## Quick commands (run them in the ACTIVE project only -- Rule 2)
 
 ```
 python launch.py --selftest   # full gate battery -- must end ALL GREEN
@@ -192,6 +205,7 @@ python score.py               # gates x fingerprinted benchmarks
 ```
 
 Wall-clock, so Rule 0 can be planned against: `score.py` ~2.5 min,
-`launch.py --selftest` ~3 min. Anything you write yourself gets budgeted
+`launch.py --selftest` ~3 min. Both are per project, and both are minutes
+of the owner's GPU: run them where the work is, not everywhere. Anything you write yourself gets budgeted
 the same way — measure one short run first, then size the sweep to fit
 under 5 minutes.

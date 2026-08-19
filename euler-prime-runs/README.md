@@ -321,6 +321,15 @@ python score.py                # gates x fingerprinted benchmarks
 python euler_model.py          # rebuild the odds model + its gates
 ```
 
+**This project is PAUSED, so run the first two of those before you do
+anything else with it.** Work on the repository's active project keeps
+changing shared machinery (`huntlib/`) and repo-wide conventions, and
+those changes edit this project's files without its gates being run for
+them — deliberately, because a paused hunt should not be spending the
+owner's GPU (CONVENTIONS.md § The gate discipline). The full battery is
+where they get proved here, and it is the first item of picking this back
+up, not something to do after the first new change.
+
 Progress is read off **rungs**: the model's Q1/median/Q3/P90 for the next
 open term (a(20): 1.3×10²¹ / 6.0×10²¹ / 1.9×10²² / 4.5×10²², unconditional,
 derived at start from the singular series) plus the ceiling, logged
