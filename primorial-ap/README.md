@@ -14,11 +14,13 @@ and no open term has ever had an upper bound published for it.
 
 **Results so far: none.** The engine is built, the gate battery is green
 and the odds model is validated and stated below, but **no production sweep
-has been run** — only bounded smoke runs to 8×10¹¹, far below where any
-open term is expected. Hunts in this repository are started deliberately by
+has been run** — only bounded smoke runs to 6.4×10¹², below where any
+open term is expected (the deepest of them verified a depth-15 chain at
+p = 4,361,081,208,811 — one value short of a(16) — as a live drill of the
+NEAR protocol). Hunts in this repository are started deliberately by
 the repository owner, never by an agent. The first target is **a(16)**,
-which the model puts at a median of 3.87×10¹³ — about 1.8 hours of sweep at
-the measured end-to-end rate.
+which the model puts at a median of 3.87×10¹³ — about **three minutes**
+of sweep at the measured v2 end-to-end rate.
 
 **Status: ACTIVE** — this is the project currently being advanced. Prior
 frontier: **a(15) = 158,317,270,283**, Donovan Johnson, October 20, 2009.
@@ -146,29 +148,30 @@ its own sweep from the floor.
 
 | term | Q1 | median | Q3 | P90 | median at the measured rate |
 |------|----|--------|----|-----|------------------------------|
-| a(16) | 1.56×10¹³ | **3.87×10¹³** | 7.93×10¹³ | 1.34×10¹⁴ | 1.8 h |
-| a(17) | 3.29×10¹⁴ | **8.15×10¹⁴** | 1.67×10¹⁵ | 2.81×10¹⁵ | 1.6 d |
-| a(18) | 7.16×10¹⁵ | **1.77×10¹⁶** | 3.61×10¹⁶ | 6.08×10¹⁶ | 34 d |
-| a(19) | 1.67×10¹⁷ | **4.12×10¹⁷** | 8.40×10¹⁷ | 1.41×10¹⁸ | 2.2 y |
-| a(20) | 4.10×10¹⁸ | **1.01×10¹⁹** | 2.05×10¹⁹ | 3.45×10¹⁹ | 54 y |
+| a(16) | 1.56×10¹³ | **3.87×10¹³** | 7.93×10¹³ | 1.34×10¹⁴ | 3.1 min |
+| a(17) | 3.29×10¹⁴ | **8.15×10¹⁴** | 1.67×10¹⁵ | 2.81×10¹⁵ | 1.1 h |
+| a(18) | 7.16×10¹⁵ | **1.77×10¹⁶** | 3.61×10¹⁶ | 6.08×10¹⁶ | 24 h |
+| a(19) | 1.67×10¹⁷ | **4.12×10¹⁷** | 8.40×10¹⁷ | 1.41×10¹⁸ | 23 d |
+| a(20) | 4.10×10¹⁸ | **1.01×10¹⁹** | 2.05×10¹⁹ | 3.45×10¹⁹ | 1.5 y |
 
-**What that means for what this project can expect to find.** The measured
-v1 rates are **8.46×10⁹ p/s** of device sieve and **5.97×10⁹ p/s**
-end-to-end (the campaign currently sieves a segment and then classifies it,
-rather than overlapping the two — a measured 30% left on the table, and the
-first entry on the optimization list). The table above uses the end-to-end
-number. So a(16) is an afternoon, a(17) is a weekend, and a(18) is about
-five weeks at the median — eleven weeks at P90. **a(19) is out of reach
-without a faster engine.**
+**What that means for what this project can expect to find.** The
+measured **v2** rates are **2.1×10¹¹ p/s** of device sieve at the
+campaign depth and **2.07×10¹¹ p/s end-to-end** (classification runs one
+segment behind the device and is fully hidden;
+[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) #8), 34.7× the v1 engine this
+project was first built and priced around. The table above uses the
+end-to-end number. So a(16) is minutes, a(17) is a lunch break, a(18) is
+about a day at the median — and **a(19), which was out of reach for v1
+at 2.2 years, is a three-week hunt at the median and eleven weeks at
+P90.** The term that now depends on optimization work that has not been
+done is a(20), at a median of a year and a half; the priced candidates
+(the largest ~+14%) are in the log's termination table.
 
-The engine is a v1 and there is real headroom: the marking kernel draws
-210 W of a 450 W budget and reaches about 2.4×10¹⁰ marks per second, which
-is far short of what the memory system can do, and the overlap above is a
-separate 30%. But headroom is not a result. The honest statement is that
-**this project is built to find three new terms**, and that a fourth
-depends on optimization work that has not been done —
-[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) says what the candidates are and
-what each is expected to be worth.
+Optimization here is bounded by verification changing character, not by
+appetite: a v1-era claim that the mark kernel was "far short of what the
+memory system can do" was true, and v2 spent it — the kernel now sits at
+named rooflines (the log has the table), and the honest statement is
+that **this project is built to find four new terms.**
 
 **Verification changes character at a(19), too.** The largest value is
 about (n−1)·P(n): 4.9×10²⁰ at a(16), 3.1×10²² at a(17), 2.0×10²⁴ at
@@ -202,11 +205,13 @@ counts per chain depth. When a term lands, the launcher retires that term's
 rungs, resets the cursor to the floor and builds a completely new sieve for
 the next open term, logging a `[STAGE]` line that says so.
 
-Throttles, priced: `--workers` (2 by default, sized from a measured 0.64
-cores of demand), `--gpu-yield-ms` (about 1% of the rate per 15 ms), and
-`--gentle` (one worker and a 15 ms yield: about 2% of the rate for a
-machine that stays comfortable). `--sieve-depth 1024` is 14% faster and
-asks for five times the host; the measured table is in `launch.py`.
+Throttles, priced: `--workers` (3 by default, sized from a measured 1.1
+cores of demand), `--gpu-yield-ms`, and `--gentle` (one worker and a
+15 ms yield for a machine that stays comfortable — with one worker the
+classification runs inline and the overlap is off, so it costs more of
+the rate than it did in v1). `--sieve-depth 4096 --workers 8` is ~14%
+faster and asks for four times the host; the measured table is in
+`launch.py`.
 
 **Every program here stops cleanly on Ctrl+C**: the launcher checkpoints at
 the last fully classified segment, logs one `[STAGE]` line and exits 130,

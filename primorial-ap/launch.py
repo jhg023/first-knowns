@@ -108,52 +108,53 @@ FRONTIER_N = _front.top_settled(TABLES, {}, floor=0)
 MODEL_FILE = str(_pathlib.Path(__file__).with_name("model_results.json"))
 
 # ---- sieve depth: the knob that decides HOW MUCH MACHINE the hunt needs ---
-# Measured on the production shape (n = 16, p ~ 4e13), interleaved, four
-# rounds, median, on a SUSTAINED card, with the host cost priced at the
-# measured 17 us per survivor (OPTIMIZATION_LOG.md #1 and #2):
+# Re-measured against the v2 engine (OPTIMIZATION_LOG.md #4-#7), which is
+# ~20x the device rate the first configuration was chosen against.  Same
+# production shape (n = 16, p ~ 4e13), interleaved, median, sustained
+# card, host priced at the measured 16.7 us per survivor -- which is
+# pow(2, p-1, p) arithmetic on 70-bit integers, NOT Python overhead
+# (OPTIMIZATION_LOG.md #9), so it does not vectorize away:
 #
 #     q2       device rate    survivors/unit   host cores    workers needed
-#     1024     9.67e9 p/s       1.99e-05          3.28            8
-#     2048     8.46e9 p/s       4.47e-06          0.64            2
-#     4096     7.19e9 p/s       1.11e-06          0.14            1
-#     8192     6.65e9 p/s       3.05e-07          0.03            1 (inline)
-#     16384    5.95e9 p/s       9.14e-08          0.01            1 (inline)
-#     65536    5.38e9 p/s       1.09e-08          0.00            1 (inline)
+#     2048     5.2e11 p/s       4.37e-06          38.8           impossible
+#     4096     2.4e11 p/s       1.09e-06          4.5             8
+#     8192     2.1e11 p/s       2.99e-07          1.1             3
+#     16384    1.5e11 p/s       8.75e-08          0.23            2
 #
-# Read the first two columns together, because the shape of this problem is
-# in them: the hunt is DEVICE-BOUND at every depth worth running.  Survivors
-# are so rare that classifying them is a rounding error next to sieving for
-# them, so the depth is a straight trade of marking work against host
-# processes -- and the SHALLOW end wins on rate.  That is the opposite of
-# the sibling project in this repo, where deep sieving bought its speed by
-# taking work off a saturated host, and it is why CONVENTIONS.md rule 5c
-# says to measure the configuration rather than inherit it.
-#
-# 2048 is the default.  1024 is 14% faster and was DECLINED: it asks for
-# 3.3 host cores against 0.64, five times the machine for a seventh of the
-# rate, on a program that runs for days on a desktop somebody else also
-# uses (CONVENTIONS.md, "Sizing a hunt so it leaves the machine usable",
-# step 3).  It is one flag away for anyone who wants it --
-# `--sieve-depth 1024 --workers 8` -- and the table above is the price.
-Q2_CAMPAIGN = 2048
+# The v1 engine was device-bound at every depth and the shallow end won.
+# v2 inverted that: the depth the DEVICE prefers (2048) now demands forty
+# host cores of classification.  8192 is the default: 89% of 4096's
+# device rate for a QUARTER of its host demand, comfortably inside the
+# load budget of a desktop somebody else also uses (CONVENTIONS.md,
+# "Sizing a hunt so it leaves the machine usable").  4096 is ~14% more
+# rate for 4x the host and is one flag away:
+# `--sieve-depth 4096 --workers 8` -- priced, declined as a default.
+Q2_CAMPAIGN = 8192
 
-# Host classification runs in a process pool one segment behind the device.
-# SIZED FROM THE REQUIREMENT: 0.64 cores at the default depth, so two
-# workers is 3.1x the need and leaves the pool at ~32% duty.  `cpu_count -
-# k` is not sizing, it is an appetite -- it scales with the machine rather
-# than with the work, and on this class of host it would ask for sixty
-# processes to do the work of one.  The pool is RAMPED, not stamped
-# (huntlib.pool.ramp).
-WORKERS_DEFAULT = 2
+# Host classification runs in a process pool one segment behind the device
+# (the overlap is OPTIMIZATION_LOG.md #8: the pool classifies segment i-1
+# in worker processes while the main thread blocks in segment i's device
+# sync, so at the default depth the classify cost is fully hidden).
+# SIZED FROM THE REQUIREMENT: 1.1 cores at the default depth, so three
+# workers is 2.7x the need at ~37% duty.  `cpu_count - k` is not sizing,
+# it is an appetite -- it scales with the machine rather than with the
+# work.  The pool is RAMPED, not stamped (huntlib.pool.ramp).
+WORKERS_DEFAULT = 3
 
-SEG_LAUNCHES = 16              # device launches per checkpoint segment:
-#                                ~1.9 s at the default depth, so an
-#                                interrupt or a crash costs about two
-#                                seconds of sweep
+SEG_LAUNCHES = 64              # device launches per checkpoint segment:
+#                                ~6.4e10 of p-line, ~0.3 s at the default
+#                                depth, so an interrupt or a crash costs a
+#                                third of a second of sweep
 CHUNK = 512                    # survivors per classification task
-ALT_Q2 = 1 << 13               # verification leg 3 re-sieves at THIS depth,
-#                                deliberately not the campaign's
 CERT_VALUE_CAP = 10**34        # past this a bounded proof cannot be promised
+
+
+def _alt_q2(q2):
+    """Verification leg 3 re-sieves at a depth the campaign is NOT running:
+    8192 unless that IS the campaign depth, then 4096.  Derived, not
+    pinned, so a campaign depth change cannot silently collapse the two
+    legs onto the same sieve."""
+    return (1 << 13) if int(q2) != (1 << 13) else (1 << 12)
 
 
 class CorruptEngineError(RuntimeError):
@@ -380,18 +381,19 @@ def full_verify(p, n, claimed, certify=True, witness=True, q2=Q2_CAMPAIGN):
     # divisibility on the actual values.  Membership of one p is all this
     # leg has ever checked, and answering exactly that avoids handing a
     # windowed sieve a range it was never sized for.
+    alt_q2 = _alt_q2(q2)
     try:
         from ap_gpu import GpuEngine
-        alt = GpuEngine(n, ALT_Q2).survives(p)
+        alt = GpuEngine(n, alt_q2).survives(p)
     except Exception:
-        alt = CpuEngine(n, ALT_Q2).survives(p)
-    alt = bool(alt) and ref.sieve_survivor(p, n, min(ALT_Q2, 4096))
+        alt = CpuEngine(n, alt_q2).survives(p)
+    alt = bool(alt) and ref.sieve_survivor(p, n, min(alt_q2, 4096))
 
     out = {"p": p, "n": n, "depth": int(r_own), "difference": d,
            "values": [p + j * d for j in range(min(claimed, n))],
            "legs": {"engine_mr": int(r_own), "sympy_bpsw": int(r_sym),
                     "alt_sieve_survives": bool(alt),
-                    "alt_sieve_depth": ALT_Q2},
+                    "alt_sieve_depth": alt_q2},
            "agree": bool(r_own == r_sym == claimed and alt)}
     if not out["agree"]:
         return out
@@ -431,14 +433,14 @@ def record_discovery(ev, label):
 
 # -------------------------------- preludes ----------------------------------
 
-def low_pass(n, verbose=True):
+def low_pass(n, q2=Q2_CAMPAIGN, verbose=True):
     """The engines refuse to sieve below max(P_FLOOR, q2); the oracle covers
     that zone, so the least-claim is contiguous from 2.
 
     Cheap, and it has to happen once per term, because a(n) for small n
     really does live down there (a(1) = 2, a(3) = 7).
     """
-    floor = max(ref.P_FLOOR, Q2_CAMPAIGN)
+    floor = max(ref.P_FLOOR, int(q2))
     got = ref.first_p(n, lo=2, hi=floor - 1, wheel=False)
     if verbose:
         log("STAGE", f"low pass n={n}: [2, {floor}) swept by the oracle -- "
@@ -506,7 +508,7 @@ def production(args):
                  f" the deterministic Miller-Rabin bound")
 
     if not c.get("canaries_done"):
-        low_pass(n)
+        low_pass(n, q2)
         if not canary_prelude(args.engine):
             return 2
         c["canaries_done"] = True
@@ -552,6 +554,13 @@ def production(args):
     hb.start(line)
     rc = 0
     try:
+        # The device runs ONE SEGMENT AHEAD of the classified cursor
+        # (OPTIMIZATION_LOG.md #8): while the main thread blocks in segment
+        # i's device sync, the pool's worker processes classify segment
+        # i-1.  `pending` is that in-flight segment; the cursor -- and so
+        # the checkpoint, and so the least-claim -- only ever advances past
+        # a FULLY CLASSIFIED segment, in _finalize below.
+        pending = None
         while True:
             n_now = target_n(c, args.n)
             if n_now != int(c["n"]):
@@ -566,83 +575,39 @@ def production(args):
                              f"P({n_now}) = {difference(n_now):.6g}, cursor "
                              f"back to the floor, a fresh sieve")
                 save_ckpt(c)
+                pending = None          # in-flight survivors were the OLD
+                #                         term's; their p-line is moot now
             n = int(c["n"])
 
-            base = int(c["next_u"]) * W0
-            if base >= P_CEIL:
-                break
-            if args.to and base >= float(args.to):
-                stop_reason = f"reached --to {args.to}"
-                break
-            seg = min(span, P_CEIL - base)
-            seg -= seg % W0
-            if seg <= 0:
-                break
+            ahead = (pending["seg"] // W0) if pending else 0
+            base = (int(c["next_u"]) + ahead) * W0
+            seg = 0
+            if base < P_CEIL and not (args.to and base >= float(args.to)):
+                seg = min(span, P_CEIL - base)
+                seg -= seg % W0
+            nxt = None
+            if seg > 0:
+                hb.doing(f"sieving a({n}) from p={base:.4e}" +
+                         (f" (classifying {len(pending['offs'])} behind it)"
+                          if pending else ""))
+                offs = []
+                for chunk in eng.survivors(base, seg):
+                    offs.extend(int(o) for o in chunk.tolist())
+                nxt = {"base": base, "seg": seg, "offs": offs,
+                       "collect": _submit(pool, n, q2, base, offs)}
 
-            hb.doing(f"sieving a({n}) from p={base:.4e}")
-            offs = []
-            for chunk in eng.survivors(base, seg):
-                offs.extend(int(o) for o in chunk.tolist())
-            hb.doing(f"classifying {len(offs)} survivors at p={base:.4e}")
-            depths = _submit(pool, n, q2, base, offs)()
+            if pending is None and nxt is None:
+                if args.to and base >= float(args.to):
+                    stop_reason = f"reached --to {args.to}"
+                break
 
             found_here = False
-            for o, dep in zip(offs, depths):
-                p = base + o
-                kind = event_kind(c, dep, n)
-                if kind is None:
-                    continue
-                if dep > int(c["best_depth"]):
-                    c["best_depth"], c["best_p"] = int(dep), int(p)
-                if kind == "CENSUS":
-                    _front.bump_census(c["census"], dep)
-                    continue
-                if kind == "NEAR":
-                    ordinal = _front.bump_census(c["census"], dep)
-                    hb.doing(f"verifying a NEAR at p={p}")
-                    v = full_verify(p, n, dep, certify=False, witness=False,
-                                    q2=q2)
-                    if not v["agree"]:
-                        log("ALARM", f"verification legs disagree on p={p}: "
-                                     f"{v['legs']}")
-                        rc = 2
-                        raise CorruptEngineError("legs disagree")
-                    log("NEAR", f"chain {dep} at p = {p} (depth-{dep} #"
-                                f"{ordinal} of this stage; verified 3-way) "
-                                f"-- ONE value short of a({n})!")
-                    continue
-                # DISCOVERY
-                hb.doing(f"verifying a claimed a({n}) at p={p}")
-                v = full_verify(p, n, dep, q2=q2)
-                if not v["agree"]:
-                    log("ALARM", f"a claimed a({n}) at p={p} failed "
-                                 f"verification: {v.get('error', v['legs'])}")
-                    rc = 2
-                    raise CorruptEngineError("discovery failed verification")
-                _front.settle_one(c["found"], n, p)
-                c["hits"] = int(c["hits"]) + 1
-                v["swept_from"] = int(eng.floor)
-                v["swept_to"] = int(base + seg)
-                v["config"] = ckpt_key(q2)
-                path = record_discovery(v, "DISCOVERY")
-                banner("DISCOVERY", [
-                    f"a({n}) = {p:,}",
-                    f"P({n}) = {difference(n):,}",
-                    f"all {n} values prime; proofs: "
-                    f"{', '.join(v.get('proof_kinds', ['-']))}",
-                    f"verified 3 ways + per-value proof; evidence {path}",
-                    f"least-claim: contiguous sweep from {eng.floor} "
-                    f"to {base + seg}",
-                ])
-                found_here = True
-
-            c["survivors"] = int(c["survivors"]) + len(offs)
-            c["next_u"] = int(c["next_u"]) + seg // W0
-            new_pos = int(c["next_u"]) * W0
-            hb.mark(new_pos)
-            boundary = dict(c)
-            _milestones(c, base, new_pos, n)
-            save_ckpt(c)
+            if pending is not None:
+                hb.doing(f"classifying {len(pending['offs'])} survivors at "
+                         f"p={pending['base']:.4e}")
+                found_here = _finalize(c, eng, hb, n, q2, pending)
+                boundary = dict(c)
+            pending = nxt
 
             if found_here and args.stop_on_discovery:
                 stop_reason = "--stop-on-discovery"
@@ -662,6 +627,70 @@ def production(args):
         log("STAGE", f"campaign stopped: {stop_reason}; cursor at "
                      f"p = {int(c['next_u']) * W0:.6e}, checkpoint {CKPT}")
     return rc
+
+
+def _finalize(c, eng, hb, n, q2, pending):
+    """Collect one classified segment, record its events, advance the
+    cursor past it and checkpoint.  This is the ONLY place the cursor
+    moves, which is what makes the overlap safe: an interrupt between
+    segments loses in-flight device work, never classified coverage."""
+    base, seg, offs = pending["base"], pending["seg"], pending["offs"]
+    depths = pending["collect"]()
+    found_here = False
+    for o, dep in zip(offs, depths):
+        p = base + o
+        kind = event_kind(c, dep, n)
+        if kind is None:
+            continue
+        if dep > int(c["best_depth"]):
+            c["best_depth"], c["best_p"] = int(dep), int(p)
+        if kind == "CENSUS":
+            _front.bump_census(c["census"], dep)
+            continue
+        if kind == "NEAR":
+            ordinal = _front.bump_census(c["census"], dep)
+            hb.doing(f"verifying a NEAR at p={p}")
+            v = full_verify(p, n, dep, certify=False, witness=False,
+                            q2=q2)
+            if not v["agree"]:
+                log("ALARM", f"verification legs disagree on p={p}: "
+                             f"{v['legs']}")
+                raise CorruptEngineError("legs disagree")
+            log("NEAR", f"chain {dep} at p = {p} (depth-{dep} #"
+                        f"{ordinal} of this stage; verified 3-way) "
+                        f"-- ONE value short of a({n})!")
+            continue
+        # DISCOVERY
+        hb.doing(f"verifying a claimed a({n}) at p={p}")
+        v = full_verify(p, n, dep, q2=q2)
+        if not v["agree"]:
+            log("ALARM", f"a claimed a({n}) at p={p} failed "
+                         f"verification: {v.get('error', v['legs'])}")
+            raise CorruptEngineError("discovery failed verification")
+        _front.settle_one(c["found"], n, p)
+        c["hits"] = int(c["hits"]) + 1
+        v["swept_from"] = int(eng.floor)
+        v["swept_to"] = int(base + seg)
+        v["config"] = ckpt_key(q2)
+        path = record_discovery(v, "DISCOVERY")
+        banner("DISCOVERY", [
+            f"a({n}) = {p:,}",
+            f"P({n}) = {difference(n):,}",
+            f"all {n} values prime; proofs: "
+            f"{', '.join(v.get('proof_kinds', ['-']))}",
+            f"verified 3 ways + per-value proof; evidence {path}",
+            f"least-claim: contiguous sweep from {eng.floor} "
+            f"to {base + seg}",
+        ])
+        found_here = True
+
+    c["survivors"] = int(c["survivors"]) + len(offs)
+    c["next_u"] = int(c["next_u"]) + seg // W0
+    new_pos = int(c["next_u"]) * W0
+    hb.mark(new_pos)
+    _milestones(c, base, new_pos, n)
+    save_ckpt(c)
+    return found_here
 
 
 def _save_boundary(state):
@@ -966,9 +995,10 @@ def main():
                     help="hunt this term or the next open one above it")
     ap.add_argument("--sieve-depth", type=int, default=Q2_CAMPAIGN,
                     help=f"primes tested by the sieve (default {Q2_CAMPAIGN}; "
-                         f"1024 is 14%% faster and asks for 5x the host, "
-                         f"deeper is slower here -- see the table in this "
-                         f"file)")
+                         f"shallower is faster on the device but multiplies "
+                         f"the host's classification load -- 4096 with "
+                         f"--workers 8 is ~14%% more rate for 4x the "
+                         f"machine; see the table in this file)")
     ap.add_argument("--engine", choices=("gpu", "cpu"), default="gpu")
     ap.add_argument("--workers", type=int, default=WORKERS_DEFAULT,
                     help=f"classification processes (default "

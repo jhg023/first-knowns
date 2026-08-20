@@ -43,39 +43,48 @@ Card: one RTX 4090, 128 SMs, stock power limit (450 W), driver 610.88.
 ## Wall clock at the campaign configuration
 
 The score is measured at the *frozen* depth. The campaign runs at
-depth 2048, where the numbers are different and are the ones that matter
-for planning. All measured 2026-08-20, interleaved, four rounds, median,
-on a **sustained** card — see OPTIMIZATION_LOG #2 for why that word is
-load-bearing.
+depth 8192, where the numbers are different and are the ones that matter
+for planning. Re-measured 2026-08-20 against the **v2 engine**
+(OPTIMIZATION_LOG #4–#7), interleaved, median, on a sustained card — see
+OPTIMIZATION_LOG #2 for why that word is load-bearing. Absolute device
+rates on this desktop swing ±15–30% with ambient load; the ratios are
+the stable quantity.
 
 | sieve depth | device p/s | survivors / unit | host cores | workers |
 |-------------|-----------|------------------|-----------|---------|
-| 1024 | 9.67×10⁹ | 1.99×10⁻⁵ | 3.28 | 8 |
-| **2048 (campaign)** | **8.46×10⁹** | 4.47×10⁻⁶ | 0.64 | 2 |
-| 4096 | 7.19×10⁹ | 1.11×10⁻⁶ | 0.14 | 1 |
-| 8192 | 6.65×10⁹ | 3.05×10⁻⁷ | 0.03 | 1 (inline) |
-| 16384 | 5.95×10⁹ | 9.14×10⁻⁸ | 0.01 | 1 (inline) |
-| 65536 (scored) | 5.38×10⁹ | 1.09×10⁻⁸ | 0.00 | 1 (inline) |
+| 2048 | 5.2×10¹¹ | 4.37×10⁻⁶ | 38.8 | impossible |
+| 4096 | 2.4×10¹¹ | 1.09×10⁻⁶ | 4.5 | 8 |
+| **8192 (campaign)** | **2.1×10¹¹** | 2.99×10⁻⁷ | 1.1 | 3 |
+| 16384 | 1.5×10¹¹ | 8.75×10⁻⁸ | 0.23 | 2 |
 
-Host cores are priced at the measured 17 µs per survivor classification.
-This hunt is device-bound at every depth worth running, which is why the
-shallow end wins — the opposite of the sibling project in this repo.
+Host cores are priced at the measured 16.7 µs per survivor — which is
+`pow(2, p−1, p)` arithmetic on the 70-bit values, not overhead
+(OPTIMIZATION_LOG #9). v1 was device-bound everywhere and the shallow
+end won; v2 inverted the problem, and the campaign depth is now set by
+the **load budget**: 8192 is 89% of 4096's device rate for a quarter of
+its host demand.
 
-**End-to-end, as the campaign actually runs it** (depth 2048, 2 workers,
-16 launches per checkpoint segment): **5.97×10⁹ p/s**, measured over a
-bounded run to p = 8×10¹¹. The 30% gap to the device rate is the
-sieve/classify serialization — OPTIMIZATION_LOG #3.
+**End-to-end, as the campaign actually runs it** (depth 8192, 3 workers,
+64 launches per checkpoint segment, classification overlapped one
+segment behind the device — OPTIMIZATION_LOG #8): **2.07×10¹¹ p/s**,
+measured over a bounded production run to p = 6.4×10¹², **34.7× v1's
+end-to-end** at 96% of the device rate.
 
 ## What each term costs
 
-At 5.97×10⁹ p/s end-to-end, against the model's stated quartiles:
+At 2.07×10¹¹ p/s end-to-end, against the model's stated quartiles:
 
 | term | Q1 | median | Q3 | P90 |
 |------|----|--------|----|-----|
-| a(16) | 44 min | **1.8 h** | 3.7 h | 6.2 h |
-| a(17) | 15 h | **1.6 d** | 3.2 d | 5.4 d |
-| a(18) | 14 d | **34 d** | 70 d | 118 d |
-| a(19) | 324 d | **2.2 y** | 4.5 y | 7.5 y |
+| a(16) | 75 s | **3.1 min** | 6.4 min | 11 min |
+| a(17) | 27 min | **1.1 h** | 2.2 h | 3.8 h |
+| a(18) | 9.6 h | **24 h** | 2.0 d | 3.4 d |
+| a(19) | 9.3 d | **23 d** | 47 d | 79 d |
+| a(20) | 229 d | **1.5 y** | 3.1 y | 5.3 y |
 
-The enforced ceiling is p = 10²⁶, which is the campaign's last rung and is
-not a depth anything here will reach.
+v1's table said a(16) was an afternoon, a(18) five weeks, and a(19) out
+of reach without a faster engine. The faster engine exists now: a(19) is
+a three-week hunt at the median, and a(20) is the term that depends on
+optimization work that has not been done (or on patience). The enforced
+ceiling is p = 10²⁶, which is the campaign's last rung and is not a
+depth anything here will reach.

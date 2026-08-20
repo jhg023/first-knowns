@@ -177,32 +177,70 @@ bitmap — the sub-bitmaps live in shared memory now, so L2 residency of
 the global bitmap stopped mattering). 2²⁸ measured identical; 2²⁷ takes
 half the memory.
 
-## The candidate list — measured, priced, not yet attempted
+## #8 — The overlap: the pool classifies one segment behind the device
 
-Ordered by expected value. The numbers are estimates and are not evidence
-(OPTIMIZATION.md: never treat the cost model as evidence).
+**Kept: end-to-end 1.84×10¹¹ → measured through the real launcher, and
+2.07×10¹¹ once the segment grew to match (below) — 96% of the device
+rate, against 71% for v1's serialized sieve-then-classify.** The device
+now runs one segment ahead of the classified cursor: while the main
+thread blocks in segment i's device sync, the worker processes classify
+segment i−1. The checkpoint discipline is the point, not a detail: the
+cursor advances ONLY in `_finalize`, past a fully classified segment, so
+an interrupt loses in-flight device work and never classified coverage —
+and a discovery drops the in-flight segment, which was sieved for a term
+that no longer needs hunting.
 
-**#8 — Overlap classification with the next segment's sieve.** In v1 this
-was worth ~1.3× (8.46×10⁹ device against 5.97×10⁹ end-to-end, the gap
-being the classify phase running *after* the sieve instead of beside it).
-With the device ~20× faster the classify share is ~20× larger and this
-stops being an optimization and becomes THE campaign bottleneck — see the
-re-balance measurements below when they land. The care it needs is in the
-checkpoint boundary: the cursor may only advance past a **fully
-classified** segment, or the least-claim stops meaning what it says.
+Same measurement, second knob: at the v2 rate a checkpoint segment of 16
+launches lasted 0.3 s, so the fsync'd save had become per-segment glue.
+SEG_LAUNCHES 16 → 64 (a ~1.3 s segment, still a trivial crash cost) was
+**+12% end-to-end**. Measured on bounded production runs (`--to`), which
+also rediscovered the canary and verified a live depth-15 NEAR in
+passing.
 
-**#9 — Batched classification.** 17 µs per survivor is Python overhead,
-not arithmetic: the values are 70-bit and one strong test on them is a
-couple of microseconds. In v1 this was worth nothing (the hunt was
-device-bound); at the v2 device rate the classify demand at depth 2048 is
-several host cores, so this and the sieve depth together now set the
-end-to-end rate and the machine budget.
+## #9 — Classification measured, and the re-balance it forces
 
-**#10 — A wider wheel.** The mod-30 wheel represents 8 of every 30
-integers. Mod 210 would be 48 of 210 — 14% fewer bits to mark — but
-multiplies the per-(prime, residue) lane setup and the table build by
-six. Probably a wash; measure only if the mark kernel is ever the
-bottleneck again.
+**The 17 µs per survivor is NOT Python overhead.** Measured on 4,368
+real survivors at the production shape: 16.7 µs per `chain_depth`, of
+which a single `pow(2, p−1, p)` on the 70-bit value is 6–7 µs and the
+mean survivor takes 1.7 chain tests. The v1 candidate list guessed
+"vectorize away 5×" — wrong premise, recorded here so nobody rebuilds
+it: the cost is bignum modular exponentiation in CPython, and no
+batching removes it.
+
+That number and the v2 device curve force the campaign configuration to
+move (the depth table lives in `launch.py`): **depth 2048, the device's
+favorite, now demands ~39 host cores of classification.** The kept
+configuration is depth 8192 × 3 workers — 89% of depth-4096's device
+rate for a quarter of its host, 1.1 measured cores of demand, and the
+overlap (#8) hides all of it. Priced and declined:
+
+- **depth 4096 + 8 workers: ~+14% end-to-end for 4× the host.** One flag
+  away; the load budget says no as a default.
+- **gmpy2's powmod (~2–4× on the classify): declined** — a new
+  dependency is the owner's call, and at the kept depth it buys nothing
+  (the classify is already hidden).
+- **a device base-2 sprp prefilter on p** (u64 through a(19)'s whole
+  range): would cut host demand ~3× by killing the ~53% of survivors
+  whose p is composite before the host sees them, enabling depth 4096
+  inside the budget — **the top remaining candidate, worth ~+14%,**
+  priced as a new gated kernel and left unbuilt.
+
+## The termination table (OPTIMIZATION.md Part 3), campaign configuration
+
+Depth 8192, LAUNCH_U 2²⁷, one launch ≈ 19–20 ms device:
+
+| phase | share | verdict |
+|-------|-------|---------|
+| gather (tabulated q ≤ 2048) | ~55% of mark | ~1.0×10¹⁰ coalesced table loads per launch at ~2.6/clk/SM — within ~2× of L1 transaction throughput. The cutoff is bracketed from both sides: TAB 4096 measured 0.71–0.95× at every depth tried (a q > 2048 table row is mostly zeros, so the load is wasted) |
+| shared atomics (2048 < q ≤ 8192) | ~45% of mark | **at the shared-atomic LSU roofline**: 3.1×10¹¹ marks/s ≈ 0.96/clk/SM. The only lever is fewer atomics, i.e. more tables — measured slower (row above) |
+| compact | 0.4% | below the 5% bar |
+| host glue (residue tables, D2H, sort, checkpoint) | ~4% end-to-end | measured as the gap between 2.07×10¹¹ end-to-end and 2.15×10¹¹ device |
+
+Remaining candidates, priced: the sprp prefilter (#9, ~+14%); **a wider
+wheel (mod 210)** — 14% fewer bits against a 6× larger lane setup and
+table build, argued a wash and never measured, so it is a hypothesis,
+not a verdict; SEG_LAUNCHES past 64 (~2%, against checkpoint
+granularity).
 
 **Skip the sort — moot.** v1 considered removing the survivor sort and
 declined at 0.0 ms; #5 then found the DEVICE sort was 29% of a v2 launch
