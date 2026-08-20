@@ -63,6 +63,7 @@ _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
 # elsewhere would otherwise lose its rungs and its odds silently
 MODEL_FILE = str(_pathlib.Path(__file__).with_name("model_results.json"))
 from huntlib import checkpoint as _ckpt  # noqa: E402
+from huntlib import evidence as _evid  # noqa: E402
 from huntlib.hlog import log, census_str, Heartbeat  # noqa: E402
 from huntlib import shutdown as _shutdown  # noqa: E402
 from huntlib.primes import factor_witness  # noqa: E402
@@ -467,19 +468,15 @@ def record_discovery(ev, label):
     canary) and upsert the ledger entry for p.  Called for discoveries
     only: the evidence directory holds first occurrences, never census
     values (CONVENTIONS.md).  Keyed by p, so the segment redone on resume
-    rewrites the same records instead of appending duplicates."""
-    os.makedirs("evidence", exist_ok=True)
-    with open(os.path.join("evidence", f"euler_hit_run{ev['run']}_p{ev['p']}.json"), "w") as f:
-        json.dump(ev, f, indent=1)
-    allrec = []
-    if os.path.exists(DISC):
-        with open(DISC) as f:
-            allrec = json.load(f)
-    allrec = [d for d in allrec if int(d.get("p", -1)) != int(ev["p"])]
-    allrec.append({**ev, "label": label, "t": time.time()})
-    allrec.sort(key=lambda d: int(d["p"]))
-    with open(DISC, "w") as f:
-        json.dump(allrec, f, indent=1)
+    rewrites the same records instead of appending duplicates.
+
+    huntlib.evidence.record does the keying, the upsert and the durable
+    write (an evidence JSON is the whole artefact of a discovery, so it goes
+    through the same fsync-and-replace path as a checkpoint); the file NAME
+    is this project's."""
+    _evid.record(ev, "evidence",
+                 f"euler_hit_run{ev['run']}_p{ev['p']}.json",
+                 DISC, key="p", label=label)
 
 
 def hunt(args):

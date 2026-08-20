@@ -32,16 +32,23 @@ class CheckpointCorrupt(RuntimeError):
     """The file exists and cannot be read as a checkpoint."""
 
 
-def save(path, state):
-    """Write `state` durably: temp file -> fsync -> replace, keeping a .bak.
+def save_json(path, obj):
+    """Write any JSON-able object durably: temp -> fsync -> replace, .bak kept.
 
     The rotation order matters. The backup is taken from the file that is
     already on disk BEFORE the new one lands, so at every instant at least
-    one of {path, path.bak} is a complete checkpoint.
+    one of {path, path.bak} is complete.
+
+    Separate from `save` because a checkpoint is not the only file a
+    campaign cannot afford half of: an evidence JSON is the entire artefact
+    of a discovery, and a torn ledger is worse than a stale one.
     """
     tmp = path + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(state, f, indent=1)
+    # newline="\n" so the repo's LF rule holds for the JSONs that get
+    # committed (evidence files and ledgers); the default translates on
+    # Windows and quietly commits CRLF.
+    with open(tmp, "w", newline="\n") as f:
+        json.dump(obj, f, indent=1)
         f.flush()
         os.fsync(f.fileno())          # the bytes, not just the directory entry
     if os.path.exists(path):
@@ -51,6 +58,11 @@ def save(path, state):
         except OSError:               # a backup is best-effort; never fatal
             pass
     os.replace(tmp, path)
+
+
+def save(path, state):
+    """Write a checkpoint durably.  See save_json."""
+    save_json(path, state)
 
 
 def _read(path):
@@ -93,3 +105,61 @@ def load(path, expect_key, warn=None):
             warn(f"checkpoint key mismatch ({state.get('key')}); ignoring it")
         return None
     return state
+
+
+class CursorRefused(RuntimeError):
+    """A cursor file exists that this configuration must not reinterpret."""
+
+
+def refuse_mismatch(path, expect_key, fresh=False, describe=None):
+    """Raise unless it is SAFE to start: a key mismatch must halt the run.
+
+    `load` ignores a checkpoint whose key does not match, which is the right
+    default for a stale file and exactly the wrong one for a live frontier:
+    "ignore" falls straight through to a fresh cursor at zero, and a
+    campaign that silently restarts at the floor after a wheel change
+    abandons every unit of line it had already swept. Reinterpreting the
+    cursor instead is just as wrong in the other direction -- a count of
+    wheel PERIODS read against a different period once misplaced a frontier
+    by 31x.
+
+    Both wrong answers are prevented the same way: an existing cursor this
+    configuration cannot read is a REFUSAL. `--fresh` says "discard it, I
+    mean it"; a project with a migration path offers that instead.
+
+    `describe(state) -> str` may add a line saying what is being refused,
+    in the project's own units.
+    """
+    if fresh or not os.path.exists(path):
+        return
+    try:
+        state = _read(path)
+    except Exception as e:
+        bak = path + ".bak"
+        if os.path.exists(bak):
+            try:
+                _read(bak)
+                return              # load() will recover it and say so
+            except Exception:
+                pass
+        raise CheckpointCorrupt(
+            f"{path} exists but cannot be read ({e}), and no usable {bak} "
+            f"stands behind it. A hard crash during a save can leave a "
+            f"right-sized file of NUL bytes -- that is exactly what happened "
+            f"here once, and it is why saves are fsynced and backed up now. "
+            f"The cursor in it is gone: pass --fresh to restart the sweep "
+            f"deliberately, or restore a cursor by hand.")
+    if state.get("key") == expect_key:
+        return
+    extra = ""
+    if describe:
+        try:
+            extra = "\n        stored     : " + str(describe(state))
+        except Exception:
+            extra = ""
+    raise CursorRefused(
+        f"a campaign cursor exists but this configuration cannot read it.\n"
+        f"        stored key : {state.get('key')!r}\n"
+        f"        wanted key : {expect_key!r}{extra}\n"
+        f"  Starting anyway would begin a FRESH sweep and abandon that "
+        f"frontier. Pass --fresh to discard it deliberately.")

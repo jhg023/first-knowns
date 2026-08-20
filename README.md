@@ -24,6 +24,7 @@ survive before it is recorded.
 |---------|---------|--------|
 | [euler-prime-runs](euler-prime-runs/) | [A164926](https://oeis.org/A164926): the least prime p whose Euler-form polynomial x²+x+p is prime for exactly n consecutive x — extending the direct lineage of Euler's famous x²+x+41 | **PAUSED — open to others** — a(17) = 348,284,517,256,411,907, a(18) = 8,461,068,614,861,832,371 and a(19) = 3,744,101,869,688,673,856,367 found & verified (the first new terms since 2009); a(21) = 234,505,015,943,235,329,417 settled by exhaustive sweep past the known bound. The sweep is contiguous to 3.744×10²¹, so the one term of this stretch still open — a(20) — exceeds that, and exceeds a(19) and a(21) with it. The hunt halted on the a(19) find 2026-08-18 and is left resumable: conditional a(20) median 1.75×10²², ~9 days on one 4090 |
 | [dickson-ladders](dickson-ladders/) | [A247965](https://oeis.org/A247965): the least k such that m·k²+1 is prime for every m = 1..n — a Dickson ladder whose n = 1 case is Landau's k²+1 problem | **PAUSED — open to others** — a(10) = 9,328,409,578,841,430, a(11) = 433,871,469,806,557,860, a(12) = 55,119,263,286,518,170,740 (all 2026-08-18) and **a(13) = 12,094,123,415,384,869,458,600** (2026-08-19) found & verified — the first advance since 2014 — each with a primality certificate for all of its values and re-verified from its evidence before publication. Prior frontier: Hiroaki Yamanouchi's a(9) = 3,332,396,388,090, Oct 2014. a(13) landed 58 min after the v4 fold went in (a paired 2.39× on top of the 2026-08-18 27.9× re-configuration — **2.3×10¹⁷ k/s**, reach extended 17× to k = 2.04×10²⁴). All four finds landed late — model quantiles 0.915, 0.923, 0.787 and 0.916; the pooled optimism factor is 2.26× and its 95% interval [1.03, 8.31] excludes 1 for the first time, so the model now reads ~2× optimistic about depth. The campaign paused 2026-08-20 at k = 1.57×10²² and is left resumable: **a(14)** sits inside the remaining sweep at 98.6% model odds (≈85% adjusted), ~8.5 days to its median on one 4090 |
+| [primorial-ap](primorial-ap/) | [A053647](https://oeis.org/A053647): the first term of the first arithmetic progression of n primes whose common difference is the n-th primorial — the smallest difference such a progression can have | **ACTIVE** — no results yet: the engine is built, the gate battery is green and the odds model is validated, but **no production sweep has been run**. Frontier: Donovan Johnson's a(15) = 158,317,270,283, Oct 2009, a 17-year-old frontier with no published bound on any open term. First target **a(16)**, model median 3.87×10¹³ — 1.8 h at the measured 5.97×10⁹ p/s end-to-end. The engine is a gated v1: a(17) is a weekend and a(18) about five weeks at the median, so this is built to find **three** terms, with a(19) depending on optimization work that has not been done |
 
 Project documentation follows a fixed template (see
 [CONVENTIONS.md](CONVENTIONS.md) § Documentation template): every
@@ -54,9 +55,13 @@ The projects share a skeleton and a library:
   didn't. A hunt's frontier is set by throughput, so this is not
   optional polish; two of its rules are design decisions best made
   before the first engine is written.
-- [`huntlib/`](huntlib/) — the shared code: deterministic Miller-Rabin,
-  Barrett reciprocal helpers for CUDA kernels, atomic checkpoints,
-  tagged logging, graceful shutdown, and the un-gameable SCORE runner.
+- [`huntlib/`](huntlib/) — the shared code: deterministic Miller-Rabin and
+  BLS75 primality certificates, Barrett reciprocal helpers for CUDA
+  kernels, crash-durable checkpoints, tagged logging and the wall-clock
+  heartbeat, the ramped classification pool, frontier and census
+  bookkeeping, the progress ladder, first-occurrence evidence files,
+  graceful shutdown, the un-gameable SCORE runner — and the repo-wide
+  selftest drills every project owes.
 
 ## Reproducing results
 

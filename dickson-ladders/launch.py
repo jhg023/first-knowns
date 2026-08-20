@@ -63,17 +63,21 @@ import os
 import pathlib as _pathlib
 import sys as _sys
 import time
-from math import gcd
 
 _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
-from sympy import factorint, isprime, primerange              # noqa: E402
+from sympy import factorint                                   # noqa: E402
 
+from huntlib import certificate as _cert                      # noqa: E402
 from huntlib import checkpoint as _ckpt                       # noqa: E402
+from huntlib import evidence as _evid                         # noqa: E402
+from huntlib import pool as _hpool                            # noqa: E402
 from huntlib.checkpoint import CheckpointCorrupt              # noqa: E402
+from huntlib.gpu import device_report as _device_report       # noqa: E402
+from huntlib.gpu import nbytes_of as _nbytes_of               # noqa: E402
 from huntlib.hlog import log, census_str, Heartbeat           # noqa: E402
 from huntlib import shutdown as _shutdown                     # noqa: E402
-from huntlib.primes import (MR_VALID_BELOW, factor_witness,   # noqa: E402
-                            mr_is_prime, sprp_base2)
+from huntlib.primes import (factor_witness, mr_is_prime,      # noqa: E402
+                            sprp_base2)
 from ladder_reference import (K_FLOOR, KNOWN, PUBLISHED_BOUNDS,  # noqa: E402
                               run_length as oracle_run, wheel_modulus)
 from ladder_search import CpuEngine, J_CEIL, Q2_DEFAULT       # noqa: E402
@@ -218,55 +222,17 @@ class CorruptEngineError(RuntimeError):
 def device_report(eng):
     """One line of machine state at campaign start.
 
-    A hunt that runs for days on a desktop should say, in its own log, how
-    much of the machine it is taking and what the machine's limits were
-    when it started -- so the log itself can answer "how much VRAM did it
-    hold" and "was the card at stock limits" afterwards, without anyone
-    reconstructing it.  Everything here is READ-ONLY: the campaign reports
-    the machine's state and never changes a setting on the owner's behalf
-    (CONVENTIONS.md, "Sizing a hunt so it leaves the machine usable",
-    step 7).
+    The reporting itself is huntlib.gpu.device_report (shared: every hunt
+    in this repo owes its own log the same line, and all of it is READ-ONLY
+    -- a campaign names the machine's levers and never pulls one,
+    CONVENTIONS.md step 7).  What stays here is the only part that is this
+    engine's business: WHICH of its arrays count as held VRAM.
     """
-    bits = []
-    try:
-        import cupy as cp
-        dev = cp.cuda.Device()
-        props = cp.cuda.runtime.getDeviceProperties(dev.id)
-        free, total = cp.cuda.runtime.memGetInfo()
-        name = props["name"].decode() if isinstance(props["name"], bytes) \
-            else str(props["name"])
-        held = 0
-        for a in ("d_bits", "d_pat", "d_primes", "d_magic", "d_wmod"):
-            arr = getattr(eng, a, None)
-            if isinstance(arr, dict):              # per-fold-offset tables
-                held += sum(int(getattr(v, "nbytes", 0)) for v in arr.values())
-            elif arr is not None:
-                held += int(getattr(arr, "nbytes", 0))
-        for slot in getattr(eng, "_slots", []):
-            for key in ("q1", "q2", "cnt", "args"):
-                held += int(getattr(slot.get(key), "nbytes", 0) or 0)
-        bits.append(f"{name}, {props['multiProcessorCount']} SMs")
-        bits.append(f"VRAM {(total-free)/2**30:.1f}/{total/2**30:.1f} GiB used "
-                    f"(this engine holds {held/2**30:.2f} GiB)")
-    except Exception:
-        pass
-    try:
-        import subprocess
-        out = subprocess.run(
-            ["nvidia-smi", "--query-gpu=power.limit,power.max_limit,"
-             "clocks.max.sm,temperature.gpu,driver_version",
-             "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=10)
-        if out.returncode == 0 and out.stdout.strip():
-            pl, pmax, clk, temp, drv = [x.strip() for x in
-                                        out.stdout.strip().splitlines()[0]
-                                        .split(",")]
-            cap = "" if pl == pmax else "  (CAPPED)"
-            bits.append(f"driver {drv}, power limit {pl}/{pmax} W{cap}, "
-                        f"max SM clock {clk} MHz, {temp} C")
-    except Exception:
-        pass
-    return "; ".join(bits) if bits else "device state unavailable"
+    held = _nbytes_of(*(getattr(eng, a, None) for a in
+                        ("d_bits", "d_pat", "d_primes", "d_magic", "d_wmod")),
+                      *[slot.get(key) for slot in getattr(eng, "_slots", [])
+                        for key in ("q1", "q2", "cnt", "args")])
+    return _device_report(held)
 
 
 # ------------------------ certificates (BLS75 Thm 1) ------------------------
@@ -313,38 +279,23 @@ def certificate(N, fac, base_cap=CERT_BASE_CAP):
     the first eleven primes left only five or six coin flips per value --
     it ran out on a genuine run-10 census value at m = 2 (every prime
     below 41 a residue) and aborted the campaign with a false ALARM.
+
+    The search itself is huntlib.certificate.witnesses -- the theorem is not
+    this project's mathematics, and a second project now depends on it.
+    What is this project's is the paragraph above: WHY the base list has to
+    be open-ended here.
     """
-    out = {}
-    for p in fac:
-        for a in primerange(2, base_cap):
-            if pow(a, N - 1, N) != 1:
-                return None            # Fermat fails: N is composite, no proof exists
-            if gcd(pow(a, (N - 1) // p, N) - 1, N) == 1:
-                out[p] = a
-                break
-        else:
-            return None
-    return out
+    return _cert.witnesses(N, sorted(fac), base_cap)
 
 
 def verify_certificate(N, fac, witnesses):
-    """Re-check a certificate from scratch: this is what the gate drills."""
-    prod = 1
-    for p, e in fac.items():
-        if p >= MR_VALID_BELOW or not mr_is_prime(p):
-            return False, f"claimed factor {p} is not a certified prime"
-        prod *= p ** e
-    if prod != N - 1:
-        return False, "factorization does not multiply to N-1"
-    for p in fac:
-        a = witnesses.get(p) or witnesses.get(str(p))
-        if a is None:
-            return False, f"no witness for {p}"
-        if pow(a, N - 1, N) != 1:
-            return False, f"witness {a} fails Fermat at p={p}"
-        if gcd(pow(a, (N - 1) // p, N) - 1, N) != 1:
-            return False, f"witness {a} fails the gcd condition at p={p}"
-    return True, "ok"
+    """Re-check a certificate from scratch: this is what the gate drills.
+
+    huntlib.certificate.theorem1_verify, which trusts nothing in what it is
+    handed -- not the factorization, not that the claimed factors are
+    prime, not the witnesses.
+    """
+    return _cert.theorem1_verify(N, fac, witnesses)
 
 
 # ------------------------- verification (four-way) --------------------------
@@ -402,71 +353,33 @@ def _classify_chunk(task):
 
 
 def _worker_init():
-    """Pool worker startup: drop below normal priority, then import.
+    """Pool worker startup: go deaf to Ctrl+C, drop priority, pay the imports.
 
-    A classification worker is pure background arithmetic with a whole
-    segment of slack; it has no business competing with the display driver,
-    the CUDA host thread or the desktop for a time slice.  Dropping it a
-    class costs the hunt nothing measurable and keeps the machine usable --
-    and a machine whose driver threads are never starved is a machine that
-    does not appear to have "locked up" when it is merely descheduled.
-    Best effort: a platform that will not take the hint is not an error.
+    huntlib.pool.worker_init, which is where the reasoning now lives: the
+    PARENT decides when a run ends (a worker that kills itself on the
+    console's Ctrl+C can break the pool underneath a parent still writing
+    its checkpoint), a classification worker has a whole segment of slack
+    and no business competing with the display driver for a time slice, and
+    the imports are paid inside the ramp rather than inside the first real
+    segment.
     """
-    _shutdown.ignore_in_worker()   # the PARENT decides when the run ends:
-    # a worker that kills itself on the console's Ctrl+C can break the pool
-    # underneath a parent that is still writing its checkpoint
-    try:
-        if _sys.platform == "win32":
-            import ctypes
-            BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
-            h = ctypes.windll.kernel32.GetCurrentProcess()
-            ctypes.windll.kernel32.SetPriorityClass(
-                h, BELOW_NORMAL_PRIORITY_CLASS)
-        else:
-            os.nice(5)
-    except Exception:
-        pass
-    import numpy  # noqa: F401   -- pay the import here, inside the ramp,
-    import sympy  # noqa: F401      never inside the first real segment
+    _hpool.worker_init("numpy", "sympy")
 
 
 def _worker_ping():
     return os.getpid()
 
 
-def _worker_hold(t):
-    """Occupy a worker for t seconds.  See _prime_pool."""
-    time.sleep(t)
-    return os.getpid()
-
-
 def _prime_pool(pool, workers, ramp_s=WORKER_RAMP_S):
-    """Start the pool's interpreters ONE AT A TIME, and return with all of
-    them up and warm.  Returns the number of distinct workers started.
+    """Start the pool's interpreters ONE AT A TIME (huntlib.pool.ramp).
 
-    ProcessPoolExecutor spawns lazily, and -- this is the part that has to
-    be right -- it spawns on submit ONLY IF no worker is idle.  So pinging
-    and waiting ramps nothing: the single worker that exists answers every
+    The subtlety that has to be right, and the reason this is not a loop of
+    pings: a pool spawns on submit ONLY IF no worker is idle, so pinging and
+    waiting ramps nothing -- the single worker that exists answers every
     ping and the pool never grows.  Each worker has to be HELD busy while
-    the next one is asked for, which is what the hold task is.
-
-    Why bother: submitting a segment's worth of chunks in a loop starts
-    every worker in the same instant, and on Windows every one of them is a
-    fresh interpreter importing numpy and sympy.  N of those at once is the
-    largest, fastest host load step the campaign ever makes, and it lands
-    while the device is flat out on the next segment.  It is also completely
-    unnecessary -- the pool has a whole segment of slack.  Ramped, the host
-    comes up as a staircase, and every import is paid before the first real
-    segment instead of inside it.
+    the next is asked for.
     """
-    hold = ramp_s * workers + 1.0        # still busy when the next is asked
-    futs = []
-    for i in range(workers):
-        futs.append(pool.submit(_worker_hold, hold))
-        if i + 1 < workers:
-            time.sleep(ramp_s)
-    return len({f.result() for f in futs})
-
+    return _hpool.ramp(pool, workers, ramp_s=ramp_s)
 
 
 def _submit_segment(pool, surv, W, cap):
@@ -705,26 +618,18 @@ def refuse_unreadable_cursor(eng, fresh):
     the campaign would begin again at k = K_FLOOR and quietly abandon
     everything already swept.  (This trap cost the sibling project a
     real incident; it is closed here before the first production run.)
+
+    The refusal itself is huntlib.checkpoint.refuse_mismatch -- the rule is
+    repo-wide, and a second project now depends on it.  The exception type
+    at this call site is unchanged.
     """
-    if fresh or not os.path.exists(CKPT):
-        return
     try:
-        with open(CKPT) as fh:
-            stored = json.load(fh).get("key")
-    except Exception as e:
-        raise CorruptEngineError(
-            f"[ALARM] {CKPT} exists but cannot be read ({e}), and no usable "
-            f"{CKPT}.bak stands behind it. A hard crash during a save can "
-            f"leave a right-sized file of NUL bytes -- that is exactly what "
-            f"happened here once, and it is why saves are now fsynced and "
-            f"backed up. The cursor in it is gone; pass --fresh to restart "
-            f"the sweep (contiguous from the floor) or restore a cursor by "
-            f"hand.")
-    raise CorruptEngineError(
-        f"[ALARM] checkpoint key {stored!r} does not match the running "
-        f"configuration {ckpt_key(eng.q2)!r}. Refusing to start a fresh "
-        f"sweep over a range that may already be covered; pass --fresh to "
-        f"discard it deliberately.")
+        _ckpt.refuse_mismatch(CKPT, ckpt_key(eng.q2), fresh=fresh,
+                              describe=lambda s: f"n={s.get('n')} next_j="
+                                                 f"{s.get('next_j')} of "
+                                                 f"W={s.get('W')}")
+    except (_ckpt.CursorRefused, CheckpointCorrupt) as e:
+        raise CorruptEngineError(f"[ALARM] {e}")
 
 
 # ------------------------------- discovery ---------------------------------
@@ -736,24 +641,11 @@ def record_discovery(ev, label):
 
     Keyed by k, so redoing a segment (the one in flight at an interrupt or
     a crash is redone on resume) rewrites the same records instead of
-    appending duplicates."""
-    os.makedirs("evidence", exist_ok=True)
-    path = os.path.join("evidence", f"ladder_hit_run{ev['run']}_k{ev['k']}.json")
-    with open(path, "w") as f:
-        json.dump(ev, f, indent=1)
-    allrec = []
-    if os.path.exists(DISC):
-        with open(DISC) as f:
-            allrec = json.load(f)
-    rec = dict(ev)
-    rec["label"] = label
-    rec["t"] = time.time()
-    allrec = [d for d in allrec if int(d.get("k", -1)) != int(ev["k"])]
-    allrec.append(rec)
-    allrec.sort(key=lambda d: d["k"])
-    with open(DISC, "w") as f:
-        json.dump(allrec, f, indent=1)
-    return path
+    appending duplicates.  huntlib.evidence.record does the keying, the
+    upsert and the durable write; the file NAME is this project's."""
+    return _evid.record(ev, "evidence",
+                        f"ladder_hit_run{ev['run']}_k{ev['k']}.json",
+                        DISC, key="k", label=label)
 
 
 # -------------------------------- preludes ---------------------------------
