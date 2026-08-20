@@ -8,8 +8,9 @@ and shown in each 30-second `[STATUS]` line, never written here
 (CONVENTIONS.md, "The census is counted, not narrated").
 
 Present: **a(10)** (`ladder_hit_run10_k9328409578841430.json`),
-**a(11)** (`ladder_hit_run11_k433871469806557860.json`) and **a(12)**
-(`ladder_hit_run12_k55119263286518170740.json`) -- the campaign's three
+**a(11)** (`ladder_hit_run11_k433871469806557860.json`), **a(12)**
+(`ladder_hit_run12_k55119263286518170740.json`) and **a(13)**
+(`ladder_hit_run13_k12094123415384869458600.json`) -- the campaigns' four
 first occurrences -- plus the ledger. Each was re-verified from these
 files -- independent protocol re-run, every stored certificate re-checked,
 sympy on every value, the stored factorization of k re-multiplied and its

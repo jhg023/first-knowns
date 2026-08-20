@@ -689,3 +689,11 @@ device per 1e18 k.
   multiply to 35 classes, the kill-bit tables scale to ~12 GiB at the
   campaign depth, and stage 1a is no longer 60% of anything.  Revisit
   only if stage 1a dominates again at a much deeper q2.
+
+### Postscript: what v4 bought
+
+a(13) = 12,094,123,415,384,869,458,600 landed at k = 1.209e22 on
+2026-08-19, 58 minutes after this entry's commit -- 1.12e21 of k-line
+past the crash point the folded campaign resumed from (RESULTS.md).  The
+campaign was paused 2026-08-20 at k = 1.57e22 with a(14) the next open
+term, E = 4.28 inside the remaining folded reach.

@@ -94,7 +94,8 @@ CONFIG_KEY = "dickson-ladders/v2/q2={q2}/jceil=4e18"
 # what is already in RESULTS.md as a discovery.)
 CAMPAIGN_FOUND = {10: 9_328_409_578_841_430,
                   11: 433_871_469_806_557_860,
-                  12: 55_119_263_286_518_170_740}
+                  12: 55_119_263_286_518_170_740,
+                  13: 12_094_123_415_384_869_458_600}
 FRONTIER_N = max(max(KNOWN), *([max(CAMPAIGN_FOUND)] if CAMPAIGN_FOUND else [0]))
 
 # A campaign runs INDEFINITELY (CONVENTIONS.md): there is no depth at which

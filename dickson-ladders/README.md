@@ -7,22 +7,28 @@
 
 The hunt for new terms of [OEIS A247965](https://oeis.org/A247965): the
 least k such that **m·k² + 1 is prime for every m = 1, 2, …, n**. The
-sequence is `nonn,hard,more`; its last computational advance was in
-**October 2014**, and the four terms this project targets — a(10) through
-a(13) — have never had an upper bound published for them.
+sequence is `nonn,hard,more`; its last computational advance before this
+project was in **October 2014**, and the four terms the project targeted
+— a(10) through a(13) — had never had an upper bound published for them.
+**All four are now found.**
 
-**Results so far: a(10) = 9,328,409,578,841,430,
+**Results: a(10) = 9,328,409,578,841,430,
 a(11) = 433,871,469,806,557,860 and
-a(12) = 55,119,263,286,518,170,740**, all three found and verified
-2026-08-18 — the first computational advance on this sequence since
+a(12) = 55,119,263,286,518,170,740, found and verified 2026-08-18, and
+a(13) = 12,094,123,415,384,869,458,600, found and verified 2026-08-19** —
+the first computational advance on this sequence since
 October 2014, when Hiroaki Yamanouchi computed a(9) = 3,332,396,388,090
 and left a(10) > 1.54665×10¹³. Each was verified four ways, including a
 Brillhart–Lehmer–Selfridge primality certificate for every one of its
 values, and each was re-verified from its evidence file before
 publication. Details in [RESULTS.md](RESULTS.md).
 
-**Status: ACTIVE** — the campaign is hunting **a(13)**, with **a(14)**
-now inside the engine's reach.
+**Status: PAUSED — open to others** — a(10)–a(13) are found and verified,
+and the campaign is left resumable at k = 1.57×10²², aimed at **a(14)**,
+which sits inside the engine's reach at **98.6%** model odds (E = 4.28
+over the remaining sweep; ≈85% under the pooled optimism factor below).
+Whoever resumes it runs `python launch.py --selftest` and
+`python score.py` **first** (repo rule, CONVENTIONS.md).
 The engine is v4: the v2 bit-sieve restructure (913x the first gated
 engine on the production shape), the 2026-08-18 campaign re-configuration
 measured at **27.9×** end-to-end ([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)
@@ -32,11 +38,13 @@ re-configured campaign — and the 2026-08-19 **fold** (v4), which moves the
 first sieve prime into candidate generation for a paired **2.39×** on top
 (9.6×10¹⁶ → **2.3×10¹⁷ k/s** at the campaign configuration) and extends
 the enforced reach 17×, to k = 2.04×10²⁴ — past a(14)'s P90, where the
-old ceiling sat below a(14)'s *median*.
-The model put a(10) at median 1.68×10¹⁵, a(11) at 7.18×10¹⁶ and a(12) at
-1.83×10¹⁹; all three landed late, at quantiles 0.915, 0.923 and 0.787 —
-see the model scoring below and in RESULTS.md. It puts a(13) at 2.14×10²¹;
-the cursor stands past the P90 at k = 1.10×10²². Predictions are stated in
+old ceiling sat below a(14)'s *median*. **a(13) is what the fold bought**:
+it landed 58 minutes after the fold's commit, 1.12×10²¹ of k-line past
+the point where the pre-fold campaign had stopped.
+The model put a(10) at median 1.68×10¹⁵, a(11) at 7.18×10¹⁶, a(12) at
+1.83×10¹⁹ and a(13) at 2.14×10²¹; all four landed late, at quantiles
+0.915, 0.923, 0.787 and 0.916 — see the model scoring below and in
+RESULTS.md. Predictions are stated in
 full below and were fixed *before* the run, which is the only time they
 are worth anything. Hunts are started deliberately by the repository
 owner, never by an agent.
@@ -63,6 +71,9 @@ the eleven years after are editorial.
 | 10 | **> 15,466,500,000,000** (open) |
 | 11 | **> 107,669,100,000,000** (open) |
 | 12, 13 | **open, no bound published** |
+
+(That is the sequence as published, the state this project started from;
+the finds above settle all four of its open rows.)
 
 Why it is open rather than solved: a k that works for n must make n
 distinct quadratic forms simultaneously prime, and even the n = 1 case —
@@ -169,14 +180,15 @@ hidden; at n = 10 it binds at 2.2x, on legs that take seconds — see
 counted, not narrated.** The launcher's frontier promotes itself the
 moment a longer run is verified (and is stored in the checkpoint, saved
 at the end of that segment): the first k with run ≥ 10 is a(10), a
-`[DISCOVERY]`, and the only thing that is evidenced. With a(12) settled, a
-run-12 value is one short of a(13) and gets a single `[NEAR]` line with
+`[DISCOVERY]`, and the only thing that is evidenced. With a(13) settled, a
+run-13 value is one short of a(14) and gets a single `[NEAR]` line with
 its ordinal (verified 3-way — own chain, sympy, alternate-alignment
-re-sieve — but not evidenced), and every run-7…11 value is **counted
+re-sieve — but not evidenced), and every run-7…12 value is **counted
 only**: it appears in the census counts of the 30-second `[STATUS]`
-heartbeat (`census 7:1368 8:352 9:78 10:27 11:2 12:1`) and nowhere else.
-The moment a(13) lands, run-12 values drop into that count too. A run of
-14 settles a(13) and a(14) at once, each logged once. `evidence/` holds
+heartbeat (`census 7:19446 8:4349 9:927 10:183 11:59 12:9 13:1`) and
+nowhere else.
+The moment a(14) lands, run-13 values drop into that count too. A run of
+15 settles a(14) and a(15) at once, each logged once. `evidence/` holds
 first occurrences only.
 Repo-wide convention: [CONVENTIONS.md](../CONVENTIONS.md).
 
@@ -241,7 +253,7 @@ the unfolded ceiling of the 30030 wheel is 1.20×10²³, between a(14)'s Q1
 and its median — sweeping to it was worth E = 0.54, a 42% chance of a(14)
 (about 22% if the optimism factor below is real). **The v4 fold moved
 that ceiling to 2.04×10²⁴**, past the P90: the reach now holds a(14) to
-E = 4.41, a 98.8% chance (≈87% under the pooled optimism factor). The
+E = 4.41, a 98.8% chance (≈86% under the pooled optimism factor). The
 wheel itself does not widen again until filter 16, which is a(15)'s
 problem, not this campaign's.
 
@@ -249,8 +261,8 @@ At the v2 rate (1.63×10¹⁷ k/s on the production n = 13 shape; the
 end-to-end n = 10 rate is host-bound at 2.45×10¹⁵ k/s — see
 [BENCHMARKS.md](BENCHMARKS.md)) that is **under a second to the a(10)
 median, half a minute to a(11), minutes to a(12), and 3.6 hours to
-a(13)** (P90 19 hours). The first three of those are now history rather
-than forecast: a(10), a(11) and a(12) all landed, each a few times past
+a(13)** (P90 19 hours). All four of those are now history rather
+than forecast: a(10)–a(13) each landed a few times past
 its median (table below). At the v1 rate a(13) was months to years; the
 ledger of how that gap closed, with every reject and its price, is
 [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md).
@@ -262,16 +274,23 @@ ledger of how that gap closed, with every reject and its price, is
 | a(10) | 9.33×10¹⁵ | 1.68×10¹⁵ | 2.47 | 0.915 |
 | a(11) | 4.34×10¹⁷ | 7.18×10¹⁶ | 2.57 | 0.923 |
 | a(12) | 5.51×10¹⁹ | 1.83×10¹⁹ | 1.54 | 0.787 |
+| a(13) | 1.21×10²² | 2.14×10²¹ | 2.48 | 0.916 |
 
-All three are late draws — 5.5×, 6.0× and 3.0× past their medians, where
-the median wait is E = ln 2 ≈ 0.69. Pooling them as Exp(1) draws gives a
-maximum-likelihood optimism factor of **2.2×** with a 95% interval of
-roughly **[0.9, 10.6]**; that still contains 1, so it is still not
-evidence the singular series is wrong. The third draw was the mildest of
-the three and *lowered* the estimate (it was 2.5× on two), while the
-one-sided tail — P(ΣE ≥ 6.58) for three Exp(1) draws — tightened to
-**0.04**. Three late draws in a row are worth watching; a(13) is the one
-that decides it.
+All four are late draws — 5.5×, 6.0×, 3.0× and 5.7× past their medians,
+where the median wait is E = ln 2 ≈ 0.69. Pooling them as Exp(1) draws
+gives a maximum-likelihood optimism factor of **2.26×** with a 95%
+interval of **[1.03, 8.31]** — and that interval, for the first time,
+**no longer contains 1**: the one-sided tail, P(ΣE ≥ 9.06) for four
+Exp(1) draws, is **0.020**. The question three late draws posed, which
+a(13) was to decide, is decided: four consecutive late draws are now
+modest evidence — a small sample, clearing 1 by little — that the model
+is **optimistic about depth by a factor near 2**, so read its medians as
+nearer their Q3s. It is *not* evidence against Dickson/Bateman–Horn:
+the terms keep existing and keep being found, just deeper, which is the
+signature of a small systematic bias in the singular series rather than
+of a missing obstruction. a(14) is the clean out-of-sample test: median
+1.68×10²³ as published, nearer 3.8×10²³ if the 2.26× factor is real —
+both inside the folded reach.
 
 ## Running it
 
@@ -302,17 +321,18 @@ The filter sets the wheel: W(n) is the product of the primes ≤ n+1,
 because run(k) ≥ n forces q | k for every prime q ≤ n+1 (m runs over a
 complete residue system mod q, so some m has m·k² ≡ −1, and that value is
 larger than q above the floor). With the default **`--filter-lag 0`** the
-sieve asks only for the next open term — n = frontier + 1, which is **13**
-now that a(12) has landed — so it rides the **30030** wheel rather than
+sieve asks only for the next open term — n = frontier + 1, which is **14**
+now that a(13) has landed — so it rides the **30030** wheel rather than
 the 2310 one: **13× fewer candidates per unit of k-line and 13× fewer
 survivors to classify.** Nothing about the least-claim weakens, because
-a(13) *is* a multiple of 30030 by that same argument, so the coarser wheel
-skips no candidate that could be a(13). (W(13) = W(12) = 30030, both being
-the primes ≤ 14, so the a(12) find moved the filter without moving the
-wheel or the cursor.)
+a(14) *is* a multiple of 30030 by that same argument, so the coarser wheel
+skips no candidate that could be a(14). (W(12), W(13) and W(14) are all
+30030 — the primes ≤ 13, ≤ 14 and ≤ 15 are the same set — so the a(12)
+and a(13) finds each moved the filter without moving the wheel or the
+cursor.)
 
 `--filter-lag 1` runs a step behind instead: the sieve stays at n =
-frontier, so run-12 values (one short of a(13)) still appear and get their
+frontier, so run-13 values (one short of a(14)) still appear and get their
 `[NEAR]` line and the census fills in below the frontier. That is
 bookkeeping, and it costs a factor of thirteen. When a step widens the
 wheel the cursor is re-denominated by floor — an overlap of under one

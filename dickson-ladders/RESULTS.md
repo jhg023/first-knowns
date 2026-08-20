@@ -6,9 +6,9 @@ run-breaking composite, and — specific to this project — a primality
 certificate for every value claimed prime. Evidence JSONs in
 `evidence/`.
 
-## Standing state (2026-08-18)
+## Standing state (2026-08-20)
 
-**Three new terms found and verified**, the first computational advance on
+**Four new terms found and verified**, the first computational advance on
 A247965 since October 2014:
 
 | n | value | status |
@@ -17,14 +17,15 @@ A247965 since October 2014:
 | **a(10)** | **9,328,409,578,841,430** | **found 2026-08-18** |
 | **a(11)** | **433,871,469,806,557,860** | **found 2026-08-18** |
 | **a(12)** | **55,119,263,286,518,170,740** | **found 2026-08-18** |
-| a(13) | open, no bound published | the hunt continues |
+| **a(13)** | **12,094,123,415,384,869,458,600** | **found 2026-08-19** |
+| a(14) | open, no bound published | campaign paused, resumable |
 
-All three were found in the first minutes of a campaign, all three were
-verified four ways (below), and the sweep that produced them is contiguous
-from k = 10⁴, which is what makes them *least* values rather than merely
-examples. Prior published lower bounds — a(10) > 1.54665×10¹³ and
-a(11) > 1.076691×10¹⁴ — are consistent: the finds sit 600× and 4,000×
-above them. No bound had been published for a(12).
+All four were verified four ways (below), each was re-verified from its
+evidence file before publication, and the sweep that produced them is
+contiguous from k = 10⁴, which is what makes them *least* values rather
+than merely examples. Prior published lower bounds — a(10) > 1.54665×10¹³
+and a(11) > 1.076691×10¹⁴ — are consistent: those finds sit 600× and
+4,000× above them. No bound had been published for a(12) or a(13).
 
 These are **candidates for OEIS in the repository owner's hands, not
 submissions**: the pipeline records, humans decide (CLAUDE.md rule 5).
@@ -92,43 +93,77 @@ above a(11).
   P90).
 - Evidence: `evidence/ladder_hit_run12_k55119263286518170740.json`
 
-### What the three finds say about the model
+## A247965(13) = 12,094,123,415,384,869,458,600
 
-All three landed late — quantiles 0.915, 0.923 and 0.787, i.e. E = 2.47,
-2.57 and 1.54 where the median wait is ln 2 ≈ 0.69. The third was the
-mildest of them, which *lowers* the estimated bias: pooling all three as
-Exp(1) draws gives a maximum-likelihood optimism factor of **2.2×** (down
-from 2.5× on two) with a 95% interval of about **[0.9, 10.6]** (from
-[0.9, 20.8]). The interval still contains 1, so this is still not evidence
-that the singular series is wrong — but the one-sided tail is now
-P(ΣE ≥ 6.58 | three Exp(1) draws) = **0.04**, which is where a third
-consecutive late draw does start to be worth watching rather than merely
-noting. The honest reading: the model is not yet falsified, it has been
-pessimistic-about-depth three times running, and a(13) is the draw that
-decides it.
+Found 2026-08-19 at k ≈ 1.21×10²², 219× above a(12) — **58 minutes after
+the v4 fold's commit landed** and the campaign resumed from
+k = 1.097×10²², where the verification-leg crash (below) had stopped it:
+1.12×10²¹ of k-line under the folded engine, and the fold is what made
+the depth routine.
 
-Stated as predictions rather than post-hoc: the same model puts a(13)'s
-median at 2.14×10²¹ and its P90 at 1.10×10²². If the 2.2× factor is real
-rather than luck, a(13) lands nearer 4×10²¹ than 2×10²¹.
+- m·k²+1 is prime for every m = 1..13 — thirteen simultaneous primes of
+  45–46 digits.
+- The run breaks at m = 14: 14k² + 1 =
+  2,047,749,496,611,848,115,619,307,470,334,282,799,595,440,001 =
+  **2,711** × 755,348,394,176,262,676,362,710,243,575,906,602,580,391
+  (itself composite), so the run is exactly 13.
+- k = 2³ · 3 · 5² · 7² · 11 · 13 · 17 · 294,293 · 574,992,493 — a
+  multiple of W(13) = 30030, as the wheel argument forces. (17 | k is
+  chance, not force: the wheel takes only the primes ≤ 14.)
+- Least-claim basis: every multiple of 30030 from 10⁴ to k was classified
+  and failed, each failure a proof. Contiguity is unbroken across the
+  wheel changes far below it and across the one crash-and-resume, which
+  redid its in-flight segment from the checkpointed boundary.
+- Model quantile of the find: **0.916** (E = 2.48; median predicted
+  2.14×10²¹, so it landed 5.7× past it — 10% beyond the model's P90,
+  later relative to prediction than every earlier find except a(11)).
+- Evidence: `evidence/ladder_hit_run13_k12094123415384869458600.json`
 
-The validation table below (six known terms, E scattering around 1) was
-computed before the run and is unchanged by these three.
+### What the four finds say about the model
+
+All four landed late — quantiles 0.915, 0.923, 0.787 and 0.916, i.e.
+E = 2.47, 2.57, 1.54 and 2.48 where the median wait is ln 2 ≈ 0.69. The
+previous edition of this file said a(13) was the draw that would decide
+whether three consecutive late draws meant anything. It has, and it came
+in late again — its own adjusted guess ("nearer 4×10²¹ than 2×10²¹") was
+itself too shallow by 3×. Pooling all four as Exp(1) draws gives a
+maximum-likelihood optimism factor of **2.26×** with a 95% interval of
+**[1.03, 8.31]** — which for the first time **excludes 1** — and the
+one-sided tail P(ΣE ≥ 9.06 | four Exp(1) draws) = **0.020**.
+
+The honest reading, with its own caveats attached: four draws is a small
+sample and the interval clears 1 by very little, but the question was
+posed before the draw, and it resolved against the model. The working
+conclusion is that the singular-series model is **optimistic about depth
+by a factor of about 2** for this family — read its medians as nearer
+their Q3s. What this is *not* is evidence against Dickson/Bateman–Horn:
+the terms keep existing and keep being found, just deeper than the
+truncated series predicts, which is the signature of a small systematic
+bias in C_n rather than of a missing obstruction. a(14) is the clean
+out-of-sample test: median 1.68×10²³ as published, nearer 3.8×10²³ if
+the 2.26× factor is real — both inside the folded reach.
+
+The validation table in the README (six known terms, E scattering around
+1) was computed before the run and is unchanged by these four.
 
 ## Verification
 
-Every claim above survived the project's four-way protocol, and all three
+Every claim above survived the project's four-way protocol, and all four
 were **re-verified from their evidence files** before publication — the
 whole protocol re-run from scratch, plus an independent re-check of every
 stored certificate:
 
-| leg | a(10) | a(11) | a(12) |
-|-----|-------|-------|-------|
-| engine SPRP chain + sympy BPSW agree on the run length | ok | ok | ok |
-| alternate-alignment re-sieve (coarser wheel, numpy `%`, not the GPU's Barrett path) | ok | ok | ok |
-| BLS75 primality certificates, re-checked from scratch | 10/10 | 11/11 | 12/12 |
-| factor witness for the run breaker | 1,425,733 | 13 | 173 |
-| sympy `isprime` on every value, independently | 10/10 | 11/11 | 12/12 |
-| stored k factorization re-multiplied, factors re-proved prime | ok | ok | ok |
+| leg | a(10) | a(11) | a(12) | a(13) |
+|-----|-------|-------|-------|-------|
+| engine SPRP chain + sympy BPSW agree on the run length | ok | ok | ok | ok |
+| alternate-alignment re-sieve (different wheel alignment, sympy square roots and plain `%`, not the GPU's Barrett path) | ok | ok | ok | ok |
+| BLS75 primality certificates, re-checked from scratch | 10/10 | 11/11 | 12/12 | 13/13 |
+| factor witness for the run breaker | 1,425,733 | 13 | 173 | 2,711 |
+| sympy `isprime` on every value, independently | 10/10 | 11/11 | 12/12 | 13/13 |
+| stored k factorization re-multiplied, factors re-proved prime | ok | ok | ok | ok |
+
+a(13)'s alternate-alignment leg ran in the post-crash direct-table form
+(Python integers, no j ceiling — see below); what is checked is unchanged.
 
 The certificates matter here rather than being decoration: m·k²+1 passes
 huntlib's deterministic Miller–Rabin bound (3.317×10²⁴) before a(9), so
@@ -138,7 +173,7 @@ Brillhart–Lehmer–Selfridge Theorem 1 needs.
 
 ## The machinery behind the claims
 
-Rediscoveries rather than discoveries — but they are the reason the two
+Rediscoveries rather than discoveries — but they are the reason the four
 finds above are believable, they run before every campaign, and anyone
 can check them today:
 
@@ -173,7 +208,8 @@ can check them today:
 from 10⁴ to that k was classified, every one below it failed, and the
 failures are *proofs* — a small prime dividing one of the ten values, or
 a failed strong Fermat test. The same holds for a(11) through
-4.34×10¹⁷, and for a(12) through 5.51×10¹⁹ on W(12) = 30030. "These
+4.34×10¹⁷, and for a(12) and a(13) through 5.51×10¹⁹ and 1.21×10²² on
+W(12) = W(13) = 30030. "These
 values are prime" rests on certificates rather than probable-prime tests,
 because m·k²+1 outgrows deterministic Miller–Rabin before a(9).
 
@@ -203,36 +239,56 @@ The a(10)/a(11) campaign, sieving one step behind the frontier on the
 |-----|---|---|---|----|----| 
 | count | 11,447 | 2,649 | 606 | 140 | 35 |
 
-The a(12) campaign, sieving for the next open term on the 30030 wheel, at
-k ≈ 8.73×10¹⁹ (33,199,184 survivors classified in 13.5 minutes):
+The a(12)/a(13) campaign, sieving for the next open term on the 30030
+wheel, at its pause point k = 1.57×10²² (956,235,834 survivors classified
+over 25.1 h of campaign wall clock):
 
-| run | 7 | 8 | 9 | 10 | 11 | 12 |
-|-----|---|---|---|----|----|----| 
-| count | 1,368 | 352 | 78 | 27 | 2 | 1 |
+| run | 7 | 8 | 9 | 10 | 11 | 12 | 13 |
+|-----|---|---|---|----|----|----|----|
+| count | 19,446 | 4,349 | 927 | 183 | 59 | 9 | 1 |
 
-The second campaign covered 6× more k-line and counted 8× fewer run-7s,
-because a census count is a count of what the sweep *examined*: on the
-30030 wheel twelve of every thirteen 2310-multiples are never candidates
-at all — each is proved not to be a(12) by divisibility, not by
-classification. The census is a by-product of the hunt, not a measurement
-of the k-line, and only counts taken at the same filter can be compared.
+This campaign covered orders of magnitude more k-line per count than the
+first, because a census count is a count of what the sweep *examined*: on
+the 30030 wheel twelve of every thirteen 2310-multiples are never
+candidates at all — each is proved not to be a(12) by divisibility, not
+by classification — and a shorter run is counted only when its breaker
+also escapes the sieve depth. The census is a by-product of the hunt, not
+a measurement of the k-line, and only counts taken at the same filter can
+be compared.
 
 Within each campaign the counts fall by roughly the factor the model
 predicts per added constraint, which is a weak but free consistency check
-on the sieve. Each run-11 and run-12 value was verified when met; none is
-evidenced, because `evidence/` holds first occurrences only.
+on the sieve. The run-13 count is the a(13) find itself; of the nine
+run-12s, the first is the a(12) find and the rest are census repeats,
+each verified when met, none evidenced, because `evidence/` holds first
+occurrences only.
 
-## In progress
+## Paused (2026-08-20)
 
-The campaign is **hunting a(13)**, which the model puts at median
-2.14×10²¹ — the sweep is past the P90, standing at k = 1.10×10²² with the
-census at `7:17161 8:3876 9:822 10:168 11:51 12:8`. It runs indefinitely
-to the enforced ceiling of its wheel (the last rung) unless stopped;
-`--stop-on-discovery` and `--to` are the deliberate stops, and Ctrl+C
-checkpoints at the last completed segment and exits cleanly.
+With a(13) found and verified, the owner paused the campaign to move to
+other work. Where it stands, all of it in the checkpoint:
+
+- cursor k = 1.57×10²² (next_j = 521,960,159,937,822,721 on the 30030
+  wheel), filter n = 14, contiguous from the floor;
+- 956,235,834 survivors classified over 25.1 h of campaign wall clock;
+- census at pause: `7:19446 8:4349 9:927 10:183 11:59 12:9 13:1`;
+- every a(13) rung is passed and retired; the ladder aims at a(14).
+
+The hunt is left resumable: `python launch.py` continues from the
+checkpointed boundary. **Resuming starts with `python launch.py
+--selftest` and `python score.py`** — that is where any shared change
+made while the project sleeps gets proved on it (repo rule,
+CONVENTIONS.md).
+
+What the remaining sweep is worth: from the pause cursor to the folded
+ceiling k = 2.04×10²⁴ is E = 4.28 for a(14) — a **98.6%** model chance,
+≈85% under the 2.26× pooled optimism factor — about 8.5 days of sweep to
+the a(14) median and 43 days to its P90 at the paired v4 rate. The wheel
+does not widen again until filter 16, so a resumed campaign rides the
+same 30030 wheel and the same cursor to the end of the ladder.
 
 Two 2026-08-19 changes bear on the claims and the reach, both gated
-before resuming:
+before the sweep that found a(13) resumed:
 
 - **A verification-path crash was found by the campaign itself and
   fixed.** At k = 1.097×10²² a run-12 `[NEAR]` verification converted k
@@ -255,9 +311,10 @@ before resuming:
   the same sweep: E = 4.41 (98.8%) inside the new reach, against
   E = 0.54 (42%) inside the old one.
 
-The find moved the hunt itself: the filter followed the frontier from 12
-to 13 the moment a(12) was verified. The wheel is unchanged at 30030 —
-W(13) also takes the primes ≤ 14 — so the cursor did not need
+Each find moved the hunt itself: the filter followed the frontier from 12
+to 13 the moment a(12) was verified, and from 13 to 14 the moment a(13)
+was. The wheel is unchanged at 30030 across both — W(13) and W(14) also
+take the primes ≤ 14 and ≤ 15 — so the cursor never needed
 re-denominating, and the sweep continued from where it stood.
 
 **The campaign was re-configured on 2026-08-18** for a measured 27.9×
@@ -291,8 +348,10 @@ than an optimization log, because they bear on what the claims rest on:
   skips is proved not to be a(12). The cursor was re-denominated by floor,
   which overlaps by under one period and never gaps.
 
-That third draw has now landed, and it came in milder than the first two:
-the pooled optimism factor fell from 2.5× to 2.2× and its interval still
-contains 1, while the one-sided tail tightened to 0.04. So the question
-the last edition of this file posed is answered "not yet, and now watch
-a(13)" — which is the honest place for it to be after three events.
+The fourth draw has now landed too, and it broke the softening trend of
+the third: a(13) came in at quantile 0.916, the pooled optimism factor
+rose from 2.19× to 2.26×, and its 95% interval — [1.03, 8.31] — no
+longer contains 1. The question this file carried through three finds
+("is the model optimistic about depth?") is answered "probably, by about
+2×", and a(14), the next open term, is the out-of-sample test of exactly
+that number.

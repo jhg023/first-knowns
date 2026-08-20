@@ -207,3 +207,15 @@ prelude, the [NEAR]/[DISCOVERY] verifications and the filter switch --
 and the find itself sat 3.0x past the median, at 9 min 45 s. The
 projection was conservative on rate; the wait past the median is the
 model's variance, not the benchmark's.
+
+The v4 configuration was then measured against a real campaign the same
+way: it found a(13) = 12,094,123,415,384,869,458,600 at k = 1.209e22 on
+2026-08-19, **58 minutes after the fold's commit landed** -- 1.12e21 of
+k-line beyond the crash point the campaign resumed from, with the
+prelude, a run-12 [NEAR] verification and the discovery's own four-way
+verification inside the same wall clock. That implies at least 2.5e17 k/s
+end-to-end, above the paired capture's 2.31e17 absolute -- expected, and
+not a discrepancy: the interleaved A/B shares the device between its two
+arms, and its result is the ratio, never the absolute. The campaign then
+swept on to k = 1.57e22 and was paused 2026-08-20 with a(14) the next
+open term.

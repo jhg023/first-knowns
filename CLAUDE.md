@@ -32,8 +32,10 @@ each README stays.
    skeleton (oracle / CPU engine / GPU engine / launcher / score) and
    the gate discipline are binding.
 2. **Gates green before and after every change — for the ACTIVE project
-   only.** Run `python score.py` in the project being worked on (today:
-   dickson-ladders); commit only with that project's SCORE in the
+   only.** Run `python score.py` in the project being worked on (the
+   ACTIVE row of the top-level README's project table says which; as of
+   2026-08-20 both projects are PAUSED); commit only with that
+   project's SCORE in the
    message. If a deliberate coverage change alters the benchmark
    fingerprint, update the fingerprint in the same commit and log it in
    that project's OPTIMIZATION_LOG.md.
