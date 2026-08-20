@@ -225,12 +225,35 @@ evidenced, because `evidence/` holds first occurrences only.
 ## In progress
 
 The campaign is **hunting a(13)**, which the model puts at median
-2.14×10²¹ — the cursor stood at k = 8.73×10¹⁹ when it was last stopped, so
-at the observed 1.1×10¹⁷ k/s the median is about **5 hours** of sweep away
-and the P90 about **27 hours**. It runs indefinitely to the enforced
-ceiling of its wheel (the last rung) unless stopped;
+2.14×10²¹ — the sweep is past the P90, standing at k = 1.10×10²² with the
+census at `7:17161 8:3876 9:822 10:168 11:51 12:8`. It runs indefinitely
+to the enforced ceiling of its wheel (the last rung) unless stopped;
 `--stop-on-discovery` and `--to` are the deliberate stops, and Ctrl+C
 checkpoints at the last completed segment and exits cleanly.
+
+Two 2026-08-19 changes bear on the claims and the reach, both gated
+before resuming:
+
+- **A verification-path crash was found by the campaign itself and
+  fixed.** At k = 1.097×10²² a run-12 `[NEAR]` verification converted k
+  to j on the *coarser* alternate-alignment wheel (2310), crossed the
+  enforced j ceiling — which the coarse wheel reaches at k = 9.24×10²¹,
+  13× before the campaign's own wheel — and halted the run with the
+  checkpoint intact at a segment boundary. The leg now consults the
+  alternate table directly in Python integers (same table, same
+  mathematics, no ceiling), and the selftest drills it at the exact j
+  that raised. **No recorded value is affected**: the leg only ever
+  checked membership of k, and every earlier verification ran below the
+  coarse wheel's reach.
+- **The engine folded its first sieve prime into candidate generation**
+  (v4): j = 17u + r over the five surviving offsets, an identical
+  survivor stream (G17 pins folded == unfolded bit for bit, and the
+  frozen fingerprints reproduce), measured **2.39× end-to-end** at the
+  campaign configuration — and the enforced reach moved from
+  k = 1.20×10²³ to **k = 2.04×10²⁴**, which is what makes **a(14)**
+  (median 1.68×10²³, past the old ceiling) a realistic continuation of
+  the same sweep: E = 4.41 (98.8%) inside the new reach, against
+  E = 0.54 (42%) inside the old one.
 
 The find moved the hunt itself: the filter followed the frontier from 12
 to 13 the moment a(12) was verified. The wheel is unchanged at 30030 —

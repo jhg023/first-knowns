@@ -169,6 +169,33 @@ a(13) median 2.14e21 is about **8.8 hours** and its P90 1.09e22 about
 **45 hours**. At the v2 rate those were 2.2 hours, 11 hours, 10 days and
 50 days.
 
+## v4 (2026-08-19, RTX 4090): the fold
+
+The engine folds its first sieve prime into candidate generation
+(OPTIMIZATION_LOG.md v4): j = 17u + r over the five surviving offsets at
+n = 13, identical survivor stream (G17), same kernels walking a line
+3.4x thinner. **Paired and interleaved at the campaign shape (n = 13,
+q2 = 262144, 2^41-j window, streams compared every round):
+v4/v3 = 2.387x (min 2.138, max 2.439)** -- 2.31e17 k/s folded against
+9.64e16 k/s unfolded on an idle machine, 4.3 s of device per 1e18 of
+k-line. Constants re-swept after the change: NS derivation confirmed
+(the 20-24 plateau is flat), RATIO 2 and LAUNCH 2^34 stay, pinned T 4096
+inverted to 0.979x and is closed.
+
+| shape | capture | note |
+|-------|---------|------|
+| `SCORE` (n = 10) | 1,230,573,335 | a folded pass through a 2^32 window is 5-7 ragged EAGER launches: the shape's absolute collapsed further and resolves nothing (OPTIMIZATION.md 2.13). Fingerprint reproduces, which is the job it still does |
+| `SCORE12` (n = 12) | 16,466,591,056 | same |
+| `SCORE13` (n = 13) | 214,673,527,566 | ~0.94 launches per offset -- eager, no double-buffer overlap -- and still 2.2x the pre-fold capture. Engine A/Bs are judged on campaign-shaped windows now (the paired 2.387x above) |
+
+The fold also extends the enforced reach 17x, to k = 2.04e24 (the u64
+quantity on the device is u, not j), which moves a(14) from "past the
+ceiling at its median" to E = 4.41 (98.8%) inside the reach. At the v4
+rate the remaining a(13) tail (cursor k = 1.10e22 to P95-ish depths) is
+hours, and the a(14) median 1.68e23 is about **8.5 days** of sweep --
+the P90 8.55e23 about **43 days** -- where the pre-fold engine would
+have hit its ceiling at 1.20e23 with a(14) still at 42% odds.
+
 **Measured against a real campaign.** The v3 configuration then found
 a(12) = 55,119,263,286,518,170,740 at k = 5.51e19 after **9 min 45 s** of
 wall clock, and was stopped at k = 8.73e19 after 13.5 min (33,199,184

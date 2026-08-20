@@ -562,3 +562,130 @@ that.
   still the two best remaining ideas -- but note that CRT pairs now have a
   *mechanism* to be judged against (sectors per gather, not table size),
   which is not how they were priced.
+
+
+---
+
+## v4 (2026-08-19): the fold -- a declined item re-priced 3x wrong, worth 2.39x
+
+### 0. First, the crash that freed the machine to measure
+
+The live a(13) campaign died at k = 1.097e22: a run-12 [NEAR]
+verification called `full_verify`, whose alternate-alignment leg
+re-sieved a window around k on the COARSER 2310 wheel, and
+j = k/2310 = 4.75e18 tripped the enforced J_CEIL (4e18) guard --
+ValueError, campaign down.  The coarse verification wheel crosses the j
+ceiling at k = 9.24e21, **13x before the campaign's own wheel does**, and
+the eight earlier run-12 values all happened to sit below that.  The
+checkpoint was at a segment boundary as designed; the crash cost two
+minutes of sweep.  The leg now consults the alt engine's residue table
+directly (`CpuEngine.survives`, Python integers, exact at any depth) --
+membership of k is all the windowed sweep ever checked -- and the
+selftest's deep-verification drill pins the direct check against
+big-integer divisibility at the exact j that raised.  Committed
+separately (db24539) before any measurement below.
+
+### 1. The mispriced decline (OPTIMIZATION.md Rule 5b, worked example)
+
+The v2 "priced, not built" list carried: *"a wider wheel for the deep
+legs (fold 17 into the line at n = 13): ~1.06x of candidates ...
+declined."*  That price is a linear-form transplant -- one killed
+residue per prime, 17/16 = 1.06 -- and this form is QUADRATIC: every
+solvable m contributes two roots, so w_q ~ n.  The engine's own kill-bit
+table says w_17(13) = **12**: folding 17 out of the sieve and into
+candidate generation keeps 5/17 of the line -- **3.4x fewer candidates**,
+not 1.06x.  A decline is only as good as its stated reason, and this one
+did not survive a single popcount of a table the engine already builds.
+
+### 2. Phase split at the live shape (n = 13, q2 = 262144), before building
+
+Whole-graph events on the production path (graph replay intact, no
+readback), interleaved full-chain vs stage-1a-only:
+
+| phase | share |
+|-------|-------|
+| stage 1a | 5.90 ms/launch -> **60.7%** |
+| stage 1b + tail | 2.32 ms -> 39.3% |
+
+Device 11.4 s per 1e18 k idle; ~81 final survivors per 1e18 k at this
+depth, so the host pool is essentially idle at n = 13 (~3.7 core-s per
+1e18 k) and every win below is pure device win.  Predicted fold value:
+1a x (5/17) x (NS'/NS) -> ~1.8x end-to-end.
+
+### 3. The fold, built (engine v4)
+
+Enumerate u with j = P*u + r over the offsets r that survive P = 17
+(five of seventeen at n = 13: 0, 2, 6, 11, 15, from the same walk the
+device runs).  The kill-bit and pattern tables are built per offset --
+entry s answers for j = P*s + r -- and the KERNELS ARE UNCHANGED: they
+walk u where they walked j, and a launch picks its offset's tables by
+pointer (CUDA graphs captured per offset, since a graph bakes pointers).
+The survivor stream is identical by construction; all three frozen
+fingerprints reproduce, and the new **G17** pins folded == unfolded bit
+for bit on populated windows and unaligned cuts, then checks the deep
+zone (below) against big-integer divisibility with no engine on the
+other side.
+
+NS re-derives from the same S1A_TARGET on the folded line: 16 -> 24
+primes (the line's survivors are 3.4x denser per candidate, so stage 1a
+carries more primes at the same queue density -- and the densest
+stage-1b primes moved into 1a with it, which is where the measured win
+beats the 1.8x prediction).
+
+**Paired A/B at the campaign shape (n = 13, q2 = 262144, 2^41-j window
+at the live cursor, streams compared every round, both arms in one
+process): fold/unfold = 2.387x (min 2.138, max 2.439, 7 rounds).**
+2.31e17 k/s folded vs 9.64e16 unfolded on the idle machine -- 4.3 s of
+device per 1e18 k.
+
+### 4. Constants re-swept after the structural change (Rule 3.4)
+
+| knob | swept | verdict |
+|------|-------|---------|
+| NS (derived 24) | 15: 0.751, 20: 1.003, 24: 1.000, 26: 0.972 | derivation KEPT -- the 20-24 plateau is flat; the "cheap 1a" point (15, same absolute queue as v3) loses 25% |
+| LAUNCH | 2^33: 0.912, 2^34: 1.000, 2^35: 1.021 | 2^34 stays: +2.1% is not worth 2x the queue memory (0.71 -> 1.42 GiB), same verdict as v3 |
+| T pinned 4096 | **0.979** (was 1.039x before the fold) | DECLINED, and the standing "T 4096 unreachable without halving MIN_BLOCKS_PER_SM" question closes: the fold moved the optimum back to the derived 2048.  Re-sweeps exist because of exactly this |
+| RATIO | 1.5: 0.949, 2: 1.000, 3: 0.922, 4: 0.901 | 2 stays |
+
+### 5. What the fold costs, and what it moves
+
+- **Device memory 0.77 -> ~2.4 GiB** (five kill-bit tables at 344 MiB
+  each, q2 = 262144, plus the queues) of 24 GiB.  Stated per the load
+  budget; one offset's tables are hot per launch, so the L1 footprint --
+  the measured cliff -- does not move (pattern table 13.0 KiB/offset at
+  NS 24; the NS sweep shows the cliff is not biting).
+- **The queue-cap clamp moved 2^26 -> 2^27**: the folded line's stage-1a
+  survival is P/(P-w_P) higher at the same prime count, and a swept-low
+  NS hit the old clamp.  The analytic sizing still governs allocation.
+- **The reach extends 17x**: the device's u64 quantity is u, so the
+  engine holds to j = P * J_CEIL = 6.8e19 -- **k = 2.04e24**.  The old
+  ceiling (1.20e23) sat between a(14)'s Q1 and median (E = 0.54, a 42%
+  chance of a(14)); the new reach covers a(14) to E = 4.41 (98.8%).
+  Past j ~ 1.8e19 the value of j leaves u64: `survivors_j` (numpy)
+  refuses that zone and `survivors_j_deep` (Python integers, the
+  campaign's API) owns it, G17-checked at the top of the reach.
+- The frozen 2^32 shapes degrade further (a folded pass is 5-7 ragged
+  eager launches; OPTIMIZATION.md 2.13) -- their absolutes are now pure
+  noise, but they still pin their v1 fingerprints, which is their job.
+  SCORE13's window holds ~0.94 launches per offset (eager, no overlap)
+  and still reads 2.2x the pre-fold capture; the anchor for future
+  engine A/Bs should be a campaign-shaped window, as used here.
+- G13's graph drill runs LAUNCH 2^18 so each offset's u-span still holds
+  full launches; the drill's point (graph == eager) is unchanged.
+
+### What v4 settles from the standing lists
+
+- **"A wider wheel for the deep legs (fold 17): ~1.06x, declined"** --
+  the price was wrong 3x, the item is BUILT, and it was the largest
+  single device win since the v2 restructure.
+- **"T_MAX 4096, priced 1.4%, not reachable by the derivation"** --
+  re-priced at 0.979x under the fold; closed, not worth reaching.
+- **CRT pair rows** and **baked stage-1b round kernels** remain the two
+  best un-built ideas, unchanged -- but re-price both against the folded
+  profile (stage 1a is now ~35% of a much smaller device bill, and
+  round 0's primes moved into 1a).
+- Folding a SECOND prime (19: 7/19 survive at n = 13, another 2.7x
+  thinning of what remains of stage 1a) is PRICED, NOT TAKEN: offsets
+  multiply to 35 classes, the kill-bit tables scale to ~12 GiB at the
+  campaign depth, and stage 1a is no longer 60% of anything.  Revisit
+  only if stage 1a dominates again at a much deeper q2.

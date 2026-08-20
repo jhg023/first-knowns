@@ -21,23 +21,25 @@ Brillhart–Lehmer–Selfridge primality certificate for every one of its
 values, and each was re-verified from its evidence file before
 publication. Details in [RESULTS.md](RESULTS.md).
 
-**Status: ACTIVE** — the campaign is hunting **a(13)**, the deepest term
-the model makes a prediction for.
-The engine is v2 (913x the first gated engine on the production shape) and
-the campaign around it was re-configured on 2026-08-18 for a measured
-**27.9×** end-to-end, from 2.4×10¹⁵ to **6.8×10¹⁶ k/s**
-([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v3). Most of that was not the
-engine: the hunt was sieving one step behind the frontier, on a wheel 13×
-finer than a(12) can possibly need. **a(12) is what it bought** — found
-9 minutes 45 seconds into the re-configured campaign, at a depth the old
-configuration would have needed about six and a half hours to reach.
+**Status: ACTIVE** — the campaign is hunting **a(13)**, with **a(14)**
+now inside the engine's reach.
+The engine is v4: the v2 bit-sieve restructure (913x the first gated
+engine on the production shape), the 2026-08-18 campaign re-configuration
+measured at **27.9×** end-to-end ([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)
+v3) — most of which was not the kernel but *which wheel the sieve rides*,
+and **a(12) is what it bought**, found 9 minutes 45 seconds into the
+re-configured campaign — and the 2026-08-19 **fold** (v4), which moves the
+first sieve prime into candidate generation for a paired **2.39×** on top
+(9.6×10¹⁶ → **2.3×10¹⁷ k/s** at the campaign configuration) and extends
+the enforced reach 17×, to k = 2.04×10²⁴ — past a(14)'s P90, where the
+old ceiling sat below a(14)'s *median*.
 The model put a(10) at median 1.68×10¹⁵, a(11) at 7.18×10¹⁶ and a(12) at
 1.83×10¹⁹; all three landed late, at quantiles 0.915, 0.923 and 0.787 —
-see the model scoring below and in RESULTS.md. It puts a(13) at 2.14×10²¹,
-about five hours of sweep from where the cursor now stands. Predictions
-are stated in full below and were fixed *before* the run, which is the
-only time they are worth anything. Hunts are started deliberately by the
-repository owner, never by an agent.
+see the model scoring below and in RESULTS.md. It puts a(13) at 2.14×10²¹;
+the cursor stands past the P90 at k = 1.10×10²². Predictions are stated in
+full below and were fixed *before* the run, which is the only time they
+are worth anything. Hunts are started deliberately by the repository
+owner, never by an agent.
 
 ## The problem
 
@@ -89,18 +91,38 @@ assuming it. (The exception zone is real: a(1) = a(2) = 1 works because
 1·1+1 *is* the prime 2. The engines refuse to run below k = 10⁴ and the
 oracle owns everything under it.)
 
-**2. Representation: (W, j), never k.** A candidate is the pair (W, j)
-with k = W·j. The value k passes 2⁶⁴ around a(12) and the *values*
-m·k²+1 pass it before a(8) — but no engine ever forms either. Every
-sieve test needs only
+**2. Representation: (W, j), never k — and folded, (W, P·u + r).** A
+candidate is the pair (W, j) with k = W·j. The value k passes 2⁶⁴ around
+a(12) and the *values* m·k²+1 pass it before a(8) — but no engine ever
+forms either. Every sieve test needs only
 
   k mod q = ((W mod q) · (j mod q)) mod q
 
-and j stays inside u64 to the enforced ceiling (4×10¹⁸, i.e. k up to
-9.2×10²¹ on the 2310 wheel). One engine spans the whole range; there is
-no second engine waiting at the machine-word boundary, which is
+One engine spans the whole range; there is no second engine waiting at
+the machine-word boundary, which is
 [OPTIMIZATION.md](../OPTIMIZATION.md) §2.7 applied at the start of a
 project instead of after it hurts.
+
+**2a. The fold (v4).** The first sieve prime is also the strongest
+killer this problem has: each solvable m contributes two roots, so
+w_q ≈ n residues die per prime, and at n = 13 the prime 17 kills **12 of
+17** j-residues — the line the sieve walks is 70% dead on arrival. The
+GPU engine therefore folds 17 out of the sieve and into candidate
+*generation*: it enumerates u with j = 17u + r over the five surviving
+offsets r, building its kill-bit and pattern tables per offset (only one
+offset's tables are hot per launch, so the cache footprint is unchanged)
+while the kernels themselves are untouched — they walk u where they
+walked j. That is 3.4× fewer candidates per unit of k-line for the
+provably identical survivor stream (**G17** pins folded == unfolded bit
+for bit), measured **2.39× end-to-end** at the campaign configuration.
+It also moves the ceiling: the device's u64 quantity is now u, so the
+engine holds to j = 17 × 4×10¹⁸, i.e. **k up to 2.04×10²⁴** on the 30030
+wheel — past j ≈ 1.8×10¹⁹ the value of j itself no longer fits a machine
+word, and the campaign carries survivors as Python integers. An earlier
+pass priced this fold at "~1.06× of candidates" and declined it; that
+number was wrong by 3× (a linear-form intuition applied to a quadratic
+form), and the correction is written down in
+[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v4 so it cannot be re-derived.
 
 **3. The sieve.** For a prime q > n+1 the killed residues of k are the
 roots of k² ≡ −1/m (mod q) over m = 1..n: two roots for each m with
@@ -213,13 +235,15 @@ where one exists):
 
 a(14) was added to the model on 2026-08-19, once a(12) had landed and the
 hunt was within a day of a(13); a(10)–a(13) are byte-identical to the
-predictions fixed before the run, so nothing above is hindsight. **The
-a(14) row is the first one the campaign cannot simply outrun**: the
-enforced ceiling of the 30030 wheel is 1.20×10²³, which sits between
-a(14)'s Q1 and its median — sweeping the whole remaining wheel is worth
-E = 0.54, a 41% chance of also landing a(14) (about 21% if the optimism
-factor below is real). Going past that is not a `--to` change; it needs a
-raised `J_CEIL`, and the wheel itself does not widen again until filter 16.
+predictions fixed before the run, so nothing above is hindsight. The
+a(14) row used to be the first one the campaign could not simply outrun:
+the unfolded ceiling of the 30030 wheel is 1.20×10²³, between a(14)'s Q1
+and its median — sweeping to it was worth E = 0.54, a 42% chance of a(14)
+(about 22% if the optimism factor below is real). **The v4 fold moved
+that ceiling to 2.04×10²⁴**, past the P90: the reach now holds a(14) to
+E = 4.41, a 98.8% chance (≈87% under the pooled optimism factor). The
+wheel itself does not widen again until filter 16, which is a(15)'s
+problem, not this campaign's.
 
 At the v2 rate (1.63×10¹⁷ k/s on the production n = 13 shape; the
 end-to-end n = 10 rate is host-bound at 2.45×10¹⁵ k/s — see
@@ -293,6 +317,14 @@ frontier, so run-12 values (one short of a(13)) still appear and get their
 bookkeeping, and it costs a factor of thirteen. When a step widens the
 wheel the cursor is re-denominated by floor — an overlap of under one
 period, never a gap — and logged as a `[STAGE]` line.
+
+**`--fold P`** controls the v4 fold (default auto: the first sieve
+prime, 17 at the current filter; `--fold 0` runs the unfolded line). The
+fold changes nothing about the stream or the cursor — the checkpoint's
+j-cursor means exactly what it meant, and a campaign can switch fold
+settings between runs without re-denominating anything — it changes how
+much of the line the device has to touch (2.39× measured) and how deep
+the engine reaches (17 × J_CEIL × wheel = 2.04×10²⁴).
 
 Every 30 s of wall clock (`--heartbeat`) the launcher logs a `[STATUS]`
 line from its own timer thread — whatever the main loop is doing: position,

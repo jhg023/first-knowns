@@ -237,7 +237,9 @@ def device_report(eng):
         held = 0
         for a in ("d_bits", "d_pat", "d_primes", "d_magic", "d_wmod"):
             arr = getattr(eng, a, None)
-            if arr is not None:
+            if isinstance(arr, dict):              # per-fold-offset tables
+                held += sum(int(getattr(v, "nbytes", 0)) for v in arr.values())
+            elif arr is not None:
                 held += int(getattr(arr, "nbytes", 0))
         for slot in getattr(eng, "_slots", []):
             for key in ("q1", "q2", "cnt", "args"):
@@ -469,8 +471,9 @@ def _prime_pool(pool, workers, ramp_s=WORKER_RAMP_S):
 def _submit_segment(pool, surv, W, cap):
     """Chunk a segment's survivors and hand them to the pool (or classify
     inline when there is no pool).  Returns a callable that yields the run
-    lengths in survivor order."""
-    js = surv.tolist()
+    lengths in survivor order.  Survivors arrive as a list of Python ints
+    (the deep-zone API: j exceeds u64 past k ~ 5.5e23) or a numpy array."""
+    js = surv if isinstance(surv, list) else surv.tolist()
     if pool is None:
         return lambda: _classify_chunk((W, cap, js))
     futs = [pool.submit(_classify_chunk, (W, cap, js[i:i + CHUNK]))
@@ -796,12 +799,14 @@ def canary_prelude(make_engine):
 
 def production(args):
     if args.engine == "cpu":
-        from ladder_search import CpuEngine as Eng
+        def make_engine(m):
+            return CpuEngine(m, q2=args.q2)
     else:
-        from ladder_gpu import GpuEngine as Eng
+        from ladder_gpu import GpuEngine
 
-    def make_engine(m):
-        return Eng(m, q2=args.q2)
+        def make_engine(m):
+            f = "auto" if args.fold < 0 else (args.fold if args.fold else None)
+            return GpuEngine(m, q2=args.q2, fold=f)
 
     # ---- cursor: the checkpoint says which filter the campaign is on
     c = None if args.fresh else load_ckpt(args.q2)
@@ -871,14 +876,24 @@ def production(args):
     user_cap = None if args.to is None else int(args.to)
     rungs = load_rungs()
 
+    def j_reach():
+        # the engine's enforced line reach: fold P x J_CEIL folded (the
+        # device's u64 quantity is u, not j), J_CEIL otherwise
+        return getattr(eng, "J_REACH", J_CEIL)
+
     def ceiling():
-        return J_CEIL * W
+        return j_reach() * W
 
     def cap_now():
         return ceiling() if user_cap is None else min(user_cap, ceiling())
 
     def j_cap_now():
-        return min(cap_now() // W + 1, J_CEIL)
+        return min(cap_now() // W + 1, j_reach())
+
+    if user_cap is not None and user_cap > ceiling():
+        log("ALARM", f"requested depth {user_cap:.3e} is past the enforced "
+                     f"ceiling {ceiling():.3e}")
+        return 2
 
     def live_rungs():
         """The ladder as it stands NOW: the model's quartiles for the terms
@@ -928,8 +943,11 @@ def production(args):
                      f"interpreters is the campaign's largest host load "
                      f"step, and the pool has a whole segment of slack in "
                      f"which to avoid it)")
+    fold_note = (f", fold {eng.P} ({len(eng.offs)}/{eng.P} offsets, "
+                 f"reach k = {ceiling():.2e})"
+                 if getattr(eng, "P", 1) > 1 else "")
     log("STAGE", "machine: " + device_report(eng))
-    log("STAGE", f"production: n={n} filter, wheel {W}, sieve depth q2="
+    log("STAGE", f"production: n={n} filter, wheel {W}{fold_note}, sieve depth q2="
                  f"{args.q2}, k from {c['next_j']*W:.4e} to {cap_now():.3e} "
                  f"({'--to' if user_cap is not None else 'the enforced ceiling'};"
                  f" {len(live_rungs())} rungs to a({frontier_of(c)+1})+, "
@@ -943,11 +961,11 @@ def production(args):
     yield_s = float(args.gpu_yield_ms) / 1000.0
 
     def sieve(j0, j1):
-        surv = eng.survivors_j(j0, j1)
-        if not hasattr(surv, "tolist"):                  # CPU engine: chunks
-            import numpy as np
-            surv = (np.concatenate([x for x in surv])
-                    if surv else np.empty(0, dtype="uint64"))
+        if hasattr(eng, "survivors_j_deep"):     # GPU: Python ints, exact
+            surv = eng.survivors_j_deep(j0, j1)  # to the folded reach
+        else:                                    # CPU engine: chunks
+            surv = [int(x) for ch in eng.survivors_j(j0, j1)
+                    for x in ch.tolist()]
         if yield_s:
             # A deliberate idle window between segments (--gpu-yield-ms).
             # OFF by default: it lowers the average draw by ADDING load
@@ -992,7 +1010,7 @@ def production(args):
         Returns True if the campaign should stop (--stop-on-discovery)."""
         nonlocal t_mark
         evidenced = False       # a discovery in this segment
-        for j, r in zip(surv.tolist(), runs):
+        for j, r in zip(surv, runs):
             k = int(j) * W
             c["survivors"] += 1
             fr = frontier_of(c)
@@ -1182,7 +1200,7 @@ def production(args):
             if pending is not None:
                 p_j0, p_j1, p_surv, p_collect = pending
                 hb.doing(f"classifying k {p_j0*W:.4e}..{p_j1*W:.4e} "
-                         f"({p_surv.size:,} survivors)")
+                         f"({len(p_surv):,} survivors)")
                 if consume(p_j0, p_j1, p_surv, p_collect()):
                     return 0
             pending = new
@@ -1554,7 +1572,7 @@ def selftest():
             engine="gpu", fresh=False, n=12, filter_lag=0, q2=Q2_DEFAULT,
             to=2e16, seg_span=None, heartbeat=30.0, workers=1,
             worker_ramp=0.0, gpu_yield_ms=0.0, gentle=False,
-            stop_on_discovery=False)
+            stop_on_discovery=False, fold=-1)
         production(a)
         mid = load_ckpt(Q2_DEFAULT)
         a.to = 4e16
@@ -1742,6 +1760,13 @@ def main():
                     help="depth cap in k (default: none -- the campaign runs "
                          "to the enforced ceiling of its wheel, the last rung)")
     ap.add_argument("--engine", choices=["gpu", "cpu"], default="gpu")
+    ap.add_argument("--fold", type=int, default=-1,
+                    help="fold this sieve prime into candidate generation "
+                         "(default -1 = auto, the first sieve prime: 3.4x "
+                         "fewer candidates at n=13 for the identical stream, "
+                         "and the reach extends to fold x J_CEIL x wheel -- "
+                         "past a(14) P90. 0 disables the fold, capping the "
+                         "reach at k = 1.2e23, below the a(14) median)")
     ap.add_argument("--seg-span", type=float, default=None,
                     help="k per checkpoint segment (default: %d j)" % SEG_J)
     ap.add_argument("--heartbeat", type=float, default=30.0,
@@ -1781,9 +1806,8 @@ def main():
         return selftest()
     if args.status:
         return status()
-    if args.to is not None and args.to > J_CEIL * wheel_modulus(args.n):
-        log("ALARM", "requested depth is past the enforced ceiling")
-        return 2
+    # --to against the ceiling is checked in production(), where the
+    # engine exists: the reach depends on the fold (P x J_CEIL folded)
     if args.filter_lag < 0:
         log("ALARM", "--filter-lag must be >= 0")
         return 2

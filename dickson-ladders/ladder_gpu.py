@@ -49,17 +49,43 @@ The engine (v2, the bit-sieve restructure of OPTIMIZATION.md 2.1/2.2):
 
 Representation: candidates are the pair (W, j) with k = W*j.  k is never
 formed on the device -- it does not fit a machine word past a(12) and it
-does not need to.  j stays inside u64 to the enforced ceiling J_CEIL, so
-this one engine spans the entire search range.
+does not need to.
 
-Sizes, all enforced by G14 rather than asserted in a comment: W mod q and
-s = j mod q are both < q < 2^16, so their product is < 2^32; t < q so t*t
-is < 2^32; every reduction runs on inputs it is exact for.
+The FOLD (v4).  The first sieve prime is also the strongest killer this
+problem has: w_q ~ n residues die per prime (each solvable m contributes
+two square roots), so at n = 13 the prime 17 kills 12 of 17 j-residues
+and the line the sieve walks is 70% dead on arrival.  Folding it out of
+the sieve and into candidate GENERATION -- enumerate u with j = P*u + r
+over the surviving offsets r -- hands stage 1a a line with only the
+survivors of P on it: 3.4x fewer candidates per unit of k-line at n = 13,
+for the identical survivor stream.  (An earlier pass priced this at
+"~1.06x of candidates" and declined it; that number was a linear-form
+transplant -- one killed residue per prime -- and this form is quadratic.
+OPTIMIZATION_LOG.md has the correction.)  Mechanically the fold is FIVE
+table sets, one per surviving offset: the kill-bit and pattern tables are
+built per r (dead(u) <=> q kills j = P*u + r), the kernels are UNCHANGED
+and simply walk u where they walked j, and a launch picks its offset's
+tables by pointer.  Only one offset's tables are hot per launch, so the
+L1 footprint -- a measured cliff -- does not move.
+
+The fold also moves the ceiling: the device's u64 quantity is u, so the
+engine reaches j = P * J_CEIL (self.J_REACH) -- k ~ 2.0e24 at n = 13,
+past the model's a(14) P90, where unfolded u64 j ends at k = 1.2e23,
+below the a(14) MEDIAN.  Past j ~ 1.8e19 the value of j itself leaves
+u64: survivors_j (numpy, gates and benchmarks) refuses that zone, and
+survivors_j_deep (Python integers, the campaign's API) owns it.
+
+Sizes, all enforced by gates rather than asserted in a comment: W mod q
+and s = u mod q are both < q, so their walk products stay in u64 for
+every q < 2^32 (g16); the fold's P*s + r < 2^37 long before the Barrett
+bound; t < q so t*t is exact.
 
 Gates here: G6 (GPU == CPU parity), G7 (planted-fake drill), G8 (the GPU
 rediscovers a(7) end-to-end), G13 (the stream does not depend on how the
 work is sliced), G14 (the kernel's kill decisions == big-integer
-divisibility of the actual values m*k^2+1), G15 (v2 == v1).
+divisibility of the actual values m*k^2+1), G15 (v2 == v1), G16 (deep
+sieve arithmetic), G17 (folded == unfolded, and the deep zone past u64 j
+== big-integer divisibility, both directions).
 """
 
 import pathlib as _pathlib
@@ -127,6 +153,14 @@ RATIO_DEFAULT = 2.0      # a stage-1b round ends when survival within it
 #                          does not reproduce on an idle machine.
 LAUNCH_DEFAULT = 1 << 34  # candidates per launch (SCORE13: 2^33 0.93x, 2^32 0.84x)
 GRID_1B_MAX = 4096       # cap on a round kernel's grid (grid-stride)
+FOLD_DEFAULT = "auto"    # fold the FIRST sieve prime into candidate
+#                          generation ("auto"); None runs the unfolded v2
+#                          line; an int folds that sieve prime.  The fold
+#                          changes NOTHING about the survivor stream (G17
+#                          pins folded == unfolded bit for bit) -- it hands
+#                          stage 1a a line with the fold prime's kills
+#                          already absent (3.4x fewer candidates at n = 13)
+#                          and extends the reach to j = P * J_CEIL.
 
 
 # --------------------------------------------------------------- tables ---
@@ -147,6 +181,7 @@ GRID_1B_MAX = 4096       # cap on a round kernel's grid (grid-stride)
 _TABLE_SRC = r'''
 extern "C" __global__
 void build_bits(const int nprimes, const int nfilter,
+                const unsigned long long pfold, const unsigned long long roff,
                 const unsigned long long* __restrict__ primes,
                 const unsigned long long* __restrict__ wmod,
                 const unsigned long long* __restrict__ magic,
@@ -158,9 +193,17 @@ void build_bits(const int nprimes, const int nfilter,
     const unsigned long long q = primes[i], wm = wmod[i], mg = magic[i];
     const unsigned int base = boff[i];
     for (unsigned int s = threadIdx.x; s < (unsigned int)q; s += blockDim.x) {
-        /* t = k^2 mod q with k = W*j and j == s: both factors are < q, so
+        /* the folded line: entry s of this table answers "does q kill the
+           candidate at line position s", where the position is j = s
+           unfolded (pfold = 1, roff = 0) and j = pfold*s + roff folded.
+           pfold*s + roff < 2^37, so the reduction below is exact. */
+        unsigned long long sj = pfold * (unsigned long long)s + roff;
+        sj -= __umul64hi(sj, mg) * q;
+        if (sj >= q) sj -= q;
+        if (sj >= q) sj -= q;
+        /* t = k^2 mod q with k = W*j and j == sj: both factors are < q, so
            every product below is < 2^64 and every reduction is exact */
-        unsigned long long t = wm * (unsigned long long)s;
+        unsigned long long t = wm * sj;
         t -= __umul64hi(t, mg) * q;
         if (t >= q) t -= q;
         if (t >= q) t -= q;
@@ -383,7 +426,8 @@ class GpuEngine:
 
     def __init__(self, n, q2=Q2_DEFAULT, ns=None, T=None,
                  ratio=RATIO_DEFAULT, launch=LAUNCH_DEFAULT,
-                 warp_pop=WARP_POP_DEFAULT, vote=VOTE_EVERY_DEFAULT):
+                 warp_pop=WARP_POP_DEFAULT, vote=VOTE_EVERY_DEFAULT,
+                 fold=FOLD_DEFAULT):
         if cp is None:
             raise RuntimeError("CuPy/CUDA not available; use --engine cpu")
         if not (2 < q2 <= Q2_MAX):
@@ -394,7 +438,22 @@ class GpuEngine:
         self.n = n
         self.q2 = q2
         self.W = wheel_modulus(n)
-        primes = np.array([q for q in primerange(n + 2, q2)], dtype=np.uint64)
+        allp = [int(q) for q in primerange(n + 2, q2)]
+        # ---- the fold (module docstring): enumerate j = P*u + r over the
+        # offsets r that survive the fold prime, and sieve the rest.  The
+        # offsets come from the same residue walk the device runs -- never
+        # from sympy's square roots, which belong to the CPU engine.
+        if fold == "auto":
+            fold = allp[0] if len(allp) > 1 else None
+        if fold:
+            fold = int(fold)
+            if fold not in allp:
+                raise ValueError(f"fold prime {fold} is not a sieve prime "
+                                 f"at n={n}, q2={q2}")
+        self.P = int(fold) if fold else 1
+        self.offs = self._fold_offsets(self.P, n) if fold else [0]
+        self.J_REACH = self.P * J_CEIL
+        primes = np.array([q for q in allp if q != fold], dtype=np.uint64)
         self.primes = primes
         self.NP = int(primes.size)
         # snapshot the tuning constants; everything below compiles against
@@ -416,21 +475,31 @@ class GpuEngine:
         wmod = np.array([self.W % int(q) for q in primes], dtype=np.uint64)
         self.d_wmod = cp.asarray(wmod)
 
-        # ---- kill-bit table for every prime (device-built by the walk)
+        # ---- kill-bit tables, one per fold offset (device-built by the
+        # walk).  Entry s of offset r's table answers "does q kill the
+        # candidate at line position s", i.e. j = P*s + r.  Only one
+        # offset's tables are hot per launch, so the L1 footprint is the
+        # same as unfolded.
         p32 = primes.astype(np.uint32)
         words = ((primes.astype(np.int64) + 31) // 32)
         boff = np.concatenate([[0], np.cumsum(words)[:-1]]).astype(np.uint32)
         d_p32 = cp.asarray(p32)
         d_boff = cp.asarray(boff)
-        self.d_bits = cp.zeros(int(words.sum()), dtype=cp.uint32)
         mod = cp.RawModule(code=_TABLE_SRC)
         k_bits = mod.get_function("build_bits")
-        k_bits((self.NP,), (256,),
-               (np.int32(self.NP), np.int32(n), self.d_primes, self.d_wmod,
-                self.d_magic, d_boff, self.d_bits))
+        self.d_bits = {}
+        for r in self.offs:
+            b = cp.zeros(int(words.sum()), dtype=cp.uint32)
+            k_bits((self.NP,), (256,),
+                   (np.int32(self.NP), np.int32(n), np.uint64(self.P),
+                    np.uint64(r), self.d_primes, self.d_wmod,
+                    self.d_magic, d_boff, b))
+            self.d_bits[r] = b
         # killed-residue counts per prime, from the table itself (one
-        # derivation, used for the queue sizing below)
-        self.wq = self._popcounts(words, boff)
+        # derivation, used for the queue sizing below).  The counts are
+        # offset-independent -- u -> P*u + r is a bijection mod q -- so
+        # one offset's table is the derivation (G17 checks the others).
+        self.wq = self._popcounts(self.d_bits[self.offs[0]], words, boff)
         # ---- survival through the primes, from the table itself (one
         # derivation, used for NS, the round schedule, the grids, the queues)
         surv = np.cumprod(1.0 - self.wq / primes.astype(np.float64))
@@ -441,14 +510,20 @@ class GpuEngine:
                               NS_MAX, self.NP))
         self.s1a_survival = float(self.survival[self.NS])
 
-        # ---- stage-1a pattern table for the first NS primes
+        # ---- stage-1a pattern tables for the first NS primes, one per
+        # offset (build_pat walks the offset's kill bits, so the fold is
+        # already inside the words it emits)
         rows = primes[:self.NS].astype(np.int64)
         po = np.concatenate([[0], np.cumsum(rows)[:-1]]).astype(np.uint32)
-        self.d_pat = cp.empty(int(rows.sum()), dtype=cp.uint64)
+        d_po = cp.asarray(po)
         k_pat = mod.get_function("build_pat")
-        k_pat((self.NS,), (256,),
-              (np.int32(self.NS), d_p32, d_boff, self.d_bits, cp.asarray(po),
-               self.d_pat))
+        self.d_pat = {}
+        for r in self.offs:
+            pt = cp.empty(int(rows.sum()), dtype=cp.uint64)
+            k_pat((self.NS,), (256,),
+                  (np.int32(self.NS), d_p32, d_boff, self.d_bits[r], d_po,
+                   pt))
+            self.d_pat[r] = pt
         self.pat_bytes = int(rows.sum()) * 8
         entries = [{"i": i, "q": int(primes[i]),
                     "magic": (1 << 64) // int(primes[i]),
@@ -494,7 +569,12 @@ class GpuEngine:
         # enqueued before chain i is read back, so the device never idles
         # on the host (the per-launch sync bubble measured 15% of wall).
         cap = int(1.25 * self.LAUNCH * self.s1a_survival) + (1 << 16)
-        self.queue_cap = int(min(max(cap, 1 << 14), 1 << 26))
+        # clamp raised 2^26 -> 2^27 with the fold: the folded line's
+        # stage-1a survival is P/(P - w_P) higher at the same prime count,
+        # so a swept-low NS needs a queue the old clamp silently forbade
+        # (the overflow check would raise).  The analytic size above still
+        # governs the real allocation.
+        self.queue_cap = int(min(max(cap, 1 << 14), 1 << 27))
         self._slots = []
         for _ in range(2):
             self._slots.append({
@@ -504,16 +584,37 @@ class GpuEngine:
                 # one counter per stage: [0] = stage 1a, [1 + r] = round r
                 "cnt": cp.zeros(2 + len(self.rounds), dtype=cp.uint32),
                 # stage-1a scalars live on the device so a full-size launch
-                # is a CUDA-graph replay (one args upload, one graph launch)
+                # is a CUDA-graph replay (one args upload, one graph launch);
+                # graphs are captured per fold offset (the offset picks its
+                # table POINTERS, and pointers are baked into a graph)
                 "args": cp.zeros(4, dtype=cp.uint64),
-                "graph": None, "graph_qin": None,
+                "graph": {}, "graph_qin": {},
                 "count": 0, "qin": None, "prof": None})
         self._use_graph = True     # False: eager launches (measurement only)
         self._serial = False       # True: finish each launch before the next
         #                            (measurement only)
 
-    def _popcounts(self, words, boff):
-        bits = self.d_bits.get()
+    def _fold_offsets(self, P, n):
+        """Surviving j-residues mod the fold prime, by the SAME walk the
+        device runs (m*t + 1 stepping) in Python integers -- never sympy's
+        square roots, which are the CPU engine's independent construction.
+        0 always survives (j == 0 mod P makes every value == 1 mod P)."""
+        wm = self.W % P
+        offs = []
+        for s in range(P):
+            t = (wm * s) * (wm * s) % P
+            r, dead = (t + 1) % P, False
+            for _ in range(n):
+                if r == 0:
+                    dead = True
+                    break
+                r = (r + t) % P
+            if not dead:
+                offs.append(s)
+        return offs
+
+    def _popcounts(self, d_bits, words, boff):
+        bits = d_bits.get()
         out = np.zeros(self.NP, dtype=np.int64)
         for i in range(self.NP):
             seg = bits[int(boff[i]):int(boff[i]) + int(words[i])]
@@ -526,19 +627,21 @@ class GpuEngine:
             return self.T
         return int(min(T_MAX, max(1, count // (64 * self._min_threads))))
 
-    def _enqueue(self, slot, count, marks=None):
+    def _enqueue(self, slot, count, off=0, marks=None):
         """Enqueue the chain (counters zero -> stage 1a -> rounds) on the
         current stream for a launch of `count` candidates whose scalars are
-        already in the slot's args.  With `marks` a list, an event is
-        recorded after every kernel (profiling only)."""
+        already in the slot's args, using fold offset `off`'s tables.  With
+        `marks` a list, an event is recorded after every kernel (profiling
+        only)."""
         d_cnt = slot["cnt"]
         d_cnt.fill(0)
         cap = np.uint32(self.queue_cap)
         T = self._T_for(count)
         threads = (count + 64 * T - 1) // (64 * T)
         grid = (threads + BLOCK - 1) // BLOCK
+        d_pat, d_bits = self.d_pat[off], self.d_bits[off]
         self.k_1a((grid,), (BLOCK,),
-                  (slot["args"], self.d_pat, slot["q1"], d_cnt[0:1], cap))
+                  (slot["args"], d_pat, slot["q1"], d_cnt[0:1], cap))
         if marks is not None:
             e = cp.cuda.Event(); e.record(); marks.append(e)
         qin, nin = slot["q1"], d_cnt[0:1]
@@ -549,39 +652,41 @@ class GpuEngine:
             kern((self.round_grid[r],), (BLOCK,),
                  (nin, qin, cap, np.int32(i0), np.int32(i1),
                   np.int32(self.n), self.d_primes, self.d_magic,
-                  self.d_wmod, self.d_boff, self.d_bits, qout, nout, cap))
+                  self.d_wmod, self.d_boff, d_bits, qout, nout, cap))
             qin, nin = qout, nout
             if marks is not None:
                 e = cp.cuda.Event(); e.record(); marks.append(e)
         return qin
 
-    def _start(self, slot, j0, count):
+    def _start(self, slot, u0, count, off=0):
         """Enqueue one launch on a slot and return without waiting.
 
         A full-size launch (count == LAUNCH) replays a CUDA graph captured
-        on the slot's first use; the window's ragged last launch, and any
-        launch with self.profile set to a list (CUDA events around every
-        kernel, measurement only), run the same kernels eagerly.
+        on the slot's first use of that fold offset (the offset selects
+        table POINTERS, which a graph bakes); the window's ragged last
+        launch, and any launch with self.profile set to a list (CUDA
+        events around every kernel, measurement only), run the same
+        kernels eagerly.
         """
         prof = getattr(self, "profile", None)
         slot["count"] = count
         with slot["stream"]:
-            slot["args"].set(np.array([j0, count, self._T_for(count), 0],
+            slot["args"].set(np.array([u0, count, self._T_for(count), 0],
                                       dtype=np.uint64))
             if prof is not None:
                 e0 = cp.cuda.Event(); e0.record()
                 marks = []
-                slot["qin"] = self._enqueue(slot, count, marks)
+                slot["qin"] = self._enqueue(slot, count, off, marks)
                 slot["prof"] = (e0, marks)
             elif count == self.LAUNCH and self._use_graph:
-                if slot["graph"] is None:
+                if off not in slot["graph"]:
                     slot["stream"].begin_capture()
-                    slot["graph_qin"] = self._enqueue(slot, count)
-                    slot["graph"] = slot["stream"].end_capture()
-                slot["graph"].launch(stream=slot["stream"])
-                slot["qin"] = slot["graph_qin"]
+                    slot["graph_qin"][off] = self._enqueue(slot, count, off)
+                    slot["graph"][off] = slot["stream"].end_capture()
+                slot["graph"][off].launch(stream=slot["stream"])
+                slot["qin"] = slot["graph_qin"][off]
             else:
-                slot["qin"] = self._enqueue(slot, count)
+                slot["qin"] = self._enqueue(slot, count, off)
 
     def _finish(self, slot):
         """Wait for a slot's launch and return its sorted survivors."""
@@ -608,22 +713,21 @@ class GpuEngine:
                 slot["prof"] = None
         return arr
 
-    def survivors_j(self, j_lo, j_hi, launch=None):
-        """Sorted u64 array of surviving j in [j_lo, j_hi)."""
-        if j_hi > J_CEIL:
-            raise ValueError(f"j {j_hi} past the enforced ceiling {J_CEIL}")
-        if j_lo * self.W < K_FLOOR:
-            raise ValueError("engines refuse to run below K_FLOOR")
+    def _survivors_u(self, u_lo, u_hi, off, launch=None):
+        """Sorted u64 array of surviving line positions u in [u_lo, u_hi)
+        at fold offset `off` -- the double-buffered launch loop."""
+        if u_hi > J_CEIL:
+            raise ValueError(f"u {u_hi} past the enforced ceiling {J_CEIL}")
         launch = int(launch or self.LAUNCH)
         if launch > self.LAUNCH:
             raise ValueError("launch larger than the queues were sized for")
         out = []
-        j0 = int(j_lo)
+        u0 = int(u_lo)
         pending, i = None, 0
-        while j0 < int(j_hi):
-            count = min(launch, int(j_hi) - j0)
+        while u0 < int(u_hi):
+            count = min(launch, int(u_hi) - u0)
             slot = self._slots[i & 1]
-            self._start(slot, j0, count)         # device runs chain i ...
+            self._start(slot, u0, count, off)    # device runs chain i ...
             if pending is not None:              # ... while the host reads
                 got = self._finish(pending)      #     back chain i-1
                 if got is not None:
@@ -634,7 +738,7 @@ class GpuEngine:
                 if got is not None:
                     out.append(got)
                 pending = None
-            j0 += count
+            u0 += count
             i += 1
         if pending is not None:
             got = self._finish(pending)
@@ -643,6 +747,61 @@ class GpuEngine:
         if not out:
             return np.empty(0, dtype=np.uint64)
         return np.concatenate(out)
+
+    def _u_range(self, off, j_lo, j_hi):
+        """[u_lo, u_hi) covering {j in [j_lo, j_hi) : j == off (mod P)}."""
+        u_lo = -((off - int(j_lo)) // self.P)        # ceil((j_lo - off)/P)
+        u_hi = -((off - int(j_hi)) // self.P)
+        return max(u_lo, 0), max(u_hi, 0)
+
+    def survivors_j(self, j_lo, j_hi, launch=None):
+        """Sorted u64 array of surviving j in [j_lo, j_hi).
+
+        The gates' and benchmarks' API: j itself must fit u64 comfortably,
+        so it refuses past 2^62 (and past J_REACH when unfolded reach is
+        smaller).  The campaign hunts through survivors_j_deep, which
+        carries j as Python integers to the full folded reach."""
+        if j_hi > min(self.J_REACH, 1 << 62):
+            raise ValueError(
+                f"j {j_hi} past this API's reach "
+                f"{min(self.J_REACH, 1 << 62)}; the deep zone is "
+                f"survivors_j_deep's (Python integers)")
+        if j_lo * self.W < K_FLOOR:
+            raise ValueError("engines refuse to run below K_FLOOR")
+        parts = []
+        for off in self.offs:
+            u_lo, u_hi = self._u_range(off, j_lo, j_hi)
+            if u_hi <= u_lo:
+                continue
+            us = self._survivors_u(u_lo, u_hi, off, launch)
+            if us.size:
+                parts.append(us * np.uint64(self.P) + np.uint64(off))
+        if not parts:
+            return np.empty(0, dtype=np.uint64)
+        return np.sort(np.concatenate(parts))
+
+    def survivors_j_deep(self, j_lo, j_hi, launch=None):
+        """Sorted list of surviving j in [j_lo, j_hi) as PYTHON INTEGERS.
+
+        The campaign's API: exact to J_REACH = P * J_CEIL, where j itself
+        leaves u64 though the device's line position u never does.  The
+        survivor stream is identical to survivors_j where both run (G17).
+        """
+        j_lo, j_hi = int(j_lo), int(j_hi)
+        if j_hi > self.J_REACH:
+            raise ValueError(f"j {j_hi} past the enforced reach "
+                             f"{self.J_REACH} (= fold {self.P} x J_CEIL)")
+        if j_lo * self.W < K_FLOOR:
+            raise ValueError("engines refuse to run below K_FLOOR")
+        out = []
+        for off in self.offs:
+            u_lo, u_hi = self._u_range(off, j_lo, j_hi)
+            if u_hi <= u_lo:
+                continue
+            us = self._survivors_u(u_lo, u_hi, off, launch)
+            out.extend(int(u) * self.P + off for u in us.tolist())
+        out.sort()
+        return out
 
     def survivors_pre_mr(self, k_lo, k_hi, launch=None):
         """The same stream expressed on the k line (both ends inclusive)."""
@@ -875,11 +1034,13 @@ def g13_slicing_independence():
         if not np.array_equal(whole, alt.survivors_j(j_lo, j_lo + span)):
             return False, f"G13 FAIL: T={T} != whole"
     # a small LAUNCH makes the window several full launches (the captured
-    # CUDA graph, replayed) plus a ragged last one (the eager path)
-    small = GpuEngine(n, q2=1024, launch=1 << 20)
+    # CUDA graph, replayed) plus a ragged last one (the eager path).  Small
+    # enough that every FOLD OFFSET's u-span (span / P) holds full launches,
+    # or the graph path would go unexercised
+    small = GpuEngine(n, q2=1024, launch=1 << 18)
     if not np.array_equal(whole, small.survivors_j(j_lo, j_lo + span)):
         return False, "G13 FAIL: graph-replayed launches != whole"
-    if any(sl["graph"] is None for sl in small._slots):
+    if any(not sl["graph"] for sl in small._slots):
         return False, "G13 FAIL: the graph path was not exercised on both slots"
     if whole.size == 0:
         return False, "G13 FAIL: vacuous (empty window)"
@@ -992,31 +1153,37 @@ def g16_deep_sieve_arithmetic():
     primes = eng.primes
     words = (primes.astype(np.int64) + 31) // 32
     boff = np.concatenate([[0], np.cumsum(words)[:-1]]).astype(np.int64)
-    bits = eng.d_bits.get()
     idx = sorted(set([0, 1, eng.NP // 4, eng.NP // 2] +
                      [int(np.searchsorted(primes, b))
                       for b in (1 << 16, (1 << 16) + 1, 100003, 200003)] +
                      [eng.NP - 2, eng.NP - 1]))
     above = 0
-    for i in idx:
-        if not 0 <= i < eng.NP:
-            continue
-        q = int(primes[i])
-        above += q > (1 << 16)
-        seg = bits[int(boff[i]):int(boff[i]) + int(words[i])]
-        got = set(int(x) for x in
-                  np.nonzero(np.unpackbits(seg.view(np.uint8),
-                                           bitorder="little"))[0] if x < q)
-        wm = eng.W % q
-        want = set(sj for sj in range(q)
-                   if any((m * (wm * sj % q) ** 2 + 1) % q == 0
-                          for m in range(1, n + 1)))
-        if got != want:
-            return False, (f"G16 FAIL: kill-bit table for q={q} has "
-                           f"{len(got)} dead residues, divisibility says "
-                           f"{len(want)}; symmetric difference "
-                           f"{sorted(got ^ want)[:4]}")
-    if above < 3:
+    # two fold offsets, so the fold's remap (entry s answers for
+    # j = P*s + r) is checked against divisibility too, not just r = 0
+    for r in (eng.offs[0], eng.offs[-1]):
+        bits = eng.d_bits[r].get()
+        for i in idx:
+            if not 0 <= i < eng.NP:
+                continue
+            q = int(primes[i])
+            above += q > (1 << 16)
+            seg = bits[int(boff[i]):int(boff[i]) + int(words[i])]
+            got = set(int(x) for x in
+                      np.nonzero(np.unpackbits(seg.view(np.uint8),
+                                               bitorder="little"))[0]
+                      if x < q)
+            wm = eng.W % q
+            want = set(s for s in range(q)
+                       if any((m * (wm * ((eng.P * s + r) % q) % q) ** 2
+                               + 1) % q == 0
+                              for m in range(1, n + 1)))
+            if got != want:
+                return False, (f"G16 FAIL: kill-bit table for q={q} at "
+                               f"fold offset {r} has {len(got)} dead "
+                               f"entries, divisibility says {len(want)}; "
+                               f"symmetric difference "
+                               f"{sorted(got ^ want)[:4]}")
+    if above < 6:
         return False, "G16 FAIL: fewer than 3 sampled primes exceed 2^16"
     # and the deep stream, against the other engine
     ce = CpuEngine(7, q2=q2)
@@ -1036,9 +1203,86 @@ def g16_deep_sieve_arithmetic():
                   f"populated window ({len(cs)} survivors)")
 
 
+def g17_fold_parity():
+    """Folded == unfolded, bit for bit -- and the deep zone past u64 j,
+    which only the fold can reach, == big-integer divisibility.
+
+    The fold changes candidate GENERATION (j = P*u + r over surviving
+    offsets), never the mathematics, so the survivor stream must be
+    identical wherever both engines run -- including j-windows cut at
+    positions with no alignment to P, which is where the per-offset edge
+    handling lives.  Past j ~ 1.8e19 the value of j leaves u64 and no
+    unfolded engine can follow: there the check is the definition itself
+    (trial division of the actual values m*k^2+1 by every prime below the
+    sieve depth, INCLUDING the fold prime), in both directions, at the
+    folded engine's own enforced reach.
+    """
+    total = 0
+    for n, j_lo, span, q2 in ((10, 7 * 10**9 + 12345, 3 * 10**7, Q2_DEFAULT),
+                              (13, J_CEIL - 4 * 10**6, 4 * 10**6, 2048)):
+        fe = GpuEngine(n, q2=q2)
+        if fe.P == 1:
+            return False, "G17 FAIL: auto fold did not engage"
+        ue = GpuEngine(n, q2=q2, fold=None)
+        a = fe.survivors_j(j_lo, j_lo + span)
+        b = ue.survivors_j(j_lo, j_lo + span)
+        if a.size == 0:
+            return False, f"G17 FAIL: window n={n} at {j_lo} is empty (vacuous)"
+        if a.size != b.size or not np.array_equal(a, b):
+            return False, (f"G17 FAIL: folded != unfolded at n={n}: "
+                           f"{a.size} vs {b.size} survivors")
+        for cut in (fe.P - 1, fe.P, fe.P + 1, span // 3, 2 * span // 3 + 7):
+            x = fe.survivors_j(j_lo, j_lo + cut)
+            y = fe.survivors_j(j_lo + cut, j_lo + span)
+            joined = np.concatenate([x, y]) if x.size or y.size else x
+            if not np.array_equal(a, joined):
+                return False, f"G17 FAIL: fold split at {cut} != whole"
+        total += int(a.size)
+    # ---- the deep zone: j past u64, k past the unfolded ceiling
+    fe = GpuEngine(13, q2=2048)
+    span = 4 * 10**6
+    hi = fe.J_REACH - span
+    deep = fe.survivors_j_deep(hi, hi + span)
+    if not deep:
+        return False, "G17 FAIL: deep-zone window is empty (vacuous)"
+    if deep[0] <= (1 << 64):
+        return False, "G17 FAIL: deep-zone window does not exceed u64 j"
+    smalls = [int(q) for q in primerange(fe.n + 2, fe.q2)]
+
+    def divisor(k):
+        for q in smalls:
+            kq = k % q
+            t = kq * kq % q
+            for m in range(1, fe.n + 1):
+                if (m * t + 1) % q == 0:
+                    return q
+        return None
+
+    dset = set(deep)
+    for j in deep:
+        d = divisor(j * fe.W)
+        if d is not None:
+            return False, (f"G17 FAIL: deep survivor j={j} has {d} "
+                           f"dividing one of its values")
+    sampled_dead = 0
+    for j in range(hi, hi + span, 99_991):
+        d = divisor(j * fe.W)
+        if (j in dset) != (d is None):
+            return False, (f"G17 FAIL: deep j={j}: engine "
+                           f"{'kept' if j in dset else 'killed'}, "
+                           f"divisibility says divisor={d}")
+        sampled_dead += d is not None
+    return True, (f"G17 ok: folded == unfolded on 2 populated windows and "
+                  f"10 unaligned cuts ({total} survivors); deep zone at "
+                  f"j ~ {hi:.1e} (k ~ {hi * fe.W:.1e}, past u64 j and the "
+                  f"unfolded ceiling): all {len(deep)} survivors clean and "
+                  f"{sampled_dead} sampled kills confirmed by big-integer "
+                  f"divisibility")
+
+
 GATES = [g6_parity_with_cpu, g7_planted_fake, g8_gpu_rediscovers_a7,
          g13_slicing_independence, g14_kernel_matches_bigint,
-         g15_v2_matches_v1, g16_deep_sieve_arithmetic]
+         g15_v2_matches_v1, g16_deep_sieve_arithmetic, g17_fold_parity]
 
 # Ctrl+C is a normal exit everywhere in this repo (CONVENTIONS.md
 # "Stopping a run"): one path out, no traceback, exit 130.
