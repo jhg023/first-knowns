@@ -65,6 +65,7 @@ class CpuEngine:
         # (mod q) makes every m*k^2+1 == 1 (mod q).
         self.primes = [q for q in primerange(n + 2, q2)]
         self.table = {q: self._forbidden_j(q) for q in self.primes}
+        self._sets = None      # built on first survives() call
 
     # ---------------------------------------------------------------- table
     def _forbidden_j(self, q):
@@ -116,6 +117,27 @@ class CpuEngine:
         j_hi = int(k_hi) // self.W + 1
         for chunk in self.survivors_j(j_lo, j_hi, block):
             yield chunk
+
+    def survives(self, j):
+        """True iff the sieve keeps j -- the residue table consulted
+        directly, one candidate at a time, in Python integers.
+
+        The same decision survivors_j makes by strided marking, without
+        forming any array: exact at ANY j, far past J_CEIL (which guards
+        the segmented sieve's uint64 output, not this arithmetic).  It
+        exists because full_verify's alternate-alignment leg runs on a
+        wheel COARSER than the campaign's, and j = k/W on a coarser wheel
+        crosses the ceiling 13x sooner than the campaign does: at
+        k ~ 1.1e22 a run-12 verification asked the 2310 wheel for
+        j ~ 4.7e18 and the ceiling guard killed a live campaign
+        mid-verification.  Membership of one k is all that leg ever
+        checked; this answers exactly that, at any depth.
+        """
+        j = int(j)
+        if self._sets is None:
+            self._sets = {q: frozenset(int(r) for r in t)
+                          for q, t in self.table.items()}
+        return all(j % q not in self._sets[q] for q in self.primes)
 
     # ------------------------------------------------------------ classify
     def run_length(self, k, cap=64):

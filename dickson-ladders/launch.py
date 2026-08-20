@@ -13,8 +13,12 @@ for itself):
 
   1. the engine's own strong-probable-prime chain (huntlib MR bases);
   2. sympy's independent BPSW chain;
-  3. a from-scratch re-derivation by different machinery -- the numpy CPU
-     engine on a DIFFERENT wheel, so k sits in a different progression;
+  3. a from-scratch re-derivation by different machinery -- the CPU
+     engine's residue table (sympy square roots, plain `%`) on a
+     DIFFERENT wheel, consulted directly in Python integers so the leg
+     holds at any depth (the windowed form of this check once converted
+     k to j on the coarser wheel and crashed on the j ceiling 13x before
+     the campaign's own);
   4. a PRIMALITY CERTIFICATE for every one of the n values.
 
 Leg 4 is not optional decoration here.  The values m*k^2+1 pass huntlib's
@@ -494,15 +498,23 @@ def full_verify(k, claimed_run, n_filter, certify=True, witness=True):
         return None, (f"run disagreement own={r_own} sympy={r_sym} "
                       f"claimed={claimed_run}")
     # Alternate-alignment re-sieve: a coarser wheel puts k in a different
-    # progression and uses numpy `%` instead of the GPU's Barrett path.
+    # progression, and the table it is checked against is built from
+    # sympy's square roots with plain `%` -- never the GPU's residue walk
+    # or its Barrett arithmetic.  The table is consulted DIRECTLY
+    # (CpuEngine.survives, Python integers, exact at any k).  The windowed
+    # segmented sweep this replaces converted k to j on the COARSER wheel,
+    # which crosses the enforced j ceiling 13x sooner than the campaign
+    # does: at k ~ 1.1e22 a run-12 [NEAR] verification asked the 2310
+    # wheel for j ~ 4.7e18 and the ceiling guard killed a live campaign
+    # mid-hunt.  What is verified is unchanged -- k is on the alt wheel
+    # and no prime below the alt sieve depth divides any of its values --
+    # and the leg now holds to any depth the hunt can reach.
     alt_n = max(3, min(n_filter, claimed_run) - 1)
     alt = CpuEngine(alt_n)
-    lo = max(K_FLOOR, k - 4 * alt.W)
-    seen = set()
-    for chunk in alt.survivors_pre_mr(lo, k + 4 * alt.W):
-        seen.update(int(j) * alt.W for j in chunk.tolist())
-    if k not in seen:
-        return None, f"alternate-alignment re-sieve (wheel {alt.W}) lost k"
+    if k % alt.W:
+        return None, f"alternate-alignment re-sieve: k is not on the {alt.W} wheel"
+    if not alt.survives(k // alt.W):
+        return None, f"alternate-alignment re-sieve (wheel {alt.W}) kills k"
     certs = {}
     if certify:
         kf = factorint(k)
@@ -1446,6 +1458,43 @@ def selftest():
               f"SPRP_EXACT_FROM={SPRP_EXACT_FROM}, and every run the campaign "
               f"records (census floor {NEAR_FROM}, [NEAR], [DISCOVERY], "
               f"best_run) is at or above it")
+
+    # --- deep-verification drill: the alternate-alignment leg must hold
+    # ABOVE the coarse wheel's old reach.  The windowed re-sieve it
+    # replaced converted k to j on the ALT wheel (2310), which crosses
+    # J_CEIL at k = 9.24e21 -- 13x before the campaign's own ceiling --
+    # and a run-12 [NEAR] verification at k ~ 1.1e22 crashed a live
+    # campaign there (ValueError from the ceiling guard, mid-hunt).  The
+    # direct table check (CpuEngine.survives, Python ints) must agree
+    # with big-integer divisibility in BOTH directions at exactly that
+    # depth, on the alt wheel the leg really uses.
+    alt = CpuEngine(11, q2=4096)
+    j_crash = 4_748_822_888_266_957_986          # the j that raised
+    sample = list(range(j_crash, j_crash + 25))
+    j_star = next((j for j in range(j_crash, j_crash + 10_000_000)
+                   if alt.survives(j)), None)
+    if j_star is not None and j_star not in sample:
+        sample.append(j_star)
+
+    def _bigint_clean(j):
+        k = j * alt.W
+        return not any((m * k * k + 1) % q == 0
+                       for q in alt.primes for m in range(1, alt.n + 1))
+
+    agree = all(alt.survives(j) == _bigint_clean(j) for j in sample)
+    kills = sum(1 for j in sample if not alt.survives(j))
+    if (j_star is None or j_star <= J_CEIL or not agree
+            or kills < 5 or not _bigint_clean(j_star)):
+        print(f"FAIL deep-verification drill: j*={j_star} agree={agree} "
+              f"kills={kills} of {len(sample)}")
+        ok = False
+    else:
+        print(f"PASS deep-verification drill: direct alt-wheel check == "
+              f"big-integer divisibility on {len(sample)} candidates at "
+              f"j ~ {j_crash:.2e} on the 2310 wheel ({kills} killed, "
+              f"survivor j* = {j_star} kept both ways) -- all PAST the "
+              f"j ceiling {J_CEIL:.0e} that the old windowed re-sieve "
+              f"crashed on at k ~ 1.1e22")
 
     # --- durability drill: a crash mid-save must not cost the cursor ------
     # The real failure, reproduced exactly: a campaign checkpoint written
