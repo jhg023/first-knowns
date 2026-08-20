@@ -219,11 +219,17 @@ overlap (#8) hides all of it. Priced and declined:
 - **gmpy2's powmod (~2–4× on the classify): declined** — a new
   dependency is the owner's call, and at the kept depth it buys nothing
   (the classify is already hidden).
-- **a device base-2 sprp prefilter on p** (u64 through a(19)'s whole
-  range): would cut host demand ~3× by killing the ~53% of survivors
-  whose p is composite before the host sees them, enabling depth 4096
-  inside the budget — **the top remaining candidate, worth ~+14%,**
-  priced as a new gated kernel and left unbuilt.
+- **a device base-2 sprp prefilter on p: declined on the measured
+  arithmetic.** It first looked like a 3× host cut (it removes the ~53%
+  of survivors whose p is composite). It is not, and the reason is the
+  classify cost's own shape: a p-composite survivor costs ONE 7 µs test,
+  while a p-passing survivor averages 1.7 more tests on values that are
+  ~65 bits — past u64, so the device cannot touch them at n = 16. The
+  filter therefore removes only 23% of host work (16.7 → 12.9 µs per
+  sieve survivor), leaving depth 4096 at ~3.5 cores — still 4× the
+  budget for the same +14%. A new gated primality kernel for a 23% host
+  cut that the overlap already hides was not worth its correctness
+  surface.
 
 ## The termination table (OPTIMIZATION.md Part 3), campaign configuration
 
@@ -236,11 +242,15 @@ Depth 8192, LAUNCH_U 2²⁷, one launch ≈ 19–20 ms device:
 | compact | 0.4% | below the 5% bar |
 | host glue (residue tables, D2H, sort, checkpoint) | ~4% end-to-end | measured as the gap between 2.07×10¹¹ end-to-end and 2.15×10¹¹ device |
 
-Remaining candidates, priced: the sprp prefilter (#9, ~+14%); **a wider
-wheel (mod 210)** — 14% fewer bits against a 6× larger lane setup and
-table build, argued a wash and never measured, so it is a hypothesis,
-not a verdict; SEG_LAUNCHES past 64 (~2%, against checkpoint
-granularity).
+Remaining candidates, priced: **a wider wheel (mod 210)** — 14% fewer
+bits against a 6× larger lane setup and table build, argued a wash and
+never measured, so it is a hypothesis, not a verdict; SEG_LAUNCHES past
+64 (~2%, against checkpoint granularity); the sprp prefilter, declined
+on measured arithmetic (#9). The closing re-sweep (Rule 3.4/3.5) of
+TARGET_MARKS_SH at the final design measured 1.000 over 11 interleaved
+rounds and THREADS 512 at 0.81, so the constants are fresh and the last
+round found nothing — which is the state OPTIMIZATION.md Part 3 requires
+before stopping, and the state this file hands to the next pass.
 
 **Skip the sort — moot.** v1 considered removing the survivor sort and
 declined at 0.0 ms; #5 then found the DEVICE sort was 29% of a v2 launch
