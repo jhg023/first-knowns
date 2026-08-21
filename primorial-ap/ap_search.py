@@ -175,6 +175,11 @@ class CpuEngine:
         set.  What the cheap pass buys is that ~93% of survivors are
         dismissed at one exponentiation instead of seven, because the
         commonest survivor is one whose p is composite.
+
+        The default cap is n, so a return of n means the chain reaches AT
+        LEAST n -- which is the definition, but any reader comparing the
+        result to n must read equality as ">=" (full_verify does; chains
+        DO run past n, a(9)'s to 10).  A return below the cap is exact.
         """
         p = int(p)
         cap = self.n if cap is None else int(cap)

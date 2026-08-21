@@ -62,6 +62,7 @@ and a second Ctrl+C cannot land inside the checkpoint write.
 
 import argparse
 import concurrent.futures as _cf
+import json
 import math
 import os
 import pathlib as _pathlib
@@ -98,7 +99,9 @@ CONFIG_KEY = "primorial-ap/v1/q2={q2}/pceil=1e26"
 # discovery something already written up in RESULTS.md.  (The runtime
 # frontier in the checkpoint promotes itself the same way; this table seeds
 # a fresh one.)
-CAMPAIGN_FOUND = {}
+CAMPAIGN_FOUND = {16: 116_781_362_669_989,
+                  17: 2_097_209_048_106_247,
+                  18: 14_042_451_608_819_603}
 TABLES = (KNOWN, CAMPAIGN_FOUND)
 FRONTIER_N = _front.top_settled(TABLES, {}, floor=0)
 
@@ -147,6 +150,12 @@ SEG_LAUNCHES = 64              # device launches per checkpoint segment:
 #                                third of a second of sweep
 CHUNK = 512                    # survivors per classification task
 CERT_VALUE_CAP = 10**34        # past this a bounded proof cannot be promised
+VERIFY_OVERSHOOT = 8           # a full chain may run PAST n (a(9)'s runs 10
+#                                deep, and a claimed a(17) once ran 19); the
+#                                verification legs walk this far beyond the
+#                                claim to find the chain's true end and its
+#                                breaker -- a bound, because nothing in a
+#                                verification path may run unbounded
 
 
 def _alt_q2(q2):
@@ -361,7 +370,17 @@ def _bounded_witness(m):
 
 
 def full_verify(p, n, claimed, certify=True, witness=True, q2=Q2_CAMPAIGN):
-    """Independent confirmation that the chain at p is exactly `claimed`.
+    """Independent confirmation of the chain at p behind a claim of `claimed`.
+
+    What a claim MEANS depends on where it sits relative to n, because
+    classification walks with cap = n (ap_search.chain_depth): a claim of n
+    says the chain reaches AT LEAST n -- `chain_depth >= n` IS the
+    definition -- while a claim below n was measured exactly, since that
+    walk stopped at a composite rather than at its cap.  The legs are held
+    to the same reading.  A chain that runs past n is still a(n) -- a(9) =
+    272809 runs 10 deep -- not a corrupt engine; the legs walk a BOUNDED
+    distance past a full claim so the true depth and the real breaker land
+    in the evidence.
 
     Legs 1-3 always; `certify` adds the per-value primality proofs and
     `witness` the factor of the value that ends the chain.  Both are for the
@@ -370,7 +389,8 @@ def full_verify(p, n, claimed, certify=True, witness=True, q2=Q2_CAMPAIGN):
     """
     p, n, claimed = int(p), int(n), int(claimed)
     d = difference(n)
-    cap = claimed + 1
+    exact = claimed < n
+    cap = claimed + 1 if exact else claimed + 1 + VERIFY_OVERSHOOT
 
     r_own = CpuEngine(n, q2).chain_depth(p, cap=cap)             # leg 1
     r_sym = ref.chain_depth(p, n, cap=cap)                       # leg 2
@@ -389,14 +409,17 @@ def full_verify(p, n, claimed, certify=True, witness=True, q2=Q2_CAMPAIGN):
         alt = CpuEngine(n, alt_q2).survives(p)
     alt = bool(alt) and ref.sieve_survivor(p, n, min(alt_q2, 4096))
 
+    depth_ok = (r_own == claimed) if exact else (r_own >= claimed)
     out = {"p": p, "n": n, "depth": int(r_own), "difference": d,
            "values": [p + j * d for j in range(min(claimed, n))],
            "legs": {"engine_mr": int(r_own), "sympy_bpsw": int(r_sym),
                     "alt_sieve_survives": bool(alt),
                     "alt_sieve_depth": alt_q2},
-           "agree": bool(r_own == r_sym == claimed and alt)}
+           "agree": bool(r_own == r_sym and depth_ok and alt)}
     if not out["agree"]:
         return out
+    if r_own == cap:
+        out["depth_is_lower_bound"] = True  # the bounded walk never broke
 
     if certify and claimed >= n:
         proofs = []
@@ -413,8 +436,11 @@ def full_verify(p, n, claimed, certify=True, witness=True, q2=Q2_CAMPAIGN):
             proofs.append(pr)
         out["proofs"] = proofs
         out["proof_kinds"] = sorted({pr["proof"] for pr in proofs})
-    if witness and claimed < n + 1:
-        breaker = p + claimed * d
+    if witness and r_own < cap:
+        # both legs stopped AT r_own, so p + r_own*d is the value that
+        # actually ends the chain -- never p + claimed*d, which for a chain
+        # that overshoots its claim is prime
+        breaker = p + r_own * d
         out["chain_breaker"] = breaker
         out["chain_breaker_factor"] = _bounded_witness(breaker)
     return out
@@ -633,22 +659,36 @@ def _finalize(c, eng, hb, n, q2, pending):
     """Collect one classified segment, record its events, advance the
     cursor past it and checkpoint.  This is the ONLY place the cursor
     moves, which is what makes the overlap safe: an interrupt between
-    segments loses in-flight device work, never classified coverage."""
+    segments loses in-flight device work, never classified coverage.
+
+    The census and the best-chain counters are accumulated in LOCALS and
+    committed to `c` only at the end, next to the cursor: counters are per
+    candidate, so if this function raises mid-segment (a failed
+    verification does), `c` must still hold the boundary it started from
+    or the redo of this segment double-counts (CLAUDE.md 5e).  Committing
+    by ASSIGNMENT rather than in-place mutation is also what keeps the
+    interrupt thread's shallow `boundary = dict(c)` snapshot honest.  The
+    discovery ledger (`found`, `hits`, the evidence file) is the deliberate
+    exception: it moves mid-loop, and a redo is safe because a settled term
+    re-classifies as a census repeat and the evidence record is keyed by p.
+    """
     base, seg, offs = pending["base"], pending["seg"], pending["offs"]
     depths = pending["collect"]()
+    census = dict(c.get("census") or {})
+    best_depth, best_p = int(c["best_depth"]), int(c["best_p"])
     found_here = False
     for o, dep in zip(offs, depths):
         p = base + o
         kind = event_kind(c, dep, n)
         if kind is None:
             continue
-        if dep > int(c["best_depth"]):
-            c["best_depth"], c["best_p"] = int(dep), int(p)
+        if dep > best_depth:
+            best_depth, best_p = int(dep), int(p)
         if kind == "CENSUS":
-            _front.bump_census(c["census"], dep)
+            _front.bump_census(census, dep)
             continue
         if kind == "NEAR":
-            ordinal = _front.bump_census(c["census"], dep)
+            ordinal = _front.bump_census(census, dep)
             hb.doing(f"verifying a NEAR at p={p}")
             v = full_verify(p, n, dep, certify=False, witness=False,
                             q2=q2)
@@ -676,14 +716,18 @@ def _finalize(c, eng, hb, n, q2, pending):
         banner("DISCOVERY", [
             f"a({n}) = {p:,}",
             f"P({n}) = {difference(n):,}",
-            f"all {n} values prime; proofs: "
-            f"{', '.join(v.get('proof_kinds', ['-']))}",
+            f"all {n} values prime"
+            + (f" -- and the chain runs {int(v['depth'])} deep"
+               if int(v["depth"]) > n else "")
+            + f"; proofs: {', '.join(v.get('proof_kinds', ['-']))}",
             f"verified 3 ways + per-value proof; evidence {path}",
             f"least-claim: contiguous sweep from {eng.floor} "
             f"to {base + seg}",
         ])
         found_here = True
 
+    c["census"] = census
+    c["best_depth"], c["best_p"] = best_depth, best_p
     c["survivors"] = int(c["survivors"]) + len(offs)
     c["next_u"] = int(c["next_u"]) + seg // W0
     new_pos = int(c["next_u"]) * W0
@@ -811,6 +855,7 @@ def selftest(engine="gpu"):
     print("=== project drills ===")
     run("event_kind", _drill_event_kind)
     run("verification", _drill_verification)
+    run("published terms", _drill_published)
     run("low pass", _drill_low_pass)
     run("stage advance", _drill_stage_advance)
     run("resume", lambda: _drill_resume(engine))
@@ -834,7 +879,7 @@ def _drill_event_kind():
     drill.
     """
     from huntlib import drills
-    n = target_n({}, 16)
+    n = target_n({}, FRONTIER_N)
     c = {"found": {}, "n": n}
     cases = [(n, "DISCOVERY"), (n + 3, "DISCOVERY"), (n - 1, "NEAR"),
              (DEPTH_FLOOR, "CENSUS"), (n - 2, "CENSUS"),
@@ -871,10 +916,81 @@ def _drill_verification():
     short = full_verify(KNOWN[n], n, n + 1, q2=4096)
     if short["agree"]:
         return False, "verification: accepted an overstated depth"
+    # a chain that runs PAST its n is still the term: a claim of n is a
+    # CAPPED walk (ap_search.chain_depth caps at n), so it means AT LEAST
+    # n, and the verifier must report the true depth and put the breaker
+    # at the chain's real end.  a(9) = 272809 runs 10 deep; the day this
+    # case was missing, a genuine a(17) whose chain ran 19 deep was
+    # rejected as a corrupt engine and the campaign died on it.
+    deep = full_verify(KNOWN[9], 9, 9, q2=4096)
+    if not deep["agree"]:
+        return False, (f"verification: rejected a(9), whose chain runs "
+                       f"past n: {deep['legs']}")
+    if int(deep["depth"]) != 10:
+        return False, (f"verification: a(9)'s chain is 10 deep, reported "
+                       f"{deep['depth']}")
+    if deep.get("chain_breaker") != KNOWN[9] + 10 * difference(9):
+        return False, ("verification: the breaker must sit at the chain's "
+                       "true end, not at the claimed depth")
+    # ... and the OTHER direction stays an alarm: a NEAR measured exactly
+    # (its walk stopped at a composite, not at the cap) that re-measures
+    # LONGER means the classifier called a prime composite -- corruption.
+    near_wrong = full_verify(KNOWN[9], 9, 8, certify=False, witness=False,
+                             q2=4096)
+    if near_wrong["agree"]:
+        return False, ("verification: a NEAR claim below the chain's true "
+                       "depth must be rejected -- that direction IS a "
+                       "corrupt engine")
     # a value past the certificate cap must be refused, not guessed at
     return True, (f"verification: the genuine a({n}) passes all legs with "
-                  f"{n} proofs ({'/'.join(sorted(kinds))}); a fake p and an "
-                  f"overstated depth are both rejected")
+                  f"{n} proofs ({'/'.join(sorted(kinds))}); a fake p, an "
+                  f"overstated depth and a too-short NEAR are rejected; "
+                  f"a(9)'s 10-deep chain verifies as a(9) with its breaker "
+                  f"at the true end")
+
+
+def _drill_published(certify=False):
+    """Every term THIS project published must still satisfy the definition,
+    and its evidence file must still say so.
+
+    G1 does this for the literature table; CAMPAIGN_FOUND is the other half
+    and is the half that is this repository's own claim, so it gets the
+    same treatment on every gate run rather than a one-time check at
+    publication.  Cheap legs by default -- the per-value proofs are what
+    `certify` adds and what the campaign itself already ran once.
+    """
+    if not CAMPAIGN_FOUND:
+        return True, "published terms: none yet"
+    checked = []
+    for n in sorted(CAMPAIGN_FOUND):
+        p = CAMPAIGN_FOUND[n]
+        v = full_verify(p, n, n, certify=certify, q2=4096)
+        if not v["agree"]:
+            return False, (f"published terms: a({n}) = {p} no longer "
+                           f"verifies: {v['legs']}")
+        path = str(_pathlib.Path(__file__).with_name("evidence") /
+                   f"ap_a{n}_p{p}.json")
+        if not os.path.exists(path):
+            return False, f"published terms: a({n}) has no evidence file"
+        with open(path) as fh:
+            ev = json.load(fh)
+        if int(ev["p"]) != p or int(ev["n"]) != n:
+            return False, f"published terms: {path} is not about a({n})"
+        if int(ev["depth"]) != int(v["depth"]):
+            return False, (f"published terms: a({n})'s file records depth "
+                           f"{ev['depth']}, the chain is {v['depth']}")
+        if ev["values"] != [p + j * difference(n) for j in range(n)]:
+            return False, (f"published terms: a({n})'s recorded values do "
+                           f"not match the definition")
+        br, w = ev.get("chain_breaker"), ev.get("chain_breaker_factor")
+        if br != v.get("chain_breaker") or not w or br % w or not 1 < w < br:
+            return False, (f"published terms: a({n})'s factor witness does "
+                           f"not divide the value that ends the chain")
+        checked.append(f"a({n}) {v['depth']} deep")
+    return True, ("published terms: " + ", ".join(checked) +
+                  " -- each re-verified against the definition and against "
+                  "its own evidence file (values, true depth, factor "
+                  "witness)")
 
 
 def _drill_low_pass():
@@ -896,29 +1012,35 @@ def _drill_stage_advance():
     This is the drill for the failure the sibling project shipped -- a
     campaign that found its term and then spent hours advertising a rung
     belonging to it.
+
+    Frontier-RELATIVE, like the event_kind drill: it hunts whatever term is
+    open now and settles THAT, so publishing a term does not falsify it.
+    The day a(16)-a(18) landed in CAMPAIGN_FOUND, a version of this drill
+    that named a(16) failed -- correctly, and uselessly.
     """
-    eng = CpuEngine(16, 4096)
-    c = fresh_ckpt(16, eng)
+    n = target_n({}, FRONTIER_N)
+    eng = CpuEngine(n, 4096)
+    c = fresh_ckpt(n, eng)
     c["next_u"] = 10**9
     c["census"] = {"7": 5}
-    c["rungs_passed"] = ["a(16) Q1", "a(16) median"]
-    _front.settle_one(c["found"], 16, 39000000000000)
-    nxt = target_n(c, 16)
-    if nxt != 17:
-        return False, f"stage advance: next target is a({nxt}), want a(17)"
+    c["rungs_passed"] = [f"a({n}) Q1", f"a({n}) median"]
+    _front.settle_one(c["found"], n, 39000000000000)
+    nxt = target_n(c, FRONTIER_N)
+    if nxt != n + 1:
+        return False, f"stage advance: next target is a({nxt}), want a({n + 1})"
     lad = ladder()
-    if any(l.startswith("a(16)") for _t, l, _d in
+    if any(l.startswith(f"a({n})") for _t, l, _d in
            lad.live(_front.top_settled(TABLES, c["found"]))):
-        return False, "stage advance: a(16) rungs are still live after the find"
+        return False, f"stage advance: a({n}) rungs are still live after the find"
     stage_reset(c, nxt, CpuEngine(nxt, 4096))
     if c["next_u"] != _floor_u(eng) or c["census"] or c["rungs_passed"]:
         return False, ("stage advance: the cursor, census or rungs survived "
                        "the move to a new term")
-    if c["found"].get("16") is None or int(c["hits"]) != 0:
+    if c["found"].get(str(n)) is None or int(c["hits"]) != 0:
         return False, "stage advance: the find did not survive the move"
-    return True, ("stage advance: finding a(16) retires its rungs, resets the "
-                  "cursor to the floor and clears the census, while the find "
-                  "itself survives")
+    return True, (f"stage advance: finding a({n}) retires its rungs, resets "
+                  f"the cursor to the floor and clears the census, while the "
+                  f"find itself survives")
 
 
 def _drill_resume(engine="gpu"):

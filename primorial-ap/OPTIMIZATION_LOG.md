@@ -11,9 +11,11 @@ before adding to this file.
 **State of the engine: v2.** v1 was built to be correct and gated, then
 measured (#1–#3); #4–#7 are the optimization pass that followed, ~20× of
 device rate at the campaign depth with the stream pinned bit-for-bit
-throughout. The campaign configuration below #3 (depth 2048, two workers)
-was chosen against v1's rates and is STALE against v2 — the re-balance is
-the open item at the bottom of this file.
+throughout. #3's configuration (depth 2048, two workers) was chosen against
+v1's rates and was superseded by #9's re-balance to depth 8192 × 3 workers;
+it is kept below as the measurement it was. **#10 is the production
+result**: the configuration ran a three-term campaign and the pre-stated
+end-to-end rate predicted it to within 7%.
 
 ---
 
@@ -230,6 +232,38 @@ overlap (#8) hides all of it. Priced and declined:
   budget for the same +14%. A new gated primality kernel for a 23% host
   cut that the overlap already hides was not worth its correctness
   surface.
+
+## #10 — The configuration, checked against a real campaign
+
+**Kept, unchanged: the numbers held.** The a(16)–a(18) campaign
+(2026-08-20/21) is the first production run at the #9 configuration, and
+it is the only measurement in this file whose shape nobody chose: three
+sweeps from the floor, 1.63×10¹⁶ of p-line, stopped by a find rather than
+by a `--to`. Predicted at the pre-stated 2.07×10¹¹ p/s: 21.8 h. Actual:
+**23.4 h wall clock, 1.93×10¹¹ p/s, 93%** — with the shortfall accounted
+for and none of it in the kernel (the canary rediscovery, three pool ramps
+and three fresh sieve builds, verification pauses, one restart). A rate
+measured on 6.4×10¹² of line predicted a run 2,500× longer to within a
+tenth, which is the strongest statement available that #1–#9 measured the
+right thing.
+
+Two things to carry into the next pass rather than fix now:
+
+- **The depth table (#9, BENCHMARKS.md) was measured at n = 16 and does
+  not transfer up.** Classification cost is bignum `pow` on values of
+  ~(n−1)·P(n), which grew from 21 digits at a(16) to 25 at a(18) and hits
+  27 at a(19) — and at a(19) each find also needs BLS75 certificates. The
+  host side is the one that moves; **re-measure µs per survivor at n = 19
+  before sizing that pool** (CONVENTIONS.md rule 5c), because 3 workers
+  was sized from 1.1 cores of demand at n = 16 and that number is stale by
+  construction.
+- **`wall_s` in the checkpoint undercounts and is not a rate source.** The
+  interrupt path saves the segment-boundary snapshot, which is taken
+  before the clock is folded in, so every Ctrl+C-ended run drops out of
+  the total; this campaign's counter reads 4.95 h against a 23.4 h span.
+  Cosmetic — no cursor, census or find is affected — but anything derived
+  from it is wrong, so the timings above come from the discovery
+  timestamps instead.
 
 ## The termination table (OPTIMIZATION.md Part 3), campaign configuration
 

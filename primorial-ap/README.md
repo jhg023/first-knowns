@@ -9,28 +9,39 @@ The hunt for new terms of [OEIS A053647](https://oeis.org/A053647): the
 first term of the first arithmetic progression of **n primes whose common
 difference is the n-th primorial** — the smallest difference an n-term
 progression of primes can possibly have. The sequence is
-`nonn,nice,hard,more`; its last computational advance was **October 2009**,
-and no open term has ever had an upper bound published for it.
+`nonn,nice,hard,more`; its last computational advance before this project
+was **October 2009**, and no open term had ever had a bound of any kind
+published for it.
 
-**Results so far: none.** The engine is built, the gate battery is green
-and the odds model is validated and stated below, but **no production sweep
-has been run** — only bounded smoke runs to 6.4×10¹², below where any
-open term is expected (the deepest of them verified a depth-15 chain at
-p = 4,361,081,208,811 — one value short of a(16) — as a live drill of the
-NEAR protocol). Hunts in this repository are started deliberately by
-the repository owner, never by an agent. The first target is **a(16)**,
-which the model puts at a median of 3.87×10¹³ — about **three minutes**
-of sweep at the measured v2 end-to-end rate.
+**Three new terms, found and verified:**
 
-**Status: ACTIVE** — this is the project currently being advanced. Prior
-frontier: **a(15) = 158,317,270,283**, Donovan Johnson, October 20, 2009.
+| | |
+|---|---|
+| **a(16)** | **116,781,362,669,989** |
+| **a(17)** | **2,097,209,048,106,247** |
+| **a(18)** | **14,042,451,608,819,603** |
+
+found 2026-08-20/21 in a single 23-hour campaign — the first value of any
+kind ever put on an open term of this sequence. Each is a *least* value, swept
+contiguously from p = 2; each was verified four ways and re-verified from
+its evidence file before publication; and all 51 of their values are
+**proved** prime rather than asserted, because they sit below huntlib's
+deterministic Miller–Rabin bound. The exact integers, factor witnesses and
+verification records are in [RESULTS.md](RESULTS.md).
+
+**Status: PAUSED — open to others.** The campaign stopped on the a(18)
+find and is left resumable at the floor of the **a(19)** sweep: model
+median 4.12×10¹⁷, about **23 days** on one 4090, and the first term whose
+values need certificates. Prior frontier: **a(15) = 158,317,270,283**,
+Donovan Johnson, October 20, 2009.
 
 ## The problem
 
 G. L. Honaker, Jr. proposed the sequence in February 2000; Jud McCranie
 filled in a(11)–a(13) within ten days, and Donovan Johnson computed
-a(14) and a(15) in October 2009. Nothing computational has happened to it
-since — the edits in the seventeen years after are link and format changes.
+a(14) and a(15) in October 2009. Nothing computational happened to it in
+the seventeen years after — every edit to the entry since is a link or a
+format change — until the three terms above.
 
 A053647(n) is the least prime *p* such that
 
@@ -53,6 +64,14 @@ achieves it.
 | 6 | 73 | | 14 | 114,649,314,209 |
 | 7 | 7,937 | | 15 | 158,317,270,283 |
 | 8 | 7,703 | | | |
+
+and the terms this project added, all previously open with no bound:
+
+| n | a(n) |
+|---|------|
+| **16** | **116,781,362,669,989** |
+| **17** | **2,097,209,048,106,247** |
+| **18** | **14,042,451,608,819,603** |
 
 **The sequence is not monotone** — a(7) = 7937 is larger than a(8) = 7703 —
 and that is not a curiosity, it is the shape of the whole problem. The
@@ -144,15 +163,27 @@ is the opposite skew from the sibling project in this repo, whose model ran
 about 2× optimistic.
 
 **Predictions, stated before the run.** Depths on the p-line; each term is
-its own sweep from the floor.
+its own sweep from the floor. The `found at` column was filled in
+afterwards; nothing else in the table moved, and `model_results.json` is
+unchanged from the pre-run file.
 
-| term | Q1 | median | Q3 | P90 | median at the measured rate |
-|------|----|--------|----|-----|------------------------------|
-| a(16) | 1.56×10¹³ | **3.87×10¹³** | 7.93×10¹³ | 1.34×10¹⁴ | 3.1 min |
-| a(17) | 3.29×10¹⁴ | **8.15×10¹⁴** | 1.67×10¹⁵ | 2.81×10¹⁵ | 1.1 h |
-| a(18) | 7.16×10¹⁵ | **1.77×10¹⁶** | 3.61×10¹⁶ | 6.08×10¹⁶ | 24 h |
-| a(19) | 1.67×10¹⁷ | **4.12×10¹⁷** | 8.40×10¹⁷ | 1.41×10¹⁸ | 23 d |
-| a(20) | 4.10×10¹⁸ | **1.01×10¹⁹** | 2.05×10¹⁹ | 3.45×10¹⁹ | 1.5 y |
+| term | Q1 | median | Q3 | P90 | median at the measured rate | found at |
+|------|----|--------|----|-----|------------------------------|----------|
+| a(16) | 1.56×10¹³ | **3.87×10¹³** | 7.93×10¹³ | 1.34×10¹⁴ | 3.1 min | **1.17×10¹⁴** (q 0.87) |
+| a(17) | 3.29×10¹⁴ | **8.15×10¹⁴** | 1.67×10¹⁵ | 2.81×10¹⁵ | 1.1 h | **2.10×10¹⁵** (q 0.82) |
+| a(18) | 7.16×10¹⁵ | **1.77×10¹⁶** | 3.61×10¹⁶ | 6.08×10¹⁶ | 24 h | **1.40×10¹⁶** (q 0.43) |
+| a(19) | 1.67×10¹⁷ | **4.12×10¹⁷** | 8.40×10¹⁷ | 1.41×10¹⁸ | 23 d | open |
+| a(20) | 4.10×10¹⁸ | **1.01×10¹⁹** | 2.05×10¹⁹ | 3.45×10¹⁹ | 1.5 y | open |
+
+**How it held up.** Two of the three landed late and one early, for
+E summing to 4.30 against 3 expected — a factor of 1.43× whose 95%
+interval, [0.60, 6.96], includes 1. Pooled with the nine knowns that lean
+the other way: **9.94 against 12, a factor of 0.83, interval [0.51,
+1.60]**. Three live finds have not made this model distinguishable from
+honest in either direction, which is the outcome the validation above was
+checking for and is *not* what happened to the sibling project, whose
+interval excludes 1. The per-term arithmetic is in
+[RESULTS.md](RESULTS.md).
 
 **What that means for what this project can expect to find.** The
 measured **v2** rates are **2.1×10¹¹ p/s** of device sieve at the
@@ -160,24 +191,30 @@ campaign depth and **2.07×10¹¹ p/s end-to-end** (classification runs one
 segment behind the device and is fully hidden;
 [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) #8), 34.7× the v1 engine this
 project was first built and priced around. The table above uses the
-end-to-end number. So a(16) is minutes, a(17) is a lunch break, a(18) is
-about a day at the median — and **a(19), which was out of reach for v1
-at 2.2 years, is a three-week hunt at the median and eleven weeks at
-P90.** The term that now depends on optimization work that has not been
-done is a(20), at a median of a year and a half; the priced candidates
-(the largest ~+14%) are in the log's termination table.
+end-to-end number, and the campaign then tested it against something
+nobody chose the shape of: three sweeps from the floor totalling
+1.63×10¹⁶ of p-line, predicted at 21.8 h and delivered in **23.4 h** —
+**93% of a rate measured on a run 2,500× shorter**
+([BENCHMARKS.md](BENCHMARKS.md)). So a(16) was minutes, a(17) a lunch
+break, a(18) a day — and **a(19), which was out of reach for v1 at 2.2
+years, is a three-week hunt at the median and eleven weeks at P90.** The
+term that now depends on optimization work that has not been done is
+a(20), at a median of a year and a half; the priced candidates (the
+largest ~+14%) are in the log's termination table.
 
 Optimization here is bounded by verification changing character, not by
 appetite: a v1-era claim that the mark kernel was "far short of what the
 memory system can do" was true, and v2 spent it — the kernel now sits at
 named rooflines (the log has the table), and the honest statement is
-that **this project is built to find four new terms.**
+that **this project was built to find four new terms — three of them are
+in, and a(19) is the fourth.**
 
 **Verification changes character at a(19), too.** The largest value is
 about (n−1)·P(n): 4.9×10²⁰ at a(16), 3.1×10²² at a(17), 2.0×10²⁴ at
 a(18) — all below huntlib's deterministic Miller–Rabin bound of
-3.317×10²⁴, so for the first three terms the engine's own chain is a
-*proof*. At a(19) the values reach 1.4×10²⁶ and the bound is gone; from
+3.317×10²⁴, which is why the three terms found here are *proved* by the
+engine's own chain. At a(19) the values reach 1.4×10²⁶ and the bound is
+gone; from
 there every value carries a BLS75 certificate, and since N−1 = p−1+j·P(n)
 has no structure to exploit, that means a bounded partial factorization and
 Theorem 5's cube-root threshold rather than Theorem 1's square root. Gate
@@ -203,7 +240,15 @@ model quartiles above, logged `[RUNG]` as they are passed and shown with an
 ETA in every 30-second `[STATUS]` line, which also carries the census
 counts per chain depth. When a term lands, the launcher retires that term's
 rungs, resets the cursor to the floor and builds a completely new sieve for
-the next open term, logging a `[STAGE]` line that says so.
+the next open term, logging a `[STAGE]` line that says so — it did that
+twice unattended during the a(16)–a(18) campaign.
+
+**Resuming from where this stopped.** The checkpoint in the owner's tree
+(runtime checkpoints are not published) sits on the a(18) find with the
+stage advance not yet taken, so `python launch.py` picks up by retiring
+a(18)'s rungs and starting a(19) from the floor. Anyone starting fresh
+gets the same thing from an empty directory, three terms later: the
+launcher reads the settled frontier from the finds, not from the cursor.
 
 Throttles, priced: `--workers` (3 by default, sized from a measured 1.1
 cores of demand), `--gpu-yield-ms`, and `--gentle` (one worker and a
@@ -240,6 +285,21 @@ load budget are repository-wide and documented in
   Python integers, a from-scratch re-derivation at a sieve depth the
   campaign is not running, and a primality proof for every one of the n
   values. Any disagreement halts the campaign.
+- **A claim of n means *at least* n, and the verifier is drilled on both
+  directions of that.** The classifier walks each chain with a cap at n, so
+  a full chain may run further — a(9) = 272,809 has run 10 deep since 2000,
+  and a(17) found here runs 19. The verifier walks a bounded distance past
+  a full claim to record the true depth and put the factor witness at the
+  chain's real end, while a claim that re-measures *longer* than a chain
+  which had already stopped at a composite stays an alarm. Both cases are
+  in `_drill_verification`; the first one is there because its absence
+  halted this campaign on a correct find.
+- **The terms this project published are re-checked on every gate run.**
+  G1 holds the literature to the definition; the `published terms` drill
+  does the same for a(16)–a(18) *and* re-reads each evidence file, checking
+  the recorded values against the definition, the recorded depth against a
+  fresh walk, and that the factor witness really divides the value that
+  ends the chain.
 - **The evidence directory holds first occurrences only.** A chain one
   value short of the term being hunted gets one `[NEAR]` line and no file;
   everything from depth 6 up is counted in the checkpoint and appears only

@@ -3,3 +3,4 @@ __pycache__/
 campaign_checkpoint.json
 campaign_checkpoint.json.*
 *.tmp
+**/evidence/*.json.bak

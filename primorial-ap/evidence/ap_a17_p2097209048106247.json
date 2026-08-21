@@ -1,0 +1,144 @@
+{
+ "p": 2097209048106247,
+ "n": 17,
+ "depth": 19,
+ "difference": 1922760350154212639070,
+ "values": [
+  2097209048106247,
+  1922762447363260745317,
+  3845522797517473384387,
+  5768283147671686023457,
+  7691043497825898662527,
+  9613803847980111301597,
+  11536564198134323940667,
+  13459324548288536579737,
+  15382084898442749218807,
+  17304845248596961857877,
+  19227605598751174496947,
+  21150365948905387136017,
+  23073126299059599775087,
+  24995886649213812414157,
+  26918646999368025053227,
+  28841407349522237692297,
+  30764167699676450331367
+ ],
+ "legs": {
+  "engine_mr": 19,
+  "sympy_bpsw": 19,
+  "alt_sieve_survives": true,
+  "alt_sieve_depth": 4096
+ },
+ "agree": true,
+ "proofs": [
+  {
+   "proof": "deterministic-mr",
+   "N": 2097209048106247,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  {
+   "proof": "deterministic-mr",
+   "N": 1922762447363260745317,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  {
+   "proof": "deterministic-mr",
+   "N": 3845522797517473384387,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  {
+   "proof": "deterministic-mr",
+   "N": 5768283147671686023457,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  {
+   "proof": "deterministic-mr",
+   "N": 7691043497825898662527,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  {
+   "proof": "deterministic-mr",
+   "N": 9613803847980111301597,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  {
+   "proof": "deterministic-mr",
+   "N": 11536564198134323940667,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  {
+   "proof": "deterministic-mr",
+   "N": 13459324548288536579737,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  {
+   "proof": "deterministic-mr",
+   "N": 15382084898442749218807,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  {
+   "proof": "deterministic-mr",
+   "N": 17304845248596961857877,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  {
+   "proof": "deterministic-mr",
+   "N": 19227605598751174496947,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  {
+   "proof": "deterministic-mr",
+   "N": 21150365948905387136017,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  {
+   "proof": "deterministic-mr",
+   "N": 23073126299059599775087,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  {
+   "proof": "deterministic-mr",
+   "N": 24995886649213812414157,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  {
+   "proof": "deterministic-mr",
+   "N": 26918646999368025053227,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  {
+   "proof": "deterministic-mr",
+   "N": 28841407349522237692297,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  {
+   "proof": "deterministic-mr",
+   "N": 30764167699676450331367,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  }
+ ],
+ "proof_kinds": [
+  "deterministic-mr"
+ ],
+ "chain_breaker": 36532448750139088248577,
+ "chain_breaker_factor": 71,
+ "swept_from": 10000,
+ "swept_to": 2097404329338660,
+ "config": "primorial-ap/v1/q2=8192/pceil=1e26"
+}

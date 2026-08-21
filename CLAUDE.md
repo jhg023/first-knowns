@@ -34,7 +34,8 @@ each README stays.
 2. **Gates green before and after every change — for the ACTIVE project
    only.** Run `python score.py` in the project being worked on (the
    ACTIVE row of the top-level README's project table says which; as of
-   2026-08-20 both projects are PAUSED); commit only with that
+   2026-08-21 ALL THREE projects are PAUSED, so there is no project whose
+   battery an agent may run unasked); commit only with that
    project's SCORE in the
    message. If a deliberate coverage change alters the benchmark
    fingerprint, update the fingerprint in the same commit and log it in
