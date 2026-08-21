@@ -6,12 +6,13 @@
 
 ## Verified finds
 
-**None.** No production sweep has been run. The engine, the three
-implementations, the odds model and the full gate battery are built and
-green, and the v1 engine's measured rate is about three orders of
-magnitude short of what the nearest target needs — so the campaign has
-not been started and will not be until the optimization pass lands. See
-[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md).
+**None.** No production sweep has been run. The four implementations,
+the odds model and the full gate battery are built and green, and after
+the v2 optimization pass the campaign is **startable** — the nearest
+target is about eleven days of wall clock rather than 8.7 years. Starting
+it is the owner's call; the pipeline does not start itself. See
+[BENCHMARKS.md](BENCHMARKS.md) for what each target costs and
+[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) for how the rate was got.
 
 This section will carry, per find, in discovery order: the exact integers
 (the index *k* and prime(*k*)), the sequences it extends, the
@@ -71,12 +72,16 @@ verified number and can decide what to do with it.
 
 Nothing is running. The state the next session inherits:
 
-- Five files, four documents, twelve gates plus five drills, **all green**
+- Six files, four documents, fifteen gates plus five drills, **all green**
   (`python launch.py --selftest`).
-- **SCORE 95** (Mp/s of prime line on the frozen from-scratch window,
-  fingerprint 147/5908722711111303797).
-- Production-height rate probe: **1.2×10⁸ p/s at p = 10¹²**, against a
-  nearest target (m = 11 Q1) at prime line 3.3×10¹⁶ — about 8.7 years at
-  that rate. The optimization pass is the whole of the next session's
-  work, and its levers are named and unpriced in the log.
+- **SCORE 58,754** (Mp/s of prime line on the frozen from-scratch window,
+  fingerprint 147/5908722711111303797 — the same fingerprint v1 produced,
+  held bit-for-bit through the whole optimization pass).
+- Campaign-height rate: **3.3×10¹⁰ p/s at p = 3×10¹⁶**, against v1's
+  3.3×10⁷ there. The nearest target (m = 11 Q1, prime line 3.3×10¹⁶) is
+  about **11 days**; new ground on five of the seven families begins after
+  about **six**.
+- The instruction-count ceiling for this algorithm on this device is about
+  3,000× the v1 score, and v2 is at 618× of it — the arithmetic is in
+  BENCHMARKS.md so the next pass knows what is left before it starts.
 - No checkpoint, no evidence files, no campaign clock.

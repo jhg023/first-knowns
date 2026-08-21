@@ -13,59 +13,107 @@ the fingerprint; an engine that breaks correctness fails the gates. Both
 score 0.
 
 **Frozen shape.** A sweep from p = 2 to 2²⁶ (6.711×10⁷ of prime line),
-all eight families live, `seg = 2²⁴`, `chunk = 2¹⁶`.
+all eight families live, one segment, `run = 128`, `tpb = 128`,
+`subw = 1024`. The geometry is pinned in `score.py` rather than inherited
+from the engine, so retuning a campaign default for a different height
+cannot move the frozen shape.
 
-**Frozen fingerprint.** `147 hits / xor 5908722711111303797`.
+**Frozen fingerprint.** `147 hits / xor 5908722711111303797` — unchanged
+from v1, and unchanged through every optimization below.
 
 Every one of those 147 hits is a real term of a real sequence, and all of
-them are published values this project did not find — which is why the
-from-scratch window was chosen over a synthetic seed at production height.
+them are published values this project did not find.
+
+Repeat runs of the whole battery land between 58,754 and 60,655 Mp/s. The
+window is about a millisecond now, so a few percent of ambient GPU load is
+visible in the number; the ledger records the low end.
+
+**The median is over nine runs, not three.** The window now takes about a
+millisecond, and at that size the rate is bimodal against ambient GPU load
+(1.10 ms against 1.78 ms on the same build, same process). Three samples
+put the median on the wrong mode about a third of the time. The pool is
+also released and the engine warmed before the clock starts: the gates
+build a dozen engines with their own cached device buffers, and that
+residue is measurement noise, not engine rate.
 
 ## Ledger
 
 | date | engine | SCORE (Mp/s) | fingerprint | note |
 |------|--------|--------------|-------------|------|
-| 2026-08-21 | v1 | **95** | 147/5908722711111303797 | first light: three kernels, unnormalized limb prefix, Montgomery test |
+| 2026-08-21 | v1 | 95 | 147/5908722711111303797 | first light: three kernels, unnormalized limb prefix, Montgomery test |
+| 2026-08-21 | **v2** | **58,754** | 147/5908722711111303797 | **618×**: widths sized at codegen, cost-chosen power chain, division-free Montgomery Horner, decoupled look-back, balanced sieve |
+
+## Where the time goes
+
+Score window, 1.040 ms best of fifteen:
+
+| stage | ms | share |
+|-------|----|-------|
+| sieve: marking | 0.201 | 19% |
+| sieve: count + scan + compact (one kernel) | 0.138 | 13% |
+| the sweep | 0.486 | 47% |
+| host | 0.214 | 21% |
+
+Inside the sweep, by compiling the same kernel with each stage removed and
+a keep-alive on the accumulator: **powering ~50%** (both walks), the
+divisibility test ~23%, the warp scan and look-back ~25%. That inverts
+what v1's architecture was built around — the Montgomery test it was
+designed for is the smallest of the three.
 
 ## Rates that are not the score
 
 The score is pinned to a shape so it keeps meaning the same thing while
 the configuration moves. The number the **campaign** is priced on is the
-rate at production height, and it is measured separately (CLAUDE.md rule
-5c: device seconds per unit of the line the hunt is paid in).
+rate at production height (CLAUDE.md rule 5c), measured separately at the
+campaign's own configuration: `seg = 2²⁸`, `run = 64`, `subw = 2048`.
 
-| measurement | rate | how |
-|-------------|------|-----|
-| frozen score window, from p = 2 | 9.5×10⁷ p/s | `score.py`, median of 3 |
-| production height, p = 10¹², span 2²⁶ | **1.23×10⁸ p/s** | synthetic state, real work; rate probe only |
-| sieve kernel alone, p = 10¹² | 3.3×10⁸ p/s | device-only, no powers/test |
+| height | v1 | v2 | factor |
+|--------|----|----|--------|
+| frozen score window, from p = 2 | 9.5×10⁷ p/s | **5.88×10¹⁰ p/s** | 618× |
+| p = 10¹² | 1.20×10⁸ p/s | **4.07×10¹⁰ p/s** | 338× |
+| p = 10¹⁵ | — | **3.58×10¹⁰ p/s** | — |
+| p = 10¹⁶ | 3.25×10⁷ p/s | **3.50×10¹⁰ p/s** | **1,077×** |
+| p = 3×10¹⁶ (campaign height) | — | **3.34×10¹⁰ p/s** | — |
 
-The sieve alone is ~2.7× the end-to-end rate, so **roughly two thirds of
-the time is the power/prefix/test pipeline and its per-chunk host
-round-trip** — a device→host copy per power per chunk, eight of them per
-65 536 primes. That is the first suspect for the optimization pass, and it
-is a suspect rather than a measurement: a micro-harness written for the
-phase split returned several sub-resolution readings and is not trusted.
-A CUDA-event harness is the first task of the next pass (OPTIMIZATION.md:
-measure the phase split before touching code).
+v1's rate *falls* with height (48 fixed limbs stop being the waste and the
+base-prime pass starts being it); v2's is nearly flat from 10¹² to
+3×10¹⁶, which is what makes the campaign plannable rather than a
+guess. All rate probes use a synthetic state at height and do real work;
+they are not fingerprinted, and they are not the score.
 
 ## What the campaign costs at this rate
 
 The index line and the prime line are related by p ≈ k(ln k + ln ln k − 1).
-Targets, and what v1 would need:
+At the measured 3.34×10¹⁰ p/s:
 
-| target | index k | prime line | at 1.23×10⁸ p/s |
-|--------|---------|------------|------------------|
-| m = 11 Q1 (25% for a(19)) | 8.9×10¹⁴ | 3.3×10¹⁶ | 8.7 years |
-| m = 11 median (50%) | 2.0×10¹⁵ | 7.6×10¹⁶ | 20 years |
-| A045345 a(17) median | 2.6×10¹⁶ | 1.05×10¹⁸ | 270 years |
+| target | index k | prime line | v1 | **v2** |
+|--------|---------|------------|----|--------|
+| lowest live frontier (m ≥ 8) | 5×10¹⁴ | 1.8×10¹⁶ | 18 years | **6.3 days** |
+| m = 11 Q1 (25% for a(19)) | 8.9×10¹⁴ | 3.3×10¹⁶ | 8.7 years | **11.4 days** |
+| m = 11 median (50%) | 2.0×10¹⁵ | 7.6×10¹⁶ | 20 years | **26 days** |
+| A045345 a(17) median | 2.6×10¹⁶ | 1.05×10¹⁸ | 270 years | **364 days** |
 
-**So no campaign starts on v1.** The gap to a sane run is about three
-orders of magnitude, and closing it is the next pass's whole job. For
-scale, the throughput work on the other projects in this repository has
-returned 20×, 27.9× and 913× on their engines, and in every case the
-largest single factor came from the campaign's configuration rather than
-from the kernel.
+**The campaign is startable.** Six days of walking reaches new ground on
+five of the seven families at once, and the nearest quartile is a
+fortnight rather than a decade. The `nice` headline (A045345) remains the
+most expensive family by an order of magnitude, because its frontier is
+the highest — that is a fact about the problem, not about the engine.
+
+## The ceiling, stated plainly
+
+An RTX 4090 issues about 2.08×10¹³ integer instructions per second
+(128 SMs × 64 INT32 lanes × 2.535 GHz). Each of the frozen window's
+3,957,808 primes needs, with nothing wasted, 137 word multiplies for the
+shared power chain, 83 words of carry-propagating accumulation, and ~42
+sixty-four-bit Montgomery limbs for the odd half of the candidates —
+about **1,250 integer instructions per prime**, or ~0.24 ms for the whole
+window at 100% of the device's issue rate, before the sieve and before a
+single kernel launch.
+
+So **~3,000× is the instruction-count ceiling** for this algorithm on this
+hardware, and v2 sits at 618× — about half the device's issue rate, which
+is what a 168-register straight-line kernel at 25% occupancy gets. Beyond
+that needs a cheaper algorithm, not a better kernel.
 
 ## Wall clock of the batteries
 
@@ -73,11 +121,11 @@ Budgeted against CLAUDE.md rule 0 (no agent command over 5 minutes):
 
 | command | wall clock |
 |---------|-----------|
-| `python launch.py --selftest` | ~15 s (12 gates + 5 drills) |
-| `python score.py` | ~20 s (gates ~10 s, benchmark 3 runs) |
+| `python launch.py --selftest` | ~35 s (15 gates + 5 drills) |
+| `python score.py` | ~40 s (gates ~35 s, benchmark 9 runs + 3 warm) |
 
 Both are cheap because the gates run at small *k* by design: the oracle is
 exhaustive to k = 60 000, the parity windows are populated but short, and
-the canary hunt covers k ≈ 283 000. Nothing in the battery needs
-production height, which is what keeps a full re-gate affordable after
-every change.
+the canary hunt covers k ≈ 283 000. The v2 gates add NVRTC compilations —
+one per distinct limb plan — which is most of the extra time and is
+cached within a process.

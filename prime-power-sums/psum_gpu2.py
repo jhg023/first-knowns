@@ -359,6 +359,7 @@ extern "C" __global__ void sieve_mark_large(u32* __restrict__ bits, u64 base,
 
 extern "C" __global__ void sieve_compact(const u32* __restrict__ bits,
         u64 nwords, int per, u64 base, u64* __restrict__ out, u64 outcap,
+        int* over,
         volatile u64* agg, volatile u64* inc, volatile int* status,
         int* ctr, u64* total, int ncb)
 {
@@ -425,6 +426,7 @@ extern "C" __global__ void sieve_compact(const u32* __restrict__ bits,
             const int j = __ffs(v) - 1;
             v &= v - 1;
             if (mypos < outcap) out[mypos] = base + 2ULL * (i * 32 + j);
+            else atomicExch(over, 1);
             ++mypos;
         }
         pos += tot;
@@ -768,14 +770,21 @@ class GpuSweep2:
             self._sp_lim = lim
         d_sp, nsp = self._sp_dev, int(self._sp_dev.size)
 
-        d_seed = self._buf("seedA", wtot, np.uint32)
-        d_seed2 = self._buf("seedB", wtot, np.uint32)
-        d_seed.set(_state_words(plan, st.sums))
-        d_k0 = self._buf("k0A", 1, np.uint64)
-        d_k0b = self._buf("k0B", 1, np.uint64)
-        d_k0.set(np.array([st.k], dtype=np.uint64))
+        # sums in [0, wtot), k0 in two 8-byte-aligned words past them, so
+        # the whole resumable state comes back in a single transfer
+        wpad = wtot + (wtot & 1)
+        mA = self._buf("metaA", wpad + 2, np.uint32)
+        mB = self._buf("metaB", wpad + 2, np.uint32)
+        init = np.zeros(wpad + 2, dtype=np.uint32)
+        init[:wtot] = _state_words(plan, st.sums)
+        init[wpad:] = np.frombuffer(
+            int(st.k).to_bytes(8, "little"), dtype=np.uint32)
+        mA.set(init)
+        d_seed, d_seed2 = mA, mB
+        d_k0 = mA[wpad:].view(np.uint64)
+        d_k0b = mB[wpad:].view(np.uint64)
         d_hits = self._buf("hits", HIT_BUF, np.uint64)
-        d_nh = self._buf("nh", 1, np.int32)
+        d_nh = self._buf("nh", 2, np.int32)     # [0] hits, [1] overflow
         d_nh.fill(0)
 
         while lo < p_hi:
@@ -784,13 +793,15 @@ class GpuSweep2:
                           d_hits, d_nh, plan)
             d_seed, d_seed2 = d_seed2, d_seed
             d_k0, d_k0b = d_k0b, d_k0
+            wpad = wpad
             lo = hi
 
-        if int(cp.asnumpy(self._buf("tot", 1, np.uint64))[0]) > self._nmax_seen:
+        nhv = cp.asnumpy(d_nh)
+        if int(nhv[1]):
             raise RuntimeError(
                 "prime-count bound was too small for a segment; the "
                 "compacted array would have overflowed")
-        cnt = int(d_nh.get()[0])          # the run's one and only sync
+        cnt = int(nhv[0])
         if cnt > HIT_BUF:
             raise RuntimeError(f"hit buffer overflow: {cnt} > {HIT_BUF}")
         v = cp.asnumpy(d_hits[:cnt]).astype(np.uint64)
@@ -798,8 +809,9 @@ class GpuSweep2:
         es_ = ((v >> np.uint64(57)) & np.uint64(1)).tolist()
         ks_ = (v & np.uint64((1 << 57) - 1)).tolist()
         hits.extend(zip(ms_, es_, ks_))
-        st.k = int(cp.asnumpy(d_k0)[0])
-        st.sums = _read_words(plan, cp.asnumpy(d_seed))
+        meta = cp.asnumpy(d_seed)              # sums and k0 in one read
+        st.k = int.from_bytes(meta[wpad:].tobytes(), "little")
+        st.sums = _read_words(plan, meta[:wtot])
         st.p = max(st.p, p_hi)
         self.state = st
         return sorted(hits), st
@@ -847,9 +859,9 @@ class GpuSweep2:
         self._d_sst = d_all[ncb + 1:]
         self.k_compact((ncb,), (32,),
                        (d_bits, np.uint64(nwords), np.int32(per),
-                        np.uint64(base), d_ps, np.uint64(nmax), d_cagg,
-                        d_cinc, d_cst, d_cst[ncb:], d_tot, np.int32(ncb)))
-        self._nmax_seen = max(getattr(self, "_nmax_seen", 0), nmax)
+                        np.uint64(base), d_ps, np.uint64(nmax), d_nh[1:],
+                        d_cagg, d_cinc, d_cst, d_cst[ncb:], d_tot,
+                        np.int32(ncb)))
         self._sweep(d_ps, d_tot, nmax, d_k0, d_k0b, d_seed, d_seed2,
                     d_hits, d_nh, plan)
 

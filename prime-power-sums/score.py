@@ -44,9 +44,10 @@ import psum_search as cpu                                           # noqa: E402
 BENCH_SPAN = 1 << 26                   # 6.7e7 of prime line, from p = 2
 BENCH_SEG = 1 << 26                    # the whole window in one segment
 BENCH_CHUNK = 1 << 16                  # v1's shape, kept for the record
-BENCH_RUN = 128                        # pinned here, not inherited: the
-BENCH_TPB = 128                        # frozen shape must not move when a
-                                       # campaign default is retuned
+BENCH_RUN = 128                        # Pinned here, not inherited from the
+BENCH_TPB = 128                        # engine: the frozen shape must not
+BENCH_SUBW = 1024                      # move when a campaign default is
+                                       # retuned for a different height.
 BENCH_FAMILIES = ref.ALL_FAMILIES
 
 # The frozen fingerprint: reproduced by every engine that does the work.
@@ -72,7 +73,8 @@ def _work():
     # NVRTC rather than the sweep.  The frozen shape is unchanged.
     if not _ENG:
         _ENG.append(psum_gpu2.GpuSweep2(BENCH_FAMILIES, seg=BENCH_SEG,
-                                        run=BENCH_RUN, tpb=BENCH_TPB))
+                                        run=BENCH_RUN, tpb=BENCH_TPB,
+                                        subw=BENCH_SUBW))
     ms = sorted({m for m, _ in BENCH_FAMILIES})
     hits, _ = _ENG[0].run(BENCH_SPAN, state=cpu.State(ms))
     return _encode(hits)
@@ -88,9 +90,17 @@ def main():
     def sync():
         cp.cuda.Stream.null.synchronize()
 
-    _work()                                    # warm: compile, allocate
+    # The gates build a dozen engines before this point, each with its own
+    # cached device buffers.  Their residue is measurement noise, not engine
+    # rate, so the pool is released and the engine warmed before the clock
+    # starts -- the frozen window is under two milliseconds, and at that
+    # size a fragmented pool and a cold clock are worth 30%.
+    cp.get_default_memory_pool().free_all_blocks()
+    for _ in range(3):
+        _work()                                # warm: compile, allocate, clock
+        sync()
     rate, fp_ok = scoring.fingerprint_benchmark(
-        _work, BENCH_SPAN, FP_COUNT, FP_CHECKSUM, runs=3, sync=sync)
+        _work, BENCH_SPAN, FP_COUNT, FP_CHECKSUM, runs=9, sync=sync)
     if not fp_ok:
         return 1
     scoring.emit_score(rate, unit=1e6)

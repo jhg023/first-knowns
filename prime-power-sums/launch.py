@@ -79,8 +79,9 @@ LEDGER = str(HERE / "evidence" / "psum_discoveries.json")
 
 ENGINE_VERSION = "v2"
 SEG = psum_gpu2.SEG_DEFAULT
-RUN = 32                                  # tuned at campaign height, not
-                                          # at the score window
+RUN = 64                                  # tuned at campaign height (p ~ 1e16
+SUBW = 2048                               # with seg 2^28), not at the score
+                                          # window -- rule 5c
 CHUNK = psum_gpu.CHUNK                    # v1's shape, kept for the gates
 # v2 sizes its limbs from the run rather than from a constant, so the
 # config key carries the geometry that fixes the stream instead of LIMBS.
@@ -198,7 +199,8 @@ class Campaign:
         self.args = args
         self.families = ref.ALL_FAMILIES
         self.ms = sorted({m for m, _ in self.families})
-        self.engine = psum_gpu2.GpuSweep2(self.families, seg=SEG, run=RUN)
+        self.engine = psum_gpu2.GpuSweep2(self.families, seg=SEG, run=RUN,
+                                          subw=SUBW)
         self.state = cpu.State(self.ms)
         self.boundary = self.state.copy()
         self.found = {}            # "m.e" -> [k, ...] found by THIS project

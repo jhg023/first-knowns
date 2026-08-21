@@ -15,15 +15,16 @@ should be able to take the problem from them: 6.5×10¹⁵ at *m* = 1, where
 the running sum fits in 128 bits, against 5×10¹⁴ at *m* ≥ 8, where it does
 not.
 
-**Status: ACTIVE** — no results yet, and **no production sweep is
-runnable at the v1 engine's measured rate**. The mathematics, the three
-independent implementations, the odds model and the full gate battery are
-built and green (SCORE 95); the engine measures 1.2×10⁸ p/s at production
-height, which is about **three orders of magnitude short** of what the
-nearest target needs. The next pass is an optimization pass, and the
-campaign does not start until it lands. See
-[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) for the baseline measurement
-and the named levers.
+**Status: ACTIVE** — no results yet, and **the campaign is now
+startable**. The mathematics, the four implementations, the odds model and
+the full gate battery are built and green at **SCORE 58,754** (v1 scored
+95); the v2 engine measures **3.3×10¹⁰ p/s at campaign height**, against
+v1's 3.3×10⁷ there, which turns the nearest target from 8.7 years into
+about eleven days and reaches new ground on five families in six. The
+optimization pass and everything it rejected are in
+[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md); the rates and what they cost
+the campaign are in [BENCHMARKS.md](BENCHMARKS.md). Starting the hunt is
+the owner's call, not the pipeline's.
 
 ## The problem
 
@@ -94,23 +95,50 @@ deliberately not used — the run-up below the lowest live frontier is 0.1%
 of the campaign, and walking it makes the engine rediscover **124
 published terms** on the way, which is the canary battery for free.
 
-**On the device.** Three kernels. A segmented sieve over the odd residues;
-`pow_limbs`, which builds *p*^*m* as 32-bit limbs with an explicit carry
-chain; and `test_hits`, which does the divisibility test by **Montgomery
-reduction** — needed because the sum is a ~600-bit number, the modulus is
-up to 2⁵⁷, and NVRTC has no `__int128`. Montgomery requires an odd
-modulus, which the obstruction supplies for nothing: 2 divides Q(*m*) for
-every *m*, so every *e* = 0 term is odd and testing only odd *k* loses
-nothing. The engines declare that **ODD_ONLY** coverage explicitly.
+**On the device (v2).** A prime's whole journey — *p*^*m* for all eight
+families, the running prefix, and the test — happens in registers inside
+one kernel; nothing is ever materialised. Four things make that work:
 
-The accumulator is deliberately **unnormalized**: limbs are held in 64-bit
-lanes so a plain prefix sum adds them exactly with no carry propagation at
-all, and carries are resolved once per chunk on the host to update the
-resumable state.
+- **The source is generated per run.** Family (*m*, *e*) gets exactly
+  ⌈(*m*·log₂ p_hi + log₂ k_hi)/32⌉ words and *p*^*j* exactly
+  ⌈*j*·log₂ p_hi/32⌉, so every loop bound is a compile-time constant the
+  compiler unrolls into registers. v1 walked 48 limbs for every family at
+  every height because LIMBS was a constant; the same work is 83 words at
+  the score window.
+- **One addition chain, chosen by shared cost.** All eight powers come off
+  one chain, and the exponent set is enumerated exactly rather than
+  guessed — a per-exponent DP double-counts what the powers already share
+  and misses *p*¹⁹ = *p*¹⁷·*p*² for a *p*¹⁸ nothing wants.
+- **A Montgomery Horner with no division and no R².** The sum is reduced
+  bottom-up, A_j = w_j + A_{j−1}·2⁻⁶⁴ (mod *k*), one REDC per limb, and
+  never converted back: *k* is odd, so X·2⁻⁶⁴ᴸ ≡ 0 exactly when X ≡ 0.
+  The accumulator is left **unreduced between limbs** — `hi` carries
+  weight 1 in that recurrence, so folding it by *k* when it would overflow
+  changes no residue and costs two instructions, which is what removes the
+  last division. Montgomery needs an odd modulus and the obstruction
+  supplies it for nothing: 2 divides Q(*m*) for every *m*, so every
+  *e* = 0 term is odd and **ODD_ONLY** coverage loses nothing.
+- **A decoupled look-back for the prefix.** A warp owns a tile of
+  consecutive primes, scans it with carry-propagating shuffles, publishes
+  its aggregate, and sums its predecessors 32 at a time until it meets a
+  published inclusive prefix. A segment is three launches and the running
+  state never leaves the device.
 
-**Ceiling.** LIMBS = 48 (1536 bits) holds S(19, *k*) past *k* = 10¹⁷; the
-binding ceiling is P_CEIL = 2⁶². The engine refuses a run it cannot
-represent rather than truncating (GPU G9).
+The sieve is a segmented sieve over the odd residues, split by how much
+work a prime carries: a small prime is walked by the whole block in
+disjoint chunks, a large one gets a thread, and a prime bigger than a
+sub-segment gets its own pass over the whole segment. One thread per prime
+throughout — the obvious shape — gives the thread that draws *q* = 3 a
+third of the sub-segment to itself, and cost 72% of an early window.
+
+**Ceiling.** v1's LIMBS = 48 is gone as a constant: the width is computed
+from the run, so a run that cannot be represented raises before a kernel
+is compiled. P_CEIL = 2⁶² and K_CEIL = 2⁵⁷ still bind, and are still
+checked rather than assumed (GPU G9, G16).
+
+**v1 stays in the tree** as the parity reference and is never reachable
+from a campaign (CLAUDE.md rule 3): G14 compares the two engines' streams
+and states bit-for-bit.
 
 ## The odds model
 
@@ -146,7 +174,7 @@ inside a total.
 python launch.py --selftest   # the full gate battery -- must end ALL GREEN
 python score.py               # gates x fingerprinted benchmark
 python launch.py --status     # where the checkpoint stands
-python launch.py              # the hunt (owner-started; see the status note)
+python launch.py              # the hunt (owner-started, days)
 ```
 
 Requirements: Python 3.12, numpy, sympy, cupy (CUDA 12), one NVIDIA GPU.
@@ -161,11 +189,19 @@ trade a few percent of rate for a quieter desktop.
 The gate discipline, the discovery protocol and the census rule are
 repo-wide and live in [CONVENTIONS.md](../CONVENTIONS.md). Project-specific:
 
-- **Three independent implementations.** The oracle (sympy, exact Python
+- **Four independent implementations.** The oracle (sympy, exact Python
   integers, the definition as written), the CPU engine (numpy sieve, exact
-  integers, plain `%`), and the GPU engine (limb arithmetic, Montgomery
-  reduction). No one of them ever calls another; the parity gates compare
-  their *streams* on populated windows.
+  integers, plain `%`), the v1 GPU engine (fixed 48-limb arithmetic, a
+  materialised prefix), and the v2 GPU engine (widths generated per run, a
+  fused kernel, a division-free Montgomery Horner). No one of them ever
+  calls another; the parity gates compare their *streams* on populated
+  windows, and G14 requires all three engines to agree exactly.
+- **The geometry must be invisible.** G15 sweeps the same window at five
+  segment/tile shapes and requires one stream and one state. One shape is
+  deliberately tile-rich, past the number of warps the device holds at
+  once: an earlier build capped its own grid there and dropped the tail of
+  the line, deterministically and silently, and every gate shape at the
+  time had too few tiles to notice.
 - **124 published terms as canaries.** The sweep starts below every live
   frontier, so it must rediscover them all before it reaches new ground.
   A hit below a frontier that is *not* published is an ALARM, not a
