@@ -79,7 +79,8 @@ LEDGER = str(HERE / "evidence" / "psum_discoveries.json")
 
 ENGINE_VERSION = "v2"
 SEG = psum_gpu2.SEG_DEFAULT
-RUN = psum_gpu2.RUN_DEFAULT
+RUN = 32                                  # tuned at campaign height, not
+                                          # at the score window
 CHUNK = psum_gpu.CHUNK                    # v1's shape, kept for the gates
 # v2 sizes its limbs from the run rather than from a constant, so the
 # config key carries the geometry that fixes the stream instead of LIMBS.

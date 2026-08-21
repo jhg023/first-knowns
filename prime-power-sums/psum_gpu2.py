@@ -70,9 +70,14 @@ import psum_reference as ref
 import psum_search as cpu
 from psum_gpu import CeilingExceeded, limbs_needed          # noqa: F401
 
-SEG_DEFAULT = 1 << 26          # prime-line span per sieve segment
+# Measured on the campaign's own shape, not on the score window (rule 5c).
+# The segment is the biggest single lever at height: at p = 1e16 going from
+# 2^26 to 2^28 is 2.4x, because the per-segment costs (the base-prime pass,
+# the buffers, the look-back chains) amortise over four times the line.
+# 2^30 gives it back again -- the bitmap stops fitting the cache.
+SEG_DEFAULT = 1 << 28          # prime-line span per sieve segment
 RUN_DEFAULT = 128              # primes per thread inside a tile
-TPB_DEFAULT = 64               # threads per block for the sweep
+TPB_DEFAULT = 128              # threads per block for the sweep
 SUBW_DEFAULT = 2048            # u32 words of sieve bitmap per block
 TPBMARK_DEFAULT = 256          # threads per block for the sieve
 HIT_BUF = 1 << 14
@@ -326,8 +331,34 @@ extern "C" __global__ void sieve_mark(u32* __restrict__ bits, u64 base,
    decoupled way the sweep does, and then writes.  Order is preserved
    because the cursor is the exclusive prefix, and order is the whole
    contract: index k must mean the k-th prime. */
+/* Primes larger than a sub-segment hit it at most once, so a per-block
+   loop over them is all overhead: at p = 1e15 that was 512 blocks x 1.95e6
+   primes of 64-bit division, 20 ms of a 24 ms segment.  Give each one a
+   thread and let it walk the WHOLE segment, marking straight into the
+   global bitmap.  Consecutive base primes do near-identical amounts of
+   work, so a grid-stride loop over a sorted list is balanced for free.
+   This runs AFTER the small pass, which stores whole words. */
+extern "C" __global__ void sieve_mark_large(u32* __restrict__ bits, u64 base,
+        u64 npos, const u32* __restrict__ sp, int lo_i, int nsp)
+{
+    const u64 hi = base + 2ULL * npos;
+    for (int t = lo_i + blockIdx.x * blockDim.x + threadIdx.x; t < nsp;
+         t += gridDim.x * blockDim.x) {
+        const u64 q = sp[t];
+        u64 s = q * q;
+        if (s < base) {
+            const u64 r = base % q;
+            s = base + (r ? (q - r) : 0ULL);
+            if ((s & 1ULL) == 0ULL) s += q;
+        }
+        if (s >= hi) continue;
+        for (u64 i = (s - base) >> 1; i < npos; i += q)
+            atomicAnd(&bits[i >> 5], ~(1u << (i & 31)));
+    }
+}
+
 extern "C" __global__ void sieve_compact(const u32* __restrict__ bits,
-        u64 nwords, int per, u64 base, u64* __restrict__ out,
+        u64 nwords, int per, u64 base, u64* __restrict__ out, u64 outcap,
         volatile u64* agg, volatile u64* inc, volatile int* status,
         int* ctr, u64* total, int ncb)
 {
@@ -393,7 +424,8 @@ extern "C" __global__ void sieve_compact(const u32* __restrict__ bits,
         while (v) {
             const int j = __ffs(v) - 1;
             v &= v - 1;
-            out[mypos++] = base + 2ULL * (i * 32 + j);
+            if (mypos < outcap) out[mypos] = base + 2ULL * (i * 32 + j);
+            ++mypos;
         }
         pos += tot;
     }
@@ -416,6 +448,11 @@ extern "C" __global__ void sweep(
     const u64 k0 = k0p[0];
     const int ntile = (int)((n + TILE - 1) / TILE);
     const int lane = threadIdx.x & 31;
+    /* One tile per warp.  A persistent grid drawing tiles in a loop was
+       tried and is 11% SLOWER here: it saves nothing the tighter prime
+       bound does not already save, and the loop costs the compiler its
+       straight-line schedule. */
+    {
     int tile;
     if (lane == 0) tile = atomicAdd(ctr, 1);
     tile = __shfl_sync(0xffffffffu, tile, 0);
@@ -533,6 +570,7 @@ extern "C" __global__ void sweep(
         const u64 k = k0 + idx + 1ULL;
         if ((k & 1ULL) && k >= 3ULL) testk(acc, k, hits, nh, cap);
     }
+    }
 }
 """
 
@@ -618,23 +656,35 @@ class GpuSweep2:
         self._plan = None
         self._bufs = {}
         self._sp_lim = None
+        self._splitkey = None
+        self._ceil_seen = None
+        self._ceil_need = None
+        self._plankey = None
 
     # ---------------------------------------------------------------- checks
     def check_ceiling(self, p_hi):
+        if self._ceil_seen == p_hi:
+            return self._ceil_need
         if p_hi > cpu.P_CEIL:
             raise CeilingExceeded(f"p_hi {p_hi} exceeds P_CEIL = 2^62")
         k_hi = _k_bound(p_hi)
         if k_hi > cpu.K_CEIL:
             raise CeilingExceeded(f"k_hi {k_hi} exceeds K_CEIL = 2^57")
-        return max(limbs_needed(m, p_hi) for m in self.ms)
+        self._ceil_seen = p_hi
+        self._ceil_need = max(limbs_needed(m, p_hi) for m in self.ms)
+        return self._ceil_need
 
     # ----------------------------------------------------------- compilation
     def _build(self, p_hi, k_hi):
         cp = self.cp
+        if self._plankey == (p_hi, k_hi):
+            return self._plan
         plan = build_plan(self.families, p_hi, k_hi, self.run_len)
+        self._plankey = (p_hi, k_hi)
         key = (plan["wtot"], plan["run"], plan["pw"], self.subw,
                tuple(sorted(plan["W"].items())))
         if self._plan is not None and self._key == key:
+            self._plan = plan
             return plan
         if key not in _MODCACHE:
             src = gen_source(plan, self.subw)
@@ -645,8 +695,29 @@ class GpuSweep2:
         self.k_sweep = mod.get_function("sweep")
         self.k_mark = mod.get_function("sieve_mark")
         self.k_compact = mod.get_function("sieve_compact")
+        self.k_mark_large = mod.get_function("sieve_mark_large")
         self._plan, self._key = plan, key
         return plan
+
+    def _splits(self, subb):
+        """Where the base primes divide into the sieve's three regimes.
+
+        Cached, because np.searchsorted against a uint32 array with a PYTHON
+        int upcasts the whole array to int64 first: at p = 1e16 that is
+        5.8e6 elements copied twice per segment, and it measured 17.6 ms of
+        a 20 ms segment -- more than every kernel in the engine put
+        together, in a line that looks like a lookup.
+        """
+        key = (subb, self._sp_lim, self.tpb_mark)
+        if self._splitkey != key:
+            sp = self._sp_host
+            small = np.searchsorted(sp, np.uint32(
+                max(subb // (4 * self.tpb_mark), 3)), "right")
+            # a prime bigger than a sub-segment cannot hit one twice
+            mid = np.searchsorted(sp, np.uint64(2 * subb), "right")
+            self._split = (int(small), int(min(mid, sp.size)))
+            self._splitkey = key
+        return self._split
 
     # --------------------------------------------------------- device buffers
     def _buf(self, name, size, dtype):
@@ -715,6 +786,10 @@ class GpuSweep2:
             d_k0, d_k0b = d_k0b, d_k0
             lo = hi
 
+        if int(cp.asnumpy(self._buf("tot", 1, np.uint64))[0]) > self._nmax_seen:
+            raise RuntimeError(
+                "prime-count bound was too small for a segment; the "
+                "compacted array would have overflowed")
         cnt = int(d_nh.get()[0])          # the run's one and only sync
         if cnt > HIT_BUF:
             raise RuntimeError(f"hit buffer overflow: {cnt} > {HIT_BUF}")
@@ -749,38 +824,46 @@ class GpuSweep2:
         # the optimum sits at about four multiples per thread -- the
         # cooperative path pays a 64-bit division and a block-wide pass per
         # prime, which swamps the imbalance it is there to fix.
-        nsmall = int(np.searchsorted(self._sp_host,
-                                     max(subb // (4 * self.tpb_mark), 3),
-                                     "right"))
+        nsmall, nsm = self._splits(subb)
         self.k_mark((nblk,), (self.tpb_mark,),
                     (d_bits, np.uint64(base), np.uint64(npos), d_sp,
-                     np.int32(nsp), np.int32(nsmall)))
+                     np.int32(nsm), np.int32(nsmall)))
+        if nsm < nsp:
+            nb = min((nsp - nsm + 255) // 256, 8192)
+            self.k_mark_large((nb,), (256,),
+                              (d_bits, np.uint64(base), np.uint64(npos),
+                               d_sp, np.int32(nsm), np.int32(nsp)))
         per = 1024
         ncb = int((nwords + per - 1) // per)
         nmax = _prime_bound(lo, hi, npos)
         d_ps = self._buf("ps", nmax, np.uint64)
         d_cagg = self._buf("cagg", ncb, np.uint64)
         d_cinc = self._buf("cinc", ncb, np.uint64)
-        d_cst = self._buf("cst", ncb + 1, np.int32)     # [ncb] is the counter
+        ntile_s = int((nmax + 32 * self.run_len - 1) // (32 * self.run_len))
+        d_all = self._buf("stat", ncb + ntile_s + 2, np.int32)
+        d_all.fill(0)                # ONE fill for both look-backs
+        d_cst = d_all[:ncb + 1]                        # [ncb] is the counter
         d_tot = self._buf("tot", 1, np.uint64)
-        d_cst.fill(0)
+        self._d_sst = d_all[ncb + 1:]
         self.k_compact((ncb,), (32,),
                        (d_bits, np.uint64(nwords), np.int32(per),
-                        np.uint64(base), d_ps, d_cagg, d_cinc, d_cst,
-                        d_cst[ncb:], d_tot, np.int32(ncb)))
+                        np.uint64(base), d_ps, np.uint64(nmax), d_cagg,
+                        d_cinc, d_cst, d_cst[ncb:], d_tot, np.int32(ncb)))
+        self._nmax_seen = max(getattr(self, "_nmax_seen", 0), nmax)
         self._sweep(d_ps, d_tot, nmax, d_k0, d_k0b, d_seed, d_seed2,
                     d_hits, d_nh, plan)
 
     def _sweep(self, d_ps, d_n, nmax, d_k0, d_k0b, d_seed, d_seed2,
                d_hits, d_nh, plan):
         wtot, run = plan["wtot"], plan["run"]
+        # EVERY tile needs a warp: the kernel has no outer loop, so a grid
+        # short of ntile drops the tail of the line in silence.
         ntile = int((nmax + 32 * run - 1) // (32 * run))
         d_agg = self._buf("agg", ntile * wtot, np.uint32)
         d_inc = self._buf("inc", ntile * wtot, np.uint32)
-        d_st = self._buf("st", ntile + 1, np.int32)    # [ntile] is the counter
-        d_st.fill(0)                 # 0 means "this tile has published nothing"
-        d_ctr = d_st[ntile:]
-        nblk = (ntile * 32 + self.tpb - 1) // self.tpb
+        d_st = self._d_sst                # zeroed with the compaction's, once
+        d_ctr = d_st[ntile:ntile + 1]
+        nblk = max((ntile * 32 + self.tpb - 1) // self.tpb, 1)
         self.k_sweep((nblk,), (self.tpb,),
                      (d_ps, d_n, d_k0, d_seed, d_hits, d_nh,
                       np.int32(HIT_BUF), d_agg, d_inc, d_st, d_ctr,
@@ -801,6 +884,18 @@ def _prime_bound(lo, hi, npos):
     n = hi / (math.log(hi) - 1.1)
     if lo >= 17:
         n -= lo / math.log(lo)
+    y = hi - lo
+    if lo >= 10 ** 6 and y >= 1 << 20:
+        # High on the line the density is 1/ln(lo) to well under a percent
+        # over a segment this long; 1.25x of that is orders of magnitude of
+        # margin, and sieve_compact clamps and reports rather than
+        # overruns if it were ever wrong.
+        n = min(n, 1.25 * y / math.log(lo) + 4096)
+    if y >= 8:
+        # Montgomery-Vaughan: pi(x+y) - pi(x) <= 2y/ln y, which is what
+        # binds for a short segment high up the line, where the difference
+        # of two large pi estimates is worthless (17x loose at p = 1e15).
+        n = min(n, 2.0 * y / math.log(y))
     return int(min(npos, int(n) + 64))
 
 
@@ -811,29 +906,32 @@ def _k_bound(p_hi):
 
 
 def _state_words(plan, sums):
+    """Pack the exact sums into the plan's little-endian words.
+
+    Via int.to_bytes rather than a shift-and-mask loop: at 83 words and a
+    ~500-bit sum the Python loop was 20 us of a 1.1 ms window, which is
+    real money once the device side is under half a millisecond.
+    """
     w = np.zeros(plan["wtot"], dtype=np.uint32)
     for f in plan["fams"]:
         m, _ = f
-        v, o = int(sums.get(m, 0)), plan["off"][f]
-        for i in range(plan["W"][f]):
-            w[o + i] = v & 0xFFFFFFFF
-            v >>= 32
-        if v:
+        v, o, W = int(sums.get(m, 0)), plan["off"][f], plan["W"][f]
+        if v.bit_length() > 32 * W:
             raise CeilingExceeded(
-                f"S({m}, k) does not fit the plan's {plan['W'][f]} words; "
+                f"S({m}, k) does not fit the plan's {W} words; "
                 f"the run was sized for p_hi = {plan['p_hi']}")
+        w[o:o + W] = np.frombuffer(v.to_bytes(4 * W, "little"),
+                                   dtype=np.uint32)
     return w
 
 
 def _read_words(plan, w):
     out = {}
+    raw = np.ascontiguousarray(w, dtype=np.uint32).tobytes()
     for f in plan["fams"]:
         m, _ = f
         o, W = plan["off"][f], plan["W"][f]
-        v = 0
-        for i in range(W - 1, -1, -1):
-            v = (v << 32) | int(w[o + i])
-        out[m] = v
+        out[m] = int.from_bytes(raw[4 * o:4 * (o + W)], "little")
     return out
 
 
@@ -889,7 +987,10 @@ def g15_segmentation_invisible():
     shapes = [(1 << 20, 128, 64, 2048),      # one segment, few tiles
               (1 << 17, 8, 64, 512),         # many tiles: >32, seeds via
               (1 << 16, 4, 128, 512),        #   the look-back's front walk
-              (1 << 19, 32, 32, 1024)]
+              (1 << 19, 32, 32, 1024),
+              (1 << 20, 1, 64, 2048)]        # MORE tiles than the device
+                                             # holds warps -- the shape a
+                                             # short grid drops in silence
     base = None
     for seg, run, tpb, subw in shapes:
         e = GpuSweep2(_GATE_FAMS, seg=seg, run=run, tpb=tpb, subw=subw)
@@ -903,10 +1004,11 @@ def g15_segmentation_invisible():
             return False, (f"G15 FAIL: shape seg={seg} run={run} tpb={tpb} "
                            f"subw={subw} disagrees ({len(got[0])} hits vs "
                            f"{len(base[0])})")
-    ntiles = max(1, (base[1] // (32 * 4)))
-    return True, (f"G15 ok: 4 segment/tile geometries agree exactly on "
-                  f"{len(base[0])} hits and the state (up to ~{ntiles} "
-                  f"tiles, so the look-back's front walk is covered)")
+    ntiles = max(1, base[1] // 32)
+    return True, (f"G15 ok: 5 segment/tile geometries agree exactly on "
+                  f"{len(base[0])} hits and the state, up to ~{ntiles} "
+                  f"tiles -- past the device's warp capacity, so a grid "
+                  f"that cannot cover the line is caught")
 
 
 def g16_width_plan_is_sound():

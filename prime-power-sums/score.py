@@ -42,9 +42,11 @@ import psum_search as cpu                                           # noqa: E402
 
 # ------------------------------ frozen shape --------------------------------
 BENCH_SPAN = 1 << 26                   # 6.7e7 of prime line, from p = 2
-BENCH_SEG = 1 << 26
+BENCH_SEG = 1 << 26                    # the whole window in one segment
 BENCH_CHUNK = 1 << 16                  # v1's shape, kept for the record
-BENCH_RUN = psum_gpu2.RUN_DEFAULT
+BENCH_RUN = 128                        # pinned here, not inherited: the
+BENCH_TPB = 128                        # frozen shape must not move when a
+                                       # campaign default is retuned
 BENCH_FAMILIES = ref.ALL_FAMILIES
 
 # The frozen fingerprint: reproduced by every engine that does the work.
@@ -70,7 +72,7 @@ def _work():
     # NVRTC rather than the sweep.  The frozen shape is unchanged.
     if not _ENG:
         _ENG.append(psum_gpu2.GpuSweep2(BENCH_FAMILIES, seg=BENCH_SEG,
-                                        run=BENCH_RUN))
+                                        run=BENCH_RUN, tpb=BENCH_TPB))
     ms = sorted({m for m, _ in BENCH_FAMILIES})
     hits, _ = _ENG[0].run(BENCH_SPAN, state=cpu.State(ms))
     return _encode(hits)
