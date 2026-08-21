@@ -226,15 +226,37 @@ a wheel-30 sieve representation (about 45% fewer marks and 47% fewer
 positions to scan); and a bucket sieve, which is what the large-prime pass
 really wants at p ≳ 10¹⁷.
 
-None of them changes the order of magnitude, and it is worth writing down
-why. On this device (128 SMs × 64 INT32 lanes × 2.535 GHz ≈ 2.08×10¹³
-integer instructions per second) the frozen window's 3,957,808 primes each
-need, with nothing wasted: 137 word multiplies for the shared power chain
+The one substantial unpriced lever left is a **mod-6 wheel** for the
+sieve: carrying only v ≡ ±1 (mod 6) is a third fewer positions and, because
+q = 3 leaves the prime list entirely, 45% fewer marks — worth perhaps 11%
+of the window and about the same at height, where marking is 31% of a
+segment. It was designed and not built; the arithmetic is unusually clean
+(value(j) = base + 3j + (j&1), and j = (value − base)/3 exactly, with each
+prime marking two chains of position-step 2q), so it is a real candidate
+rather than a wish. PTX carry chains and a bucket sieve are the other two,
+and the first is already priced and rejected above.
+
+**What the ceiling actually is, and why the gap is not headroom.** On this
+device (128 SMs × 64 INT32 lanes × 2.535 GHz ≈ 2.08×10¹³ integer
+instructions per second) the frozen window's 3,957,808 primes each need,
+with nothing wasted: 137 word multiplies for the shared power chain
 (provably the cheapest exponent set at that height), 83 accumulator words
 of carry-propagating addition, and ~42 sixty-four-bit Montgomery limbs for
-the odd half of the candidates. That is **~1,250 integer instructions per
-prime**, or ~0.24 ms for the window at 100% of the device's issue rate,
-before the sieve and before a single launch. **A ~3,000× score is the
-instruction-count ceiling for this algorithm on this hardware**, and v2 is
-at 618× of it — roughly half the device's issue rate, at 168 registers and
-25% occupancy, which is what a register-heavy straight-line kernel gets.
+the odd half of the candidates — **~1,250 integer instructions per prime**,
+~0.24 ms for the window at 100% issue rate.
+
+That gives a ~3,000× *instruction-count bound*, and it should not be read
+as a target. It assumes an issue rate no real kernel reaches, and it
+assumes the sieve and the host are free, where they measure 33% and 21% of
+the window. At a realistic 60-70% of issue for a dependent multiply chain
+at 25% occupancy, with the wheel taken and the host halved, the
+**achievable ceiling is nearer 900-1,100×**. v2 is at ~640×.
+
+The rejected list above is the evidence for that reading rather than a
+more hopeful one: ten separate attempts at the remaining implementation
+slack — two PTX forms, two sieve mechanisms, a family split, a persistent
+grid, a bitmap-fed sweep, leaf accumulation, register caps, loop
+unrolling — of which exactly one paid, and it paid 3%. Every model of
+where the waste lived was refuted by measurement. Past this point it takes
+a cheaper algorithm, and the power chain is already within 1.7× of the
+information content of its own output.

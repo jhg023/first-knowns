@@ -110,10 +110,22 @@ about **1,250 integer instructions per prime**, or ~0.24 ms for the whole
 window at 100% of the device's issue rate, before the sieve and before a
 single kernel launch.
 
-So **~3,000× is the instruction-count ceiling** for this algorithm on this
-hardware, and v2 sits at 618× — about half the device's issue rate, which
-is what a 168-register straight-line kernel at 25% occupancy gets. Beyond
-that needs a cheaper algorithm, not a better kernel.
+That ~3,000× is an **instruction-count bound, not a reachable number**,
+and the distinction matters because the gap looks like headroom and is not.
+It assumes 100% issue rate, which no real kernel gets — a straight-line
+kernel with a dependent multiply chain at 168 registers and 25% occupancy
+runs at roughly half — and it assumes the sieve and the host cost nothing,
+where measured they are 33% and 21% of the window.
+
+Folding those in: the sweep at a realistic 60-70% of issue is ~0.35 ms,
+the sieve has perhaps 30% left in a mod-6 wheel, and the host maybe half
+of its 0.21 ms. That puts the **achievable ceiling near 900-1,100×**, and
+v2 is at ~640× of it. The evidence for that reading is the rejected list
+above: ten separate attempts at the remaining implementation slack, of
+which one paid 3% and the rest were neutral or worse. Past this point it
+takes a cheaper algorithm, and the power chain — 137 word multiplies for
+83 words of output, from a provably minimal exponent set — is already
+within 1.7× of the information in its own result.
 
 ## Wall clock of the batteries
 
