@@ -555,7 +555,7 @@ def production(args):
 
     hb = Heartbeat(args.heartbeat)
     span = engine_span(eng)
-    started = time.time()
+    clock = [time.time()]          # last boundary the campaign clock counted
     stop_reason = "reached the last rung (the enforced ceiling)"
 
     def line():
@@ -631,7 +631,7 @@ def production(args):
             if pending is not None:
                 hb.doing(f"classifying {len(pending['offs'])} survivors at "
                          f"p={pending['base']:.4e}")
-                found_here = _finalize(c, eng, hb, n, q2, pending)
+                found_here = _finalize(c, eng, hb, n, q2, pending, clock)
                 boundary = dict(c)
             pending = nxt
 
@@ -643,7 +643,13 @@ def production(args):
     except CorruptEngineError:
         rc = 2
     finally:
-        c["wall_s"] = float(c.get("wall_s", 0.0)) + (time.time() - started)
+        # The clock is NOT topped up here.  It advances in _finalize, past a
+        # fully classified segment, for the same reason the cursor does: the
+        # segment in flight is redone on resume, so counting its seconds
+        # would inflate the campaign clock by a segment on every stop.  What
+        # this save persists is a `c` that may be mid-_finalize; the boundary
+        # snapshot written by the interrupt callback lands on top of it, and
+        # carries the clock because _finalize commits it next to the cursor.
         save_ckpt(c)
         hb.emit()
         hb.stop()
@@ -655,7 +661,29 @@ def production(args):
     return rc
 
 
-def _finalize(c, eng, hb, n, q2, pending):
+def _tick(c, clock):
+    """Fold the seconds since the last segment boundary into the campaign
+    clock, and re-mark.
+
+    Called from ONE place -- `_finalize`'s commit block, next to the cursor
+    -- and that placement is the whole content of this function.  The clock
+    measures classified coverage, so it must move exactly where coverage
+    does: a segment in flight when the run stops is redone on resume, and
+    counting its seconds would add a segment to the total on every stop.
+    Committing it here also puts it in the shallow `boundary = dict(c)`
+    snapshot the interrupt callback saves; when this was done in `run`'s
+    `finally` instead, the snapshot was taken BEFORE the fold and the
+    boundary save landed on top of it, so every Ctrl+C-ended run -- the
+    normal exit for these campaigns -- contributed nothing at all.  The
+    a(16)-a(18) campaign recorded 4.95 h of a 23.4 h span that way.
+    """
+    now = time.time()
+    c["wall_s"] = float(c.get("wall_s", 0.0)) + (now - clock[0])
+    clock[0] = now
+    return c["wall_s"]
+
+
+def _finalize(c, eng, hb, n, q2, pending, clock):
     """Collect one classified segment, record its events, advance the
     cursor past it and checkpoint.  This is the ONLY place the cursor
     moves, which is what makes the overlap safe: an interrupt between
@@ -668,6 +696,10 @@ def _finalize(c, eng, hb, n, q2, pending):
     or the redo of this segment double-counts (CLAUDE.md 5e).  Committing
     by ASSIGNMENT rather than in-place mutation is also what keeps the
     interrupt thread's shallow `boundary = dict(c)` snapshot honest.  The
+    campaign clock is committed in the same block, by `_tick`, for the same
+    reason and with the same consequence if it is not: it must reach disk
+    with the cursor it belongs to, and it must not count a segment that is
+    about to be redone.  The
     discovery ledger (`found`, `hits`, the evidence file) is the deliberate
     exception: it moves mid-loop, and a redo is safe because a settled term
     re-classifies as a census repeat and the evidence record is keyed by p.
@@ -730,6 +762,7 @@ def _finalize(c, eng, hb, n, q2, pending):
     c["best_depth"], c["best_p"] = best_depth, best_p
     c["survivors"] = int(c["survivors"]) + len(offs)
     c["next_u"] = int(c["next_u"]) + seg // W0
+    _tick(c, clock)
     new_pos = int(c["next_u"]) * W0
     hb.mark(new_pos)
     _milestones(c, base, new_pos, n)
@@ -737,10 +770,11 @@ def _finalize(c, eng, hb, n, q2, pending):
     return found_here
 
 
-def _save_boundary(state):
-    save_ckpt(state)
+def _save_boundary(state, path=CKPT):
+    save_ckpt(state, path)
     return (f"checkpoint written at the last segment boundary: "
-            f"a({state.get('n')}) p = {int(state.get('next_u', 0)) * W0:.6e}")
+            f"a({state.get('n')}) p = {int(state.get('next_u', 0)) * W0:.6e}"
+            f", {float(state.get('wall_s', 0.0)) / 3600:.2f} h swept")
 
 
 def _odds(n, pos):
@@ -806,7 +840,14 @@ def status(q2=Q2_CAMPAIGN):
     print(f"  {lad.status_str(pos, fr, None, only_term=n)}")
     for r, v in sorted((int(k), v) for k, v in (c.get("found") or {}).items()):
         print(f"  FOUND        a({r}) = {v:,}")
-    print(f"  wall clock   {float(c.get('wall_s', 0)) / 3600:.2f} h")
+    # both numbers, because their RATIO is the readout: swept is time the
+    # device was actually sieving, span is how long ago the campaign began.
+    # A campaign left running should have them close; far apart means the
+    # run has been stopped and restarted (or that the clock is dropping
+    # time again, which is how the first version of it was caught).
+    span = time.time() - float(c.get("started") or time.time())
+    print(f"  wall clock   {float(c.get('wall_s', 0)) / 3600:.2f} h swept"
+          f"   ({span / 3600:.2f} h since the campaign started)")
     return 0
 
 
@@ -856,6 +897,7 @@ def selftest(engine="gpu"):
     run("event_kind", _drill_event_kind)
     run("verification", _drill_verification)
     run("published terms", _drill_published)
+    run("campaign clock", _drill_clock)
     run("low pass", _drill_low_pass)
     run("stage advance", _drill_stage_advance)
     run("resume", lambda: _drill_resume(engine))
@@ -991,6 +1033,63 @@ def _drill_published(certify=False):
                   " -- each re-verified against the definition and against "
                   "its own evidence file (values, true depth, factor "
                   "witness)")
+
+
+def _drill_clock():
+    """The campaign clock must reach disk by the path an interrupt takes,
+    and must not count the segment that will be redone.
+
+    The regression: the clock used to be folded in by `run`'s `finally`,
+    AFTER the boundary snapshot had been taken, and the interrupt callback
+    then saved that snapshot over the top -- so a Ctrl+C-ended run, which is
+    how every one of these campaigns ends, contributed zero.  Both halves
+    are checked here because a fix that counts the in-flight segment instead
+    would trade an undercount for an overcount.
+    """
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix="ap-clock-")
+    path = os.path.join(tmp, "ckpt.json")
+    try:
+        eng = CpuEngine(16, 4096)
+        c = fresh_ckpt(16, eng, 4096)
+        clock = [time.time() - 60.0]        # a minute of classified sweep
+        _tick(c, clock)
+        if not 59.0 <= float(c["wall_s"]) <= 61.0:
+            return False, (f"clock: a 60 s segment folded in as "
+                           f"{c['wall_s']:.1f} s")
+        boundary = dict(c)                  # what run() snapshots afterwards
+        clock[0] -= 30.0                    # ... then 30 s goes in flight
+        _save_boundary(boundary, path)      # ... and Ctrl+C arrives
+        back = _ckpt.load(path, ckpt_key(4096))
+        if back is None:
+            return False, "clock: the boundary save wrote nothing"
+        got = float(back.get("wall_s", 0.0))
+        if got < 59.0:
+            return False, (f"clock: the interrupt path persisted {got:.1f} s "
+                           f"of a 60 s campaign -- the boundary snapshot is "
+                           f"not carrying the clock")
+        if got > 61.0:
+            return False, (f"clock: the interrupt path persisted {got:.1f} s, "
+                           f"counting the segment in flight -- that segment "
+                           f"is redone on resume and would be counted twice")
+        # and a second segment accumulates rather than replacing
+        _tick(c, [time.time() - 10.0])
+        if not 69.0 <= float(c["wall_s"]) <= 71.0:
+            return False, (f"clock: a second segment left the total at "
+                           f"{c['wall_s']:.1f} s, want ~70")
+        return True, ("clock: a 60 s segment survives Ctrl+C through the "
+                      "boundary snapshot, the 30 s in flight is NOT counted "
+                      "(it is redone on resume), and segments accumulate")
+    finally:
+        for f in os.listdir(tmp):
+            try:
+                os.remove(os.path.join(tmp, f))
+            except OSError:
+                pass
+        try:
+            os.rmdir(tmp)
+        except OSError:
+            pass
 
 
 def _drill_low_pass():

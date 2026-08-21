@@ -282,6 +282,17 @@ ends on an interrupt with all four of:
   at the segment boundary, after a filter switch, after the prelude) and
   write *that*. An interrupted run then costs exactly the segment in
   flight — the same guarantee as a crash (rule 5d), and no double count.
+
+  **Every field of the checkpoint is committed where the cursor is
+  committed — at the boundary, never at exit.** The snapshot is what
+  reaches disk on the exit path the program actually uses, so a field
+  folded in later is a field silently dropped. primorial-ap updated its
+  campaign clock in the launcher's `finally`, *after* the snapshot had
+  been taken and before the interrupt callback wrote that snapshot over
+  the top; every Ctrl+C-ended run therefore contributed zero, and a
+  three-term campaign recorded 4.95 h of a 23.4 h span. The two halves
+  are one rule: commit at the boundary and the field survives the stop
+  *and* excludes the segment about to be redone.
 - **one `[STAGE]` line** naming what stopped it and where the checkpoint
   ended up.
 - **no traceback, ever** — not from the launcher, not from a pool worker,

@@ -257,13 +257,28 @@ Two things to carry into the next pass rather than fix now:
   before sizing that pool** (CONVENTIONS.md rule 5c), because 3 workers
   was sized from 1.1 cores of demand at n = 16 and that number is stale by
   construction.
-- **`wall_s` in the checkpoint undercounts and is not a rate source.** The
-  interrupt path saves the segment-boundary snapshot, which is taken
-  before the clock is folded in, so every Ctrl+C-ended run drops out of
-  the total; this campaign's counter reads 4.95 h against a 23.4 h span.
-  Cosmetic — no cursor, census or find is affected — but anything derived
-  from it is wrong, so the timings above come from the discovery
-  timestamps instead.
+- **`wall_s` undercounted, and the fix was a placement, not a
+  calculation.** The clock was folded in by `run`'s `finally`, *after* the
+  boundary snapshot had been taken; the interrupt callback then saved that
+  snapshot over the top, so every Ctrl+C-ended run — the normal exit for
+  these campaigns — contributed zero. This campaign's counter reads 4.95 h
+  against a 23.4 h span, which is how it was noticed. It now advances in
+  `_finalize`, in the same commit block as the cursor and the census, so
+  it reaches disk by the path an interrupt actually takes and still
+  excludes the in-flight segment (which is redone on resume, and would
+  otherwise be counted twice — the same double-count CLAUDE.md 5e forbids
+  for the census). Nothing else was affected: no cursor, census, find or
+  evidence file. The `campaign clock` drill checks both directions, and
+  was confirmed to fail against the old ordering (0.0 s of a 60 s
+  campaign) and against a naive fix that counts the in-flight segment
+  (90.0 s of 60). The timings in this entry predate the fix and come from
+  the discovery timestamps.
+
+  Worth generalizing: the two sibling launchers already folded their
+  clocks per segment, right before marking the boundary, and were correct.
+  primorial-ap was the one that did it at exit. **A counter that is not
+  committed where the cursor is committed does not survive the exit path
+  the program actually uses.**
 
 ## The termination table (OPTIMIZATION.md Part 3), campaign configuration
 

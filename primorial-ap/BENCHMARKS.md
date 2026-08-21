@@ -35,13 +35,14 @@ explaining why.
 | 2026-08-20 | v2 | **39,772** | 192 / 4046714554 | pattern tables + shared-memory sub-segments + host fixes (OPTIMIZATION_LOG #4–#7); same fingerprint |
 | 2026-08-21 | v2 | 43,374 | 192 / 4046714554 | after the a(16)–a(18) campaign. **No engine change** — the only edits since were to the verifier, the drills and the checkpoint's counter bookkeeping |
 | 2026-08-21 | v2 | **44,533** | 192 / 4046714554 | the publication run, an hour later, same engine |
+| 2026-08-21 | v2 | 43,035 | 192 / 4046714554 | after the campaign-clock fix (OPTIMIZATION_LOG #10) — launcher bookkeeping, nothing the sieve touches |
 
-**The last three rows widen the noise floor, and that is the point of
+**The last four rows widen the noise floor, and that is the point of
 recording them.** Two v1 runs of an unchanged engine landed 1.3% apart,
 and that pair was cited here as the bar any future A/B had to clear. The
 v2 engine, unchanged in any way that touches the sieve, has now produced
-39,772 / 43,374 / 44,533 — **12% end to end**, 2.7% between two runs an
-hour apart. The 1.3% was a lucky pair, not the spread. Judge a
+39,772 / 43,374 / 44,533 / 43,035 — a **12% spread**, with 2.7% between
+two runs an hour apart. The 1.3% was a lucky pair, not the spread. Judge a
 non-interleaved A/B against ~10%, or — better — interleave it and take the
 ratio, which is what OPTIMIZATION.md Rule 3 asks for and what makes the
 absolute number here almost irrelevant.
@@ -102,12 +103,19 @@ correct find). A rate measured on 6.4×10¹² of line predicted a
 2,500× longer run to within a tenth.
 
 > The checkpoint's own `wall_s` counter reads 4.95 h for this campaign and
-> is **not** the number above. The boundary save that runs on Ctrl+C
-> writes the snapshot taken at the last segment boundary, which is
-> deliberately taken *before* the clock is folded in, so every
-> interrupt-ended run drops out of the total. The times above are taken
-> from the campaign start and the discovery timestamps in
-> `evidence/ap_discoveries.json` instead, which are written at the find.
+> is **not** the number above: the clock used to be folded in by the
+> launcher's `finally`, *after* the boundary snapshot had been taken, and
+> the interrupt callback then saved that snapshot over the top — so every
+> Ctrl+C-ended run, which is how each of these campaigns ended,
+> contributed nothing. Fixed: the clock now advances in `_finalize`, next
+> to the cursor and for the same reason, so it reaches disk by the path an
+> interrupt takes and still excludes the segment in flight (which is
+> redone on resume). The `campaign clock` drill holds both halves, and
+> `--status` prints the swept clock beside the span since the campaign
+> started, so a future divergence is visible rather than latent. The
+> times above predate the fix and come from the campaign start and the
+> discovery timestamps in `evidence/ap_discoveries.json`, which are
+> written at the find.
 
 ## What each term costs
 
