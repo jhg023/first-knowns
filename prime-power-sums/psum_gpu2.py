@@ -113,9 +113,12 @@ def build_plan(families, p_hi, k_hi, run=RUN_DEFAULT):
     for f in fams:
         off[f] = tot
         tot += W[f]
+    narrow = int(p_hi) < (1 << 32)
     return dict(fams=fams, ms=sorted({m for m, _ in fams}), W=W, off=off,
                 wtot=tot, lpow=lpow, pw=lpow(1), run=int(run),
-                p_hi=int(p_hi), k_hi=int(k_hi))
+                p_hi=int(p_hi), k_hi=int(k_hi),
+                ptype="u32" if narrow else "u64",
+                pnp=np.uint32 if narrow else np.uint64)
 
 
 def _mulcost(la, lb, lo):
@@ -187,6 +190,7 @@ typedef unsigned long long u64;
 
 #define RUN  @RUN@
 #define WTOT @WTOT@
+typedef @PTYPE@ ptype;              /* compacted primes: 32 bits when they fit */
 #define TILE (32 * RUN)
 
 /* Truncated schoolbook: only the low LO words, which is all p^(a+b) has.
@@ -358,7 +362,7 @@ extern "C" __global__ void sieve_mark_large(u32* __restrict__ bits, u64 base,
 }
 
 extern "C" __global__ void sieve_compact(const u32* __restrict__ bits,
-        u64 nwords, int per, u64 base, u64* __restrict__ out, u64 outcap,
+        u64 nwords, int per, u64 base, ptype* __restrict__ out, u64 outcap,
         int* over,
         volatile u64* agg, volatile u64* inc, volatile int* status,
         int* ctr, u64* total, int ncb)
@@ -425,7 +429,7 @@ extern "C" __global__ void sieve_compact(const u32* __restrict__ bits,
         while (v) {
             const int j = __ffs(v) - 1;
             v &= v - 1;
-            if (mypos < outcap) out[mypos] = base + 2ULL * (i * 32 + j);
+            if (mypos < outcap) out[mypos] = (ptype)(base + 2ULL * (i * 32 + j));
             else atomicExch(over, 1);
             ++mypos;
         }
@@ -436,7 +440,7 @@ extern "C" __global__ void sieve_compact(const u32* __restrict__ bits,
 
 _SWEEP = r"""
 extern "C" __global__ void sweep(
-        const u64* __restrict__ ps, const u64* __restrict__ np,
+        const ptype* __restrict__ ps, const u64* __restrict__ np,
         const u64* __restrict__ k0p,
         const u32* __restrict__ seed,
         u64* hits, int* nh, const int cap,
@@ -468,7 +472,7 @@ extern "C" __global__ void sweep(
 #pragma unroll 1
     for (int r = 0; r < RUN; ++r) {
         u64 idx = base + r;
-        if (idx < n) addpow(acc, ps[idx]);
+        if (idx < n) addpow(acc, (u64)ps[idx]);
     }
 
     /* inclusive scan across the warp, carries propagated inside each lane */
@@ -568,7 +572,7 @@ extern "C" __global__ void sweep(
     for (int r = 0; r < RUN; ++r) {
         u64 idx = base + r;
         if (idx >= n) break;
-        addpow(acc, ps[idx]);
+        addpow(acc, (u64)ps[idx]);
         const u64 k = k0 + idx + 1ULL;
         if ((k & 1ULL) && k >= 3ULL) testk(acc, k, hits, nh, cap);
     }
@@ -586,7 +590,8 @@ def gen_source(plan, subw=2048):
         fam_of.setdefault(f[0], []).append(f)
 
     src = [_HEAD.replace("@RUN@", str(plan["run"]))
-                .replace("@WTOT@", str(plan["wtot"])),
+                .replace("@WTOT@", str(plan["wtot"]))
+                .replace("@PTYPE@", plan["ptype"]),
            _SIEVE.replace("@SUBW@", str(subw))]
 
     a = ["__device__ __forceinline__ void addpow(u32* acc, u64 p)", "{",
@@ -684,6 +689,7 @@ class GpuSweep2:
         plan = build_plan(self.families, p_hi, k_hi, self.run_len)
         self._plankey = (p_hi, k_hi)
         key = (plan["wtot"], plan["run"], plan["pw"], self.subw,
+               plan["ptype"],
                tuple(sorted(plan["W"].items())))
         if self._plan is not None and self._key == key:
             self._plan = plan
@@ -848,7 +854,7 @@ class GpuSweep2:
         per = 1024
         ncb = int((nwords + per - 1) // per)
         nmax = _prime_bound(lo, hi, npos)
-        d_ps = self._buf("ps", nmax, np.uint64)
+        d_ps = self._buf("ps", nmax, plan["pnp"])
         d_cagg = self._buf("cagg", ncb, np.uint64)
         d_cinc = self._buf("cinc", ncb, np.uint64)
         ntile_s = int((nmax + 32 * self.run_len - 1) // (32 * self.run_len))

@@ -171,6 +171,17 @@ via `int.to_bytes` rather than a shift-and-mask loop. **0.65 → 0.21 ms.**
   spilling actually rose from 96 to 160 bytes. The accumulator is 166 of
   255 registers at height on its own; removing one temporary does not
   change which side of the cliff the kernel is on.
+- **Inline PTX for the schoolbook multiply**, in both standard forms. The
+  measurement that motivated it was real -- the powering runs at about
+  four instructions per word multiply, where PTX carry chains promise two
+  -- and both forms still lose. Column-wise (Comba, three instructions per
+  word multiply in three-instruction asm blocks): 1.03x on the score
+  window, **0.91x at p = 10^16**. Row-wise (two instructions per word
+  multiply, one asm block per row): registers fall 178 -> 134, and it is
+  **0.94x on the score window and 0.61x at p = 10^16**. An asm block is a
+  scheduling barrier the compiler cannot reorder across, and for a kernel
+  whose critical path is a chain of dependent multiplies that costs more
+  than the instructions it saves. The C form is left alone.
 - **A binary power chain** instead of the cost-chosen one: 231 multiplies
   against 137, 167 registers against 168, 4% slower. Depth is not what
   binds here.

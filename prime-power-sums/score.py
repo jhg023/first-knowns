@@ -100,7 +100,7 @@ def main():
         _work()                                # warm: compile, allocate, clock
         sync()
     rate, fp_ok = scoring.fingerprint_benchmark(
-        _work, BENCH_SPAN, FP_COUNT, FP_CHECKSUM, runs=9, sync=sync)
+        _work, BENCH_SPAN, FP_COUNT, FP_CHECKSUM, runs=15, sync=sync)
     if not fp_ok:
         return 1
     scoring.emit_score(rate, unit=1e6)

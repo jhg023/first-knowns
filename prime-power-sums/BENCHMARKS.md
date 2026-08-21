@@ -28,7 +28,7 @@ Repeat runs of the whole battery land between 58,754 and 60,655 Mp/s. The
 window is about a millisecond now, so a few percent of ambient GPU load is
 visible in the number; the ledger records the low end.
 
-**The median is over nine runs, not three.** The window now takes about a
+**The median is over fifteen runs, not three.** The window now takes about a
 millisecond, and at that size the rate is bimodal against ambient GPU load
 (1.10 ms against 1.78 ms on the same build, same process). Three samples
 put the median on the wrong mode about a third of the time. The pool is
@@ -122,7 +122,7 @@ Budgeted against CLAUDE.md rule 0 (no agent command over 5 minutes):
 | command | wall clock |
 |---------|-----------|
 | `python launch.py --selftest` | ~35 s (15 gates + 5 drills) |
-| `python score.py` | ~40 s (gates ~35 s, benchmark 9 runs + 3 warm) |
+| `python score.py` | ~40 s (gates ~35 s, benchmark 15 runs + 3 warm) |
 
 Both are cheap because the gates run at small *k* by design: the oracle is
 exhaustive to k = 60 000, the parity windows are populated but short, and
