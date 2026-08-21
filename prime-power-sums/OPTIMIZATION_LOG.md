@@ -165,6 +165,12 @@ via `int.to_bytes` rather than a shift-and-mask loop. **0.65 → 0.21 ms.**
   registers, and (128,3), (128,4), (64,8), (256,2): every one is neutral
   or worse. The kernel is work-bound, not occupancy-bound; forcing
   occupancy only buys spills.
+- **Multiply-accumulating the leaf powers straight into the accumulator**,
+  so p^19 never needs its own 32-word buffer. Correct, and **neutral** at
+  both heights (0.999x on the score window, 0.995x at p = 10^16) --
+  spilling actually rose from 96 to 160 bytes. The accumulator is 166 of
+  255 registers at height on its own; removing one temporary does not
+  change which side of the cliff the kernel is on.
 - **A binary power chain** instead of the cost-chosen one: 231 multiplies
   against 137, 167 registers against 168, 4% slower. Depth is not what
   binds here.
