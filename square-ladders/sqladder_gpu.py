@@ -34,7 +34,7 @@ mod W1*W2 are enumerated exactly, none stored: 5,040 entries beside the
 candidates per unit of k line than primes to 23, out of two tables that
 still fit in cache.
 
-THE TEST LOOP IS ISSUE-BOUND, AND THE WARP PAYS THE MAX (v3, worth 4.1x).
+THE TEST LOOP IS ISSUE-BOUND, AND THE WARP PAYS THE MAX (v3, worth 6.5x).
 Adding 24 independent instructions to the loop body costs 42% of the wall
 clock, so the kernel is bound by instruction ISSUE -- which makes both
 "fewer instructions per test" and "fewer tests per warp" real levers, and
@@ -77,20 +77,37 @@ they multiply.  v3 takes both:
     add and one conditional subtract.  The r2 residues are then never
     needed on the device at all.
 
-  * Divergence is compacted inside the CUDA block.  A lane needs 3.07
-    tests but a warp of 32 runs to the deepest of them, 16.06 -- a 5.23x
-    tax.  So each thread takes JPT candidates, runs the branchless literal
+  * Divergence is compacted inside the CUDA block, TWICE.  A lane needs
+    3.07 tests but a warp of 32 runs to the deepest of them, 16.06 -- a
+    5.23x tax.  So each thread takes JPT candidates, runs the branchless
     prefix on all of them, and pushes the survivors to a SHARED-memory
     queue; after one __syncthreads the whole block chews that queue with
-    every lane alive.  A JPT=8, TPB=128 block compacts 1,024 candidates
-    into ~36 survivors, which is a full warp where an uncompacted warp
-    would have carried one lane.  The queue cannot overflow by
-    construction: a block pushes at most one entry per candidate it owns,
-    and the queue holds exactly JPT*TPB.
+    every lane alive, and then does it again at K2.  A JPT=16, TPB=128
+    block compacts 2,048 candidates to ~194 and then to ~24, which are
+    full warps where an uncompacted warp would have carried one lane.
+    None of it leaves the kernel: the launcher never learns it exists.
+
+    The queues are sized from the ANALYTIC survival plus QCAP_SIGMA sigma
+    rather than from the worst case, because a queue big enough for "every
+    candidate survives" costs shared memory and shared memory costs blocks
+    per SM -- sizing both for that case measured 0.83x.  So overflow is
+    possible, and it is made HARMLESS instead of impossible: a candidate
+    that does not fit runs its tail on the spot, uncompacted, which is the
+    same arithmetic and so the same answer.  Capacity is a tuning constant,
+    not a correctness bound, and G14 proves it by forcing the path.
 
     The survivors leave in queue order rather than in candidate order.
     `survivors_j` sorts, and the frozen work fingerprint is a count plus
     an xor, so neither depends on the order.
+
+  * The two compaction depths are DERIVED, not hardcoded.  They were swept
+    as counts on the production shape -- 6 primes before the first, 16
+    before the second -- but a count is the wrong thing to carry to another
+    configuration: what the sweep found is a SURVIVAL FRACTION, and a
+    coarser wheel kills candidates faster, so a fixed depth there tests
+    past the point where anything is left to kill.  LIT_SURV and K2_SURV
+    are the fractions; the depths follow per configuration, and on the
+    production shape they reproduce 6 and 16 exactly.
 
 WHY THIS IS NOT dickson-ladders' ENGINE.  A247965 forces its k to be a
 multiple of the wheel modulus -- one candidate residue per period, R = 1 --
@@ -113,7 +130,8 @@ kept residue is killed), G9 (GPU survivor stream == CPU survivor stream,
 bit for bit, on populated windows at three heights and three filters,
 one-level AND two-level, including at the ceiling), G13 (the production
 wheel constants), G14 (the v3 mechanisms: the A/C generation tables, the
-baked literal prefix, and the queue's capacity invariant).
+derived compaction depths, the CRT-combined prefix and round-2 group
+tables, and the queue-overflow fallback, forced and checked identical).
 """
 
 import pathlib as _pathlib
@@ -132,8 +150,23 @@ P1_DEFAULT = 23              # first-level wheel: the primes up to here
 P2_DEFAULT = 37              # second-level wheel: the primes in (P1, P2]
 TPB_DEFAULT = 128            # threads per block   (swept on the v3 geometry)
 JPT_DEFAULT = 16             # candidates per thread before compaction
-LIT_DEFAULT = 6              # sieve primes baked into the source as literals
-K2_DEFAULT = 12              # second compaction round: branchless to here
+# WHERE THE TWO COMPACTION POINTS GO.  They were swept as counts on the
+# production shape -- 6 primes before the first compaction, 16 before
+# the second -- but a count is the wrong thing to carry to another
+# configuration, because what the sweep actually found is a SURVIVAL
+# FRACTION.  A coarser wheel kills candidates faster (w(q,n) is
+# min(n,(q-1)/2), so a smaller n or a smaller wheel means a steeper
+# curve), and testing to a fixed DEPTH there is testing past the point
+# where anything is left to kill.  Shipping the counts cost the two
+# coarse-wheel benchmark shapes 22% each, which is exactly what a
+# four-shape benchmark is for.
+#
+# So the constants are the fractions, and the depths are derived per
+# configuration: the first compaction goes where about 9.5% of
+# candidates are left, the second where about 1.2% are.  On the
+# production shape that reproduces 6 and 16 exactly.
+LIT_SURV = 0.095             # first compaction point: survival target
+K2_SURV = 0.012              # second compaction point: survival target
 UNROLL = 4                   # independent Barrett chains in the queue tail
 HIT_CAP = 1 << 16            # survivors buffered per launch
 RES_MAX = 1 << 24            # refuse a one-level wheel table bigger than this
@@ -144,6 +177,11 @@ LIT_INLINE_Q = 64            # below this, a group's kill set is a u64 literal
 # 76 KB and 0.39x at 536 KB.  8192 puts the production prefix in three
 # pairs (41*43, 47*53, 59*61) totalling 981 bytes.
 LIT_GROUP_MAX = 1 << 13
+# The same budget for round 2's groups.  They sit on a much smaller
+# population -- the queue, not every candidate -- so they can afford a
+# bigger table before the L1 cliff bites.  Swept: 16384 beats 8192 by
+# 1.06x and 65536 only ties it, so this is the knee, not the peak.
+K2_GROUP_MAX = 1 << 14
 
 # How much margin the shared queues carry over their ANALYTIC occupancy.
 # Survival through a prefix is an exact product over the primes involved
@@ -214,8 +252,8 @@ def wheel(n, p1, lo=1):
     return W, res
 
 
-def lit_groups(primes, nlit, budget=LIT_GROUP_MAX):
-    """Group the first `nlit` sieve primes for CRT-combined testing.
+def lit_groups(primes, nlit, budget=LIT_GROUP_MAX, start=0):
+    """Group primes[start:nlit] into CRT-combined test groups.
 
     "Killed by 41 or by 43" is a function of k mod (41*43) alone, so a
     group of primes costs ONE reduction and ONE bitmap lookup instead of
@@ -225,7 +263,7 @@ def lit_groups(primes, nlit, budget=LIT_GROUP_MAX):
     it INVERTS to 0.39x at 536 KB and 0.25x at 76 KB.  See the header.
     """
     groups, cur, prod = [], [], 1
-    for i in range(nlit):
+    for i in range(start, nlit):
         q = primes[i]
         if cur and prod * q > budget:
             groups.append(cur)
@@ -237,8 +275,8 @@ def lit_groups(primes, nlit, budget=LIT_GROUP_MAX):
     return groups
 
 
-def lit_prefix(n, primes, groups):
-    """(CUDA source, packed table) for the CRT-combined literal prefix.
+def lit_prefix(n, primes, groups, table="gbits", indent=12):
+    """(CUDA source, packed table) for a run of CRT-combined group tests.
 
     Every modulus, magic number and table offset is a compile-time literal
     (OPTIMIZATION.md 2.5), so a group test loads nothing but its own bit.
@@ -257,7 +295,7 @@ def lit_prefix(n, primes, groups):
         for q in qs:
             Q *= q
         mg = (1 << 64) // Q
-        head = ("            { unsigned int r = (unsigned int)k - "
+        head = (" " * indent + "{ unsigned int r = (unsigned int)k - "
                 f"(unsigned int)__umul64hi(k, {mg}ULL) * {Q}u; "
                 f"if (r >= {Q}u) r -= {Q}u; ")
         if Q < LIT_INLINE_Q:
@@ -275,7 +313,8 @@ def lit_prefix(n, primes, groups):
             np.bitwise_or.at(tab, b >> 5,
                              (np.uint32(1) << (b & 31)).astype(np.uint32))
         lines.append(head + f"const unsigned int b = {off_bits}u + r; "
-                            f"kill |= (gbits[b >> 5] >> (b & 31)) & 1u; }}")
+                            f"kill |= ({table}[b >> 5] >> (b & 31)) "
+                            f"& 1u; }}")
         words.append(tab)
         off_bits += tab.size * 32
     table = (np.concatenate(words) if words
@@ -334,6 +373,36 @@ __device__ __forceinline__ bool tail_survives(
 #define EMIT(K) { const int _p = atomicAdd(nout, 1); \
                   if (_p < cap) out[_p] = (K); }
 
+#if TWOLEVEL
+/* m = A[t] + C[s] reduced mod W2.  Both are already under W2, so the sum
+   is under 2*W2 and one subtraction is enough -- and unsigned wraparound
+   turns that into a min, because if m < W2 then m - W2 wraps to something
+   huge and the min keeps m. */
+#define GEN_K(T) \
+    const uint2 e1 = res1x[T]; \
+    unsigned int m = e1.y + c2; \
+    m = min(m, m - W2C); \
+    const unsigned long long k = base + (unsigned long long)e1.x \
+                               + (unsigned long long)W1C * m;
+#else
+#define GEN_K(T) \
+    const unsigned long long k = base + (unsigned long long)res1x[T].x;
+#endif
+
+/* One candidate, start to finish: generate it, run the CRT-combined
+   prefix, and either queue it or -- if the queue is full -- finish it on
+   the spot.  A macro, because the JPT loop below is written twice: once
+   with a bounds check and once, for every block but the last, without. */
+#define BODY(T) { \
+    GEN_K(T) \
+    unsigned int kill = 0u; \
+%(prefix_m)s
+    if (!kill) { \
+        const int p = atomicAdd(&qn, 1); \
+        if (p < Q1CAP) qk[p] = k; \
+        else if (tail_survives(k, np_, LITN, pk, bits)) EMIT(k) \
+    } }
+
 extern "C" __global__ void sieve(
         const unsigned long long base0, const int R1, const int np_,
         const unsigned int* __restrict__ bits,
@@ -341,25 +410,21 @@ extern "C" __global__ void sieve(
         const uint4* __restrict__ pk,
         const uint2* __restrict__ res1x,
         const unsigned int* __restrict__ res2c,
-        const unsigned int* __restrict__ gbits)
+        const unsigned int* __restrict__ gbits,
+        const unsigned int* __restrict__ g2bits)
 {
     /* Sized from the analytic survival plus QCAP_SIGMA sigma, NOT from the
        impossible worst case: a queue big enough for "every candidate
        survives" costs shared memory, and shared memory costs blocks per
-       SM.  Overflow is made harmless instead of impossible -- see the
-       fallback below. */
+       SM.  Overflow is made harmless instead of impossible -- a candidate
+       that does not fit runs its tail on the spot, uncompacted, which is
+       the same arithmetic and so the same answer.  G14 forces that path
+       and checks the stream is unchanged. */
     __shared__ unsigned long long qk[Q1CAP];
-    __shared__ int qn;
-#if K2 > LITN
     __shared__ unsigned long long qk2[Q2CAP];
+    __shared__ int qn;
     __shared__ int qn2;
-#endif
-    if (threadIdx.x == 0) {
-        qn = 0;
-#if K2 > LITN
-        qn2 = 0;
-#endif
-    }
+    if (threadIdx.x == 0) { qn = 0; qn2 = 0; }
     __syncthreads();
 
     const unsigned long long base = base0
@@ -369,48 +434,30 @@ extern "C" __global__ void sieve(
 #endif
     const int tbase = blockIdx.x * (blockDim.x * JPT) + threadIdx.x;
 
+    /* The bounds check is false only in the last block of the x grid, so
+       it is hoisted: one test for the whole strided run instead of JPT of
+       them.  Worth 1.007x, which is small and free. */
+    if (tbase + (JPT - 1) * TPB < R1) {
 #pragma unroll
-    for (int jj = 0; jj < JPT; ++jj) {
-        const int t = tbase + jj * TPB;
-        if (t < R1) {
-            const uint2 e1 = res1x[t];
-#if TWOLEVEL
-            unsigned int m = e1.y + c2;
-            if (m >= W2C) m -= W2C;
-            const unsigned long long k = base + (unsigned long long)e1.x
-                                       + (unsigned long long)W1C * m;
-#else
-            const unsigned long long k = base + (unsigned long long)e1.x;
-#endif
-            unsigned int kill = 0u;
-%(prefix)s
-            if (!kill) {
-                const int p = atomicAdd(&qn, 1);
-                if (p < Q1CAP) qk[p] = k;
-                /* The queue is full.  Run this candidate's tail right
-                   here, uncompacted -- identical arithmetic, identical
-                   answer, just without the packing.  This is what makes
-                   the capacity a tuning constant rather than a
-                   correctness bound; G14 forces the path and checks the
-                   stream is unchanged. */
-                else if (tail_survives(k, np_, LITN, pk, bits)) EMIT(k)
-            }
+        for (int jj = 0; jj < JPT; ++jj) BODY(tbase + jj * TPB)
+    } else {
+#pragma unroll
+        for (int jj = 0; jj < JPT; ++jj) {
+            const int t = tbase + jj * TPB;
+            if (t < R1) BODY(t)
         }
     }
     __syncthreads();
     const int n1 = min(qn, Q1CAP);
 
-#if K2 > LITN
-    /* Second compaction round: primes LITN..K2 branchless over the
-       compacted queue, survivors packed again.  Worth 1.21x, and it is
-       only worth it because the queues are sized from the survival rate
-       -- with both queues at the worst-case size it MEASURED 0.83x, the
-       shared memory halving the blocks an SM can hold. */
+    /* Second compaction round: primes LITN..K2, CRT-combined the same way
+       the prefix is, branchless over the compacted queue, survivors packed
+       again.  Combining these was worth 1.06x and moved K2 from 12 to 16 --
+       cheaper tests buy more of them. */
     for (int idx = threadIdx.x; idx < n1; idx += TPB) {
         const unsigned long long k = qk[idx];
         unsigned int kill = 0u;
-#pragma unroll
-        for (int z = LITN; z < K2; ++z) TEST(z, kill)
+%(round2)s
         if (!kill) {
             const int p = atomicAdd(&qn2, 1);
             if (p < Q2CAP) qk2[p] = k;
@@ -423,12 +470,6 @@ extern "C" __global__ void sieve(
         const unsigned long long k = qk2[idx];
         if (tail_survives(k, np_, K2, pk, bits)) EMIT(k)
     }
-#else
-    for (int idx = threadIdx.x; idx < n1; idx += TPB) {
-        const unsigned long long k = qk[idx];
-        if (tail_survives(k, np_, LITN, pk, bits)) EMIT(k)
-    }
-#endif
 }
 """
 
@@ -454,8 +495,8 @@ class GpuEngine:
     """Wheel-generated candidates, Barrett-tested against a bitmap."""
 
     def __init__(self, n, p1=P1_DEFAULT, p2=P2_DEFAULT, q2=Q2_DEFAULT,
-                 tpb=TPB_DEFAULT, jpt=JPT_DEFAULT, lit=LIT_DEFAULT,
-                 k2=K2_DEFAULT, qcap_sigma=QCAP_SIGMA):
+                 tpb=TPB_DEFAULT, jpt=JPT_DEFAULT, lit=None, k2=None,
+                 qcap_sigma=QCAP_SIGMA):
         import cupy as cp
         self.cp = cp
         self.n, self.p1, self.p2, self.q2, self.tpb = n, p1, p2, q2, tpb
@@ -511,9 +552,28 @@ class GpuEngine:
         self.primes = [q for q in primerange(wheel_top + 1, q2 + 1)]
         if not self.primes:
             raise ValueError("no sieve primes above the wheel")
-        self.lit = min(lit, len(self.primes))
-        self.k2 = min(max(k2, self.lit), len(self.primes))
+        # survival through each prefix, exactly: an ordered product over
+        # the primes involved, which is what both the compaction depths and
+        # the queue capacities are sized from (OPTIMIZATION.md 2.6)
+        surv, self.surv = 1.0, []
+        for q in self.primes:
+            self.surv.append(surv)
+            surv *= 1.0 - len(killed_residues(q, n)) / q
+        self.surv.append(surv)
+
+        def depth_for(target):
+            for i, sv in enumerate(self.surv):
+                if sv <= target:
+                    return i
+            return len(self.primes)
+
+        self.lit = (depth_for(LIT_SURV) if lit is None
+                    else min(lit, len(self.primes)))
+        self.k2 = (max(self.lit, depth_for(K2_SURV)) if k2 is None
+                   else min(max(k2, self.lit), len(self.primes)))
         self.groups = lit_groups(self.primes, self.lit)
+        self.groups2 = lit_groups(self.primes, self.k2, K2_GROUP_MAX,
+                                  start=self.lit)
 
         # packed forbidden-residue bitmap: q bits per prime, concatenated
         offs, tot = [], 0
@@ -542,28 +602,28 @@ class GpuEngine:
         self.tile = self.tpb * self.jpt          # candidates per CUDA block
         self.per_launch = max(1, min(65535, CAND_PER_LAUNCH // self.R))
 
-        # survival through each compaction point, exactly (2.6): the queues
-        # are sized from these, not from the worst case that never happens
-        surv, self.surv = 1.0, []
-        for q in self.primes:
-            self.surv.append(surv)
-            surv *= 1.0 - len(killed_residues(q, n)) / q
-        self.surv.append(surv)
         self.q1cap = _qcap(self.tile, self.surv[self.lit], qcap_sigma)
         self.q2cap = (_qcap(self.tile, self.surv[self.k2], qcap_sigma)
                       if self.k2 > self.lit else 1)
 
         prefix_src, gtable = lit_prefix(n, self.primes, self.groups)
         self.d_gbits = cp.asarray(gtable)
+        r2_src, g2table = lit_prefix(n, self.primes, self.groups2,
+                                     table="g2bits", indent=8)
+        self.d_g2bits = cp.asarray(g2table)
+        # inside the BODY macro every line has to end in a continuation
+        prefix_m = "\n".join(ln + " \\" for ln in prefix_src.split("\n"))
 
         key = (n, self.W1, self.W2, q2, tpb, jpt, self.lit, self.k2,
-               self.q1cap, self.q2cap, tuple(map(tuple, self.groups)))
+               self.q1cap, self.q2cap, tuple(map(tuple, self.groups)),
+               tuple(map(tuple, self.groups2)))
         if key not in _MODCACHE:
             src = _SRC % {"w1": self.W1, "w2": self.W2, "w": self.W,
                           "two": 1 if self.R2 > 1 else 0, "lit": self.lit,
                           "k2": self.k2, "jpt": jpt, "tpb": tpb,
                           "unroll": UNROLL, "q1cap": self.q1cap,
-                          "q2cap": self.q2cap, "prefix": prefix_src}
+                          "q2cap": self.q2cap, "prefix_m": prefix_m,
+                          "round2": r2_src}
             _MODCACHE[key] = cp.RawModule(code=src, options=("-std=c++14",),
                                           backend="nvrtc")
         self.k_sieve = _MODCACHE[key].get_function("sieve")
@@ -580,7 +640,7 @@ class GpuEngine:
     def bytes_held(self):
         n = (self.d_res1x.nbytes + self.d_bits.nbytes + self.d_pk.nbytes
              + self.d_out.nbytes + self.d_res2c.nbytes
-             + self.d_gbits.nbytes)
+             + self.d_gbits.nbytes + self.d_g2bits.nbytes)
         return int(n)
 
     # ---------------------------------------------------------------- sieve
@@ -606,7 +666,7 @@ class GpuEngine:
                           np.int32(len(self.primes)), self.d_bits,
                           self.d_out, self.d_n, np.int32(HIT_CAP),
                           self.d_pk, self.d_res1x, self.d_res2c,
-                          self.d_gbits))
+                          self.d_gbits, self.d_g2bits))
             cnt = int(self.d_n.get()[0])
             if cnt > HIT_CAP:
                 raise RuntimeError(
@@ -825,48 +885,74 @@ def g14_v3_mechanisms():
             if int(r1[t]) + W1 * m_split != int(r1[t]) + W1 * m_ref:
                 return False, f"G14 FAIL: n={n}: reconstructed x differs"
 
-        primes = [q for q in primerange(p2 + 1, q2 + 1)]
-        nlit = min(LIT_DEFAULT, len(primes))
-        groups = lit_groups(primes, nlit)
-        src, table = lit_prefix(n, primes, groups)
-        if sum(len(g) for g in groups) != nlit or \
-                [i for g in groups for i in g] != list(range(nlit)):
-            return False, (f"G14 FAIL: n={n}: the prefix grouping "
-                           f"{groups} does not cover the first {nlit} "
-                           f"primes exactly once, in order")
-        off_bits = 0
-        for g in groups:
-            qs = [primes[i] for i in g]
-            Q = 1
-            for q in qs:
-                Q *= q
-            if Q > LIT_GROUP_MAX:
-                return False, (f"G14 FAIL: n={n}: group {qs} has modulus "
-                               f"{Q} over the {LIT_GROUP_MAX} budget that "
-                               f"keeps the combined table in L1")
-            if f"* {Q}u;" not in src or \
-                    f"__umul64hi(k, {(1 << 64) // Q}ULL)" not in src:
-                return False, (f"G14 FAIL: n={n}: modulus {Q} or its magic "
-                               f"is not baked into the prefix source")
-            # every residue mod Q must agree with "killed by some q in g"
-            want = np.zeros(Q, dtype=bool)
-            for q in qs:
-                bad = np.array(killed_residues(q, n), dtype=np.int64)
-                want |= np.isin(np.arange(Q) % q, bad)
-            if Q < LIT_INLINE_Q:
-                mask = 0
-                for u in killed_residues(qs[0], n):
-                    mask |= 1 << u
-                got = np.array([(mask >> u) & 1 for u in range(Q)], bool)
-            else:
-                b = off_bits + np.arange(Q)
-                got = ((table[b >> 5] >> (b & 31)) & 1).astype(bool)
-                off_bits += ((Q + 31) // 32) * 32
-            if not np.array_equal(got, want):
-                return False, (f"G14 FAIL: n={n}: the combined table for "
-                               f"{qs} (modulus {Q}) disagrees with "
-                               f"killed_residues at "
-                               f"{int(np.flatnonzero(got != want)[0])}")
+        eng = GpuEngine(n, p1=p1, p2=p2, q2=q2)
+        primes = eng.primes
+
+        # The compaction depths are DERIVED from the survival curve, not
+        # carried over as counts from the shape they were swept on, so the
+        # gate checks the derivation rather than two magic numbers: each
+        # depth is the first one at or under its target, and the one before
+        # it is not.  (Shipping the counts instead cost the coarse-wheel
+        # benchmark shapes 22% each.)
+        for name, depth, target in (("LIT", eng.lit, LIT_SURV),
+                                    ("K2", eng.k2, K2_SURV)):
+            if depth > len(primes):
+                return False, f"G14 FAIL: n={n}: {name} past the sieve"
+            if eng.surv[depth] > target and depth < len(primes):
+                return False, (f"G14 FAIL: n={n}: {name}={depth} leaves "
+                               f"{eng.surv[depth]:.4f} alive, over the "
+                               f"{target} target")
+            if depth > 0 and eng.surv[depth - 1] <= target and \
+                    depth > eng.lit:
+                return False, (f"G14 FAIL: n={n}: {name}={depth} is deeper "
+                               f"than it needs to be -- {depth - 1} already "
+                               f"leaves {eng.surv[depth - 1]:.4f}")
+
+        for tag, groups, table_src, budget, lo, hi in (
+                ("prefix", eng.groups,
+                 lit_prefix(n, primes, eng.groups), LIT_GROUP_MAX,
+                 0, eng.lit),
+                ("round 2", eng.groups2,
+                 lit_prefix(n, primes, eng.groups2, table="g2bits"),
+                 K2_GROUP_MAX, eng.lit, eng.k2)):
+          src, table = table_src
+          if [i for g in groups for i in g] != list(range(lo, hi)):
+            return False, (f"G14 FAIL: n={n}: the {tag} grouping "
+                           f"{groups} does not cover primes "
+                           f"[{lo}, {hi}) exactly once, in order")
+          off_bits = 0
+          for g in groups:
+              qs = [primes[i] for i in g]
+              Q = 1
+              for q in qs:
+                  Q *= q
+              if Q > budget:
+                  return False, (f"G14 FAIL: n={n}: {tag} group {qs} has "
+                                 f"modulus {Q} over the {budget} budget that "
+                                 f"keeps the combined table in L1")
+              if f"* {Q}u;" not in src or \
+                      f"__umul64hi(k, {(1 << 64) // Q}ULL)" not in src:
+                  return False, (f"G14 FAIL: n={n}: modulus {Q} or its magic "
+                                 f"is not baked into the {tag} source")
+              # every residue mod Q must agree with "killed by some q in g"
+              want = np.zeros(Q, dtype=bool)
+              for q in qs:
+                  bad = np.array(killed_residues(q, n), dtype=np.int64)
+                  want |= np.isin(np.arange(Q) % q, bad)
+              if Q < LIT_INLINE_Q:
+                  mask = 0
+                  for u in killed_residues(qs[0], n):
+                      mask |= 1 << u
+                  got = np.array([(mask >> u) & 1 for u in range(Q)], bool)
+              else:
+                  b = off_bits + np.arange(Q)
+                  got = ((table[b >> 5] >> (b & 31)) & 1).astype(bool)
+                  off_bits += ((Q + 31) // 32) * 32
+              if not np.array_equal(got, want):
+                  return False, (f"G14 FAIL: n={n}: the {tag} table for "
+                                 f"{qs} (modulus {Q}) disagrees with "
+                                 f"killed_residues at "
+                                 f"{int(np.flatnonzero(got != want)[0])}")
 
     # The queues are sized from the survival rate rather than the worst
     # case, so overflow is POSSIBLE -- and the whole design rests on it
@@ -897,12 +983,13 @@ def g14_v3_mechanisms():
                        f"(0, tile = {prod.tile}]")
     return True, (f"G14 ok: the split A/C generation tables reproduce the "
                   f"one-table CRT on 9000 sampled pairs at (n,p1,p2) = "
-                  f"(16,23,37), (17,23,37), (16,23,31); the CRT-combined "
-                  f"prefix groups cover the first {LIT_DEFAULT} primes "
-                  f"exactly once in order, stay inside the {LIT_GROUP_MAX} "
-                  f"modulus budget, and each group's table agrees with "
-                  f"killed_residues on EVERY residue of its modulus; "
-                  f"production queues hold "
+                  f"(16,23,37), (17,23,37), (16,23,31); the compaction "
+                  f"depths derive from the survival curve (production "
+                  f"LIT={prod.lit}, K2={prod.k2}); the CRT-combined prefix "
+                  f"and round-2 groups cover their prime ranges exactly "
+                  f"once in order, stay inside their modulus budgets, and "
+                  f"every group's table agrees with killed_residues on "
+                  f"EVERY residue of its modulus; production queues hold "
                   f"{prod.q1cap} and {prod.q2cap} of a {prod.tile}-candidate "
                   f"block (analytic occupancy {prod.tile * prod.surv[prod.lit]:.0f}"
                   f" and {prod.tile * prod.surv[prod.k2]:.0f}); and with the "

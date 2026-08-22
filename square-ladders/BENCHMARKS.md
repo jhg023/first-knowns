@@ -44,6 +44,7 @@ helps one and hurts the other is visible instead of averaged away.
 | 2026-08-21 | **v3, cheap tests + block compaction** | **129,397,475** | 25,231,327 | 1,671,119 | 8,223,863 | **4.014×** against v2 interleaved in one run |
 | 2026-08-21 | **v3.1, second compaction round** | **136,117,250** | 26,623,079 | 2,417,096 | 8,502,831 | **4.721×** against v2, **1.209×** against v3 |
 | 2026-08-21 | **v3.2, CRT-combined prefix** | **162,963,133** | 36,251,384 | 3,123,895 | 17,523,227 | **5.735×** against v2, **1.19×** against v3.1 |
+| 2026-08-21 | **v3.3, combined round 2 + derived depths** | **184,801,999** | 36,289,650 | *see below* | *see below* | **6.481×** against v2, **1.13×** against v3.2 |
 
 The v3 rows' claim is the ratio, not the number. v2's kernel was compiled
 verbatim from the source it had at commit time and run back to back with
@@ -52,22 +53,36 @@ fingerprint `303/999990048677220` checked on every run of both: v2
 1029.5 ms / v3 256.5 ms, **4.014×**, per-round 3.893–4.079; then v2
 1030.4 ms / v3.1 218.3 ms, **4.721×**, per-round 4.580–4.790; then
 v2 1038.1 ms / v3.2 181.0 ms, **5.735×**, per-round 5.691–5.792
-with one 4.949 outlier.
+with one 4.949 outlier; then v2 1020.6 ms / v3.3 157.5 ms, **6.481×**,
+per-round 6.170–6.583.
 
-`SCORE16W` is the row to look at for v3.2: it rose **2.3×**, far more
-than the others, because it runs a coarse wheel and a shallow sieve, so
-a larger share of its work is the prefix the change makes cheap. That is
-the four-shape benchmark doing its job — a change that helps one shape
-far more than another is visible instead of averaged away. The same session measured v2 at `SCORE` 31,634,366, which
-is inside the v2 range above and near its top — so the 4.5× one would get
-by dividing the two ledger rows is the ambient swing flattering the
-comparison, and 4.014× is the honest figure.
+**`SCORE10` and `SCORE16W` stopped resolving at v3.3**, and their cells
+are left blank rather than filled with a number that does not mean
+anything. Their frozen windows are 6.0×10⁹ and 3.1×10¹⁰ of k line, which at
+the v3.3 rate is under 2.5 milliseconds each — per-launch overhead and a
+host round-trip, not kernel time. Over five runs of one binary they spread
+**26%** and **13%**, against 1.1% for `SCORE` and 0.6% for `SCORE1L`.
+See OPTIMIZATION_LOG.md, “The benchmark shape has become the blocker”:
+the windows are NOT re-cut here, because the anchor that makes scores
+comparable across engine generations is not an optimization pass's to
+change, and both shapes still do their more important job — their
+fingerprints have been exact through every change.
 
-All four shapes rose and none fell: `SCORE` ×4.09, `SCORE1L` ×3.14,
-`SCORE10` ×2.61, `SCORE16W` ×3.03, measured against this session's own v2
-baseline run. `SCORE10` and `SCORE16W` moved this time where they did not
-under v2, and should have: v3 changes the test loop and the compaction,
-which every shape uses, rather than the wheel, which only two of them do.
+`SCORE16W` was the row to look at for v3.2, while it still resolved: it
+rose **2.3×**, far more than the others, because it runs a coarse wheel and
+a shallow sieve, so a larger share of its work is the prefix that change
+makes cheap. That is the four-shape benchmark doing its job — a change that
+helps one shape far more than another is visible instead of averaged away.
+
+On the v3 row: the same session measured v2 at `SCORE` 31,634,366, which is
+inside the v2 range above and near its top — so the 4.5× one would get by
+dividing the two ledger rows is the ambient swing flattering the
+comparison, and 4.014× is the honest figure. All four shapes rose and none
+fell there: `SCORE` ×4.09, `SCORE1L` ×3.14, `SCORE10` ×2.61, `SCORE16W`
+×3.03, measured against that session's own v2 baseline run. `SCORE10` and
+`SCORE16W` moved where they had not under v2, and should have: v3 changes
+the test loop and the compaction, which every shape uses, rather than the
+wheel, which only two of them do.
 
 **The absolute number moves with the machine; the ratio does not.** Three
 runs of the identical v2 binary produced `SCORE` 42,988,406 once and
@@ -132,17 +147,17 @@ then unmeasurably small; there is no reason to go shallower.
 
 ## What the campaign costs at this rate
 
-At the v3.2 production rate of **1.63×10¹⁴ k/s** (`score.py` 1.630, the
-interleaved A/B 1.640) — against the odds model's quantiles:
+At the v3.3 production rate of **1.85×10¹⁴ k/s** (`score.py` 1.848, the
+interleaved A/B 1.885) — against the odds model's quantiles:
 
 | target | Q1 | median | Q3 | P90 |
 |--------|----|--------|----|-----|
-| a(16) | 3.3 s | **13 s** | 42 s | 1.6 min |
-| a(17) | 1.3 min | **6.0 min** | 20 min | 46 min |
-| a(18) | 45 min | **3.4 h** | 10.8 h | *past the ceiling* |
+| a(16) | 2.9 s | **12 s** | 37 s | 1.4 min |
+| a(17) | 1.1 min | **5.3 min** | 17 min | 40 min |
+| a(18) | 40 min | **3.0 h** | 9.5 h | *past the ceiling* |
 
 The engine's whole enforced range — everything below `K_CEIL = 9×10¹⁸` — is
-**15.3 hours** of sweeping, down from 3.6 days under v2. That is the useful
+**13.5 hours** of sweeping, down from 3.6 days under v2. That is the useful
 way to state the budget here: this is not a hunt that needs a stopping
 rule, it is a hunt that can be run to its own ceiling **overnight**, at
 which point `a(16)`, `a(17)` and `a(18)` are either found or bounded below
@@ -180,7 +195,8 @@ leaving the constant at 2 would have quietly cut the segment to 0.13 s and
 turned a 20 ms yield from 4% of the rate into **16%**, and `--gentle`'s
 40 ms into **31%** — a documented price becoming false with no code change
 near it, and no benchmark able to see it (OPTIMIZATION.md rule 7). At 8
-12 blocks the segment is 0.55 s, an interrupt costs about half a second,
+12 blocks the segment is 0.48 s at the v3.3 rate, an interrupt costs about
+half a second,
 the checkpoint fsync is under 1% overhead, and the throttles cost what
 their help text says: `--gpu-yield-ms 20` is about 3.7% of the rate and
 `--gentle` (40 ms) about 7.3%. The constant has now moved twice for the

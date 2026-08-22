@@ -119,7 +119,7 @@ Q2 = cpu.Q2_DEFAULT               # sieve depth
 SEG_BLOCKS = 12
 K_START = 10 ** 6                 # above max(K_FLOOR, Q2); see the docstring
 CENSUS_FLOOR = 8                  # runs shorter than this are not even counted
-ENGINE_VERSION = "v3.2"
+ENGINE_VERSION = "v3.3"
 
 CONFIG_KEY = (f"a089761-{ENGINE_VERSION}-p1{P1}-p2{P2}-q2{Q2}-"
               f"seg{SEG_BLOCKS}")

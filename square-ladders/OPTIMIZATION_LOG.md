@@ -533,21 +533,106 @@ what is *left*, not that nothing is.
 
 Nothing here is finished; three of four rows carry a named, unpriced lever.
 
+---
+
+## v3.3 — combine round 2 too, and stop hardcoding the depths. KEPT: 1.13×
+
+Cumulative against v2, interleaved in one run: **6.481×** (per-round 6.243,
+6.583, 6.496, 6.487, 6.170, 6.529, 6.465 — v2 1020.6 ms, v3.3 157.5 ms).
+`SCORE 184,801,999`.
+
+Round 2 is branchless over primes LIT..K2, which is the same shape the
+prefix combining paid 1.19× on, and 67·71, 73·79, 83·89 all fit a budget.
+Combining it was **1.06×** — and then moved `K2` from 12 to **16**, worth
+another 1.06×, because cheaper tests buy more of them (Rule 1's corollary,
+for the sixth time in this project). Two small generation changes came with
+it: hoisting the `t < R1` bounds check out of the JPT loop, since it is
+false only in the last block of the x grid (**1.007×**), and replacing
+`if (m >= W2) m -= W2` with `min(m, m - W2)` on unsigned wraparound.
+
+| change | measured |
+|--------|----------|
+| bounds-guard hoist | 1.0065× |
+| min-subtract (alone) | 0.9947× |
+| both | 1.0155× |
+| CRT-combined round 2 | 1.0580× |
+| all three | 1.0753× |
+| + `K2` 12 → 16, round-2 budget 16384 | **1.1128×** on top |
+
+Round-2 budget swept separately from the prefix's: 16384 beats 8192 by
+1.06× and 65536 only ties it, so it sits at the knee. `K2` past 16 loses
+(18 is 0.997×, 20 is 0.979×, 24 is 0.975×).
+
+**Then it broke two of the four benchmark shapes, and that is the part
+worth reading.** `SCORE10` and `SCORE16W` both fell ~22%. The cause was not
+the change but the *constants*: `LIT` and `K2` had been swept as **counts**
+on the production shape and shipped as counts. But what a sweep of that
+kind actually finds is a **survival fraction**, and the fraction is not
+transferable as a depth — `w(q,n) = min(n, (q-1)/2)`, so a coarser wheel or
+a smaller `n` gives a much steeper survival curve, and testing to a fixed
+*depth* there means testing long past the point where anything is left to
+kill. Production reaches 1.2% survival at prime 16; `SCORE16W` reaches it
+at prime 8.
+
+So the constants became the fractions — `LIT_SURV = 0.095`,
+`K2_SURV = 0.012` — and the depths are derived per configuration. On the
+production shape that reproduces the swept 6 and 16 exactly; `SCORE1L` gets
+(4, 10), `SCORE10` (5, 13), `SCORE16W` (4, 8). Swept directly on a
+resolvable window, `SCORE16W`'s true optimum is (4, 10) and the derived
+(4, 8) is **0.9984** of it — so the rule is right to within noise, on a
+shape it was not tuned on.
+
+**And the 22% was not real either.** Sweeping `SCORE16W` on a *big* window
+(4,000,000 blocks, all 20 configurations agreeing on 38,505 survivors)
+showed a flat plateau, not a cliff. The 22% came from the benchmark window
+itself, which is the next entry.
+
+## The benchmark shape has become the blocker for two of four shapes
+
+OPTIMIZATION.md §2.13, arriving on schedule. The frozen windows are
+absolute spans of the k line, and the engine has got 6.5× faster
+underneath them:
+
+| shape | window | wall at the v3.3 rate | spread over 5 runs |
+|-------|--------|----------------------|--------------------|
+| `SCORE` | 2.97×10¹³ | 0.16 s | **1.1%** |
+| `SCORE1L` | 2.97×10¹³ | 0.82 s | **0.6%** |
+| `SCORE10` | 6.01×10⁹ | ~1.8 ms | **26%** |
+| `SCORE16W` | 3.06×10¹⁰ | ~2.3 ms | **13%** |
+
+Two milliseconds is per-launch overhead and a host round-trip, not kernel
+time, so those two rows have stopped measuring the engine. It shows up as
+`SCORE16W` reading 18.4 / 17.5 / 15.8 / 14.3 / 12.4 across runs of
+binaries whose real difference on a resolvable window is under 1%.
+
+**Not changed, deliberately.** Widening those windows moves their frozen
+fingerprints, and the anchor that makes scores comparable across engine
+generations is not something an optimization pass gets to re-cut (§2.13).
+The two shapes still do their more important job perfectly — they are
+correctness cross-checks, and their fingerprints have been exact through
+every change in v3. What is lost is only their *rate* number. Priced for
+whoever decides: ×100 on both windows would put them at ~0.2 s each and
+cost about 0.4 s on a `score.py` run, and it is a deliberate re-freeze
+with a log entry, not a silent one.
+
 ## Open after v3.2, in rough order of expected value
 
-0. **Re-measure the phase split a fourth time, then attack generation.**
-   It was 27.8% before this change made everything else cheaper, so it is
-   now the largest or second-largest phase and it has had exactly one
-   optimization. First question, and it is a five-minute padding ablation:
-   `res1x` is 8.7 MB and is re-read for every one of the 5,040 second-level
-   residues — 44 GB per wheel block — so is generation issue-bound or
-   L2-bandwidth-bound? The answer picks the lever: fewer instructions, or a
-   narrower table (`r1` as u32 beside `A` as u16 is 6 bytes rather than 8,
-   a free 25%), or a different loop order that reuses `res1x` across `s`.
-1. **CRT-combine the tail's first primes too.** The tail is 22.9% and the
-   prefix trick returned 1.19× on the same kind of work; the tail's
-   early-exit structure means only its first few primes matter, and those
-   are small enough to pair. Unmeasured.
+0. **Generation, which is now the biggest phase and is ISSUE-bound.**
+   The padding ablation is done and it settled the question: doubling
+   `res1x`'s traffic to 1.9 TB/s costs **2.5%** and narrowing it costs
+   0.8%, so the table is not the lever and a narrower entry is not worth
+   the extra load instruction. It is instructions. Two are already taken
+   (the guard hoist and the min-subtract, 1.0155× together); what remains
+   unexamined is the loop *shape* — every block re-reads `res1x` for one
+   second-level residue, and a block that carried several `s` values would
+   amortise the generation arithmetic as well as the load. Unmeasured.
+1. **CRT-combine the tail's first primes too.** The tail was 22.9% before
+   round 2 reached deeper, and the same trick has now paid twice (1.19× in
+   the prefix, 1.06× in round 2). The tail's early exit means only its
+   first few primes matter and those are small enough to pair, but its
+   per-prime data is a runtime table rather than literals, so it needs a
+   group table for the first few and a fall-through to the plain loop.
+   Unmeasured.
 
 2. **A third compaction round is probably closed, and unmeasured.** After
    round 2 the block holds ~47 survivors against 128 threads, so a third
