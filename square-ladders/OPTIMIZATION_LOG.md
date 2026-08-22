@@ -914,7 +914,9 @@ two tables of **4,560 and 16,675** instead of one of 76 million. The
 third-level residue rides `gridDim.z` beside the wheel-period index
 (`z = period*NU + u`), the block combines its own `C + D` once, and **the
 inner loop is byte-for-byte what v4 issued**. 8.28e13 candidates per period
-from 72 KB of tables.
+from 8.8 MB of tables -- the same residues as a plain sorted list would
+be 662 TB, and that compression is also exactly why candidates do not come
+out in k order (see "What it costs").
 
 **47 is the last prime, and not by choice.** `m` is a u32, so the combined
 second modulus must stay under 2^32: primes to 47 make it 2.756e9, primes

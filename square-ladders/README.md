@@ -110,7 +110,8 @@ lifting is linear, so the table can be factored and factored again —
     m = ( A[t] + C[s] + D[u] )  mod W2,      k = base + r1 + W1·m
 
 — and the whole wheel of the primes to 47 comes out of tables of
-**1,088,640, 4,560 and 16,675** entries: 8.3×10¹³ residues from 72 KB.
+**1,088,640, 4,560 and 16,675** entries — 8.8 MB, against the 662 TB the
+same 8.3×10¹³ residues would take as a plain sorted list.
 One candidate per 7,428 of the line where primes-to-23 gives one per 205.
 Measured end to end against the two-level wheel, interleaved: **3.5×**.
 
