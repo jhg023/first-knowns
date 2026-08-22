@@ -205,6 +205,13 @@ class Campaign:
         self.hb = Heartbeat(interval=args.heartbeat)
         self._t0 = time.time()
         self.load()
+        # `discoveries` is CUMULATIVE over the campaign and is restored by
+        # load(), so "have there been any finds" is not the same question as
+        # "has THIS RUN found something" the moment a resumed campaign has
+        # any history.  --stop-on-discovery means the second one; with the
+        # a(16)/a(17) cursor loaded it read the first and stopped on the
+        # opening segment, having found nothing.
+        self._discoveries_at_start = self.discoveries
         self.eng = gpu.GpuEngine(self.filter_n(), p1=P1, p2=P2, q2=Q2)
         if self.j is None:
             self.j = K_START // self.eng.W + 1
@@ -416,7 +423,8 @@ class Campaign:
                 self.hb.mark(self.j * self.eng.W)
                 self.check_rungs(self.j * self.eng.W)
                 self.save()
-                if self.args.stop_on_discovery and self.discoveries:
+                if (self.args.stop_on_discovery
+                        and self.discoveries > self._discoveries_at_start):
                     log("STAGE", "stopping on discovery (--stop-on-discovery)")
                     break
                 if self.args.gpu_yield_ms:
@@ -564,6 +572,47 @@ def _ceiling_drill():
                   "than compute")
 
 
+def _stop_on_discovery_drill():
+    """--stop-on-discovery stops on a NEW find, not on a loaded one.
+
+    The counter is cumulative and restored from the checkpoint, so on a
+    campaign resumed with history "any discoveries" is true before the
+    first segment runs.  It shipped that way and stopped a resumed a(18)
+    hunt on its opening segment, having found nothing.  Drilled on the
+    resumed case specifically, because the fresh case cannot see it: with
+    no history the two readings agree.
+    """
+    class _A:
+        pass
+    a = _A()
+    for k, v in dict(fresh=False, to=None, stop_on_discovery=True,
+                     heartbeat=30.0, gpu_yield_ms=0.0, status=False,
+                     selftest=False).items():
+        setattr(a, k, v)
+
+    def stops(camp):
+        return bool(a.stop_on_discovery
+                    and camp.discoveries > camp._discoveries_at_start)
+
+    class _C:
+        def __init__(self, prior):
+            self.discoveries = prior
+            self._discoveries_at_start = prior
+    for prior in (0, 1, 2, 7):
+        c = _C(prior)
+        if stops(c):
+            return False, (f"STOP DRILL FAIL: a campaign resumed with "
+                           f"{prior} prior discoveries stops before finding "
+                           f"anything")
+        c.discoveries += 1
+        if not stops(c):
+            return False, (f"STOP DRILL FAIL: a campaign with {prior} prior "
+                           f"discoveries does not stop on its own find")
+    return True, ("stop-on-discovery ok: a resumed campaign with 0, 1, 2 or 7 "
+                  "finds already in the checkpoint does NOT stop before "
+                  "finding something, and DOES stop on the next new find")
+
+
 def selftest():
     t0 = time.time()
     rows = []
@@ -574,7 +623,8 @@ def selftest():
         lambda c: event_kind(*c), _event_cases()))
     for d in drills.standard():
         rows.append(d)
-    for d in (_ceiling_drill, _canary_hunt, _protocol_drill, _resume_drill):
+    for d in (_ceiling_drill, _canary_hunt, _protocol_drill, _resume_drill,
+              _stop_on_discovery_drill):
         rows.append(d())
     bad = 0
     for ok, msg in rows:
@@ -623,7 +673,8 @@ def main(argv=None):
                     help="stop at this depth on the k line (default: the "
                          "engine ceiling, 9e18)")
     ap.add_argument("--stop-on-discovery", action="store_true",
-                    help="checkpoint and exit once a find is confirmed")
+                    help="checkpoint and exit once THIS RUN confirms a find "
+                         "(finds already in the checkpoint do not count)")
     ap.add_argument("--heartbeat", type=float, default=30.0,
                     help="seconds between [STATUS] lines (default 30)")
     ap.add_argument("--gpu-yield-ms", type=float, default=0.0,
