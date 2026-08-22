@@ -1128,9 +1128,21 @@ total on its own), not idle lanes.
 
 0. **Nothing on this list is worth more than about 1.1x, and that is the
    finding.** The wheel is capped at 47 by arithmetic, so candidates per
-   unit of k line is FIXED at 1.346e-4, and the prefix that every one of
-   them pays is three group tests that cannot be merged (L1) or skipped
-   (divergence). The engine is at a local optimum of its own design.
+   unit of k line is FIXED at 1.346e-4; the prefix that every one of them
+   pays is three group tests that cannot be merged (L1) or skipped
+   (divergence); and the device is measured **99.9% busy** across a sweep,
+   so there is no gap to reclaim either.
+
+   The prefix is also at its INFORMATION floor, which is the part worth
+   stating. Its three CRT-combined lookups cover seven primes, and an
+   early-exit test of those same seven would need
+   `1 + 0.66 + 0.46 + ... = 2.9` tests on average. Three branchless
+   lookups against a floor of 2.9: the grouping has already bought back
+   everything the divergence tax would have cost, and there is nothing
+   between the engine and the arithmetic any more.
+
+   What a further 2x needs is a different enumeration, and item 3 prices
+   it honestly rather than optimistically.
 
 1. **Overlap the tail kernel with the next launch** — two streams and a
    double-buffered global queue. Bounded above by the tail kernel's whole
@@ -1142,16 +1154,38 @@ total on its own), not idle lanes.
    is read by a different thread than the one that queued it — so it would
    have to do the same 64-bit reduction it was trying to avoid. Storing
    the residues per (thread, jj, group) is 256*4*9*2 values. Closed.
-3. **Past 47 needs a different engine: a k-ORDERED sweep.** If a launch
-   covered a contiguous k window instead of a whole period, `off` would be
-   bounded by the window rather than by W, and the wheel could grow.
-   Sketched: for each `(t, s)` the qualifying third-level residues form one
-   contiguous cyclic run in a sorted table, so it is a binary search per
-   `(t, s)` — 5e9 of them per window, which is negligible against 4e14
-   candidates, but their RESULTS are 40 GB unless the search happens inside
-   the kernel, which makes the work per block variable and the grid
-   dynamic. Worth about 1.4x at 53 and 3.1x at 61, against an engine
-   rewrite and a load-balancing problem. Priced, not started.
+3. **Past 47 needs a different engine — a k-WINDOWED sweep — and it is
+   worth much less than its throughput suggests.** The wheel is capped
+   because `off` spans a whole wheel period. If a launch covered a
+   contiguous k window instead, `off` would be bounded by the WINDOW, and
+   the wheel could grow to 61 or beyond: 3.09x fewer candidates and 2.41x
+   fewer tests per unit of line.
+
+   It is buildable. For each `(t, s, u)` the qualifying residues of the
+   last level form one contiguous run in a sorted table (their k values
+   INCREASE along it), so it is a binary search per triple, inside the
+   kernel because the results are far too large to store. The levels stay
+   small — 4,560 / 16,675 / 61,705 to reach 61.
+
+   **The reason it is not the answer is the window, and this is the number
+   to remember.** The search is amortised over the candidates a triple
+   yields, which is `window x density / triples`, so a big window is needed
+   to make it cheap: at 61 the break-even is a window near `1e19`, where a
+   triple yields ~5-10 candidates and the search costs ~1.7 probes each.
+   But **candidates still come out in index order inside the window**, so
+   the window IS the coverage granularity — and `1e19` is 2.3 hours of
+   over-sweep at a find where v5's whole period is ten minutes. Shrinking
+   the window to fix that puts the search cost straight back: at `1e18` a
+   triple yields half a candidate and the binary search alone doubles the
+   per-candidate cost.
+
+   Priced against time-to-discovery rather than throughput, at the a(18)
+   frontier: about **1.75x**, not 3x — a rate 3x higher minus half a
+   window of over-sweep. Against a full engine rewrite, a dynamic-grid
+   load-balancing problem, and a new gate suite for the one property this
+   project cannot get wrong. **Priced and NOT started**; the right moment
+   for it is a frontier where the target is many windows away, not one.
+
 4. **`CKPT_LAUNCHES` holds the half-second interval** and will need
    raising the next time the engine gets materially faster, for the reason
    the old `SEG_BLOCKS` comment gives.
