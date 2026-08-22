@@ -42,13 +42,14 @@ helps one and hurts the other is visible instead of averaged away.
 | 2026-08-21 | v1, one-level wheel ≤ 23 | 10,768,681 | — | 830,430 | 4,050,809 | first green battery; `SCORE` was then the one-level shape |
 | 2026-08-21 | **v2, factored wheel (23, 37]** | **28,576,161 – 42,988,406** | 7,265,536 – 11,195,714 | 638,515 – 643,702 | 2,450,722 – 2,526,485 | **3.9×** against `SCORE1L` in the same run |
 | 2026-08-21 | **v3, cheap tests + block compaction** | **129,397,475** | 25,231,327 | 1,671,119 | 8,223,863 | **4.014×** against v2 interleaved in one run |
+| 2026-08-21 | **v3.1, second compaction round** | **136,117,250** | 26,623,079 | 2,417,096 | 8,502,831 | **4.721×** against v2, **1.209×** against v3 |
 
-The v3 row's claim is the ratio, not the number. v2's kernel was compiled
+The v3 rows' claim is the ratio, not the number. v2's kernel was compiled
 verbatim from the source it had at commit time and run back to back with
-v3 on the `SCORE` window, seven rounds each, the frozen fingerprint
-`303/999990048677220` checked on every run of both: v2 1029.5 ms, v3
-256.5 ms, **4.014×**, per-round 3.893 / 4.014 / 4.016 / 4.079 / 3.962 /
-4.054 / 4.007. The same session measured v2 at `SCORE` 31,634,366, which
+the live engine on the `SCORE` window, seven rounds each, the frozen
+fingerprint `303/999990048677220` checked on every run of both: v2
+1029.5 ms / v3 256.5 ms, **4.014×**, per-round 3.893–4.079; then v2
+1030.4 ms / v3.1 218.3 ms, **4.721×**, per-round 4.580–4.790. The same session measured v2 at `SCORE` 31,634,366, which
 is inside the v2 range above and near its top — so the 4.5× one would get
 by dividing the two ledger rows is the ambient swing flattering the
 comparison, and 4.014× is the honest figure.
@@ -113,19 +114,18 @@ then unmeasurably small; there is no reason to go shallower.
 
 ## What the campaign costs at this rate
 
-At the reproducible v3 production rate of **1.16×10¹⁴ k/s** — the low end
-of what v3 measured (the interleaved A/B's end-to-end figure, 1.157×10¹⁴;
-`score.py` on a cooler card read 1.294×10¹⁴, and quoting the fast sample
-here would flatter every row) — against the odds model's quantiles:
+At the v3.1 production rate of **1.36×10¹⁴ k/s** — the interleaved A/B and
+`score.py` agreed to three figures this time (1.360 and 1.361×10¹⁴), which
+they did not under v3 — against the odds model's quantiles:
 
 | target | Q1 | median | Q3 | P90 |
 |--------|----|--------|----|-----|
-| a(16) | 4.6 s | **19 s** | 59 s | 2.3 min |
-| a(17) | 1.8 min | **8.5 min** | 28 min | 1.1 h |
-| a(18) | 1.1 h | **4.8 h** | 15 h | *past the ceiling* |
+| a(16) | 3.9 s | **16 s** | 50 s | 1.9 min |
+| a(17) | 1.6 min | **7.2 min** | 24 min | 55 min |
+| a(18) | 54 min | **4.1 h** | 12.9 h | *past the ceiling* |
 
 The engine's whole enforced range — everything below `K_CEIL = 9×10¹⁸` — is
-**21.6 hours** of sweeping, down from 3.6 days under v2. That is the useful
+**18.4 hours** of sweeping, down from 3.6 days under v2. That is the useful
 way to state the budget here: this is not a hunt that needs a stopping
 rule, it is a hunt that can be run to its own ceiling **overnight**, at
 which point `a(16)`, `a(17)` and `a(18)` are either found or bounded below
@@ -147,7 +147,7 @@ not done.
 ## Load
 
 There is no host worker pool, by construction. A segment is eight wheel
-blocks (5.94×10¹³ of line, ~0.51 s of device time) and yields about 640
+blocks (5.94×10¹³ of line, ~0.44 s of device time) and yields about 640
 survivors, each costing a handful of 64-bit Miller-Rabin tests —
 milliseconds of host work per second of device work. Nothing to ramp, no
 core count to size. Segment size is chosen for crash cost, not throughput,
@@ -163,9 +163,12 @@ leaving the constant at 2 would have quietly cut the segment to 0.13 s and
 turned a 20 ms yield from 4% of the rate into **16%**, and `--gentle`'s
 40 ms into **31%** — a documented price becoming false with no code change
 near it, and no benchmark able to see it (OPTIMIZATION.md rule 7). At 8
-blocks the segment is 0.51 s, an interrupt still costs half a second, the
-checkpoint fsync is 0.59% overhead, and the throttles cost what their help
-text says: `--gpu-yield-ms 20` is about 3.9% of the rate and `--gentle`
-(40 ms) about 7.8%. The engine holds 0.03 GiB of VRAM (34.6 MB: an 8.7 MB
+blocks the segment is about half a second, an interrupt costs about half a
+second, the checkpoint fsync is 0.7% overhead, and the throttles cost what
+their help text says: at v3.1's rate the segment is 0.44 s, so
+`--gpu-yield-ms 20` is about 4.6% and `--gentle` (40 ms) about 9.2%. Those
+two numbers are the ones to re-derive the next time the engine gets
+materially faster; they are why the constant is expressed as a duration
+and not as a block count. The engine holds 0.03 GiB of VRAM (34.6 MB: an 8.7 MB
 first-level residue table, a 25.3 MB forbidden-residue bitmap, and 0.6 MB
 of everything else).

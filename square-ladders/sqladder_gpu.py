@@ -124,12 +124,25 @@ from sqladder_search import (K_CEIL, Q2_DEFAULT, CpuEngine, killed_residues)
 P1_DEFAULT = 23              # first-level wheel: the primes up to here
 P2_DEFAULT = 37              # second-level wheel: the primes in (P1, P2]
 TPB_DEFAULT = 128            # threads per block   (swept on the v3 geometry)
-JPT_DEFAULT = 8              # candidates per thread before compaction
+JPT_DEFAULT = 16             # candidates per thread before compaction
 LIT_DEFAULT = 6              # sieve primes baked into the source as literals
+K2_DEFAULT = 12              # second compaction round: branchless to here
 UNROLL = 4                   # independent Barrett chains in the queue tail
 HIT_CAP = 1 << 16            # survivors buffered per launch
 RES_MAX = 1 << 24            # refuse a one-level wheel table bigger than this
 LIT_INLINE_Q = 64            # below this, a prime's kill set is a u64 literal
+
+# How much margin the shared queues carry over their ANALYTIC occupancy.
+# Survival through a prefix is an exact product over the primes involved
+# (OPTIMIZATION.md 2.6), so the mean is known and the count is a sum of
+# near-independent Bernoullis; six standard deviations of headroom makes
+# the overflow path essentially never taken.  It does not have to be
+# "never", though, and that is the point of the design: overflow is
+# HARMLESS, not impossible -- a candidate that does not fit runs its tail
+# on the spot, uncompacted, which is the same arithmetic and so the same
+# answer.  The capacity is therefore a tuning constant and not a
+# correctness bound, and G14 proves it by forcing the path.
+QCAP_SIGMA = 6.0
 
 # How much candidate work a single launch should carry.  It sets how many
 # wheel blocks go in gridDim.z, and it exists because the two ends of the
@@ -221,9 +234,12 @@ _SRC = r"""
 #define WC   %(w)dULL
 #define TWOLEVEL %(two)d
 #define LITN %(lit)d
+#define K2   %(k2)d
 #define JPT  %(jpt)d
 #define TPB  %(tpb)d
 #define UNROLL %(unroll)d
+#define Q1CAP %(q1cap)d
+#define Q2CAP %(q2cap)d
 
 /* One test against the packed per-prime uint4 (magic_lo, magic_hi, q,
    boff).  The remainder correction is 32-bit: the true value of
@@ -242,10 +258,10 @@ _SRC = r"""
    exit costs what it should.  UNROLL independent Barrett chains hide the
    dependent-chain latency the divergent version could not. */
 __device__ __forceinline__ bool tail_survives(
-        const unsigned long long k, const int np_,
+        const unsigned long long k, const int np_, const int from,
         const uint4* __restrict__ pk, const unsigned int* __restrict__ bits)
 {
-    int i = LITN;
+    int i = from;
     for (; i + UNROLL <= np_; i += UNROLL) {
         unsigned int kill = 0u;
 #pragma unroll
@@ -260,6 +276,9 @@ __device__ __forceinline__ bool tail_survives(
     return true;
 }
 
+#define EMIT(K) { const int _p = atomicAdd(nout, 1); \
+                  if (_p < cap) out[_p] = (K); }
+
 extern "C" __global__ void sieve(
         const unsigned long long base0, const int R1, const int np_,
         const unsigned int* __restrict__ bits,
@@ -268,11 +287,23 @@ extern "C" __global__ void sieve(
         const uint2* __restrict__ res1x,
         const unsigned int* __restrict__ res2c)
 {
-    /* capacity is exactly the number of candidates the block owns, so a
-       block that pushed every one of them still fits */
-    __shared__ unsigned long long qk[JPT * TPB];
+    /* Sized from the analytic survival plus QCAP_SIGMA sigma, NOT from the
+       impossible worst case: a queue big enough for "every candidate
+       survives" costs shared memory, and shared memory costs blocks per
+       SM.  Overflow is made harmless instead of impossible -- see the
+       fallback below. */
+    __shared__ unsigned long long qk[Q1CAP];
     __shared__ int qn;
-    if (threadIdx.x == 0) qn = 0;
+#if K2 > LITN
+    __shared__ unsigned long long qk2[Q2CAP];
+    __shared__ int qn2;
+#endif
+    if (threadIdx.x == 0) {
+        qn = 0;
+#if K2 > LITN
+        qn2 = 0;
+#endif
+    }
     __syncthreads();
 
     const unsigned long long base = base0
@@ -297,28 +328,78 @@ extern "C" __global__ void sieve(
 #endif
             unsigned int kill = 0u;
 %(prefix)s
-            if (!kill) qk[atomicAdd(&qn, 1)] = k;
+            if (!kill) {
+                const int p = atomicAdd(&qn, 1);
+                if (p < Q1CAP) qk[p] = k;
+                /* The queue is full.  Run this candidate's tail right
+                   here, uncompacted -- identical arithmetic, identical
+                   answer, just without the packing.  This is what makes
+                   the capacity a tuning constant rather than a
+                   correctness bound; G14 forces the path and checks the
+                   stream is unchanged. */
+                else if (tail_survives(k, np_, LITN, pk, bits)) EMIT(k)
+            }
         }
     }
     __syncthreads();
+    const int n1 = min(qn, Q1CAP);
 
-    const int n = qn;
-    for (int idx = threadIdx.x; idx < n; idx += TPB) {
+#if K2 > LITN
+    /* Second compaction round: primes LITN..K2 branchless over the
+       compacted queue, survivors packed again.  Worth 1.21x, and it is
+       only worth it because the queues are sized from the survival rate
+       -- with both queues at the worst-case size it MEASURED 0.83x, the
+       shared memory halving the blocks an SM can hold. */
+    for (int idx = threadIdx.x; idx < n1; idx += TPB) {
         const unsigned long long k = qk[idx];
-        if (tail_survives(k, np_, pk, bits)) {
-            const int p = atomicAdd(nout, 1);
-            if (p < cap) out[p] = k;
+        unsigned int kill = 0u;
+#pragma unroll
+        for (int z = LITN; z < K2; ++z) TEST(z, kill)
+        if (!kill) {
+            const int p = atomicAdd(&qn2, 1);
+            if (p < Q2CAP) qk2[p] = k;
+            else if (tail_survives(k, np_, K2, pk, bits)) EMIT(k)
         }
     }
+    __syncthreads();
+    const int n2 = min(qn2, Q2CAP);
+    for (int idx = threadIdx.x; idx < n2; idx += TPB) {
+        const unsigned long long k = qk2[idx];
+        if (tail_survives(k, np_, K2, pk, bits)) EMIT(k)
+    }
+#else
+    for (int idx = threadIdx.x; idx < n1; idx += TPB) {
+        const unsigned long long k = qk[idx];
+        if (tail_survives(k, np_, LITN, pk, bits)) EMIT(k)
+    }
+#endif
 }
 """
+
+
+def _qcap(tile, surv, sigma=QCAP_SIGMA):
+    """Queue capacity from the ANALYTIC survival, plus sigma of margin.
+
+    The count of survivors in a block is a sum of `tile` near-independent
+    Bernoulli(surv), so its mean and standard deviation are both known
+    exactly (OPTIMIZATION.md 2.6).  Rounded up to a multiple of 32 and
+    never larger than the block's own candidate count, which is a bound
+    that always holds.
+    """
+    import math
+    mean = tile * surv
+    sd = math.sqrt(max(tile * surv * (1.0 - surv), 0.0))
+    want = int(math.ceil(mean + sigma * sd))
+    want = min(max(want, 32), tile)
+    return ((want + 31) // 32) * 32
 
 
 class GpuEngine:
     """Wheel-generated candidates, Barrett-tested against a bitmap."""
 
     def __init__(self, n, p1=P1_DEFAULT, p2=P2_DEFAULT, q2=Q2_DEFAULT,
-                 tpb=TPB_DEFAULT, jpt=JPT_DEFAULT, lit=LIT_DEFAULT):
+                 tpb=TPB_DEFAULT, jpt=JPT_DEFAULT, lit=LIT_DEFAULT,
+                 k2=K2_DEFAULT, qcap_sigma=QCAP_SIGMA):
         import cupy as cp
         self.cp = cp
         self.n, self.p1, self.p2, self.q2, self.tpb = n, p1, p2, q2, tpb
@@ -375,6 +456,7 @@ class GpuEngine:
         if not self.primes:
             raise ValueError("no sieve primes above the wheel")
         self.lit = min(lit, len(self.primes))
+        self.k2 = min(max(k2, self.lit), len(self.primes))
 
         # packed forbidden-residue bitmap: q bits per prime, concatenated
         offs, tot = [], 0
@@ -403,11 +485,25 @@ class GpuEngine:
         self.tile = self.tpb * self.jpt          # candidates per CUDA block
         self.per_launch = max(1, min(65535, CAND_PER_LAUNCH // self.R))
 
-        key = (n, self.W1, self.W2, q2, tpb, jpt, self.lit)
+        # survival through each compaction point, exactly (2.6): the queues
+        # are sized from these, not from the worst case that never happens
+        surv, self.surv = 1.0, []
+        for q in self.primes:
+            self.surv.append(surv)
+            surv *= 1.0 - len(killed_residues(q, n)) / q
+        self.surv.append(surv)
+        self.q1cap = _qcap(self.tile, self.surv[self.lit], qcap_sigma)
+        self.q2cap = (_qcap(self.tile, self.surv[self.k2], qcap_sigma)
+                      if self.k2 > self.lit else 1)
+
+        key = (n, self.W1, self.W2, q2, tpb, jpt, self.lit, self.k2,
+               self.q1cap, self.q2cap)
         if key not in _MODCACHE:
             src = _SRC % {"w1": self.W1, "w2": self.W2, "w": self.W,
                           "two": 1 if self.R2 > 1 else 0, "lit": self.lit,
-                          "jpt": jpt, "tpb": tpb, "unroll": UNROLL,
+                          "k2": self.k2, "jpt": jpt, "tpb": tpb,
+                          "unroll": UNROLL, "q1cap": self.q1cap,
+                          "q2cap": self.q2cap,
                           "prefix": lit_prefix(n, self.primes, self.lit)}
             _MODCACHE[key] = cp.RawModule(code=src, options=("-std=c++14",),
                                           backend="nvrtc")
@@ -693,16 +789,44 @@ def g14_v3_mechanisms():
                                f"baked into the literal prefix")
             off += q
 
-    if JPT_DEFAULT * TPB_DEFAULT <= 0:
-        return False, "G14 FAIL: the queue capacity is not positive"
+    # The queues are sized from the survival rate rather than the worst
+    # case, so overflow is POSSIBLE -- and the whole design rests on it
+    # being harmless.  A silent drop there would lose a survivor, which is
+    # to say it could lose a discovery, so the path is not argued but
+    # FORCED: an engine whose queues hold 32 entries against a block that
+    # owns thousands takes the fallback for nearly every candidate, and its
+    # stream must be identical to the properly-sized engine's.
+    ref = GpuEngine(16, p1=13, p2=23, q2=128)
+    tiny = GpuEngine(16, p1=13, p2=23, q2=128, qcap_sigma=-1e9)
+    if tiny.q1cap > 32 or (tiny.k2 > tiny.lit and tiny.q2cap > 32):
+        return False, (f"G14 FAIL: the forced-overflow engine still has "
+                       f"room ({tiny.q1cap}, {tiny.q2cap}) -- the drill "
+                       f"would not exercise the fallback")
+    lo, span = 10 ** 12, 4 * 10 ** 8
+    a, b = ref.survivors_k(lo, lo + span), tiny.survivors_k(lo, lo + span)
+    if a.size == 0:
+        return False, "G14 FAIL: the overflow drill window is empty"
+    if a.size != b.size or not np.array_equal(a, b):
+        return False, (f"G14 FAIL: the queue-overflow fallback changed the "
+                       f"stream: {a.size} survivors properly sized, "
+                       f"{b.size} with the queues forced full")
+
+    prod = GpuEngine(16)
+    if not 0 < prod.q1cap <= prod.tile or not 0 < prod.q2cap <= prod.tile:
+        return False, (f"G14 FAIL: production queue capacities "
+                       f"({prod.q1cap}, {prod.q2cap}) are not within "
+                       f"(0, tile = {prod.tile}]")
     return True, (f"G14 ok: the split A/C generation tables reproduce the "
                   f"one-table CRT on 9000 sampled pairs at (n,p1,p2) = "
                   f"(16,23,37), (17,23,37), (16,23,31); the {LIT_DEFAULT} "
                   f"baked literal-prefix primes carry the same kill sets and "
-                  f"bit offsets as the packed bitmap; the shared queue holds "
-                  f"{JPT_DEFAULT}*{TPB_DEFAULT} = "
-                  f"{JPT_DEFAULT * TPB_DEFAULT}, exactly the candidates a "
-                  f"block owns, so it cannot overflow")
+                  f"bit offsets as the packed bitmap; production queues hold "
+                  f"{prod.q1cap} and {prod.q2cap} of a {prod.tile}-candidate "
+                  f"block (analytic occupancy {prod.tile * prod.surv[prod.lit]:.0f}"
+                  f" and {prod.tile * prod.surv[prod.k2]:.0f}); and with the "
+                  f"queues forced to 32 so the overflow path runs for nearly "
+                  f"every candidate, the survivor stream is IDENTICAL "
+                  f"({a.size} survivors)")
 
 
 GATES = [g7_wheel_matches_oracle, g8_wheel_partitions_the_period,

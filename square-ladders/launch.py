@@ -19,8 +19,8 @@ Alekseyev's searched-empty bound a(16) > 1.4e13.
 
 THE CLAIM'S FLOOR IS FREE.  a() is non-decreasing (the conditions nest), so
 a(16) >= a(15) = 861,066,640 by definition and nothing below that has to be
-swept at all.  The campaign still starts far below it: at ~1.1e13 k/s the
-whole of Alekseyev's range is about a second, so this hunt re-derives his
+swept at all.  The campaign still starts far below it: at ~1.4e14 k/s the
+whole of Alekseyev's range is a tenth of a second, so this hunt re-derives his
 bound independently before it reaches new ground, and the least-claim rests
 on our own coverage rather than on a citation.
 
@@ -91,7 +91,7 @@ P1 = gpu.P1_DEFAULT               # first-level wheel: primes 2..23
 P2 = gpu.P2_DEFAULT               # second-level wheel: primes (23, 37]
 Q2 = cpu.Q2_DEFAULT               # sieve depth
 # One wheel block is W = 7.42e12 of k line and 5.5e9 candidates, about
-# 0.064 s of device time on the v3 engine.  MEASURED, and re-measured on
+# 0.055 s of device time on the v3.1 engine.  MEASURED, and re-measured on
 # v3: the rate is flat from 1 to 16 blocks per segment (1.158-1.163e14
 # k/s, 0.4% across a 16x range), so this is not a throughput knob at all --
 # per-launch overhead is already negligible.  That makes it purely a
@@ -107,12 +107,16 @@ Q2 = cpu.Q2_DEFAULT               # sieve depth
 # 40 ms into 31%.  Neither number appears in any benchmark, which is
 # exactly OPTIMIZATION.md rule 7: a sweep that measures only throughput
 # cannot see a constraint that is not throughput.  At 8 blocks the segment
-# is 0.51 s again, an interrupt still costs half a second, the checkpoint
-# fsync is 0.59% and the throttles cost what their help text says.
+# is about half a second again, an interrupt still costs about half a
+# second, the checkpoint fsync is 0.7% and the throttles cost roughly
+# what their help text says (0.44 s at the v3.1 rate: 20 ms is 4.6%,
+# 40 ms is 9.2%).  Re-derive those two the next time the engine gets
+# much faster -- what is held fixed here is the DURATION, not the
+# block count.
 SEG_BLOCKS = 8
 K_START = 10 ** 6                 # above max(K_FLOOR, Q2); see the docstring
 CENSUS_FLOOR = 8                  # runs shorter than this are not even counted
-ENGINE_VERSION = "v3"
+ENGINE_VERSION = "v3.1"
 
 CONFIG_KEY = (f"a089761-{ENGINE_VERSION}-p1{P1}-p2{P2}-q2{Q2}-"
               f"seg{SEG_BLOCKS}")
@@ -591,10 +595,10 @@ def main(argv=None):
                     help="seconds between [STATUS] lines (default 30)")
     ap.add_argument("--gpu-yield-ms", type=float, default=0.0,
                     help="idle the device this long after every segment. "
-                         "20 ms against a ~0.5 s segment costs about 4%% of "
+                         "20 ms against a ~0.5 s segment costs about 5%% of "
                          "the rate and leaves the desktop noticeably freer")
     ap.add_argument("--gentle", action="store_true",
-                    help="preset: --gpu-yield-ms 40 (about 8%% of the rate)")
+                    help="preset: --gpu-yield-ms 40 (about 9%% of the rate)")
     ap.add_argument("--fresh", action="store_true",
                     help="discard an existing cursor deliberately")
     args = ap.parse_args(argv)

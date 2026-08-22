@@ -19,8 +19,8 @@ since is Max Alekseyev's searched-empty bound `a(16) > 1.4×10¹³`.
 odds model are complete and green; no production sweep has been run. The
 frontier stands exactly where the literature leaves it: `a(15) =
 861,066,640` published, `a(16) > 1.4×10¹³` searched-empty (Alekseyev). At
-the measured production rate the model's median for `a(16)` is **19 seconds**
-of sweeping and the engine's whole enforced range is about **21.6 hours**,
+the measured production rate the model's median for `a(16)` is **16 seconds**
+of sweeping and the engine's whole enforced range is about **18.4 hours**,
 so anyone with a CUDA GPU can take this the rest of the way — overnight.
 
 ## The problem
@@ -113,11 +113,21 @@ warp of 32 runs to the deepest of them, **16.06**, a 5.23× divergence tax.
 So each thread takes 8 candidates, runs a branchless prefix on all of
 them, and pushes the survivors into a **shared-memory queue**; one
 `__syncthreads` later the whole block chews that queue with every lane
-alive. A block compacts 1,024 candidates into ~36 survivors — a full warp
-where an uncompacted warp carried one lane — and the queue cannot overflow
-by construction. None of it leaves the kernel: the launcher is unchanged.
+alive, then does it a **second** time at prime 12. A block compacts 2,048
+candidates to ~194 and then to ~47 — full warps where an uncompacted warp
+carried one lane. None of it leaves the kernel: the launcher is unchanged.
+
+The queues are sized from the *analytic* survival rather than from the
+worst case, which means overflow is possible — so it is made **harmless**
+rather than impossible: a candidate that does not fit runs its tail on the
+spot, uncompacted, which is the same arithmetic and so the same answer.
+That turns capacity from a correctness bound into a tuning constant, and it
+matters: sizing both queues for the case that never happens measured
+**0.818×**, because the shared memory halved the blocks an SM could hold,
+while the same change sized properly is 1.169×.
+
 Measured against the v2 kernel, interleaved in one run with the frozen
-fingerprint checked on every run of both: **4.014×**.
+fingerprint checked on every run of both: **4.721×**.
 
 **Every primality decision here is a proof.** The largest value is
 `k·n²+1`, and at the enforced ceiling `K_CEIL = 9×10¹⁸` with `n = 16` that

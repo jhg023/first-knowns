@@ -380,14 +380,87 @@ atomic traffic and the generation are unchanged and nothing hoists:
 - **JPT = 16 (0.865×), tpb = 512 (0.929×), LIT = 18 (0.976×), LIT = 24
   (0.805×), UNROLL = 8 (0.988× of UNROLL 4).** All swept, all lost.
 
-## Open after v3, in rough order of expected value
+---
 
-1. **A second compaction round.** The warp-test model puts one round at
-   1.82× and two at **2.50×** (best split K = 3 then 10); the first round
-   measured 1.49× against a predicted 1.7×, so a second is worth pricing
-   at perhaps 1.2–1.3×. The shared queue already exists; a second round is
-   a few more branchless tests on the queue and a second compaction into
-   it.
+## v3.1 — the second compaction round. KEPT: 1.21×
+
+Cumulative against v2, interleaved in one run with the fingerprint checked
+on every run of both: **4.721×** (per-round 4.580, 4.670, 4.779, 4.790,
+4.687, 4.721, 4.742 — v2 1030.4 ms, v3.1 218.3 ms). `SCORE 136,117,250`.
+
+**It measured 0.818× first, and the reason it did is the whole lesson.**
+Chewing queue 1 with a branchless block of primes 6..12 and packing the
+survivors into a second queue lost 18%, monotonically worse as K2 grew,
+with registers climbing 40 → 96. The obvious reading — "the population is
+already below a block, so there is nothing left to compact" — was wrong.
+Shrinking queue 2 from 1024 entries to 256 turned the same change into
+**1.068×**. What the first measurement actually varied was not "one round
+versus two" but "8 KB of shared memory versus 16 KB", and at tpb=128 that
+is 12 blocks per SM versus 6. The A/B changed two things and attributed
+the result to the interesting one.
+
+That reframed queue 1 too. It held JPT·TPB entries so that a block in
+which *every* candidate survived the literal prefix would still fit —
+1,024 slots for an expected 97. The fix is not a bigger buffer or a
+smaller one, it is a different contract: **if the queue is full, run that
+candidate's tail on the spot, uncompacted.** Identical arithmetic,
+identical answer, no packing. Capacity stops being a correctness bound and
+becomes a tuning constant, and the queues are then sized from the
+*analytic* survival — an exact product over the primes involved (§2.6) —
+plus six standard deviations. Production holds 288 and 96 of a
+2,048-candidate block against analytic occupancies of 194 and 47.
+
+Overflow being possible rather than impossible is a claim that has to be
+proved, not asserted, because a silently dropped survivor is a silently
+lost discovery. **G14 forces the path**: an engine whose queues hold 32
+entries takes the fallback for nearly every candidate, and its stream must
+be — and is — identical to the properly sized engine's, 2,172 survivors
+bit-for-bit.
+
+| step | measured |
+|------|----------|
+| second round, both queues at worst-case size | **0.818×** |
+| same, queue 2 at 256 | 1.068× |
+| queue 1 from 1024 → 128 with the safe fallback, one round | 1.016× |
+| second round with both queues sized (Q1=256, K2=12, Q2=64) | **1.169×** |
+| JPT re-swept: 8 → 16 | 1.045× |
+| **all of it, against shipped v3** | **1.209×** |
+
+### Constants, re-swept again on the two-round geometry
+
+| K2 (LIT=6) | 10 | 11 | **12** | 13 | 14 | 16 |
+|---|---|---|---|---|---|---|
+| | 0.941 | 0.991 | **1.000** | 0.992 | 0.979 | 0.906 |
+
+| JPT (tpb=128) | 4 | 8 | **16** | 24 | 32 |
+|---|---|---|---|---|---|
+| | 0.880 | 1.000 | **1.045** | 1.056 | 1.045 |
+
+`UNROLL` is flat across 3 / 4 / 6 / 8 (1.210 / 1.209 / 1.207 / 1.215) and
+stays at 4. `JPT` = 24 measured 1.1% above 16 and was **not** taken: at
+JPT=24 the analytic queue occupancy is 291 against a 6σ cap of 384, which
+is 5.7σ of margin where JPT=16 has 14σ, and 1.1% is inside this card's
+run-to-run spread. LIT stayed at 6 (LIT=5 and 4 within 1%, LIT=8 at
+0.874×).
+
+**One rejection here is worth keeping because it shows the fallback
+working.** `JPT=32, tpb=256` measured **0.505×** — a block owning 8,192
+candidates with a queue of 448 against an analytic occupancy of 777, so
+the overflow path ran for 42% of survivors. The answer was still exactly
+right; it was just the uncompacted engine doing nearly half the work. A
+capacity that is a tuning constant fails by getting slower, which is the
+failure mode worth having.
+
+## Open after v3.1, in rough order of expected value
+
+1. **A third compaction round is probably closed, and unmeasured.** After
+   round 2 the block holds ~47 survivors against 128 threads, so a third
+   round has fewer items than the block has lanes and cannot fill a warp
+   that is not already full — §2.2's "rare-and-deep stages are already
+   optimal", one level up. That is an argument, not a measurement, and it
+   should be priced before it is believed: the same argument was made
+   about round 2 and was wrong, for reasons that turned out to be about
+   shared memory rather than about populations.
 2. **The (23, 43] wheel — 2.10× modelled, and both published blockers turn
    out to be softer than they looked.** The `gridDim.y` cap does **not**
    need the `(t,s)` flattening the v2 log describes: `R2 = 3,402,000`
@@ -408,9 +481,17 @@ atomic traffic and the generation are unchanged and nothing hoists:
    qualifying `s` for each `t` form one contiguous cyclic run findable by
    binary search. The second is the general fix and would also keep the
    checkpoint fine-grained.
-3. **Re-measure the phase split, again.** Generation is 15.3% and rising
-   as the test loop keeps getting cheaper; the next round should re-derive
-   it before choosing anything — Rule 1's corollary has now moved an
-   optimum in this project three times.
-4. **Re-sweep `SEG_BLOCKS`.** Set to 2 on the v2 geometry for crash cost,
-   against a segment that is now 4× faster.
+3. **Re-measure the phase split, again.** It was 15.3% generation / 84.7%
+   test loop on the one-round v3, and the test loop has since got another
+   1.21× cheaper, so generation is now the larger share it has ever been.
+   The next round should re-derive it before choosing anything — Rule 1's
+   corollary has now moved an optimum in this project **five** times
+   (sieve depth, LIT twice, tpb, JPT), and three of those moves were in
+   the direction opposite to the obvious guess.
+4. **`SEG_BLOCKS` — re-swept, and done for now.** Flat from 1 to 16 blocks
+   on v3 (0.4% across a 16× range), so still not a throughput knob. Set to
+   8 to hold the SEGMENT DURATION near half a second, which is what the
+   crash cost and the `--gpu-yield-ms` price are both denominated in. It
+   will need revisiting the next time the engine gets materially faster:
+   at v3.1's rate the segment is 0.44 s, so a 20 ms yield is 4.6% rather
+   than the 3.9% it was when the constant was chosen.
