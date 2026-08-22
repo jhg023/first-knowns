@@ -24,9 +24,37 @@ each README stays.
    (OPTIMIZATION.md Rule 3). Short paired runs are both faster to
    supervise and more trustworthy.
 
-   The production hunt itself (`python launch.py`) is the one exception:
-   it is meant to run for days, it checkpoints every segment, and the
-   owner starts it deliberately. Agents do not launch it.
+   The production hunt itself (`python launch.py`) is outside this cap
+   entirely — it is meant to run for days — but that is because of rule
+   0a, not because it is a timing exception.
+
+0a. **ONLY THE OWNER RUNS A HUNT. An agent never starts one — ever.**
+   `python launch.py` with no arguments, or with `--to`, or with
+   `--stop-on-discovery`, is the campaign, and starting it is the owner's
+   act alone. This is a rule about OWNERSHIP, not about duration, so none
+   of the usual mitigations make it permissible: not bounding it with
+   `--to` so it fits the five-minute cap, not "just a few seconds to
+   check the loop works", not running it to reproduce a published bound,
+   not running it because the expected time to a find happens to be
+   short. A hunt produces the discoveries this repository exists to
+   publish; the person whose name is on the claim is the person who
+   starts the run and watches it land. An agent that launches one has
+   taken that from them, spent GPU time nobody authorised, and blurred
+   the audit trail of who produced the result.
+
+   What an agent MAY run, freely and without asking:
+   - `python launch.py --selftest` — the gate battery (no sweeping)
+   - `python launch.py --status` — reads the checkpoint, touches nothing
+   - `python score.py` — gates and the frozen benchmark
+   - its own short harnesses in the scratchpad that import the ENGINE
+     (`*_gpu.py`, `*_search.py`) and call it directly
+
+   That last one is the escape hatch and it is a complete one: every
+   throughput, phase-split and A/B number this repo needs is available by
+   calling the engine API on a chosen window. There is never a reason to
+   reach for the campaign entry point to get a measurement. If a task
+   seems to require a real campaign run, the answer is to hand the owner
+   the exact command and stop, not to run it.
 
 1. **Read `CONVENTIONS.md` before touching any project.** The five-file
    skeleton (oracle / CPU engine / GPU engine / launcher / score) and
@@ -225,8 +253,11 @@ each README stays.
 
 ```
 python launch.py --selftest   # full gate battery -- must end ALL GREEN
-python launch.py              # the hunt (resumable; owner-started, days)
+python launch.py --status     # where the cursor is; reads, never writes
 python score.py               # gates x fingerprinted benchmarks
+
+python launch.py              # THE HUNT -- OWNER ONLY, never an agent (rule 0a)
+python launch.py --to 1e16    #   ditto: --to does not make it an agent command
 ```
 
 Wall-clock, so Rule 0 can be planned against: `score.py` ~2.5 min,

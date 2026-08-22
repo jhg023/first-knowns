@@ -15,6 +15,15 @@ understood one project can audit all of them.
 | `launch.py` | **The campaign.** Checkpointed (atomic writes, config-keyed cursors, resume redoes at most one segment), canary-alarmed (the stream must rediscover designated known values in-flight or halt), with a discovery protocol (below), timestamped dopamine logging, graceful Ctrl+C — and **indefinite by default**: it runs until the last rung (the enforced ceiling), never stopping on its own before that (below). |
 | `score.py` | **The un-gameable benchmark.** Prints `SCORE` (end-to-end Mitems/s on a frozen workload) only if every gate is green AND the run reproduces a frozen work fingerprint — exact result count + checksum. An engine that skips work or breaks correctness scores 0. Optimize under the score, never around it. |
 
+**Who starts a campaign (repo-wide).** `launch.py`, run as a hunt, is the
+**owner's command and nobody else's** — see CLAUDE.md rule 0a. Automation
+runs `--selftest`, `--status` and `score.py`, and gets every measurement it
+needs by importing the engine modules and calling them on a chosen window;
+it does not start the campaign, and bounding the campaign with `--to` does
+not change that. A launcher should read as what it is: the thing a person
+starts, deliberately, when they have decided to spend days of their machine
+on a claim that will carry their name.
+
 Plus documentation: `README.md` (problem, mathematics, model, usage),
 `RESULTS.md` (verified finds + evidence pointers), `BENCHMARKS.md`
 (score ledger), `OPTIMIZATION_LOG.md` (every attempt → measurement →
