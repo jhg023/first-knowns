@@ -564,12 +564,33 @@ class Campaign:
                 # the engine enqueues the next launch before handing these
                 # survivors over, so this work overlaps the device instead
                 # of stalling it (sqladder_gpu, "FLUSH").
-                since = 0
+                since, best = 0, None
                 for jn, un, surv in self.eng.sweep(self.j, j1, u_from=self.u):
                     for k in surv:
-                        r = self.run_length(int(k), cap=self.filter_n() + 6)
+                        k = int(k)
+                        r = self.run_length(k, cap=self.filter_n() + 6)
                         if r >= CENSUS_FLOOR:
-                            self.pending.append((int(k), r))
+                            self.pending.append((k, r))
+                        # A frontier-extending run is IN HAND, but it is not
+                        # yet the answer: candidates come out scrambled, so a
+                        # smaller qualifying k may still be in the rest of
+                        # this period, and a(n) is the LEAST one.  Nothing is
+                        # verified or evidenced here -- that is the period
+                        # boundary's job.  But sitting on it in silence for
+                        # up to a period would be its own kind of wrong, so
+                        # say it, and say plainly what it is not.
+                        if (r > self.frontier() and k >= self.census_floor
+                                and (best is None or k < best)):
+                            best = k
+                            log("STAGE",
+                                f"a run-{r} candidate is in hand at k = "
+                                f"{k:,} -- NOT yet a({self.frontier() + 1}): "
+                                f"this period is only "
+                                f"{100.0 * un / max(self.eng.R3, 1):.0f}% "
+                                f"swept and its candidates arrive out of "
+                                f"order, so a smaller one may still be in "
+                                f"it. Verified, evidenced and announced when "
+                                f"the period closes.")
                     self.u = un
                     since += 1
                     if since >= CKPT_LAUNCHES and un:
