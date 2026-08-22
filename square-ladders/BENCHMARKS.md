@@ -45,6 +45,7 @@ helps one and hurts the other is visible instead of averaged away.
 | 2026-08-21 | **v3.1, second compaction round** | **136,117,250** | 26,623,079 | 2,417,096 | 8,502,831 | **4.721×** against v2, **1.209×** against v3 |
 | 2026-08-21 | **v3.2, CRT-combined prefix** | **162,963,133** | 36,251,384 | 3,123,895 | 17,523,227 | **5.735×** against v2, **1.19×** against v3.1 |
 | 2026-08-21 | **v3.3, combined round 2 + derived depths** | **184,801,999** | 36,289,650 | *see below* | *see below* | **6.481×** against v2, **1.13×** against v3.2 |
+| 2026-08-21 | **v3.4, generation amortised over SPB residues** | **207,468,780** | 38,259,663 | *see below* | *see below* | **7.505×** against v2, **1.13×** against v3.3 |
 
 The v3 rows' claim is the ratio, not the number. v2's kernel was compiled
 verbatim from the source it had at commit time and run back to back with
@@ -54,7 +55,16 @@ fingerprint `303/999990048677220` checked on every run of both: v2
 1030.4 ms / v3.1 218.3 ms, **4.721×**, per-round 4.580–4.790; then
 v2 1038.1 ms / v3.2 181.0 ms, **5.735×**, per-round 5.691–5.792
 with one 4.949 outlier; then v2 1020.6 ms / v3.3 157.5 ms, **6.481×**,
-per-round 6.170–6.583.
+per-round 6.170–6.583; and
+v3.4 at **7.505×**, per-round 7.20–7.68 over eight of nine rounds.
+
+The v3.4 comparison was run on a **24-block** window rather than the
+frozen 4-block one. At v3.4's rate the frozen `SCORE` window is about
+85 ms in four launches, short enough that the card's clock ramp between
+launches shows up in the ratio (per-round 5.75 to 10.77 on one attempt);
+six times the window brings it back inside a percent or two. Both
+engines are required to agree on that window's 1,939 survivors, which
+is a wider correctness cross-check than the frozen one, not a weaker.
 
 **`SCORE10` and `SCORE16W` stopped resolving at v3.3**, and their cells
 are left blank rather than filled with a number that does not mean
@@ -147,17 +157,17 @@ then unmeasurably small; there is no reason to go shallower.
 
 ## What the campaign costs at this rate
 
-At the v3.3 production rate of **1.85×10¹⁴ k/s** (`score.py` 1.848, the
-interleaved A/B 1.885) — against the odds model's quantiles:
+At the v3.4 production rate of **2.07×10¹⁴ k/s** (the reproducible `score.py`
+cluster 205.2 / 207.5 / 209.3) — against the odds model's quantiles:
 
 | target | Q1 | median | Q3 | P90 |
 |--------|----|--------|----|-----|
-| a(16) | 2.9 s | **12 s** | 37 s | 1.4 min |
-| a(17) | 1.1 min | **5.3 min** | 17 min | 40 min |
-| a(18) | 40 min | **3.0 h** | 9.5 h | *past the ceiling* |
+| a(16) | 2.6 s | **10 s** | 33 s | 1.3 min |
+| a(17) | 1.0 min | **4.7 min** | 15 min | 36 min |
+| a(18) | 36 min | **2.7 h** | 8.5 h | *past the ceiling* |
 
 The engine's whole enforced range — everything below `K_CEIL = 9×10¹⁸` — is
-**13.5 hours** of sweeping, down from 3.6 days under v2. That is the useful
+**12 hours** of sweeping, down from 3.6 days under v2. That is the useful
 way to state the budget here: this is not a hunt that needs a stopping
 rule, it is a hunt that can be run to its own ceiling **overnight**, at
 which point `a(16)`, `a(17)` and `a(18)` are either found or bounded below
@@ -178,8 +188,8 @@ not done.
 
 ## Load
 
-There is no host worker pool, by construction. A segment is twelve wheel
-blocks (8.90×10¹³ of line, ~0.55 s of device time) and yields about 960
+There is no host worker pool, by construction. A segment is fourteen wheel
+blocks (1.04×10¹⁴ of line, ~0.50 s of device time) and yields about 1,120
 survivors, each costing a handful of 64-bit Miller-Rabin tests —
 milliseconds of host work per second of device work. Nothing to ramp, no
 core count to size. Segment size is chosen for crash cost, not throughput,
@@ -187,7 +197,7 @@ and it was **re-swept on v3**: the rate is flat from 1 to 16 blocks per
 segment (1.158–1.163×10¹⁴ k/s, 0.4% across a 16× range), with the split
 sweep's fingerprint identical at every setting.
 
-It went from 2 blocks to 8 and then to 12, and the reason is the interesting part. What
+It went from 2 blocks to 8 to 12 to 14, and the reason is the interesting part. What
 was actually chosen in v2 was a **segment duration** of about half a
 second — that is what an interrupt costs to redo, and it is also the
 denominator that prices `--gpu-yield-ms`. v3 made a block 4× faster, so
@@ -195,7 +205,7 @@ leaving the constant at 2 would have quietly cut the segment to 0.13 s and
 turned a 20 ms yield from 4% of the rate into **16%**, and `--gentle`'s
 40 ms into **31%** — a documented price becoming false with no code change
 near it, and no benchmark able to see it (OPTIMIZATION.md rule 7). At 8
-12 blocks the segment is 0.48 s at the v3.3 rate, an interrupt costs about
+14 blocks the segment is 0.50 s at the v3.4 rate, an interrupt costs about
 half a second,
 the checkpoint fsync is under 1% overhead, and the throttles cost what
 their help text says: `--gpu-yield-ms 20` is about 3.7% of the rate and

@@ -19,8 +19,8 @@ since is Max Alekseyev's searched-empty bound `a(16) > 1.4×10¹³`.
 odds model are complete and green; no production sweep has been run. The
 frontier stands exactly where the literature leaves it: `a(15) =
 861,066,640` published, `a(16) > 1.4×10¹³` searched-empty (Alekseyev). At
-the measured production rate the model's median for `a(16)` is **12 seconds**
-of sweeping and the engine's whole enforced range is about **13.5 hours**,
+the measured production rate the model's median for `a(16)` is **10 seconds**
+of sweeping and the engine's whole enforced range is about **12 hours**,
 so anyone with a CUDA GPU can take this the rest of the way — overnight.
 
 ## The problem
@@ -137,8 +137,13 @@ and it pays here for a reason worth naming: that kernel was bound by load
 count, this one by instruction issue, so trading instructions for a load is
 the right way round.)
 
-Measured against the v2 kernel, interleaved in one run with the frozen
-fingerprint checked on every run of both: **6.481×**.
+Generation is amortised the same way. `k = base + r1 + W1·m` with `m = A[t]
++ C[s]`, so for a fixed `t` the quantity `base + r1` does not depend on `s`
+at all — give a block eight second-level residues and one load, one index
+computation and one 64-bit add serve eight candidates instead of one.
+
+Measured against the v2 kernel, interleaved in one run with both engines
+required to agree on every survivor: **7.505×**.
 
 **Every primality decision here is a proof.** The largest value is
 `k·n²+1`, and at the enforced ceiling `K_CEIL = 9×10¹⁸` with `n = 16` that

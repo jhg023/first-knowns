@@ -615,17 +615,61 @@ whoever decides: ×100 on both windows would put them at ~0.2 s each and
 cost about 0.4 s on a `score.py` run, and it is a deliberate re-freeze
 with a log entry, not a silent one.
 
-## Open after v3.2, in rough order of expected value
+---
 
-0. **Generation, which is now the biggest phase and is ISSUE-bound.**
-   The padding ablation is done and it settled the question: doubling
-   `res1x`'s traffic to 1.9 TB/s costs **2.5%** and narrowing it costs
-   0.8%, so the table is not the lever and a narrower entry is not worth
-   the extra load instruction. It is instructions. Two are already taken
-   (the guard hoist and the min-subtract, 1.0155× together); what remains
-   unexamined is the loop *shape* — every block re-reads `res1x` for one
-   second-level residue, and a block that carried several `s` values would
-   amortise the generation arithmetic as well as the load. Unmeasured.
+## v3.4 — one generation setup, eight candidates. KEPT: 1.13×
+
+Cumulative against v2, interleaved in one run on a 24-block window (six
+times the frozen one, because v3 is now fast enough that the frozen window
+is short enough for clock ramp to show): **7.505×**, per-round 7.20–7.68
+over eight of nine rounds with one 5.375 outlier, both engines agreeing on
+the same 1,939 survivors every time. `SCORE ~207,468,780`.
+
+E10 had settled that generation is issue-bound, so the lever is
+instructions — and there is a structural one. `k = base + r1 + W1·m` with
+`m = A[t] + C[s]`, so for a fixed `t` the quantity `base + r1` **does not
+depend on s at all**. Give a block SPB second-level residues instead of
+one, hold its `c2` values in registers, and a single `res1x` load, a single
+`t` computation, a single bounds check and a single 64-bit add serve SPB
+candidates:
+
+    for jj in JPT:
+        e1 = res1x[t]                  <- once per SPB candidates
+        b0 = base + e1.x               <- once per SPB candidates
+        for ss in SPB:
+            k = b0 + W1 * min(m, m - W2)   where m = e1.y + c2[ss]
+
+Measured at **constant candidates per thread**, so the block growing is not
+doing the work: SPB = 1 / 2 / 4 / 8 / 16 gives 1.000 / 1.040 / 1.046 /
+**1.067** / 1.054. Then `tpb` moved back from 128 to **256** — a
+restructure of the block moves the block-size optimum, which is Rule 1's
+corollary for the seventh time here — and the pair together is **1.126×**
+against shipped v3.3 (JPT=4, SPB=8, tpb=256; neighbours 1.049 at tpb=128,
+1.010 at tpb=512, 1.069 at SPB=4).
+
+**And then it cost `SCORE1L` 16%, for the same reason the depths did.**
+A one-level wheel has no second level, so SPB collapses to 1 — and `JPT=4`
+then leaves **four** candidates per thread where production has 32. Swept
+directly on that shape, `JPT=4, tpb=256` measured **0.843×** of its own
+optimum, which is `JPT=32` — that is, 32 candidates per thread, exactly
+what production runs as 4×8. So the shipped constant is `CPT_DEFAULT = 32`
+candidates per thread and `JPT = CPT // SPB` follows. This is the third
+time in v3 that a constant swept on one shape turned out to be the wrong
+*quantity* to carry (compaction depths → survival fractions; queue capacity
+→ analytic occupancy; JPT → candidates per thread), and all three were
+caught by the same thing: a benchmark with four shapes rather than one.
+
+`tpb` is left at production's 256 even though `SCORE1L` prefers 128 by 7%
+at the same candidates-per-thread; there is no principled rule to derive it
+from, production is what the hunt runs, and the price is written down here.
+
+## Open after v3.4, in rough order of expected value
+
+0. **Re-measure the phase split a fifth time.** Generation has had three
+   optimizations now (algebraic CRT, guard + min-subtract, and the SPB
+   amortisation) and the test loop has had four, so the balance is unknown
+   again. Nothing should be chosen before it is re-derived — this project
+   has now had an optimum move under it seven times.
 1. **CRT-combine the tail's first primes too.** The tail was 22.9% before
    round 2 reached deeper, and the same trick has now paid twice (1.19× in
    the prefix, 1.06× in round 2). The tail's early exit means only its

@@ -148,8 +148,23 @@ from sqladder_search import (K_CEIL, Q2_DEFAULT, CpuEngine, killed_residues)
 
 P1_DEFAULT = 23              # first-level wheel: the primes up to here
 P2_DEFAULT = 37              # second-level wheel: the primes in (P1, P2]
-TPB_DEFAULT = 128            # threads per block   (swept on the v3 geometry)
-JPT_DEFAULT = 16             # candidates per thread before compaction
+TPB_DEFAULT = 256            # threads per block   (re-swept every version)
+# Second-level residues per BLOCK.  k = base + r1 + W1*m with
+# m = A[t] + C[s], so for a fixed t the quantity base + r1 does not
+# depend on s at all: one res1x load, one `t` computation, one bounds
+# check and one 64-bit add serve SPB candidates instead of one.
+# Generation is issue-bound (OPTIMIZATION_LOG measurement E10), so
+# that is exactly the currency it is paid in -- 1.126x.  Forced to 1
+# on a one-level wheel, where there is no second level to spread over.
+SPB_DEFAULT = 8
+# CANDIDATES PER THREAD, from which JPT (first-level residues per thread)
+# follows as CPT // SPB.  This is the invariant, and shipping JPT instead
+# is the same mistake the compaction depths taught: with SPB forced to 1
+# on a one-level wheel, a JPT of 4 leaves four candidates per thread where
+# the production shape has 32, and that measured 0.843x of that shape's
+# own optimum.  32 is the optimum on BOTH -- production reaches it as
+# 4x8, a one-level wheel as 32x1.
+CPT_DEFAULT = 32
 # WHERE THE TWO COMPACTION POINTS GO.  They were swept as counts on the
 # production shape -- 6 primes before the first compaction, 16 before
 # the second -- but a count is the wrong thing to carry to another
@@ -327,6 +342,7 @@ _SRC = r"""
 #define W2C  %(w2)du
 #define WC   %(w)dULL
 #define TWOLEVEL %(two)d
+#define SPB  %(spb)d
 #define LITN %(lit)d
 #define K2   %(k2)d
 #define JPT  %(jpt)d
@@ -373,28 +389,12 @@ __device__ __forceinline__ bool tail_survives(
 #define EMIT(K) { const int _p = atomicAdd(nout, 1); \
                   if (_p < cap) out[_p] = (K); }
 
-#if TWOLEVEL
-/* m = A[t] + C[s] reduced mod W2.  Both are already under W2, so the sum
-   is under 2*W2 and one subtraction is enough -- and unsigned wraparound
-   turns that into a min, because if m < W2 then m - W2 wraps to something
-   huge and the min keeps m. */
-#define GEN_K(T) \
-    const uint2 e1 = res1x[T]; \
-    unsigned int m = e1.y + c2; \
-    m = min(m, m - W2C); \
-    const unsigned long long k = base + (unsigned long long)e1.x \
-                               + (unsigned long long)W1C * m;
-#else
-#define GEN_K(T) \
-    const unsigned long long k = base + (unsigned long long)res1x[T].x;
-#endif
-
-/* One candidate, start to finish: generate it, run the CRT-combined
-   prefix, and either queue it or -- if the queue is full -- finish it on
-   the spot.  A macro, because the JPT loop below is written twice: once
-   with a bounds check and once, for every block but the last, without. */
-#define BODY(T) { \
-    GEN_K(T) \
+/* One candidate, start to finish: run the CRT-combined prefix on it and
+   either queue it or -- if the queue is full -- finish it on the spot.  A
+   macro, because the loop nest below is written twice: once with bounds
+   checks and once, for every block but the last, without. */
+#define CAND(K) { \
+    const unsigned long long k = (K); \
     unsigned int kill = 0u; \
 %(prefix_m)s
     if (!kill) { \
@@ -403,8 +403,15 @@ __device__ __forceinline__ bool tail_survives(
         else if (tail_survives(k, np_, LITN, pk, bits)) EMIT(k) \
     } }
 
+/* m = A[t] + C[s] reduced mod W2.  Both are already under W2, so the sum
+   is under 2*W2 and one subtraction is enough -- and unsigned wraparound
+   turns that into a min, because if m < W2 then m - W2 wraps to something
+   huge and the min keeps m. */
+#define M_OF(A, C) min((A) + (C), (A) + (C) - W2C)
+
 extern "C" __global__ void sieve(
-        const unsigned long long base0, const int R1, const int np_,
+        const unsigned long long base0, const int R1, const int R2,
+        const int np_,
         const unsigned int* __restrict__ bits,
         unsigned long long* out, int* nout, const int cap,
         const uint4* __restrict__ pk,
@@ -429,22 +436,51 @@ extern "C" __global__ void sieve(
 
     const unsigned long long base = base0
                                   + WC * (unsigned long long)blockIdx.z;
-#if TWOLEVEL
-    const unsigned int c2 = res2c[blockIdx.y];
-#endif
     const int tbase = blockIdx.x * (blockDim.x * JPT) + threadIdx.x;
-
-    /* The bounds check is false only in the last block of the x grid, so
-       it is hoisted: one test for the whole strided run instead of JPT of
-       them.  Worth 1.007x, which is small and free. */
-    if (tbase + (JPT - 1) * TPB < R1) {
+#if TWOLEVEL
+    /* the block's SPB second-level residues, held in registers and reused
+       by every one of its first-level residues */
+    const int s0 = blockIdx.y * SPB;
+    unsigned int c2[SPB];
 #pragma unroll
-        for (int jj = 0; jj < JPT; ++jj) BODY(tbase + jj * TPB)
-    } else {
+    for (int ss = 0; ss < SPB; ++ss)
+        c2[ss] = res2c[min(s0 + ss, R2 - 1)];
+    const int nss = min(SPB, R2 - s0);
+    const bool full = (tbase + (JPT - 1) * TPB < R1) && (nss == SPB);
+#else
+    const bool full = (tbase + (JPT - 1) * TPB < R1);
+#endif
+
+    /* The bounds checks are false only in the last block of each grid
+       dimension, so they are hoisted: one test for the whole nest instead
+       of one per candidate. */
+    if (full) {
 #pragma unroll
         for (int jj = 0; jj < JPT; ++jj) {
+            const uint2 e1 = res1x[tbase + jj * TPB];
+            const unsigned long long b0 = base + (unsigned long long)e1.x;
+#if TWOLEVEL
+#pragma unroll
+            for (int ss = 0; ss < SPB; ++ss)
+                CAND(b0 + (unsigned long long)W1C * M_OF(e1.y, c2[ss]))
+#else
+            CAND(b0)
+#endif
+        }
+    } else {
+        for (int jj = 0; jj < JPT; ++jj) {
             const int t = tbase + jj * TPB;
-            if (t < R1) BODY(t)
+            if (t < R1) {
+                const uint2 e1 = res1x[t];
+                const unsigned long long b0 = base
+                                            + (unsigned long long)e1.x;
+#if TWOLEVEL
+                for (int ss = 0; ss < nss; ++ss)
+                    CAND(b0 + (unsigned long long)W1C * M_OF(e1.y, c2[ss]))
+#else
+                CAND(b0)
+#endif
+            }
         }
     }
     __syncthreads();
@@ -495,12 +531,11 @@ class GpuEngine:
     """Wheel-generated candidates, Barrett-tested against a bitmap."""
 
     def __init__(self, n, p1=P1_DEFAULT, p2=P2_DEFAULT, q2=Q2_DEFAULT,
-                 tpb=TPB_DEFAULT, jpt=JPT_DEFAULT, lit=None, k2=None,
-                 qcap_sigma=QCAP_SIGMA):
+                 tpb=TPB_DEFAULT, cpt=CPT_DEFAULT, spb=SPB_DEFAULT,
+                 jpt=None, lit=None, k2=None, qcap_sigma=QCAP_SIGMA):
         import cupy as cp
         self.cp = cp
         self.n, self.p1, self.p2, self.q2, self.tpb = n, p1, p2, q2, tpb
-        self.jpt = jpt
 
         self.W1, res1 = wheel(n, p1)
         if self.W1 >= 1 << 32:
@@ -599,7 +634,11 @@ class GpuEngine:
         self.d_out = cp.empty(HIT_CAP, dtype=np.uint64)
         self.d_n = cp.zeros(1, dtype=np.int32)
 
-        self.tile = self.tpb * self.jpt          # candidates per CUDA block
+        # a one-level wheel has no second level to spread a block over,
+        # so the candidates per thread come back from SPB into JPT
+        self.spb = max(1, min(spb, self.R2))
+        self.jpt = jpt if jpt is not None else max(1, cpt // self.spb)
+        self.tile = self.tpb * self.jpt * self.spb   # candidates per block
         self.per_launch = max(1, min(65535, CAND_PER_LAUNCH // self.R))
 
         self.q1cap = _qcap(self.tile, self.surv[self.lit], qcap_sigma)
@@ -614,13 +653,15 @@ class GpuEngine:
         # inside the BODY macro every line has to end in a continuation
         prefix_m = "\n".join(ln + " \\" for ln in prefix_src.split("\n"))
 
-        key = (n, self.W1, self.W2, q2, tpb, jpt, self.lit, self.k2,
+        key = (n, self.W1, self.W2, q2, tpb, self.jpt, self.spb,
+               self.lit, self.k2,
                self.q1cap, self.q2cap, tuple(map(tuple, self.groups)),
                tuple(map(tuple, self.groups2)))
         if key not in _MODCACHE:
             src = _SRC % {"w1": self.W1, "w2": self.W2, "w": self.W,
                           "two": 1 if self.R2 > 1 else 0, "lit": self.lit,
-                          "k2": self.k2, "jpt": jpt, "tpb": tpb,
+                          "k2": self.k2, "jpt": self.jpt, "tpb": tpb,
+                          "spb": self.spb,
                           "unroll": UNROLL, "q1cap": self.q1cap,
                           "q2cap": self.q2cap, "prefix_m": prefix_m,
                           "round2": r2_src}
@@ -657,12 +698,14 @@ class GpuEngine:
                 "wheel argument has an exception zone there and a kill by q "
                 "needs value > q")
         out = []
-        gx = (self.R1 + self.tile - 1) // self.tile
+        gx = (self.R1 + self.tpb * self.jpt - 1) // (self.tpb * self.jpt)
+        gy = (self.R2 + self.spb - 1) // self.spb
         for lo in range(0, j1 - j0, self.per_launch):
             n_l = min(self.per_launch, j1 - j0 - lo)
             self.d_n.fill(0)
-            self.k_sieve((gx, self.R2, n_l), (self.tpb,),
+            self.k_sieve((gx, gy, n_l), (self.tpb,),
                          (np.uint64(self.W * (j0 + lo)), np.int32(self.R1),
+                          np.int32(self.R2),
                           np.int32(len(self.primes)), self.d_bits,
                           self.d_out, self.d_n, np.int32(HIT_CAP),
                           self.d_pk, self.d_res1x, self.d_res2c,
