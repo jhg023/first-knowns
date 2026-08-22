@@ -126,7 +126,7 @@ class CursorRefused(RuntimeError):
     """A cursor file exists that this configuration must not reinterpret."""
 
 
-def refuse_mismatch(path, expect_key, fresh=False, describe=None):
+def refuse_mismatch(path, expect_key, fresh=False, describe=None, accept=()):
     """Raise unless it is SAFE to start: a key mismatch must halt the run.
 
     `load` ignores a checkpoint whose key does not match, which is the right
@@ -164,8 +164,9 @@ def refuse_mismatch(path, expect_key, fresh=False, describe=None):
             f"here once, and it is why saves are fsynced and backed up now. "
             f"The cursor in it is gone: pass --fresh to restart the sweep "
             f"deliberately, or restore a cursor by hand.")
-    if state.get("key") == expect_key:
-        return
+    if state.get("key") == expect_key or state.get("key") in tuple(accept):
+        return                      # `accept`: see load() -- same line, and
+                                    # the migration is warned when it reads
     extra = ""
     if describe:
         try:

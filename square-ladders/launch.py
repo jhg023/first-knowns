@@ -134,6 +134,20 @@ CONFIG_KEY = (f"a089761-{ENGINE_VERSION}-p1{P1}-p2{P2}-q2{Q2}-"
 # 7.2e18 that is already done.  A change to the WHEEL or the SIEVE DEPTH
 # would not belong here -- those move coverage, and the key must break.
 INHERITS = (f"a089761-v3.4-p1{P1}-p2{P2}-q2{Q2}-seg{SEG_BLOCKS}",)
+# Derived from the SAME live constants as CONFIG_KEY, so a wheel or sieve
+# change rebuilds both and the old cursor stops being inherited on its own.
+# That is the whole safety argument, so it is asserted rather than trusted:
+# an entry here may differ from CONFIG_KEY in the VERSION FIELD ONLY.  A
+# hardcoded key that survived a constant change would silently adopt a
+# cursor covering different line, which is the one failure this guard
+# exists to prevent.
+for _old in INHERITS:
+    if (_old.split("-")[2:] != CONFIG_KEY.split("-")[2:]
+            or _old.split("-")[0] != CONFIG_KEY.split("-")[0]):
+        raise ValueError(
+            f"INHERITS entry {_old!r} differs from {CONFIG_KEY!r} in more "
+            f"than the engine version: a cursor may only be inherited "
+            f"across a change that covers the identical k line")
 
 
 # ------------------------------- the taxonomy -------------------------------
@@ -630,7 +644,8 @@ def main(argv=None):
     if args.to:
         args.to = int(args.to)
     checkpoint.refuse_mismatch(CKPT, CONFIG_KEY, fresh=args.fresh,
-                               describe=lambda s: f"k = {s.get('k')}")
+                               describe=lambda s: f"k = {s.get('k')}",
+                               accept=INHERITS)
     if args.fresh and os.path.exists(CKPT):
         os.remove(CKPT)
     return Campaign(args).run()
