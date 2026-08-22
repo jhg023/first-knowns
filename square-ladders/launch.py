@@ -318,7 +318,7 @@ class Campaign:
               # the COVERAGE claim: every k below this is swept.  It is the
               # period boundary, never the live (j, u) cursor, because a
               # part-swept period is not contiguous in k.
-              "k": int(self.boundary) * int(self.eng.W),
+              "k": int(self.swept_k()),
               "census_floor": int(self.census_floor),
               # values classified inside the period still in progress.  A
               # crash must not lose them: they are only narrated once the
@@ -372,18 +372,41 @@ class Campaign:
     # those two apart is the point: one object answers "may I read this",
     # every reader asks it, and nobody keeps a second list.
 
+    def swept_k(self):
+        """The k below which EVERY value has been swept -- the coverage claim.
+
+        It is the period boundary, except while the first period after a
+        re-denomination is still running: the line under `census_floor` was
+        swept by the engine whose cursor this one adopted, and that claim is
+        exactly what was adopted.  Taking the max is not generosity, it is
+        the difference between reporting the frontier and losing 4.3e17 of
+        it -- which is what a plain `boundary * W` did on the v4 -> v5
+        migration, in the heartbeat AND in the checkpoint it writes.
+        """
+        return max(self.boundary * self.eng.W, self.census_floor)
+
     # ------------------------------------------------------------- status
     def status_line(self):
         k = (self.hb.pos() or self.j * self.eng.W)
         rate = self.hb.rate()
-        swept = self.boundary * self.eng.W
-        # Two numbers, because they are two claims.  `k` is where the work
-        # has got to inside the period; `swept` is the line actually
-        # covered, and it only moves when a period closes.
-        parts = [f"k = {k:.6g}"]
-        if k > swept:
-            parts.append(f"swept to {swept:.6g} "
-                         f"(period {100.0 * (k - swept) / self.eng.W:.0f}%)")
+        swept = self.swept_k()
+        # Two numbers, because they are two claims.  `k` is where the WORK
+        # has got to inside the period; `swept` is the line COVERED, and it
+        # only moves when a period closes.  Say which is which, and never
+        # print a `swept` that has gone backwards -- see swept_k().
+        # clamped: the heartbeat position can only lag the boundary
+        # transiently, and a line printed every 30 s must never show
+        # nonsense even then
+        pct = min(100.0, max(0.0,
+                             100.0 * (k - self.boundary * self.eng.W)
+                             / self.eng.W))
+        parts = [f"working at k = {k:.6g} ({pct:.0f}% of the period)"]
+        if k < self.census_floor:
+            # the adopted overlap: ground the previous wheel already cleared
+            parts.append(f"RE-SWEEPING the adopted overlap below "
+                         f"{self.census_floor:.6g} as a cross-check "
+                         f"(not counted; frontier holds)")
+        parts.append(f"swept to {swept:.6g}")
         parts.append(f"filter n = {self.filter_n()}")
         if rate:
             parts.append(f"{rate:.3g} k/s")
@@ -555,7 +578,7 @@ class Campaign:
                     time.sleep(self.args.gpu_yield_ms / 1000.0)
         finally:
             self.hb.stop()
-        log("STAGE", f"reached k = {self.j * self.eng.W:.6g}; "
+        log("STAGE", f"reached k = {self.swept_k():.6g}; "
                      f"{self.discoveries} discoveries, {self.near} near, "
                      f"{sum(self.census.values())} census")
         self.save("end of run")
@@ -568,7 +591,7 @@ class Campaign:
     def _on_interrupt(self):
         self.save("interrupt")
         return (f"checkpoint written at the last segment boundary: "
-                f"k = {self.boundary * self.eng.W:,} ({CKPT})")
+                f"k = {self.swept_k():,} ({CKPT})")
 
 
 # --------------------------------- selftest ---------------------------------
@@ -725,6 +748,44 @@ def _ceiling_drill():
                   "than compute")
 
 
+def _coverage_claim_drill():
+    """The coverage claim must never go BACKWARDS, least of all at a migration.
+
+    v5 computed it as `boundary * W` alone.  Re-denominating the v4 cursor
+    floors 9.6548e18 onto a 6.1489e17 period, so the campaign reported --
+    and CHECKPOINTED -- 9.2233e18, throwing away 4.3e17 of frontier it had
+    just adopted and printing a heartbeat that read like a regression.  The
+    line under `census_floor` was swept by the engine whose cursor this one
+    adopted; that claim is exactly what was adopted, so it holds.
+    """
+    class _E:
+        W = 614889782588491410
+
+    c = object.__new__(Campaign)
+    c.eng = _E()
+    floor = 9654847819890303030
+    c.census_floor = floor
+    seen = []
+    for b in range(15, 19):
+        c.boundary = b
+        seen.append(c.swept_k())
+    if seen[0] != floor:
+        return False, (f"COVERAGE FAIL: inside the adopted overlap the claim "
+                       f"is {seen[0]:,}, below the {floor:,} it adopted")
+    if seen != sorted(seen):
+        return False, f"COVERAGE FAIL: the claim decreased: {seen}"
+    if seen[-1] != 18 * _E.W:
+        return False, "COVERAGE FAIL: the claim stopped tracking the boundary"
+    c.census_floor = 0
+    c.boundary = 15
+    if c.swept_k() != 15 * _E.W:
+        return False, ("COVERAGE FAIL: with no migration the claim is not "
+                       "the period boundary")
+    return True, ("coverage claim ok: never decreases, holds the adopted "
+                  "frontier through the re-swept overlap, and is the plain "
+                  "period boundary when there was no migration")
+
+
 def _stop_on_discovery_drill():
     """--stop-on-discovery stops on a NEW find, not on a loaded one.
 
@@ -777,7 +838,7 @@ def selftest():
     for d in drills.standard(cursor=CURSOR):
         rows.append(d)
     for d in (_ceiling_drill, _canary_hunt, _protocol_drill, _resume_drill,
-              _stop_on_discovery_drill):
+              _coverage_claim_drill, _stop_on_discovery_drill):
         rows.append(d())
     bad = 0
     for ok, msg in rows:
