@@ -61,9 +61,11 @@ each README stays.
    the gate discipline are binding.
 2. **Gates green before and after every change — for the ACTIVE project
    only.** Run `python score.py` in the project being worked on (the
-   ACTIVE row of the top-level README's project table says which; as of
-   2026-08-21 ALL THREE projects are PAUSED, so there is no project whose
-   battery an agent may run unasked); commit only with that
+   ACTIVE row of the top-level README's project table says which — read
+   the table, do not trust a count written here, and if every row is
+   PAUSED then no battery may be run unasked; a project the owner is
+   directing work on in the current session is the exception the last
+   line of this rule already makes); commit only with that
    project's SCORE in the
    message. If a deliberate coverage change alters the benchmark
    fingerprint, update the fingerprint in the same commit and log it in
@@ -151,7 +153,12 @@ each README stays.
    engine's enforced ceiling). Progress is read off rungs — named depths
    from the odds model's predictions, logged `[RUNG]` as passed and shown
    with an ETA in `[STATUS]`. `--to` and `--stop-on-discovery` are the
-   only stops and both are opt-in. If a find changes what should be
+   only stops and both are opt-in. **`--stop-on-discovery` means THIS
+   RUN's discovery, not the campaign's** -- discovery counters are
+   cumulative and restored from the checkpoint, so testing one directly
+   stops a resumed run before it has swept anything; the full rule, and
+   the drill that catches it, are CONVENTIONS.md "Stopping a run". If a
+   find changes what should be
    sieved for, the launcher moves itself (and logs it) rather than
    crawling at a stale setting. A rung retires with its term: the moment
    a term is found, its unreached quartiles leave the ladder and the
@@ -238,6 +245,10 @@ each README stays.
          calling `ignore_in_worker`, and the graceful-shutdown drill in
          the selftest (Ctrl+C: boundary checkpoint, one line, exit 130,
          no traceback even on a second Ctrl+C)
+   - [ ] `--stop-on-discovery` reads THIS RUN's finds, checked where the
+         discovery is confirmed (or against a run-start baseline), and
+         DRILLED ON THE RESUMED CASE at non-zero prior counts -- a fresh
+         campaign cannot see the bug (CONVENTIONS.md "Stopping a run")
    - [ ] host pool sized from the measurement, RAMPED not stamped, and
          the drill proves the workers come up one at a time; the load
          budget followed end to end (CONVENTIONS.md "Sizing a hunt so it

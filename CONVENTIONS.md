@@ -278,6 +278,51 @@ trigger the stop.
 
 ## Stopping a run
 
+A campaign runs indefinitely by default and stops on its own only at the
+end of the last rung (CLAUDE.md rule 5b). There are exactly three ways to
+end one early, and all three are opt-in: Ctrl+C, `--to`, and
+`--stop-on-discovery`. The first is below; the third has a subtlety that
+cost a run, so it is specified here rather than left to each project.
+
+### `--stop-on-discovery` (binding for every project)
+
+**It means: stop once THIS RUN confirms a frontier-extending discovery.**
+Not "once the campaign has ever found something". The distinction is
+invisible on a fresh campaign, where the two readings agree, and decides
+the behaviour of every resumed one.
+
+- **Only a `DISCOVERY` counts** — a first occurrence that extends the
+  frontier. A `NEAR` (one short of the open term) does not stop a run, and
+  census values are not even considered. The taxonomy is in "The discovery
+  protocol" above and is the same taxonomy this flag reads.
+- **Check it where the discovery is CONFIRMED**, inside the branch that
+  handles the find, not by polling a counter somewhere else. Discovery
+  counters are cumulative and are restored from the checkpoint, so any
+  test of the form `if args.stop_on_discovery and self.discoveries:` is
+  true *before the first segment runs* on every campaign that has ever
+  found anything. square-ladders shipped exactly that and a resumed
+  `a(18)` hunt exited on its opening segment having found nothing, with
+  two `a(16)`/`a(17)` finds sitting in the checkpoint. If a launcher must
+  defer the stop to a segment boundary — which is the right thing to do
+  when discoveries are handled inside a segment, so the checkpoint still
+  lands on a boundary — then it compares against a baseline captured at
+  RUN START, or latches a boolean when the find is recorded. What it must
+  never do is read a restored absolute count as if it were a per-run one.
+- **Checkpoint before exiting**, on the same terms as every other stop: at
+  a segment boundary, with the find recorded. The point of the flag is to
+  hand the operator a stopped campaign they can inspect and resume, not to
+  save them a Ctrl+C.
+- **Say why it stopped** in one `[STAGE]` line naming the flag, so the log
+  distinguishes it from a `--to` completion, an interrupt, and a ceiling.
+
+**Drill it on the RESUMED case.** A drill that only exercises a fresh
+campaign cannot see the failure this rule exists to prevent — that is
+precisely why it shipped. Assert both directions at a few non-zero prior
+counts: with N finds already in the checkpoint the run does NOT stop before
+finding something, and DOES stop on its own next find.
+
+### Ctrl+C
+
 **Ctrl+C is a normal exit, not a crash (repo-wide).** These campaigns run
 for days and a human decides when they end, so the interrupt path is a
 *supported* path and gets the same care as any other. Every program in
