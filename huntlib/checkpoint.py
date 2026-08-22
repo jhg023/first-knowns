@@ -73,8 +73,16 @@ def _read(path):
     return state
 
 
-def load(path, expect_key, warn=None):
+def load(path, expect_key, warn=None, accept=()):
     """Return the checkpoint dict, or None if absent/key-mismatched.
+
+    `accept` names OLD keys whose swept line the current configuration
+    inherits -- the case being an engine version that is gated to return
+    the identical survivor stream, where discarding the cursor would
+    re-sweep line already covered for no gain.  A migration is never
+    silent: it is warned, so the log says which cursor was adopted and
+    from what.  Anything that changes COVERAGE (a different wheel, a
+    different sieve depth) must not be listed here; it belongs in the key.
 
     Raises CheckpointCorrupt if the file exists, cannot be parsed, and no
     usable `.bak` stands behind it.
@@ -100,10 +108,17 @@ def load(path, expect_key, warn=None):
                 f"crash during a save can leave a right-sized file of NUL; "
                 f"the cursor in it is gone. Pass --fresh to restart the "
                 f"sweep deliberately, or edit in a known-good cursor.")
-    if state.get("key") != expect_key:
-        if warn:
-            warn(f"checkpoint key mismatch ({state.get('key')}); ignoring it")
-        return None
+    got_key = state.get("key")
+    if got_key != expect_key:
+        if got_key in tuple(accept):
+            if warn:
+                warn(f"checkpoint MIGRATED from {got_key} to {expect_key}: "
+                     f"the configurations cover the same line, so the cursor "
+                     f"carries over instead of re-sweeping it")
+        else:
+            if warn:
+                warn(f"checkpoint key mismatch ({got_key}); ignoring it")
+            return None
     return state
 
 

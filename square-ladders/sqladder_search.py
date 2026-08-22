@@ -19,11 +19,11 @@ independent in three ways that matter:
 If both engines agreed because they shared a subroutine, the parity gate
 would be theatre.  They share the answer and nothing else.
 
-Representation.  Candidates are plain k in u64.  There is no (k, off)
-split to make here -- k is the free variable and the whole search range
-sits inside u64 (K_CEIL below); it is the VALUES k*i^2+1 that grow, and
-they are formed only on the host, in Python integers, for the handful of
-survivors a segment produces.
+Representation.  Candidates are Python integers here and (k, off) pairs on
+the GPU -- k = base + off with base a host-side big int and off < W, so no
+machine word bounds the search (OPTIMIZATION.md 2.7).  This engine needs
+no such care: `%` on a Python int is already arbitrary-precision, which is
+exactly why it is the parity reference for a device that is not.
 
 Primality note, and it is a good one.  huntlib's Miller-Rabin is
 DETERMINISTIC below MR_VALID_BELOW = 3.317e24, and the largest value this
@@ -54,13 +54,31 @@ from sqladder_reference import (K_FLOOR, KNOWN, forbidden_k_residues,
                                 run_length as oracle_run_length, w)
 
 Q2_DEFAULT = 65536           # sieve depth (primes the engines test)
-# Enforced ceiling on k.  Two things fix it and both are gated: k*W stays
-# inside u64 with a factor of two of headroom (which is also what keeps the
-# GPU's Barrett reduction within one conditional subtraction of exact), and
-# every value k*i^2+1 below it stays under huntlib's DETERMINISTIC
-# Miller-Rabin bound (G10).  It sits above a(18)'s modelled Q3, so the
-# planned ladder a(16)-a(18) fits inside one engine version.
-K_CEIL = 9 * 10 ** 18
+
+
+def k_ceil(n):
+    """The enforced ceiling on k, for a filter of n conditions.
+
+    It is the PRIMALITY-TEST VALIDITY BOUND and nothing else, which is what
+    OPTIMIZATION.md 2.7 says to pick: the largest k for which every value
+    k*i^2+1 this project forms stays under huntlib's DETERMINISTIC
+    Miller-Rabin bound, so every primality decision the hunt makes is a
+    proof rather than a probable-prime filter.
+
+    Before v4 this was 9e18 -- a MACHINE WORD, not a mathematical bound,
+    forced by a GPU kernel that carried the absolute k in u64.  v4 carries
+    (k, off) instead (sqladder_gpu), so the word boundary is gone and the
+    ceiling can be what it always should have been.  At n = 18 it is
+    1.02e22, past the modelled P99 for a(18) by two orders of magnitude;
+    the run ends when the term is found, not when the engine gives out.
+
+    EXCLUSIVE, like every other bound in the engines: the largest k that
+    may be swept is k_ceil(n) - 1, and it is that k whose top value
+    (k_ceil(n)-1)*n^2 + 1 has to stay under the MR bound.  G10 pins both
+    halves, because a ceiling derived by formula fails by one or not at
+    all.
+    """
+    return (MR_VALID_BELOW - 2) // (n * n) + 1
 
 
 def killed_residues(q, n):
@@ -87,8 +105,7 @@ class CpuEngine:
 
     # ---------------------------------------------------------------- sieve
     def survivors(self, k_lo, k_hi, block=1 << 22):
-        """Yield uint64 arrays of the k in [k_lo, k_hi) that no prime
-        q <= q2 kills.
+        """Yield lists of the k in [k_lo, k_hi) that no prime q <= q2 kills.
 
         The floor is not decoration.  "q divides the value, so the value is
         composite" needs the value to EXCEED q, and k*i^2+1 >= k+1, so a
@@ -102,8 +119,9 @@ class CpuEngine:
         silence.  The ceiling drill in the selftest calls this without
         consuming it, which is exactly the case that caught it.
         """
-        if k_hi > K_CEIL:
-            raise ValueError(f"k {k_hi} past the enforced ceiling {K_CEIL}")
+        if k_hi > k_ceil(self.n):
+            raise ValueError(f"k {k_hi} past the enforced ceiling "
+                             f"{k_ceil(self.n)}")
         if k_lo <= max(K_FLOOR, self.q2):
             raise ValueError(
                 f"engines refuse to run at or below max(K_FLOOR, q2) = "
@@ -123,12 +141,15 @@ class CpuEngine:
                         alive[first::q] = False
             idx = np.nonzero(alive)[0]
             if idx.size:
-                yield (k0 + idx).astype(np.uint64)
+                # Python ints, not u64: the sieve's own arithmetic is on
+                # OFFSETS into the block and stays small, but the answers
+                # are absolute k and this engine is the parity reference
+                # for a range that runs past 2^64.
+                yield [k0 + int(i) for i in idx]
             k0 = k1
 
     def survives(self, k):
-        """The same decision, one candidate at a time, in Python ints --
-        exact at any k, past the segmented sieve's u64 output ceiling."""
+        """The same decision, one candidate at a time, in Python ints."""
         k = int(k)
         return all(k % q not in s for q, s in self._sets().items())
 
@@ -153,7 +174,7 @@ class CpuEngine:
         cap = cap or self.n + 8
         out = []
         for chunk in self.survivors(k_lo, k_hi):
-            for k in chunk.tolist():
+            for k in chunk:
                 r = self.run_length(int(k), cap=cap)
                 if r >= self.n:
                     out.append((int(k), r))
@@ -198,7 +219,7 @@ def g4_cpu_matches_oracle():
         eng = CpuEngine(n, q2=q2)
         got = set()
         for chunk in eng.survivors(k_lo, k_lo + span):
-            got.update(int(x) for x in chunk.tolist())
+            got.update(int(x) for x in chunk)
         smalls = list(primerange(2, q2 + 1))
         # The oracle side works on the VALUES k*i^2+1 and asks each prime
         # directly, which is the definition; the engine side never forms a
@@ -256,30 +277,34 @@ def g10_values_stay_inside_the_mr_bound():
     """Numeric hygiene: state the bound and pin where it is crossed.
 
     The deterministic Miller-Rabin bound is a property of the VALUES, not
-    of k.  Here the largest value is k*n^2+1, and the enforced ceiling is
-    low enough that the WHOLE engine range stays inside the bound -- so
-    every primality decision this project can possibly make is a proof,
-    not a probable-prime filter.  That is a claim about K_CEIL and n
-    together, so it is pinned here: raise either and this gate fails and
-    the claim has to be re-argued (CONVENTIONS.md "Numeric hygiene").
+    of k.  Here the largest value is k*n^2+1, and since v4 the ceiling IS
+    that bound rearranged -- so the claim to check is no longer "the cap
+    happens to sit low enough" but "the cap is exactly as high as the proof
+    allows, and not one k higher".  Both halves are gated, per n, because
+    a ceiling derived by formula fails by being off by one, not by being
+    wildly wrong (CONVENTIONS.md "Numeric hygiene").
     """
-    n = 16
-    if K_CEIL * n * n + 1 >= MR_VALID_BELOW:
-        return False, ("G10 FAIL: k*%d^2+1 at K_CEIL = %.3g leaves the "
-                       "deterministic MR zone -- the engine may no longer "
-                       "claim proofs" % (n, K_CEIL))
-    n_max = 1
-    while K_CEIL * (n_max + 1) ** 2 + 1 < MR_VALID_BELOW:
-        n_max += 1
+    for n in range(1, 41):
+        c = k_ceil(n)
+        if (c - 1) * n * n + 1 >= MR_VALID_BELOW:
+            return False, ("G10 FAIL: the largest sweepable k for n = %d is "
+                           "%.4g and its value k*%d^2+1 leaves the "
+                           "deterministic MR zone -- the engine may no "
+                           "longer claim proofs" % (n, c - 1, n))
+        if c * n * n + 1 < MR_VALID_BELOW:
+            return False, ("G10 FAIL: the ceiling for n = %d is %.4g but "
+                           "k = %.4g would still be deterministic -- the cap "
+                           "is not the bound, so it is the wrong cap"
+                           % (n, c, c))
     if not mr_is_prime(KNOWN[11] * 15 * 15 + 1):
         return False, "G10 FAIL: the a(11) champion's 15th value is not prime"
     if mr_is_prime(KNOWN[11] * 16 * 16 + 1):
         return False, "G10 FAIL: the wall value tests prime"
-    return True, ("G10 ok: at K_CEIL = %.3g the largest value k*%d^2+1 is "
-                  "%.3g, under huntlib's deterministic MR bound (3.317e24) -- "
-                  "the ENTIRE enforced range is deterministic, for every "
-                  "filter up to n = %d, so every primality decision here is a "
-                  "PROOF" % (K_CEIL, n, K_CEIL * n * n, n_max))
+    return True, ("G10 ok: the ceiling IS the deterministic MR bound "
+                  "(3.317e24) rearranged, tight to one k, for every filter "
+                  "n = 1..40 -- at n = 18 that is k < %.4g, so every "
+                  "primality decision anywhere in the enforced range is a "
+                  "PROOF" % k_ceil(18))
 
 
 GATES = [g3_table_matches_divisibility, g4_cpu_matches_oracle,

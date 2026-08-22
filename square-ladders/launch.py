@@ -25,7 +25,9 @@ bound independently before it reaches new ground, and the least-claim rests
 on our own coverage rather than on a citation.
 
 INDEFINITE BY DEFAULT (CONVENTIONS.md).  With no arguments this runs until
-the engine's enforced ceiling (K_CEIL = 9e18), which is the last rung.
+the engine's enforced ceiling -- since v4 the PRIMALITY-TEST validity
+bound k_ceil(n) (1.02e22 at n = 18), not a machine word -- which is the
+last rung.
 `--to` and `--stop-on-discovery` are the only stops and both are opt-in.
 Progress is read off RUNGS taken from the odds model's quantiles, logged as
 they are passed and shown with an ETA in every [STATUS].  A rung retires
@@ -120,10 +122,18 @@ Q2 = cpu.Q2_DEFAULT               # sieve depth
 SEG_BLOCKS = 14
 K_START = 10 ** 6                 # above max(K_FLOOR, Q2); see the docstring
 CENSUS_FLOOR = 8                  # runs shorter than this are not even counted
-ENGINE_VERSION = "v3.4"
+ENGINE_VERSION = "v4"
 
 CONFIG_KEY = (f"a089761-{ENGINE_VERSION}-p1{P1}-p2{P2}-q2{Q2}-"
               f"seg{SEG_BLOCKS}")
+# Engine versions whose swept line this one inherits.  v4 changed the
+# REPRESENTATION (k as (base, off) instead of a u64) and nothing about
+# which k are covered: same wheel, same sieve depth, and G9/G15 plus the
+# four frozen benchmark fingerprints pin the survivor stream as identical.
+# So the a(16)/a(17) campaign's cursor carries over rather than re-sweeping
+# 7.2e18 that is already done.  A change to the WHEEL or the SIEVE DEPTH
+# would not belong here -- those move coverage, and the key must break.
+INHERITS = (f"a089761-v3.4-p1{P1}-p2{P2}-q2{Q2}-seg{SEG_BLOCKS}",)
 
 
 # ------------------------------- the taxonomy -------------------------------
@@ -206,10 +216,12 @@ class Campaign:
 
     # --------------------------------------------------------------- rungs
     def ladder(self):
+        ceil = cpu.k_ceil(self.filter_n())
         preds = model.predictions(self.frontier(), self.frontier_k(),
-                                  n_ahead=3, ceiling=cpu.K_CEIL)
-        return Ladder.from_predictions(preds, ceiling=cpu.K_CEIL,
-                                       ceiling_label="engine ceiling 9e18")
+                                  n_ahead=3, ceiling=ceil)
+        return Ladder.from_predictions(
+            preds, ceiling=ceil,
+            ceiling_label=f"engine ceiling {ceil:.3g}")
 
     def next_rung(self, k):
         live = self.ladder().live(self.frontier())
@@ -244,7 +256,8 @@ class Campaign:
         return st
 
     def load(self):
-        st = checkpoint.load(CKPT, CONFIG_KEY, warn=lambda m: log("STAGE", m))
+        st = checkpoint.load(CKPT, CONFIG_KEY, warn=lambda m: log("STAGE", m),
+                             accept=INHERITS)
         if not st:
             return False
         self.j = int(st["j"])
@@ -356,7 +369,7 @@ class Campaign:
 
     # ---------------------------------------------------------------- loop
     def run(self):
-        target = self.args.to or cpu.K_CEIL
+        target = self.args.to or cpu.k_ceil(self.filter_n())
         log("STAGE", f"campaign {CONFIG_KEY}")
         log("STAGE", device_report(self.eng.bytes_held()))
         log("STAGE", f"sweeping the k line to {target:.4g}; filter n = "
@@ -375,12 +388,12 @@ class Campaign:
         try:
             while self.j * self.eng.W < target:
                 j1 = min(self.j + SEG_BLOCKS, target // self.eng.W + 1)
-                if j1 * self.eng.W > cpu.K_CEIL:
+                if j1 * self.eng.W > cpu.k_ceil(self.filter_n()):
                     break
                 self.hb.doing(f"sieving k in [{self.j * self.eng.W:.4g}, "
                               f"{j1 * self.eng.W:.4g})")
                 surv = self.eng.survivors_j(self.j, j1)
-                for k in surv.tolist():
+                for k in surv:
                     r = self.run_length(int(k),
                                         cap=self.filter_n() + 6)
                     self.handle(int(k), r)
@@ -438,7 +451,7 @@ def _canary_hunt():
         eng = gpu.GpuEngine(n, p1=13, p2=None, q2=4096)
         surv = eng.survivors_k(30031, ref.KNOWN[n] + 1)
         ceng = cpu.CpuEngine(n, q2=4096)
-        hits = [int(k) for k in surv.tolist()
+        hits = [int(k) for k in surv
                 if ceng.run_length(int(k), cap=n) >= n]
         if not hits or min(hits) != ref.KNOWN[n]:
             return False, (f"CANARY FAIL: filter n={n} found "
@@ -486,13 +499,13 @@ def _resume_drill():
         whole = eng.survivors_j(j0, j0 + span)
         a = eng.survivors_j(j0, j0 + cut)
         b = eng.survivors_j(j0 + cut, j0 + span)
-        split = _np.concatenate([a, b])
-        if whole.size == 0:
+        split = a + b
+        if not whole:
             return False, f"RESUME FAIL: {lab} window is empty -- vacuous"
-        if not _np.array_equal(whole, split):
-            return False, (f"RESUME FAIL: {lab}: {whole.size} whole vs "
-                           f"{split.size} split")
-        total += int(whole.size)
+        if whole != split:
+            return False, (f"RESUME FAIL: {lab}: {len(whole)} whole vs "
+                           f"{len(split)} split")
+        total += len(whole)
     return True, (f"resume ok: split sweep == unsplit sweep on both kernels "
                   f"({total} survivors across the seams), including the "
                   f"campaign's own (23,37] wheel")
@@ -503,11 +516,12 @@ def _ceiling_drill():
     eng = gpu.GpuEngine(16, p1=23, p2=P2, q2=4096)
     checks = []
     try:
-        eng.survivors_j(cpu.K_CEIL // eng.W, cpu.K_CEIL // eng.W + 10)
+        c = cpu.k_ceil(16)
+        eng.survivors_j(c // eng.W, c // eng.W + 10)
     except ValueError:
-        checks.append("K_CEIL")
+        checks.append("k_ceil")
     else:
-        return False, "CEILING FAIL: K_CEIL was not enforced"
+        return False, "CEILING FAIL: k_ceil was not enforced"
     try:
         gpu.GpuEngine(16, p1=29, p2=None, q2=4096)
     except ValueError:
@@ -564,7 +578,8 @@ def selftest():
 # ---------------------------------- status ----------------------------------
 
 def _status():
-    st = checkpoint.load(CKPT, CONFIG_KEY, warn=lambda m: log("STAGE", m))
+    st = checkpoint.load(CKPT, CONFIG_KEY, warn=lambda m: log("STAGE", m),
+                         accept=INHERITS)
     if not st:
         log("STATUS", "no checkpoint for this configuration yet")
         return 0

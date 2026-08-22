@@ -84,10 +84,19 @@ each README stays.
 3. **Never let the two engine implementations converge.** The CPU engine
    uses plain `%`; the GPU engine uses Barrett arithmetic. One must
    never call the other; parity gates depend on their independence.
-   Superseded engine versions stay in the tree as parity references —
-   they are how "the fast engine returns the identical stream" remains a
-   checkable claim — but they must never be reachable from the campaign.
-   One engine hunts; the others only ever appear in gates.
+   One engine hunts; the CPU engine only ever appears in gates.
+
+   **Superseded engine versions do NOT stay in the tree.** They are in
+   git history, which is where an engine nobody runs belongs; carrying a
+   second copy in the working tree bought archaeology, not safety. What
+   makes "the fast engine returns the identical stream" a checkable claim
+   is the pair that survives an engine change: the CPU parity gate (an
+   independent implementation, plain `%` over big ints, still binding
+   above) and the FROZEN BENCHMARK FINGERPRINTS in `score.py` — a
+   survivor count plus an xor, pinned to a constant rather than to a
+   second engine, so they check a new engine against every engine that
+   ever reproduced them. A new engine version reproduces the fingerprints
+   or it does not ship.
 3a. **Before optimizing anything, read `OPTIMIZATION.md`.** Throughput
    sets the frontier, so every project here needs it; that file holds the
    process and the catalogue of what has actually paid, with measured

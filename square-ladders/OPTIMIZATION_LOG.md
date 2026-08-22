@@ -748,3 +748,108 @@ from, production is what the hunt runs, and the price is written down here.
    will need revisiting the next time the engine gets materially faster:
    at v3.1's rate the segment is 0.44 s, so a 20 ms yield is 4.6% rather
    than the 3.9% it was when the constant was chosen.
+
+---
+
+## v4 — (k, off): the ceiling stops being a machine word, 2026-08-22
+
+`SCORE 203,738,256`, 25 gates green (G15 is new).
+
+**This is not a speedup and was never going to be.** It is the entry that
+OPTIMIZATION.md 2.7 exists to force, arrived at the way that section says
+it usually is — too late, with a campaign already parked against the wall.
+
+### What went wrong, stated plainly
+
+v3.4 carried the absolute `k` in a u64 and reduced *it*. The
+one-conditional-subtraction Barrett theorem needs the reduced quantity
+under `2⁶³`, so the engine enforced `K_CEIL = 9×10¹⁸` — and that number
+was a **machine word wearing the costume of a mathematical bound**. The
+docstring, the gate and the ceiling drill all faithfully enforced it; none
+of them asked whether it was the right quantity to bound. It is exactly the
+mistake 2.7 describes, and this project made it after that section was
+written.
+
+The bill came due when the a(16)/a(17) campaign stopped at
+`k = 7.246×10¹⁸` with `a(18)` still open. Priced against the live odds
+model, conditioned on `a(18) > 7.246×10¹⁸`:
+
+| reachable ceiling | needs | P(find a(18)) |
+|---|---|---|
+| `9×10¹⁸` (v3.4, as shipped) | nothing | **19.1%** |
+| `2⁶³ = 9.223×10¹⁸` | a one-line constant edit | 21.1% |
+| `2⁶⁴ = 1.845×10¹⁹` | two-subtract Barrett, a real engine change | 68.5% |
+| `1.02×10²²` (v4) | the (k, off) representation | **~100%** |
+
+The middle row is the trap. `a(18)`'s modelled **Q3 is 2.11×10¹⁹ — already
+past 2⁶⁴**, so no choice of machine word is enough, and an engine built to
+reach `2⁶⁴` would have been a second engine at the word boundary that then
+needed a third. Priced and **REJECTED** for exactly that reason.
+
+### The mechanism, and why it is free
+
+`k = base + off`: `base` is the launch's absolute floor, a Python int on
+the host that never reaches the device; `off < W·per_launch` is what the
+kernel reduces. Since `k mod q = (off + base) mod q`, the base contribution
+is folded **once per launch** into the two things each test already reads,
+never added per candidate:
+
+* per prime, the bitmap stores the killed pattern **twice** (2q bits) and
+  the uint4's `boff` slot carries `2q-block base + base mod q`; because
+  `off mod q < q`, the sum indexes the right copy with no reduction;
+* per CRT group, the base arrives as a kernel **scalar parameter** — a
+  rotated u64 mask for an inline group, a shifted table index for a table
+  group. The constant bank, not a load.
+
+So the issue-bound test loop issues **exactly what v3.4 issued**. That was
+the design constraint: this kernel is bound by instruction ISSUE (v3's
+finding, worth 6.5×), so a representation costing even one instruction per
+test would have shown up as several percent.
+
+**Measured, interleaved, twelve rounds alternating which engine goes
+first, fingerprint `303/999990048677220` checked on every run of both:**
+v3.4 median 140.7 ms, v4 143.2 ms — **0.982×, a 1.8% fee.** It is not
+zero because the doubled bitmap is 50.6 MB against 25.3 MB and the L2 feels
+it. 1.8% of throughput for 1,138× of reachable range.
+
+The `2⁶³` bound did not disappear, it moved onto a quantity the engine
+CHOOSES rather than one the mathematics hands it: `W·per_launch + q2 <
+REDUCE_MAX`, with `per_launch` halved until it holds. A ceiling on the
+wheel and the batching is a ceiling one can always pay off.
+
+### What the ceiling is now
+
+`k_ceil(n) = (MR_VALID_BELOW - 2) // n² + 1` — the **primality-proof
+validity bound and nothing else**, which is what 2.7 says to pick. At
+n = 18 that is `1.024×10²²`. G10 was rewritten to pin both halves per n:
+the largest sweepable `k` still proves, and one more `k` would not. A
+ceiling derived by formula fails by one or not at all, and the first
+version of this change was indeed off by one (an inclusive/exclusive slip
+caught by G10 at n = 1).
+
+### Things worth not re-deriving
+
+* **Doubling the CRT group tables is free; doubling the main bitmap is
+  not.** The group tables are 1–2 KB and the L1 cliff LIT_GROUP_MAX guards
+  is at ~76 KB with the sweep still flat at 33 KB, so there was no need to
+  halve LIT_GROUP_MAX to pay for the second copy — that was considered and
+  is unnecessary. The 25.3 → 50.6 MB main bitmap is where the whole 1.8%
+  lives.
+* **Rotating the group tables on the host per launch instead of passing
+  scalars** was costed and **REJECTED**: a bit-level roll of ~1.8 MB per
+  launch at ~28 launches/s lands in the same millisecond range as the
+  launch itself, against zero for a scalar parameter.
+* **Loading `base mod q` as a separate u32 array** and adding it in `TEST`
+  was **REJECTED**: it puts a load and an add back into the hot loop that
+  v3 spent 6.5× removing. The doubled bitmap buys the same result with
+  memory, which is the resource this kernel is not short of.
+* `base mod q` is computed as `(W mod q)·(j mod q) mod q`, vectorised over
+  6,542 primes — both factors under 2¹⁶, so the product is exact in u64
+  **for any j whatsoever**. Not `(W·j) mod q`, which overflows on a narrow
+  wheel at large j.
+* The checkpoint **migrates** rather than restarting: v4 covers the same
+  line as v3.4 by the same wheel and sieve depth, and the four frozen
+  fingerprints plus G9/G15 pin the stream as identical, so the a(16)/a(17)
+  cursor carries over. `huntlib.checkpoint.load` grew an `accept` list for
+  this, and it warns on every migration. A change to the WHEEL or the
+  SIEVE DEPTH must never be listed there — those move coverage.

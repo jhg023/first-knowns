@@ -35,9 +35,12 @@ def fingerprint_benchmark(work_fn, span, count_expect, checksum_expect,
                           runs=3, sync=None):
     """Median rate of work_fn() over `runs`, with fingerprint enforcement.
 
-    work_fn() must return a numpy array of results (survivors); the count
-    and xor-checksum are compared against the frozen expectations.
-    Returns (rate_items_per_s, ok).
+    work_fn() must return a SEQUENCE of results (survivors) -- a numpy
+    array, or a list of Python ints for an engine whose answers have
+    outgrown u64; the count and xor-checksum are compared against the
+    frozen expectations.  The two agree wherever both are possible, so a
+    fingerprint frozen against an array still pins an engine that has since
+    moved to big ints.  Returns (rate_items_per_s, ok).
     """
     rates, out = [], None
     for _ in range(runs):
@@ -46,8 +49,14 @@ def fingerprint_benchmark(work_fn, span, count_expect, checksum_expect,
         if sync:                          # the wall clock's resolution
             sync()
         rates.append(span / max(time.perf_counter() - t0, 1e-9))
-    count = int(out.size)
-    checksum = int(np.bitwise_xor.reduce(out)) if out.size else 0
+    if isinstance(out, np.ndarray):
+        count = int(out.size)
+        checksum = int(np.bitwise_xor.reduce(out)) if out.size else 0
+    else:
+        count = len(out)
+        checksum = 0
+        for v in out:
+            checksum ^= int(v)
     ok = (count == count_expect and
           (checksum_expect is None or checksum == checksum_expect))
     if not ok:

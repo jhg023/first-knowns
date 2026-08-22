@@ -46,6 +46,7 @@ helps one and hurts the other is visible instead of averaged away.
 | 2026-08-21 | **v3.2, CRT-combined prefix** | **162,963,133** | 36,251,384 | 3,123,895 | 17,523,227 | **5.735×** against v2, **1.19×** against v3.1 |
 | 2026-08-21 | **v3.3, combined round 2 + derived depths** | **184,801,999** | 36,289,650 | *see below* | *see below* | **6.481×** against v2, **1.13×** against v3.2 |
 | 2026-08-21 | **v3.4, generation amortised over SPB residues** | **207,468,780** | 38,259,663 | *see below* | *see below* | **7.505×** against v2, **1.13×** against v3.3 |
+| 2026-08-22 | **v4, (k, off): the ceiling stops being a machine word** | **203,738,256 – 211,898,189** | 36,299,436 | *see below* | *see below* | **0.982×** against v3.4 interleaved — a 1.8% fee for a 1,138× larger range |
 
 The v3 rows' claim is the ratio, not the number. v2's kernel was compiled
 verbatim from the source it had at commit time and run back to back with
@@ -57,6 +58,39 @@ v2 1038.1 ms / v3.2 181.0 ms, **5.735×**, per-round 5.691–5.792
 with one 4.949 outlier; then v2 1020.6 ms / v3.3 157.5 ms, **6.481×**,
 per-round 6.170–6.583; and
 v3.4 at **7.505×**, per-round 7.20–7.68 over eight of nine rounds.
+
+v4 is the one row that is not a speedup and is not meant to be. It changes
+the REPRESENTATION, not the work: the same twelve rounds, alternating which
+engine goes first, fingerprint `303/999990048677220` checked on every run
+of both, v3.4 median 140.7 ms against v4 143.2 ms — **0.982×**, a 1.8%
+fee — and that ratio, not either absolute number, is the claim: two
+`score.py` runs of v4 minutes apart read 203.7M and 211.9M, a 4% ambient
+swing that is larger than the effect being measured. The instruction count
+in the test loop is unchanged by construction
+(the launch base is folded into the bitmap offset and the group scalars on
+the host, not added per candidate); what is paid for is L2 pressure from a
+bitmap stored twice, 50.6 MB against 25.3 MB. In exchange the enforced
+ceiling stops being `2⁶³` and becomes the primality-proof bound,
+`1.02×10²²` at n = 18 — **1,138× more line**, and the difference between a
+hunt that can find `a(18)` and one that provably cannot.
+
+## What the campaign costs at this rate
+
+At the v4 production rate of **2.04×10¹⁴ k/s**, measured end-to-end over
+the a(16)/a(17) campaign at **1.49×10¹⁴ k/s** (the campaign rate includes
+classifying and verifying survivors, and it is the honest number to plan
+with) — against the odds model's quantiles, conditioned on the live
+frontier `a(18) > 7.25×10¹⁸` where the v3.4 sweep stopped:
+
+| target | Q1 | median | Q3 | P90 | P99 |
+|--------|----|--------|----|-----|-----|
+| a(18), from the v3.4 stopping point | 4.5 h | **11.7 h** | 25.8 h | 48 h | 5.0 d |
+
+The v3.4 ceiling `9×10¹⁸` sat 19.1% of the way into that distribution:
+sweeping every k the old engine could address left **four chances in five**
+of not finding `a(18)` at all. `2⁶⁴` — the most any u64 engine could ever
+reach — sits at 68.5%, which is why the fix was the representation and not
+a wider word (OPTIMIZATION.md 2.7).
 
 The v3.4 comparison was run on a **24-block** window rather than the
 frozen 4-block one. At v3.4's rate the frozen `SCORE` window is about
@@ -155,23 +189,13 @@ A 64× deeper sieve costs under 2% and buys three orders of magnitude fewer
 survivors for the host. The campaign runs 65536 because the host side is
 then unmeasurably small; there is no reason to go shallower.
 
-## What the campaign costs at this rate
-
-At the v3.4 production rate of **2.07×10¹⁴ k/s** (the reproducible `score.py`
-cluster 205.2 / 207.5 / 209.3) — against the odds model's quantiles:
-
-| target | Q1 | median | Q3 | P90 |
-|--------|----|--------|----|-----|
-| a(16) | 2.6 s | **10 s** | 33 s | 1.3 min |
-| a(17) | 1.0 min | **4.7 min** | 15 min | 36 min |
-| a(18) | 36 min | **2.7 h** | 8.5 h | *past the ceiling* |
-
-The engine's whole enforced range — everything below `K_CEIL = 9×10¹⁸` — is
-**12 hours** of sweeping, down from 3.6 days under v2. That is the useful
-way to state the budget here: this is not a hunt that needs a stopping
-rule, it is a hunt that can be run to its own ceiling **overnight**, at
-which point `a(16)`, `a(17)` and `a(18)` are either found or bounded below
-`9×10¹⁸`.
+What that budget looked like BEFORE the campaign ran, at the v3.4 rate, is
+kept here because it is the prediction the run then tested: `a(16)` Q1
+2.6 s / median 10 s / Q3 33 s, `a(17)` 1.0 min / 4.7 min / 15 min,
+`a(18)` 36 min / 2.7 h / 8.5 h with P90 already past the ceiling. The
+campaign found `a(16)` and `a(17)` and did not find `a(18)` in 13.5 hours,
+which is the model behaving: `a(18)` was always the term whose tail ran off
+the end of what v3.4 could address.
 
 That last sentence is also the reason the `(23, 43]` wheel is not
 obviously worth having any more, even though it models at 2.10×: see

@@ -12,16 +12,28 @@ are published, but the last **five of them are the same integer**: Donovan
 Johnson searched for `a(11)` in 2008, found `k = 861,066,640`, and that one
 value cleared `i = 12, 13, 14, 15` for free. The run stops at a single
 composite, `861066640·16² + 1 = 220433059841 = 47 · 149 · 31476947`, and
-that lone factorization is the entire reason `a(16)` is open. The only work
-since is Max Alekseyev's searched-empty bound `a(16) > 1.4×10¹³`.
+that lone factorization is the entire reason `a(16)` stayed open for
+eighteen years. The only work since was Max Alekseyev's searched-empty
+bound `a(16) > 1.4×10¹³` — until this project found `a(16)` and `a(17)`.
 
-**Status: PAUSED — open to others.** The engine, the gate battery and the
-odds model are complete and green; no production sweep has been run. The
-frontier stands exactly where the literature leaves it: `a(15) =
-861,066,640` published, `a(16) > 1.4×10¹³` searched-empty (Alekseyev). At
-the measured production rate the model's median for `a(16)` is **10 seconds**
-of sweeping and the engine's whole enforced range is about **12 hours**,
-so anyone with a CUDA GPU can take this the rest of the way — overnight.
+**Status: PAUSED — open to others.** `a(16) = 15,737,271,507,027,492` and
+`a(17) = 125,811,821,444,034,258` were found and verified on 2026-08-21/22
+— the first terms of this sequence anyone has found since 2008, and the
+first break in the five-term plateau. Both are **proved**, not
+probable-prime ([RESULTS.md](RESULTS.md), evidence in
+[`evidence/`](evidence/)).
+
+`a(18)` is open and is the next target. The campaign paused at
+`k = 7.25×10¹⁸` after 13.5 hours — not on a find and not on a decision, but
+because the v3.4 engine had run out of addressable range at `9×10¹⁸`, a
+**machine word** rather than any bound of the problem. Conditioned on that
+cursor the model puts `a(18)`'s Q3 at `2.11×10¹⁹`, already past `2⁶⁴`, so
+no width of integer would have been enough. The engine is now **v4**, which
+carries candidates as `(k, off)` and reduces the offset instead of the
+absolute `k` — its ceiling is the primality-proof bound `1.02×10²²`, a
+1,138× larger range for a measured 1.8% of throughput. From the current
+cursor `a(18)` is about **12 hours** to its median and 5 days to P99, so
+anyone with a CUDA GPU can take this the rest of the way.
 
 ## The problem
 
@@ -35,9 +47,11 @@ and why the published list plateaus.
 |---|---|
 | Sequence | [A089761](https://oeis.org/A089761) (`hard`, `more`, `nonn`) |
 | Published terms | `a(1)..a(15)` = 1, 1, 4, 22, 58, 58, 58, 54972, 68112, 4748632, 861066640 ×5 |
-| Last *searched* term | `a(11)`, Donovan Johnson, Sep 27 2008 |
-| Frontier | `a(16) > 1.4×10¹³` — Max Alekseyev, in the entry by 2017 |
+| Last *searched* term, before this | `a(11)`, Donovan Johnson, Sep 27 2008 |
+| Frontier this project inherited | `a(16) > 1.4×10¹³` — Max Alekseyev, in the entry by 2017 |
 | Last edit of any kind | revision #14, Aug 14 2017 |
+| **Found here** | `a(16) = 15,737,271,507,027,492`, `a(17) = 125,811,821,444,034,258` |
+| **Open, and next** | `a(18)`, searched-empty below `7.25×10¹⁸` |
 | Upper bound | **none published, at any open n** |
 
 Why it is open rather than merely unfinished: the density of qualifying `k`
@@ -145,13 +159,15 @@ computation and one 64-bit add serve eight candidates instead of one.
 Measured against the v2 kernel, interleaved in one run with both engines
 required to agree on every survivor: **7.505×**.
 
-**Every primality decision here is a proof.** The largest value is
-`k·n²+1`, and at the enforced ceiling `K_CEIL = 9×10¹⁸` with `n = 16` that
-is `2.3×10²¹` — under huntlib's deterministic Miller-Rabin bound of
-`3.317×10²⁴`. The whole enforced range is deterministic, for every filter
-up to `n = 607` (gate G10). Unlike `dickson-ladders`, whose values pass
-that bound before `a(9)`, this project never needs a probable-prime
-qualifier.
+**Every primality decision here is a proof, by construction.** The
+largest value is `k·n²+1`, and since v4 the enforced ceiling *is* huntlib's
+deterministic Miller-Rabin bound rearranged —
+`k_ceil(n) = (3.317×10²⁴ - 2)/n² + 1`, which is `1.02×10²²` at `n = 18`.
+No `k` the engine can address has a value outside the deterministic zone,
+for any filter, and gate G10 pins that tight to a single `k` at every `n`:
+the largest sweepable `k` still proves, and one more would not. Unlike
+`dickson-ladders`, whose values pass that bound before `a(9)`, this project
+never needs a probable-prime qualifier.
 
 ## The odds model
 
@@ -168,6 +184,13 @@ built from. Stated **before** any sweep (`model_results.json`):
 Quantiles for `a(16)` are measured from Alekseyev's bound, not from
 `a(15)`: crediting the model for ground somebody else already cleared would
 make every prediction optimistic.
+
+**How it did.** `a(16)` came in at `1.57×10¹⁶` — model quantile **0.899**,
+right at the stated P90. `a(17)` at `1.26×10¹⁷` — quantile **0.530**,
+essentially on the median. Two terms is far too few to score a model with
+and no optimism factor is claimed from them; recorded here because the
+quantile a find lands at is the only honest way to keep score, and it is
+cheaper to write it down now than to reconstruct it later.
 
 **Validation (gate G11).** If the modelled intensity is right, its integral
 up to the first occurrence is `Exp(1)` — mean 1. On the independently
@@ -236,6 +259,6 @@ here is built to. Specific to this one:
   accepted with a factor witness for its stopper; a fake run-16 claim on
   the same `k`, and `a(10)`'s `k` mislabelled as a run-15, are both
   rejected.
-- **Ceilings raise rather than compute** — `K_CEIL`, the u32 wheel modulus,
+- **Ceilings raise rather than compute** — `k_ceil(n)`, the u32 wheel modulus,
   `RES_MAX`, the `gridDim.y` cap on the second-level wheel, and the
   `max(K_FLOOR, q2)` floor, all drilled.

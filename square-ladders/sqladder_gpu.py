@@ -44,15 +44,18 @@ they multiply.  v3 takes both:
     < 2^17, and arithmetic mod 2^32 is exact for a value that small, so
     the 64-bit multiply, subtract and conditional subtractions all become
     32-bit.  ONE conditional subtraction suffices, and that is a theorem
-    rather than a hope: with M = floor(2^64/q) and k < 2^63,
+    rather than a hope: with M = floor(2^64/q) and x < 2^63,
 
-        k*M/2^64 = k/q - k*s/(q*2^64)   where s = 2^64 mod q < q,
+        x*M/2^64 = x/q - x*s/(q*2^64)   where s = 2^64 mod q < q,
 
-    so the error term is under 1/2, qhat > k/q - 3/2, and qhat is
-    therefore floor(k/q) or one less.  K_CEIL = 9e18 < 2^63 = 9.223e18 is
-    what makes it true, and _CHECK_ONE_SUBTRACT below enforces it.
-    (huntlib's shared snippet keeps two subtractions because it does not
-    get to assume a ceiling; this engine does, and states it.)
+    so the error term is under 1/2, qhat > x/q - 3/2, and qhat is
+    therefore floor(x/q) or one less.  In v3.4 x was the absolute k, and
+    that is precisely what capped the campaign at 9e18; in v4 x is the
+    OFFSET (below), bounded by W * per_launch, so the theorem holds at
+    every height and REDUCE_MAX enforces it against the wheel instead of
+    against the mathematics.  (huntlib's shared snippet keeps two
+    subtractions because it does not get to assume a bound; this engine
+    does, and states it.)
 
   * The per-prime constants are one uint4 (magic_lo, magic_hi, q, boff),
     so a test issues ONE 128-bit uniform load instead of three loads.
@@ -116,11 +119,47 @@ half the nonzero residues survive each small prime, R is millions, and the
 two problems need different machinery however similar they read.  The
 proof of the difference is in sqladder_reference's docstring.
 
+THE (k, off) REPRESENTATION, AND WHY THE CEILING MOVED (v4).  v3.4 carried
+the absolute k in a u64 and reduced IT, so the one-subtraction theorem
+above put a hard cap at 9e18 -- a machine word masquerading as a limit of
+the problem.  The a(16)/a(17) campaign ran into it with a(18) still open,
+and at that point the modelled Q3 for a(18) was already past 2^64, so no
+choice of word size would have been enough (OPTIMIZATION.md 2.7: do not
+grow a second engine at the machine-word boundary).
+
+So the device stopped seeing k at all.  A candidate is the pair
+(base, off) with k = base + off: `base` is the launch's absolute floor, a
+PYTHON INT of any size that never leaves the host, and `off` is the
+position within the launch, under W * per_launch.  What the device needs
+is k mod q, and
+
+    k mod q = (off + base) mod q,
+
+so the base contribution is folded ONCE PER LAUNCH into the two things
+each test already reads, and never added per candidate:
+
+  * per prime, the bitmap holds the killed pattern TWICE (2q bits) and the
+    uint4's boff slot carries `2q-block base + base mod q`; since
+    off mod q < q, the sum indexes the right copy with no reduction.
+  * per CRT group, the base arrives as a kernel SCALAR -- rotated mask for
+    an inline group, shifted table index for a table group (lit_prefix).
+
+The hot loop therefore issues exactly what v3.4 issued, which is the point:
+an issue-bound kernel cannot afford a representation that costs
+instructions.  The price is paid in memory (50.6 MB of bitmap instead of
+25.3 MB) and in ~6,500 vectorised host modulos per launch, both far off the
+critical path.  G15 is the proof: the same window sieved with the launch
+base moved returns the identical absolute stream.
+
 CEILINGS, stated and enforced (CONVENTIONS.md "Numeric hygiene"):
-  * k < K_CEIL = 9e18 < 2^63, which is what keeps the Barrett reduction
-    within ONE conditional subtraction of exact (above).  Every value
+  * k < k_ceil(n) = (MR_VALID_BELOW - 1) / n^2, the PRIMALITY-TEST
+    VALIDITY BOUND and nothing else -- 1.02e22 at n = 18.  Every value
     k*i^2+1 below it is under huntlib's DETERMINISTIC Miller-Rabin bound
-    (G10): this project proves its primes.
+    (G10): this project proves its primes.  No machine word appears in it.
+  * W * per_launch + q2 < 2^63 = REDUCE_MAX, which is what keeps the
+    Barrett reduction within ONE conditional subtraction of exact (above).
+    A bound on the WHEEL AND THE BATCHING, both of which the engine picks;
+    per_launch is halved until it holds.
   * W1 < 2^32, so the first-level table is u32.
   * W2 < 2^32 and W1*W2 < 2^63.
 
@@ -128,10 +167,12 @@ Gates here: G7 (both wheel constructions == the oracle's brute-force period
 walk), G8 (the wheel partitions the period: the count is the formula and no
 kept residue is killed), G9 (GPU survivor stream == CPU survivor stream,
 bit for bit, on populated windows at three heights and three filters,
-one-level AND two-level, including at the ceiling), G13 (the production
+one-level AND two-level, including above 2^64), G13 (the production
 wheel constants), G14 (the v3 mechanisms: the A/C generation tables, the
 derived compaction depths, the CRT-combined prefix and round-2 group
-tables, and the queue-overflow fallback, forced and checked identical).
+tables, and the queue-overflow fallback, forced and checked identical),
+G15 (the v4 representation: base-shift invariance, the doubled bitmap and
+the folded group scalars).
 """
 
 import pathlib as _pathlib
@@ -144,7 +185,8 @@ _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
 from huntlib import shutdown as _shutdown                      # noqa: E402
 from huntlib.gpu import barrett_magics                         # noqa: E402
 from sqladder_reference import K_FLOOR, wheel_residues
-from sqladder_search import (K_CEIL, Q2_DEFAULT, CpuEngine, killed_residues)
+from sqladder_search import (Q2_DEFAULT, CpuEngine, k_ceil,
+                             killed_residues)
 
 P1_DEFAULT = 23              # first-level wheel: the primes up to here
 P2_DEFAULT = 37              # second-level wheel: the primes in (P1, P2]
@@ -219,15 +261,13 @@ QCAP_SIGMA = 6.0
 # across the range (OPTIMIZATION_LOG, measurement 6).
 CAND_PER_LAUNCH = 1 << 30
 
-# The one-conditional-subtraction reduction is exact only below 2^63; see
-# the module docstring.  Asserted here so raising K_CEIL cannot silently
-# invalidate the kernel's arithmetic.
-_CHECK_ONE_SUBTRACT = K_CEIL < (1 << 63)
-if not _CHECK_ONE_SUBTRACT:
-    raise ValueError(
-        f"K_CEIL = {K_CEIL} is not below 2^63; the GPU kernel's single "
-        f"conditional subtraction is only exact under 2^63, so raising the "
-        f"ceiling is a new engine version (CONVENTIONS.md numeric hygiene)")
+# The one-conditional-subtraction reduction is exact only below 2^63.  In
+# v3.4 that was a bound on k, and it is what capped the campaign at 9e18.
+# In v4 the reduced quantity is the OFFSET within a launch, so the bound
+# is on W * per_launch -- a property of the WHEEL AND THE BATCHING, which
+# the engine chooses, and not of k, which the mathematics chooses.  Checked
+# per engine in __init__ (a module constant cannot see W).
+REDUCE_MAX = 1 << 63
 
 _MODCACHE = {}
 
@@ -290,10 +330,10 @@ def lit_groups(primes, nlit, budget=LIT_GROUP_MAX, start=0):
     return groups
 
 
-def lit_prefix(n, primes, groups, table="gbits", indent=12):
-    """(CUDA source, packed table) for a run of CRT-combined group tests.
+def lit_prefix(n, primes, groups, table="gbits", indent=12, pname="gp"):
+    """(CUDA source, packed table, group descriptors) for CRT-combined tests.
 
-    Every modulus, magic number and table offset is a compile-time literal
+    Every modulus and magic number is a compile-time literal
     (OPTIMIZATION.md 2.5), so a group test loads nothing but its own bit.
     A group whose modulus is under LIT_INLINE_Q needs no table at all --
     the entire forbidden set is a 64-bit immediate.
@@ -302,39 +342,79 @@ def lit_prefix(n, primes, groups, table="gbits", indent=12):
     the product modulus, which is exactly "killed by at least one of them",
     so the survivor set is identical to testing them one at a time; G14
     checks that against killed_residues directly.
+
+    v4: the reduced quantity is `off`, not the absolute k, so what a group
+    has to look up is `(off + base) mod Q` rather than `off mod Q`.  The
+    base contribution is NOT added per candidate -- it is folded into the
+    thing the test already reads, once per launch, on the host:
+
+      * a table group stores its pattern TWICE (2Q bits), so the launch
+        passes `2Q-block base + (base mod Q)` and `b = param + r` lands in
+        the right copy with no reduction.  The tables are 1-2 KB, so the
+        doubling is nowhere near the L1 cliff LIT_GROUP_MAX guards.
+      * an inline group's kill set is a u64 immediate, and rotating a
+        64-bit mask is free ON THE HOST, so the launch passes the ROTATED
+        mask and the test is unchanged.
+
+    Either way the group's base arrives as a kernel SCALAR PARAMETER -- the
+    constant bank, not a load -- so the prefix issues exactly the
+    instructions v3.4 issued.  `descs` tells the engine what to compute per
+    launch: (kind, Q, payload).
     """
-    lines, words, off_bits = [], [], 0
-    for g in groups:
+    lines, words, descs, off_bits = [], [], [], 0
+    for gi, g in enumerate(groups):
         qs = [primes[i] for i in g]
         Q = 1
         for q in qs:
             Q *= q
         mg = (1 << 64) // Q
-        head = (" " * indent + "{ unsigned int r = (unsigned int)k - "
-                f"(unsigned int)__umul64hi(k, {mg}ULL) * {Q}u; "
+        head = (" " * indent + "{ unsigned int r = (unsigned int)off - "
+                f"(unsigned int)__umul64hi(off, {mg}ULL) * {Q}u; "
                 f"if (r >= {Q}u) r -= {Q}u; ")
         if Q < LIT_INLINE_Q:
             mask = 0
             for u in killed_residues(qs[0], n):
                 mask |= 1 << u
-            lines.append(head + f"kill |= (unsigned int)(({mask}ULL >> r) "
+            lines.append(head + f"kill |= (unsigned int)(({pname}{gi} >> r) "
                                 f"& 1ULL); }}")
+            descs.append(("inline", Q, mask))
             continue
-        tab = np.zeros((Q + 31) // 32, dtype=np.uint32)
+        tab = np.zeros((2 * Q + 31) // 32, dtype=np.uint32)
         idx = np.arange(Q)
         for q in qs:
             bad = np.array(killed_residues(q, n), dtype=np.int64)
             b = np.nonzero(np.isin(idx % q, bad))[0]
-            np.bitwise_or.at(tab, b >> 5,
-                             (np.uint32(1) << (b & 31)).astype(np.uint32))
-        lines.append(head + f"const unsigned int b = {off_bits}u + r; "
+            for rep in (0, Q):
+                br = b + rep
+                np.bitwise_or.at(tab, br >> 5,
+                                 (np.uint32(1) << (br & 31)).astype(np.uint32))
+        lines.append(head + f"const unsigned int b = (unsigned int){pname}{gi}"
+                            f" + r; "
                             f"kill |= ({table}[b >> 5] >> (b & 31)) "
                             f"& 1u; }}")
         words.append(tab)
+        descs.append(("table", Q, off_bits))
         off_bits += tab.size * 32
     table = (np.concatenate(words) if words
              else np.zeros(1, dtype=np.uint32))
-    return "\n".join(lines), table
+    return "\n".join(lines), table, descs
+
+
+def group_params(descs, base):
+    """The per-launch scalar for each group: the base folded into its test.
+
+    `base` is the absolute k at offset 0 of the launch -- an arbitrary
+    Python int, which is the whole point: it never reaches the device.
+    """
+    out = []
+    for kind, Q, payload in descs:
+        gb = int(base) % Q
+        if kind == "inline":
+            m = ((payload >> gb) | (payload << (Q - gb))) & ((1 << Q) - 1)
+            out.append(np.uint64(m))
+        else:
+            out.append(np.uint64(payload + gb))
+    return out
 
 
 _SRC = r"""
@@ -353,13 +433,22 @@ _SRC = r"""
 
 /* One test against the packed per-prime uint4 (magic_lo, magic_hi, q,
    boff).  The remainder correction is 32-bit: the true value of
-   k - qhat*q is in [0, 2q) < 2^17 and arithmetic mod 2^32 is exact for
+   off - qhat*q is in [0, 2q) < 2^17 and arithmetic mod 2^32 is exact for
    it, and ONE conditional subtraction is enough below 2^63 (see the
-   module docstring). */
+   module docstring).
+
+   v4: what is reduced is the OFFSET within the launch, never the absolute
+   k.  The launch base enters through e.w, which the host set to
+   `2q-block base + (base mod q)`; the bitmap holds each prime's pattern
+   TWICE, so `e.w + r` lands in the right copy and the residue
+   `(off + base) mod q` is read without ever adding the two.  Same
+   instruction count as v3.4, and off < W*per_launch keeps the
+   one-subtraction proof intact whatever k itself has grown to. */
 #define TEST(IDX, DST) { \
     const uint4 e = pk[IDX]; \
     const unsigned long long mg = ((unsigned long long)e.y << 32) | e.x; \
-    unsigned int r = (unsigned int)k - (unsigned int)__umul64hi(k, mg) * e.z; \
+    unsigned int r = (unsigned int)off \
+                   - (unsigned int)__umul64hi(off, mg) * e.z; \
     if (r >= e.z) r -= e.z; \
     const unsigned int b = e.w + r; \
     DST |= (bits[b >> 5] >> (b & 31)) & 1u; }
@@ -368,7 +457,7 @@ _SRC = r"""
    exit costs what it should.  UNROLL independent Barrett chains hide the
    dependent-chain latency the divergent version could not. */
 __device__ __forceinline__ bool tail_survives(
-        const unsigned long long k, const int np_, const int from,
+        const unsigned long long off, const int np_, const int from,
         const uint4* __restrict__ pk, const unsigned int* __restrict__ bits)
 {
     int i = from;
@@ -394,13 +483,13 @@ __device__ __forceinline__ bool tail_survives(
    macro, because the loop nest below is written twice: once with bounds
    checks and once, for every block but the last, without. */
 #define CAND(K) { \
-    const unsigned long long k = (K); \
+    const unsigned long long off = (K); \
     unsigned int kill = 0u; \
 %(prefix_m)s
     if (!kill) { \
         const int p = atomicAdd(&qn, 1); \
-        if (p < Q1CAP) qk[p] = k; \
-        else if (tail_survives(k, np_, LITN, pk, bits)) EMIT(k) \
+        if (p < Q1CAP) qk[p] = off; \
+        else if (tail_survives(off, np_, LITN, pk, bits)) EMIT(off) \
     } }
 
 /* m = A[t] + C[s] reduced mod W2.  Both are already under W2, so the sum
@@ -409,8 +498,11 @@ __device__ __forceinline__ bool tail_survives(
    huge and the min keeps m. */
 #define M_OF(A, C) min((A) + (C), (A) + (C) - W2C)
 
+/* No base0.  The launch's absolute base is a Python int on the host; what
+   the device gets is the per-prime and per-group folding of it (pk.w, the
+   gp/g2p scalars), so nothing here is bounded by k. */
 extern "C" __global__ void sieve(
-        const unsigned long long base0, const int R1, const int R2,
+        const int R1, const int R2,
         const int np_,
         const unsigned int* __restrict__ bits,
         unsigned long long* out, int* nout, const int cap,
@@ -418,7 +510,7 @@ extern "C" __global__ void sieve(
         const uint2* __restrict__ res1x,
         const unsigned int* __restrict__ res2c,
         const unsigned int* __restrict__ gbits,
-        const unsigned int* __restrict__ g2bits)
+        const unsigned int* __restrict__ g2bits%(gparams)s)
 {
     /* Sized from the analytic survival plus QCAP_SIGMA sigma, NOT from the
        impossible worst case: a queue big enough for "every candidate
@@ -434,8 +526,8 @@ extern "C" __global__ void sieve(
     if (threadIdx.x == 0) { qn = 0; qn2 = 0; }
     __syncthreads();
 
-    const unsigned long long base = base0
-                                  + WC * (unsigned long long)blockIdx.z;
+    /* the z-slice's offset from the launch base -- not an absolute k */
+    const unsigned long long base = WC * (unsigned long long)blockIdx.z;
     const int tbase = blockIdx.x * (blockDim.x * JPT) + threadIdx.x;
 #if TWOLEVEL
     /* the block's SPB second-level residues, held in registers and reused
@@ -491,20 +583,20 @@ extern "C" __global__ void sieve(
        again.  Combining these was worth 1.06x and moved K2 from 12 to 16 --
        cheaper tests buy more of them. */
     for (int idx = threadIdx.x; idx < n1; idx += TPB) {
-        const unsigned long long k = qk[idx];
+        const unsigned long long off = qk[idx];
         unsigned int kill = 0u;
 %(round2)s
         if (!kill) {
             const int p = atomicAdd(&qn2, 1);
-            if (p < Q2CAP) qk2[p] = k;
-            else if (tail_survives(k, np_, K2, pk, bits)) EMIT(k)
+            if (p < Q2CAP) qk2[p] = off;
+            else if (tail_survives(off, np_, K2, pk, bits)) EMIT(off)
         }
     }
     __syncthreads();
     const int n2 = min(qn2, Q2CAP);
     for (int idx = threadIdx.x; idx < n2; idx += TPB) {
-        const unsigned long long k = qk2[idx];
-        if (tail_survives(k, np_, K2, pk, bits)) EMIT(k)
+        const unsigned long long off = qk2[idx];
+        if (tail_survives(off, np_, K2, pk, bits)) EMIT(off)
     }
 }
 """
@@ -610,25 +702,39 @@ class GpuEngine:
         self.groups2 = lit_groups(self.primes, self.k2, K2_GROUP_MAX,
                                   start=self.lit)
 
-        # packed forbidden-residue bitmap: q bits per prime, concatenated
+        # Packed forbidden-residue bitmap, 2q bits per prime: each pattern
+        # is stored TWICE so that a launch can shift a prime's window by
+        # `base mod q` with an ADD to the table offset and no reduction.
+        # That is what keeps the absolute k off the device (module
+        # docstring, "the (k, off) representation"); it costs 50.6 MB
+        # instead of 25.3 MB and no instructions at all.
         offs, tot = [], 0
         for q in self.primes:
             offs.append(tot)
-            tot += q
+            tot += 2 * q
         bits = np.zeros((tot + 31) // 32, dtype=np.uint32)
         for o, q in zip(offs, self.primes):
             for u in killed_residues(q, n):
-                b = o + u
-                bits[b >> 5] |= np.uint32(1) << np.uint32(b & 31)
+                for b in (o + u, o + q + u):
+                    bits[b >> 5] |= np.uint32(1) << np.uint32(b & 31)
 
         # the per-prime constants, one uint4 per prime: a test is one
-        # 128-bit uniform load instead of three
+        # 128-bit uniform load instead of three.  Slot .w is rewritten per
+        # launch (offs + base mod q); `_boff` keeps the base copy.
         magic = barrett_magics(self.primes)
         pk = np.empty((len(self.primes), 4), dtype=np.uint32)
         pk[:, 0] = (magic & np.uint64(0xFFFFFFFF)).astype(np.uint32)
         pk[:, 1] = (magic >> np.uint64(32)).astype(np.uint32)
         pk[:, 2] = np.array(self.primes, dtype=np.uint32)
         pk[:, 3] = np.array(offs, dtype=np.uint32)
+        self._pk = pk
+        self._boff = np.array(offs, dtype=np.uint64)
+        self._qs = np.array(self.primes, dtype=np.uint64)
+        # W mod q per prime, so a launch's `base mod q` is one vectorised
+        # multiply-and-reduce over 6,542 primes rather than 6,542 big-int
+        # divisions: base = W*j, so base mod q = (W mod q)*j mod q.
+        self._wmod = np.array([self.W % q for q in self.primes],
+                              dtype=np.uint64)
         self.d_pk = cp.asarray(pk.ravel())
         self.d_bits = cp.asarray(bits)
         self.d_out = cp.empty(HIT_CAP, dtype=np.uint64)
@@ -640,16 +746,37 @@ class GpuEngine:
         self.jpt = jpt if jpt is not None else max(1, cpt // self.spb)
         self.tile = self.tpb * self.jpt * self.spb   # candidates per block
         self.per_launch = max(1, min(65535, CAND_PER_LAUNCH // self.R))
+        # v4's one-subtraction bound: the largest quantity the kernel ever
+        # reduces is the offset of the last candidate in a launch, plus a
+        # prime's worth of slack from the folded base.  Trimming the batch
+        # is the fix if a very wide wheel ever reaches it -- not a cap on k.
+        while (self.per_launch * self.W + self.q2 >= REDUCE_MAX
+               and self.per_launch > 1):
+            self.per_launch //= 2
+        if self.per_launch * self.W + self.q2 >= REDUCE_MAX:
+            raise ValueError(
+                f"one wheel block is W = {self.W}, and W + q2 is not below "
+                f"2^63: the kernel's single conditional subtraction is only "
+                f"exact there, so this wheel needs a new reduction "
+                f"(CONVENTIONS.md numeric hygiene)")
 
         self.q1cap = _qcap(self.tile, self.surv[self.lit], qcap_sigma)
         self.q2cap = (_qcap(self.tile, self.surv[self.k2], qcap_sigma)
                       if self.k2 > self.lit else 1)
 
-        prefix_src, gtable = lit_prefix(n, self.primes, self.groups)
+        prefix_src, gtable, self.gdesc = lit_prefix(
+            n, self.primes, self.groups, pname="gp")
         self.d_gbits = cp.asarray(gtable)
-        r2_src, g2table = lit_prefix(n, self.primes, self.groups2,
-                                     table="g2bits", indent=8)
+        r2_src, g2table, self.gdesc2 = lit_prefix(
+            n, self.primes, self.groups2, table="g2bits", indent=8,
+            pname="g2p")
         self.d_g2bits = cp.asarray(g2table)
+        # Each group's base arrives as a kernel SCALAR (the constant bank),
+        # so the prefix issues what v3.4 issued -- see lit_prefix.
+        gparams = "".join(
+            f",\n        const unsigned long long {p}{i}"
+            for p, d in (("gp", self.gdesc), ("g2p", self.gdesc2))
+            for i in range(len(d)))
         # inside the BODY macro every line has to end in a continuation
         prefix_m = "\n".join(ln + " \\" for ln in prefix_src.split("\n"))
 
@@ -664,7 +791,7 @@ class GpuEngine:
                           "spb": self.spb,
                           "unroll": UNROLL, "q1cap": self.q1cap,
                           "q2cap": self.q2cap, "prefix_m": prefix_m,
-                          "round2": r2_src}
+                          "round2": r2_src, "gparams": gparams}
             _MODCACHE[key] = cp.RawModule(code=src, options=("-std=c++14",),
                                           backend="nvrtc")
         self.k_sieve = _MODCACHE[key].get_function("sieve")
@@ -685,13 +812,49 @@ class GpuEngine:
         return int(n)
 
     # ---------------------------------------------------------------- sieve
+    def _launch_base(self, base):
+        """Fold an absolute launch base into the tables, on the host.
+
+        This is the whole of v4.  `base` is a Python int of any size; what
+        reaches the device is `base mod q` per prime (slot .w of the uint4,
+        pointing into the doubled bitmap) and `base mod Q` per CRT group
+        (the gp/g2p scalars).  Both are bounded by their modulus, so the
+        device arithmetic never learns how large k has become.
+
+        base mod q is computed as (W mod q)*(j mod q) mod q rather than by
+        dividing a big int 6,542 times: both factors are under 2^16, so the
+        product is exact in u64 for any j whatsoever.
+        """
+        j = int(base) // self.W
+        if j < (1 << 64):
+            bmod = (self._wmod
+                    * (np.uint64(j) % self._qs)) % self._qs
+        else:
+            # j outgrows u64 only on a wheel far too narrow to hunt with,
+            # where the modulo cannot be vectorised.  Kept exact anyway:
+            # a gate runs here, and a gate that quietly went wrong at the
+            # top of the range is the failure this whole version is about.
+            bmod = np.array([(int(w) * (j % int(q))) % int(q)
+                             for w, q in zip(self._wmod, self._qs)],
+                            dtype=np.uint64)
+        self._pk[:, 3] = (self._boff + bmod).astype(np.uint32)
+        self.d_pk.set(self._pk.ravel())
+        return (group_params(self.gdesc, base)
+                + group_params(self.gdesc2, base))
+
     def survivors_j(self, j0, j1):
-        """Sorted u64 array of surviving k with k // W in [j0, j1)."""
+        """Sorted list of surviving k (Python ints) with k // W in [j0, j1).
+
+        Ints, not a u64 array: above 2^64 there is no numpy dtype for the
+        answer, and the survivors are a handful per launch, so the exact
+        values are assembled on the host where bigness is free.
+        """
         cp = self.cp
         j0, j1 = int(j0), int(j1)
-        if j1 * self.W > K_CEIL:
+        ceil = k_ceil(self.n)
+        if j1 * self.W > ceil:
             raise ValueError(f"k {j1 * self.W} past the enforced ceiling "
-                             f"{K_CEIL}")
+                             f"{ceil}")
         if j0 * self.W <= max(K_FLOOR, self.q2):
             raise ValueError(
                 "engines refuse to run at or below max(K_FLOOR, q2): the "
@@ -702,30 +865,32 @@ class GpuEngine:
         gy = (self.R2 + self.spb - 1) // self.spb
         for lo in range(0, j1 - j0, self.per_launch):
             n_l = min(self.per_launch, j1 - j0 - lo)
+            base = self.W * (j0 + lo)
+            gps = self._launch_base(base)
             self.d_n.fill(0)
             self.k_sieve((gx, gy, n_l), (self.tpb,),
-                         (np.uint64(self.W * (j0 + lo)), np.int32(self.R1),
+                         (np.int32(self.R1),
                           np.int32(self.R2),
                           np.int32(len(self.primes)), self.d_bits,
                           self.d_out, self.d_n, np.int32(HIT_CAP),
                           self.d_pk, self.d_res1x, self.d_res2c,
-                          self.d_gbits, self.d_g2bits))
+                          self.d_gbits, self.d_g2bits, *gps))
             cnt = int(self.d_n.get()[0])
             if cnt > HIT_CAP:
                 raise RuntimeError(
                     f"survivor buffer overflow: {cnt} > {HIT_CAP}; the "
                     f"window is too wide or the sieve too shallow")
             if cnt:
-                out.append(cp.asnumpy(self.d_out[:cnt]))
-        if not out:
-            return np.zeros(0, dtype=np.uint64)
-        return np.sort(np.concatenate(out))
+                # offsets from the device; the absolute k is made here
+                offs = cp.asnumpy(self.d_out[:cnt])
+                out.extend(base + int(o) for o in offs)
+        return sorted(out)
 
     def survivors_k(self, k_lo, k_hi):
         """Same stream, clipped to an arbitrary half-open k window."""
-        j0, j1 = int(k_lo) // self.W, int(k_hi - 1) // self.W + 1
-        s = self.survivors_j(j0, j1)
-        return s[(s >= np.uint64(k_lo)) & (s < np.uint64(k_hi))]
+        k_lo, k_hi = int(k_lo), int(k_hi)
+        j0, j1 = k_lo // self.W, (k_hi - 1) // self.W + 1
+        return [k for k in self.survivors_j(j0, j1) if k_lo <= k < k_hi]
 
 
 # --------------------------------- gates -----------------------------------
@@ -796,8 +961,13 @@ def g9_gpu_matches_cpu():
 
     Populated windows at three filters and four heights, the last of them
     hard against the enforced ceiling, because a reduction that is correct
-    at 1e12 and wrong at 9e18 is exactly the bug a mid-range parity gate
-    cannot see.  BOTH wheel paths are covered -- the one-level kernel the
+    at 1e12 and wrong at 1e22 is exactly the bug a mid-range parity gate
+    cannot see.  Since v4 that top height is ABOVE 2^64, so this gate is
+    also what proves the (k, off) split does what it claims: the CPU side
+    is Python ints all the way up, and the GPU side is arithmetic that has
+    no word wide enough to hold the answers it is producing.
+
+    BOTH wheel paths are covered -- the one-level kernel the
     frozen fingerprints are pinned to, and the two-level CRT kernel the
     campaign runs -- because they generate the same candidates by
     different arithmetic.  An empty-vs-empty comparison is vacuous and is
@@ -809,32 +979,33 @@ def g9_gpu_matches_cpu():
     # dense array can hold.  The kernel is the same code at every split --
     # only W1, W2 and W1^-1 change -- so these exercise its arithmetic in
     # full, and G13 pins the production constants themselves.
+    ceil16 = k_ceil(16)
     cases = ((10, 13, None, 256, 2 * 10 ** 9, 4 * 10 ** 6),
              (16, 13, None, 128, 10 ** 12, 2 * 10 ** 7),
              (16, 17, None, 256, 9 * 10 ** 14, 10 ** 8),
-             (16, 23, None, 64, K_CEIL - 3 * 223_092_870, 3 * 10 ** 7),
+             (16, 23, None, 64, ceil16 - 3 * 223_092_870, 3 * 10 ** 7),
              (16, 13, 23, 128, 10 ** 12, 2 * 10 ** 7),
              (16, 13, 17, 256, 9 * 10 ** 14, 10 ** 8),
-             (16, 11, 23, 64, K_CEIL - 3 * 223_092_870, 3 * 10 ** 7))
+             (16, 11, 23, 64, ceil16 - 3 * 223_092_870, 3 * 10 ** 7))
     total = 0
     for n, p1, p2, q2, k_lo, span in cases:
         eng = GpuEngine(n, p1=p1, p2=p2, q2=q2)
         got = eng.survivors_k(k_lo, k_lo + span)
         cpu = CpuEngine(n, q2=q2)
-        want = np.concatenate([np.zeros(0, dtype=np.uint64)]
-                              + list(cpu.survivors(k_lo, k_lo + span)))
-        if got.size != want.size or not np.array_equal(got, want):
-            gs, ws = set(got.tolist()), set(want.tolist())
+        want = [k for c in cpu.survivors(k_lo, k_lo + span) for k in c]
+        if got != want:
+            gs, ws = set(got), set(want)
             return False, (f"G9 FAIL: n={n} p1={p1} p2={p2} q2={q2} at "
-                           f"k~{k_lo:.3g}: GPU {got.size} vs CPU "
-                           f"{want.size}, diff {sorted(gs ^ ws)[:4]}")
-        if got.size == 0:
+                           f"k~{k_lo:.3g}: GPU {len(got)} vs CPU "
+                           f"{len(want)}, diff {sorted(gs ^ ws)[:4]}")
+        if not got:
             return False, (f"G9 FAIL: n={n} p1={p1} p2={p2} at k~{k_lo:.3g} "
                            f"is empty -- vacuous parity check")
-        total += int(got.size)
+        total += len(got)
     return True, (f"G9 ok: GPU stream == CPU stream on 7 populated windows "
                   f"({total} survivors) -- one-level AND two-level wheels, "
-                  f"filters n = 10, 16, heights 2e9 -> the enforced ceiling")
+                  f"filters n = 10, 16, heights 2e9 -> {ceil16:.3g}, the top "
+                  f"two windows ABOVE 2^64")
 
 
 def g13_production_wheel_constants():
@@ -958,7 +1129,7 @@ def g14_v3_mechanisms():
                 ("round 2", eng.groups2,
                  lit_prefix(n, primes, eng.groups2, table="g2bits"),
                  K2_GROUP_MAX, eng.lit, eng.k2)):
-          src, table = table_src
+          src, table, _descs = table_src
           if [i for g in groups for i in g] != list(range(lo, hi)):
             return False, (f"G14 FAIL: n={n}: the {tag} grouping "
                            f"{groups} does not cover primes "
@@ -974,7 +1145,7 @@ def g14_v3_mechanisms():
                                  f"modulus {Q} over the {budget} budget that "
                                  f"keeps the combined table in L1")
               if f"* {Q}u;" not in src or \
-                      f"__umul64hi(k, {(1 << 64) // Q}ULL)" not in src:
+                      f"__umul64hi(off, {(1 << 64) // Q}ULL)" not in src:
                   return False, (f"G14 FAIL: n={n}: modulus {Q} or its magic "
                                  f"is not baked into the {tag} source")
               # every residue mod Q must agree with "killed by some q in g"
@@ -988,9 +1159,18 @@ def g14_v3_mechanisms():
                       mask |= 1 << u
                   got = np.array([(mask >> u) & 1 for u in range(Q)], bool)
               else:
-                  b = off_bits + np.arange(Q)
-                  got = ((table[b >> 5] >> (b & 31)) & 1).astype(bool)
-                  off_bits += ((Q + 31) // 32) * 32
+                  # v4 stores the pattern TWICE so a launch can shift it by
+                  # base mod Q with an add; BOTH copies are checked, because
+                  # a half-written second copy is invisible at base 0 and
+                  # wrong everywhere else.
+                  b = off_bits + np.arange(2 * Q)
+                  got2 = ((table[b >> 5] >> (b & 31)) & 1).astype(bool)
+                  if not np.array_equal(got2[:Q], got2[Q:]):
+                      return False, (f"G14 FAIL: n={n}: the {tag} table for "
+                                     f"{qs} is not periodic with period "
+                                     f"{Q} -- the doubled copy differs")
+                  got = got2[:Q]
+                  off_bits += ((2 * Q + 31) // 32) * 32
               if not np.array_equal(got, want):
                   return False, (f"G14 FAIL: n={n}: the {tag} table for "
                                  f"{qs} (modulus {Q}) disagrees with "
@@ -1012,12 +1192,12 @@ def g14_v3_mechanisms():
                        f"would not exercise the fallback")
     lo, span = 10 ** 12, 4 * 10 ** 8
     a, b = ref.survivors_k(lo, lo + span), tiny.survivors_k(lo, lo + span)
-    if a.size == 0:
+    if not a:
         return False, "G14 FAIL: the overflow drill window is empty"
-    if a.size != b.size or not np.array_equal(a, b):
+    if a != b:
         return False, (f"G14 FAIL: the queue-overflow fallback changed the "
-                       f"stream: {a.size} survivors properly sized, "
-                       f"{b.size} with the queues forced full")
+                       f"stream: {len(a)} survivors properly sized, "
+                       f"{len(b)} with the queues forced full")
 
     prod = GpuEngine(16)
     if not 0 < prod.q1cap <= prod.tile or not 0 < prod.q2cap <= prod.tile:
@@ -1038,12 +1218,107 @@ def g14_v3_mechanisms():
                   f" and {prod.tile * prod.surv[prod.k2]:.0f}); and with the "
                   f"queues forced to 32 so the overflow path runs for nearly "
                   f"every candidate, the survivor stream is IDENTICAL "
-                  f"({a.size} survivors)")
+                  f"({len(a)} survivors)")
+
+
+def g15_k_off_representation():
+    """The v4 split: the base is folded, not carried, and folding is exact.
+
+    G9 already shows the whole engine agrees with the CPU above 2^64.  This
+    gate isolates the three mechanisms that make that possible, because a
+    fold that is wrong only for some bases would pass a parity check taken
+    at one height and lose survivors everywhere else.
+
+      1. BASE-SHIFT INVARIANCE.  The same absolute window, sieved with the
+         launch batching forced to different sizes, is covered from
+         different bases with different folded tables -- and must return
+         the identical stream.  This is the property the whole design
+         rests on and the one a fixed-base test cannot see.
+      2. The doubled bitmap really is periodic with period q, per prime.
+         The second copy is what lets `boff + base mod q + r` skip a
+         reduction; a half-built copy is invisible at base 0.
+      3. The folded values are the residues they claim to be, for primes
+         and for CRT groups, at bases chosen to be nastier than any the
+         campaign will meet -- including above 2^64.
+    """
+    # 1. base-shift invariance
+    eng = GpuEngine(16, p1=13, p2=23, q2=512)
+    j0 = eng.j_of(10 ** 12)
+    eng.per_launch = 1
+    one = eng.survivors_j(j0, j0 + 6)
+    eng.per_launch = 6
+    many = eng.survivors_j(j0, j0 + 6)
+    if not one:
+        return False, "G15 FAIL: the base-shift window is empty -- vacuous"
+    if one != many:
+        return False, (f"G15 FAIL: the stream depends on the launch base: "
+                       f"{len(one)} survivors in 6 launches vs {len(many)} "
+                       f"in 1 -- the fold is not base-invariant")
+
+    # 2. the doubled bitmap is periodic, per prime
+    bits = eng.cp.asnumpy(eng.d_bits)
+    rng = np.random.default_rng(4)
+    for i in rng.integers(0, len(eng.primes), 40).tolist():
+        q = eng.primes[i]
+        o = int(eng._boff[i])
+        b = o + np.arange(2 * q)
+        pat = ((bits[b >> 5] >> (b & 31)) & 1).astype(bool)
+        if not np.array_equal(pat[:q], pat[q:]):
+            return False, (f"G15 FAIL: prime {q}'s bitmap is not periodic "
+                           f"with period q -- the doubled copy differs")
+        want = np.zeros(q, dtype=bool)
+        want[killed_residues(q, 16)] = True
+        if not np.array_equal(pat[:q], want):
+            return False, (f"G15 FAIL: prime {q}'s bitmap disagrees with "
+                           f"killed_residues")
+
+    # 3. the fold is the residue it claims to be, at absurd bases
+    for base in (0, eng.W, 10 ** 12, 2 ** 64 + 12345, k_ceil(16) - eng.W,
+                 10 ** 30):
+        base -= base % eng.W                      # launches start on a block
+        gps = eng._launch_base(base)
+        got = eng._pk[:, 3].astype(np.int64) - eng._boff.astype(np.int64)
+        want = np.array([base % q for q in eng.primes], dtype=np.int64)
+        if not np.array_equal(got, want):
+            i = int(np.flatnonzero(got != want)[0])
+            return False, (f"G15 FAIL: at base {base:.4g} the fold for prime "
+                           f"{eng.primes[i]} is {got[i]}, not "
+                           f"{want[i]} = base mod q")
+        # and the group scalars: reading the table at r must answer
+        # "is (off + base) killed", for every residue of the modulus
+        descs = list(eng.gdesc) + list(eng.gdesc2)
+        gtab = (eng.cp.asnumpy(eng.d_gbits), eng.cp.asnumpy(eng.d_g2bits))
+        for gi, ((kind, Q, payload), gp) in enumerate(zip(descs, gps)):
+            tab = gtab[0 if gi < len(eng.gdesc) else 1]
+            for r in range(Q):
+                if kind == "inline":
+                    hit = bool((int(gp) >> r) & 1)
+                else:
+                    b = int(gp) + r
+                    hit = bool((tab[b >> 5] >> (b & 31)) & 1)
+                if hit != bool((int(payload) >> ((r + base) % Q)) & 1
+                               if kind == "inline"
+                               else _tab_bit(tab, payload, (r + base) % Q)):
+                    return False, (f"G15 FAIL: group {gi} (modulus {Q}) at "
+                                   f"base {base:.4g}, r={r}: the folded "
+                                   f"scalar does not answer for "
+                                   f"(off + base) mod Q")
+    return True, (f"G15 ok: the survivor stream is INVARIANT under the launch "
+                  f"base ({len(one)} survivors, 1 launch vs 6); the doubled "
+                  f"bitmap is periodic and matches killed_residues on 40 "
+                  f"sampled primes; and every per-prime and per-group fold "
+                  f"is exactly (base mod modulus) at six bases up to 1e30 -- "
+                  f"so nothing on the device is bounded by k")
+
+
+def _tab_bit(tab, off_bits, u):
+    b = int(off_bits) + int(u)
+    return bool((tab[b >> 5] >> (b & 31)) & 1)
 
 
 GATES = [g7_wheel_matches_oracle, g8_wheel_partitions_the_period,
          g13_production_wheel_constants, g14_v3_mechanisms,
-         g9_gpu_matches_cpu]
+         g9_gpu_matches_cpu, g15_k_off_representation]
 
 # Ctrl+C is a normal exit everywhere in this repo (CONVENTIONS.md
 # "Stopping a run"): one path out, no traceback, exit 130.

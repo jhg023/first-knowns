@@ -101,8 +101,10 @@ def main():
             work, blocks, count, xor, runs=runs, sync=sync)
         if not ok:
             got = work()
-            g = int(np.bitwise_xor.reduce(got)) if got.size else 0
-            print(f"  ({label}: got count={got.size} xor={g})")
+            g = 0
+            for v in got:
+                g ^= int(v)
+            print(f"  ({label}: got count={len(got)} xor={g})")
             ok_all = False
             continue
         rate_k = rate_blocks * eng.W
