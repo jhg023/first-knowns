@@ -400,13 +400,18 @@ class Campaign:
         pct = min(100.0, max(0.0,
                              100.0 * (k - self.boundary * self.eng.W)
                              / self.eng.W))
-        parts = [f"working at k = {k:.6g} ({pct:.0f}% of the period)"]
-        if k < self.census_floor:
+        lo = self.boundary * self.eng.W
+        parts = [f"swept to {swept:.6g}"]
+        parts.append(f"period {self.boundary} "
+                     f"[{lo:.5g}, {lo + self.eng.W:.5g}) {pct:.0f}%")
+        # keyed off the PERIOD, not the interpolated position: being
+        # in the adopted overlap is a property of which period is being
+        # worked, and the position is only a progress estimate
+        if self.census_floor > lo:
             # the adopted overlap: ground the previous wheel already cleared
             parts.append(f"RE-SWEEPING the adopted overlap below "
                          f"{self.census_floor:.6g} as a cross-check "
                          f"(not counted; frontier holds)")
-        parts.append(f"swept to {swept:.6g}")
         parts.append(f"filter n = {self.filter_n()}")
         if rate:
             parts.append(f"{rate:.3g} k/s")
@@ -530,6 +535,21 @@ class Campaign:
             log("STAGE", "  a(%d): S = %.4g  Q1 %.3g  median %.3g  Q3 %.3g"
                 % (row["n"], row["S"], qs.get("Q1", float("nan")),
                    qs.get("median", float("nan")), qs.get("Q3", float("nan"))))
+        # Said once, here, rather than in every [STATUS]: the heartbeat
+        # carries two numbers and they are two different claims.  Readers
+        # of the log have to be told which is which, because the obvious
+        # reading of the moving one -- "the hunt is at k" -- is wrong.
+        log("STAGE", "the heartbeat carries TWO numbers, and they are not "
+                     "the same claim:")
+        log("STAGE", f"  'swept to'  the k below which EVERY value has been "
+                     f"tested. It is the frontier, and it advances one whole "
+                     f"wheel period ({self.eng.W:.4g} of line, about "
+                     f"{self.eng.R3:,} launches) at a time.")
+        log("STAGE", "  'period N .. X%' progress THROUGH the period being "
+                     "worked on. The wheel emits its candidates in index "
+                     "order, not in k order, so they land scattered across "
+                     "the whole period and NO part of it is clear until "
+                     "that reads 100%. It is not a position on the k line.")
         self.hb.mark(self.j * self.eng.W)
         self.hb.start(self.status_line)
         shutdown.on_interrupt(self._on_interrupt)
@@ -561,12 +581,21 @@ class Campaign:
                 # The period is closed, so its values are contiguous in k
                 # again and the LEAST of them is meaningful.  Nothing is
                 # narrated before this point.
+                held = len(self.pending)
                 for k, r in sorted(self.pending):
                     self.handle(k, r)
                 self.pending = []
                 self.j = j1
                 self.u = 0
                 self.boundary = self.j
+                # The one moment 'swept to' moves.  Say so, with what it
+                # moved by and what was classified, so the jump in the next
+                # [STATUS] is an event in the log and not a mystery.
+                log("STAGE",
+                    f"period {j1 - 1} complete: swept to "
+                    f"{self.swept_k():,} (+{self.eng.W:.4g} of line; "
+                    f"{held} value{'' if held == 1 else 's'} classified in "
+                    f"k order)")
                 self.hb.mark(self.j * self.eng.W)
                 self.check_rungs(self.j * self.eng.W)
                 self.save()
