@@ -284,6 +284,65 @@ end one early, and all three are opt-in: Ctrl+C, `--to`, and
 `--stop-on-discovery`. The first is below; the third has a subtlety that
 cost a run, so it is specified here rather than left to each project.
 
+### Reading an existing cursor (binding for every project)
+
+**A checkpoint has THREE readers, and every one of them must agree about
+which stored keys this configuration may start from.** They are the
+campaign's `load`, `--status`, and the refusal in `main()`. The last one
+checks the key INDEPENDENTLY of the first, on purpose — `load` ignoring a
+foreign checkpoint is right for a stale file and catastrophic for a live
+frontier, so a cursor this configuration cannot read has to halt the run
+rather than fall through to a fresh sweep at the floor.
+
+That independence is also the trap, and it has now cost this repo two
+campaign starts, both at the owner's hand:
+
+> A launcher grows a second class of readable key. The author teaches
+> `load` about it — that is where reading obviously happens — and misses
+> `refuse_mismatch`. **Every gate stays green**, because no gate battery
+> ever writes a checkpoint carrying an OLD key, and the campaign then
+> refuses to start the first time it is run for real.
+
+So the list of old keys is **not an argument**. It is a
+`huntlib.checkpoint.CursorPolicy`, built once beside `CONFIG_KEY`, and
+every reader goes through it:
+
+    CURSOR = checkpoint.CursorPolicy(CKPT, CONFIG_KEY,
+                                     accept=INHERITS, adopt=REDENOMINATE)
+    ...
+    st, kind = CURSOR.load(warn=...)        # the campaign, and --status
+    CURSOR.refuse_mismatch(fresh=args.fresh, describe=...)
+
+`load` and `refuse_mismatch` **raise** if handed an `accept=` or `adopt=`
+list from anywhere else, so "I only updated two of the three" is no longer
+a thing that compiles. A project with exactly one key needs no policy and
+nothing changes for it — but the moment it declares a second, the guard
+makes it build one.
+
+**Two classes of old key, and they are not interchangeable.**
+
+* `accept` — the old configuration covers the **identical** line: an engine
+  version gated to return the same survivor stream, pinned by the CPU
+  parity gate and the frozen fingerprints. The cursor carries over whole,
+  indices and all.
+* `adopt` — the old configuration covers **different** line: a new wheel, a
+  new sieve depth. Only the arithmetic claim *"every k below this is
+  swept"* carries over, which is true of any correct engine. The launcher
+  must re-denominate it into its own units, **flooring** so no gap opens,
+  and must not reuse any index from it. See "Re-denominating a cursor
+  across a wheel change".
+
+Anything that moves coverage goes in `adopt`. Putting it in `accept` is a
+false claim that a fingerprint would have had to back.
+
+**Drilled, because a rule that only a reviewer enforces is not enforced.**
+`drills.standard(cursor=CURSOR)` writes a checkpoint under every key the
+policy declares and puts both readers in front of each one, requiring the
+right classification back; then it writes an unknown key and requires a
+refusal, and requires `--fresh` to override it. Pass the policy — the
+keyword has a default only so that adding it did not break the launchers
+that predate it.
+
 ### Two cursors, when coverage is coarser than work
 
 Some engines cannot enumerate candidates in `k` order. A multi-level wheel

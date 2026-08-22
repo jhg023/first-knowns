@@ -184,7 +184,21 @@ each README stays.
    atomic for the directory entry, not for the data -- a process or
    machine that stops in that window leaves a right-sized file of NUL,
    and once did); a present-but-unreadable checkpoint raises rather than
-   reading as absent. See CONVENTIONS.md.
+   reading as absent.
+
+   **And a cursor has THREE readers, so the keys it may start from live in
+   ONE `checkpoint.CursorPolicy` and never in a list passed per call.**
+   `load` ignoring a foreign checkpoint is right for a stale file and
+   catastrophic for a live frontier, so `refuse_mismatch` checks the key
+   independently -- which means a launcher that teaches `load` about its
+   predecessor and forgets the other two ships a battery that is entirely
+   green and a campaign that refuses to start. That has now happened
+   twice, both times discovered by the owner rather than by a gate.
+   `load`/`refuse_mismatch` now RAISE if handed old keys outside a policy,
+   and `drills.standard(cursor=...)` writes a checkpoint under each
+   declared key and puts every reader in front of it. Anything that moves
+   COVERAGE is `adopt` (re-denominate it, flooring) and never `accept`.
+   See CONVENTIONS.md "Reading an existing cursor".
 
 5e. **Ctrl+C is a normal exit, not a crash.** Every program in this repo
    -- launchers, `score.py`, gate scripts, the oracle -- ends on an
@@ -240,6 +254,13 @@ each README stays.
          host core-s per unit k-line, per candidate setting), not just a
          fast kernel
    - [ ] checkpoints fsynced + `.bak` rotated, corrupt-file path drilled
+   - [ ] EVERY reader of the cursor goes through one
+         `checkpoint.CursorPolicy` -- there are three of them (the
+         campaign's load, `--status`, the refusal in `main`) and a list of
+         old keys given to only two is a green battery and a campaign that
+         will not start; it has cost two campaign starts. Pass the policy
+         to `drills.standard(cursor=...)` (CONVENTIONS.md "Reading an
+         existing cursor")
    - [ ] every entry point wrapped in `huntlib.shutdown.graceful`, the
          boundary save registered with `on_interrupt`, pool initializers
          calling `ignore_in_worker`, and the graceful-shutdown drill in

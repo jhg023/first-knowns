@@ -220,17 +220,100 @@ def event_kind_drill(classify, cases):
                   f"census / below the floor)")
 
 
-def standard(pool_factory=None, tmpdir=None):
+def cursor_policy_drill(policy, tmpdir=None):
+    """Every key a policy CLAIMS to read must pass every reader it has.
+
+    This is the drill for the one bug the whole battery could not see, and
+    it has been paid for twice.  A launcher grows a second class of readable
+    key -- an inherited engine version, a re-denominated wheel -- and the
+    author teaches `load` about it and misses `refuse_mismatch`, which
+    checks the key independently, or `--status`, which reads it a third
+    time.  Every gate stays green, because nothing in a gate battery ever
+    writes a checkpoint carrying an OLD key, and the campaign then refuses
+    to start the first time it is run for real, at the owner's hand.
+
+    So: write a checkpoint under each declared key in turn and make both
+    readers answer.  A key the policy says it can read must (1) not be
+    refused and (2) come back from load with the right classification.  A
+    key it has never heard of must be refused, and --fresh must override
+    that; those two are what stop a "fix" that simply accepts everything.
+    """
+    own = tmpdir is None
+    tmp = tempfile.mkdtemp(prefix="huntlib-cursor-") if own else tmpdir
+    path = os.path.join(tmp, "cursor_policy_drill.json")
+    pol = policy.at(path)
+    kinds = ({policy.key: "own"}
+             | {k: "inherited" for k in policy.accept}
+             | {k: "adopted" for k in policy.adopt})
+    try:
+        for key, want in kinds.items():
+            _ckpt.save(path, {"key": key, "k": 12345, "j": 7})
+            try:
+                pol.refuse_mismatch()
+            except _ckpt.CursorRefused:
+                return False, (
+                    f"CURSOR POLICY FAIL: the policy lists {key!r} as "
+                    f"readable but refuse_mismatch rejects it -- the "
+                    f"campaign would refuse to start on that cursor")
+            state, kind = pol.load()
+            if state is None:
+                return False, (f"CURSOR POLICY FAIL: {key!r} is listed as "
+                               f"readable but load() ignored it")
+            if kind != want:
+                return False, (f"CURSOR POLICY FAIL: {key!r} loaded as "
+                               f"{kind!r}, expected {want!r}")
+            if int(state.get("k", 0)) != 12345:
+                return False, f"CURSOR POLICY FAIL: {key!r} lost its cursor"
+
+        # ...and a key it has never heard of must still stop the campaign
+        _ckpt.save(path, {"key": "a-configuration-that-never-existed",
+                          "k": 999, "j": 1})
+        try:
+            pol.refuse_mismatch()
+        except _ckpt.CursorRefused:
+            pass
+        else:
+            return False, ("CURSOR POLICY FAIL: an unknown key did NOT "
+                           "refuse -- a campaign would silently restart at "
+                           "the floor and abandon the frontier")
+        if pol.load()[0] is not None:
+            return False, ("CURSOR POLICY FAIL: an unknown key was loaded "
+                           "anyway")
+        pol.refuse_mismatch(fresh=True)          # --fresh must override
+    finally:
+        if own:
+            try:
+                for f in os.listdir(tmp):
+                    os.remove(os.path.join(tmp, f))
+                os.rmdir(tmp)
+            except OSError:
+                pass
+    return True, (f"cursor policy ok: all {len(kinds)} declared key(s) pass "
+                  f"BOTH readers with the right classification "
+                  f"({', '.join(sorted(set(kinds.values())))}); an unknown "
+                  f"key refuses; --fresh overrides")
+
+
+def standard(pool_factory=None, tmpdir=None, cursor=None):
     """Every repo-wide drill, as [(ok, msg)].  A project's selftest prints
     these alongside its own.
 
     `pool_factory(workers) -> a context-managed pool` adds the ramp drill;
     a project without a host pool passes None.
+
+    `cursor` is the launcher's CursorPolicy and every project should pass
+    it.  It is a keyword with a default only so that adding it did not
+    break the launchers that predate it -- the drill it enables is the one
+    that catches "this configuration cannot read its own predecessor's
+    checkpoint", which no other gate can see because no other gate ever
+    writes an old key.
     """
     own = tmpdir is None
     tmp = tempfile.mkdtemp(prefix="huntlib-drill-") if own else tmpdir
     try:
         out = [shutdown_drill(), durability_drill(tmp), evidence_drill(tmp)]
+        if cursor is not None:
+            out.append(cursor_policy_drill(cursor, tmp))
         if pool_factory is not None:
             out.append(_pool.ramp_drill(pool_factory))
         return out

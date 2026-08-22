@@ -167,6 +167,19 @@ for _old in INHERITS:
 REDENOMINATE = (f"a089761-v4-p1{P1}-p2{P2}-q2{Q2}-seg14",
                 f"a089761-v3.4-p1{P1}-p2{P2}-q2{Q2}-seg14")
 
+# EVERY reader of the checkpoint goes through this object and none of them
+# takes a key list of its own.  There are three readers -- the campaign's
+# load, --status, and the refusal check in main() -- and passing the same
+# list to three places is a thing you can forget at one of them.  It was
+# forgotten twice: v4 taught `load` about its predecessor and not
+# `refuse_mismatch`, and v5 did it again with REDENOMINATE, each time
+# leaving a battery that was entirely green and a campaign that would not
+# start.  `drills.cursor_policy` writes a checkpoint under every key this
+# declares and puts both readers in front of it, so the next one fails in
+# --selftest instead of at the owner's hand.
+CURSOR = checkpoint.CursorPolicy(CKPT, CONFIG_KEY,
+                                 accept=INHERITS, adopt=REDENOMINATE)
+
 
 # ------------------------------- the taxonomy -------------------------------
 
@@ -323,12 +336,13 @@ class Campaign:
         return st
 
     def load(self):
-        st = checkpoint.load(CKPT, CONFIG_KEY, warn=lambda m: log("STAGE", m),
-                             accept=INHERITS)
-        if not st:
-            st = self._redenominate()
+        st, kind = CURSOR.load(warn=lambda m: log("STAGE", m))
         if not st:
             return False
+        if kind == "adopted":
+            self._resume_k = int(st.get("k", 0))
+            log("STAGE", f"checkpoint written by {st.get('key')} adopted: it "
+                         f"claims the line swept to k = {self._resume_k:,}")
         self.j = int(st["j"]) if not self._resume_k else None
         self.u = int(st.get("u", 0))
         self.census_floor = int(st.get("census_floor", 0))
@@ -352,23 +366,11 @@ class Campaign:
         return int(jn * self.eng.W
                    + self.eng.W * un // max(self.eng.R3, 1))
 
-    def _redenominate(self):
-        """Adopt an older wheel's SWEPT-TO k, floored onto this wheel.
-
-        Not inheritance -- see REDENOMINATE.  What carries across is the
-        arithmetic claim "every k below this is swept", which is true of
-        any correct engine; what does not carry is the cursor `j`, which is
-        denominated in a wheel period this configuration does not have.
-        """
-        for old in REDENOMINATE:
-            st = checkpoint.load(CKPT, old, accept=(old,))
-            if st and st.get("key") == old:
-                self._resume_k = int(st.get("k", 0))
-                log("STAGE", f"checkpoint written by {old} adopted: it "
-                             f"claims the line swept to k = "
-                             f"{self._resume_k:,}")
-                return st
-        return None
+    # Re-denomination itself lives in __init__, where the engine exists to
+    # floor against; the POLICY decides only that the old cursor is
+    # readable, and says so by handing load() the kind "adopted".  Keeping
+    # those two apart is the point: one object answers "may I read this",
+    # every reader asks it, and nobody keeps a second list.
 
     # ------------------------------------------------------------- status
     def status_line(self):
@@ -772,7 +774,7 @@ def selftest():
         rows.append(g())
     rows.append(drills.event_kind_drill(
         lambda c: event_kind(*c), _event_cases()))
-    for d in drills.standard():
+    for d in drills.standard(cursor=CURSOR):
         rows.append(d)
     for d in (_ceiling_drill, _canary_hunt, _protocol_drill, _resume_drill,
               _stop_on_discovery_drill):
@@ -793,8 +795,7 @@ def selftest():
 # ---------------------------------- status ----------------------------------
 
 def _status():
-    st = checkpoint.load(CKPT, CONFIG_KEY, warn=lambda m: log("STAGE", m),
-                         accept=INHERITS)
+    st, _kind = CURSOR.load(warn=lambda m: log("STAGE", m))
     if not st:
         log("STATUS", "no checkpoint for this configuration yet")
         return 0
@@ -845,9 +846,8 @@ def main(argv=None):
         return _status()
     if args.to:
         args.to = int(args.to)
-    checkpoint.refuse_mismatch(CKPT, CONFIG_KEY, fresh=args.fresh,
-                               describe=lambda s: f"k = {s.get('k')}",
-                               accept=INHERITS)
+    CURSOR.refuse_mismatch(fresh=args.fresh,
+                           describe=lambda s: f"k = {s.get('k')}")
     if args.fresh and os.path.exists(CKPT):
         os.remove(CKPT)
     return Campaign(args).run()
