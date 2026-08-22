@@ -284,6 +284,61 @@ end one early, and all three are opt-in: Ctrl+C, `--to`, and
 `--stop-on-discovery`. The first is below; the third has a subtlety that
 cost a run, so it is specified here rather than left to each project.
 
+### Two cursors, when coverage is coarser than work
+
+Some engines cannot enumerate candidates in `k` order. A multi-level wheel
+generates them in `(t, s, u, ...)` index order, so the line is only
+contiguous at the end of a whole wheel period — and a period can be large:
+square-ladders' is `6.15e17` of `k` and about ten minutes of device.
+
+When that happens the checkpoint carries **two cursors, and they are two
+different claims**. Do not collapse them.
+
+* **COVERAGE.** The `k` below which every value has been swept. It is what
+  a least-`k` claim rests on and what `[STATUS]` may call "swept to". It
+  advances only at a period boundary.
+* **WORK.** Where to resume from. It advances every launch, so a crash
+  still costs one checkpoint interval and not one period, which is what
+  rule 5d asks for.
+
+Three consequences, all of them load-bearing:
+
+1. **A discovery is only the LEAST `k` once its period closes.** Values
+   classified mid-period are held and narrated in `k` order at the period
+   end. Holding them in memory is not enough — a crash in that window would
+   lose them, so they are held **in the checkpoint**.
+2. **`[STATUS]` must not present work progress as coverage.** Report the
+   swept `k` explicitly alongside the interpolated one; the rate and the
+   ETA want the second, the claim wants the first.
+3. **A find costs at most one period of over-sweep.** Price that against
+   what the coarser enumeration buys, at the CURRENT frontier — the answer
+   changes as the hunt moves. square-ladders' v2 log rejected exactly this
+   wheel because the target's modelled median sat inside the first block;
+   at the next term the same period was 0.13% of the remaining hunt and the
+   same wheel was worth 3.5x. Re-price a rejection like that rather than
+   inheriting it.
+
+### Re-denominating a cursor across a wheel change
+
+A checkpoint's config key must break when coverage moves (a different
+wheel, a different sieve depth), and `huntlib.checkpoint`'s `accept` list
+is only for changes that cover the IDENTICAL line. That is not the same as
+throwing the cursor away. What survives any correct engine is the plain
+arithmetic claim "every `k` below this is swept", so a launcher may adopt
+the old checkpoint's `k` — **floored** onto the new period, never rounded
+up, or a gap opens — and re-sweep the overlap. Two things must be handled
+explicitly, and both are cheap:
+
+* the census would be inflated by counting the overlap twice, so record a
+  floor below which values are counted no further;
+* a DISCOVERY inside the overlap is not a duplicate. It is two engines
+  disagreeing about line one of them has already certified as clear.
+  **Raise an alarm and stop.** That turns a re-sweep into a free
+  cross-check between the old wheel and the new one.
+
+Keep this in a separate, differently named list from the identical-coverage
+one, so the two can never be confused for each other.
+
 ### `--stop-on-discovery` (binding for every project)
 
 **It means: stop once THIS RUN confirms a frontier-extending discovery.**

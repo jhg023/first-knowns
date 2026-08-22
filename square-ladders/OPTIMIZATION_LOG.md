@@ -853,3 +853,312 @@ caught by G10 at n = 1).
   cursor carries over. `huntlib.checkpoint.load` grew an `accept` list for
   this, and it warns on every migration. A change to the WHEEL or the
   SIEVE DEPTH must never be listed there — those move coverage.
+
+---
+
+## v5 — the wheel reaches 47. KEPT: 4.31x end to end, 2026-08-22
+
+`SCORE3L 1,212,461,925` (the production configuration, new shape),
+`SCORE 261,712,890`, 27 gates green (G16 is new).
+
+Measured against the committed v4 engine, both loaded in one process,
+interleaved, nine paired rounds at the live cursor, with the ratio taken
+INSIDE each round:
+
+| | v4 | v5 | |
+|---|---|---|---|
+| device only | 2.67e14 k/s | 1.21e15 k/s | **4.514x** |
+| end to end, classification in both | 2.63e14 k/s | 1.13e15 k/s | **4.306x** |
+
+Per-round ratios 4.16–4.38, so the spread is a few percent and not the
+30% ambient swing that makes sequential sweeps lie.
+
+### Measurement 8 — where the tests actually are (do this before anything)
+
+The whole entry follows from one identity. Let
+`S(q) = prod_{q' < q} (1 - w(q')/q')` be the fraction of the k line that
+reaches prime q. Then the density of candidates after a wheel to `p2` is
+`S(next prime after p2)`, and the survival from there to q telescopes, so
+
+    TESTS PER UNIT OF K LINE  =  sum over primes q > p2 of S(q).
+
+Two things fall straight out of it. The value of putting a prime **into**
+the wheel is exactly its own term `S(p)` — not a modelled ratio, a
+subtraction. And the terms are enormously front-loaded. At n = 18 with the
+v4 wheel (23, 37]:
+
+| primes | tests/line | share |
+|--------|-----------|-------|
+| 41..47 | 1.262e-3 | **72.15%** |
+| 53..61 | 2.853e-4 | 16.30% |
+| 67..97 | 1.504e-4 | 8.59% |
+| 101..199 | 4.45e-5 | 2.54% |
+| 211..65536 | 7.1e-6 | 0.42% |
+
+**Three primes were 72% of every test the engine did**, and the engine
+stopped one short of them. Everything below is a consequence.
+
+### v5a — the third wheel level. KEPT: 3.51x
+
+41, 43 and 47 were out of the wheel for one reason: their residues do not
+fit in a table. `(23, 47]` is 76,038,000 of them, and the engine's
+second-level table is indexed by `gridDim.y`.
+
+CRT lifting is linear, so the second level can be **factored again**:
+
+    r2 = EA*r2a + EB*r2b (mod W2),   EA = W2b*(W2b^-1 mod W2a),  etc.
+
+so `C[s] = r2a*KA mod W2` and `D[u] = r2b*KB mod W2` with `KA = EA*inv`,
+`KB = EB*inv`, and a candidate is `m = (A[t] + C[s] + D[u]) mod W2` out of
+two tables of **4,560 and 16,675** instead of one of 76 million. The
+third-level residue rides `gridDim.z` beside the wheel-period index
+(`z = period*NU + u`), the block combines its own `C + D` once, and **the
+inner loop is byte-for-byte what v4 issued**. 8.28e13 candidates per period
+from 72 KB of tables.
+
+**47 is the last prime, and not by choice.** `m` is a u32, so the combined
+second modulus must stay under 2^32: primes to 47 make it 2.756e9, primes
+to 53 make it 1.46e11. Widening `m` does not help either — `W1*m` is the
+quantity the one-conditional-subtraction reduction bounds, so `W < 2^63`,
+and the product of the primes to 53 is 3.26e19. No arrangement of levels
+moves either bound, because both are functions of the PRIME SET and not of
+the split. Dropping small primes to buy 53 was priced and loses: the wheel
+wants its smallest primes most. G13 asserts the u32 bound rather than
+documenting it.
+
+Density 6.69e-4 -> 1.346e-4 candidates per k, and 72% of the tests gone.
+
+### What it costs, and why it is worth it anyway
+
+A wheel period is now **6.15e17 of k line** and about ten minutes, and
+candidates come out in `(t, s, u)` order rather than in k order, so **only
+a whole period is contiguous in k**. The launcher therefore tracks two
+cursors, and they are two different claims:
+
+* `boundary` — the k below which the line is swept. Moves one period at a
+  time. A discovery is only the LEAST k once its period closes, so finds
+  are held (in the CHECKPOINT, so a crash in that window does not lose
+  them) and narrated in k order at the period end.
+* `(j, u)` — resumable per launch. A crash costs one checkpoint interval,
+  which is what rule 5d asks for, not one period.
+
+The over-sweep at a find is at most one period: ten minutes against a
+wheel worth 3.5x. The v2 log rejected this wheel for exactly this reason
+and was right at the time — `a(16)`'s modelled median sat inside the FIRST
+block, so proving it would have cost 1.3e16 of line instead of 2.2e15. At
+the a(18) frontier the same 6.15e17 is 0.13% of the remaining hunt. The
+blocker did not get solved; it got outgrown, and that is worth writing down
+because the same rejection will look wrong again at the next frontier.
+
+### v5b — the constants, re-swept on the new wheel. KEPT: 1.12x
+
+Rule 1's corollary for the eighth time in this project, and one of these
+was not a re-sweep but a re-READ:
+
+* **`LIT_GROUP_MAX` 8192 -> 2^18. 1.11x on the two-level wheel, 1.08x on
+  the three-level one.** The v3 sweep recorded "1.19x at 1 KB and 1.18x at
+  33 KB, so the win is flat" and shipped 1 KB. Those two points **compile
+  to the same grouping**: a third prime in a group needs a modulus of
+  82,861, so both budgets produced pairs and the sweep measured one binary
+  twice. It was never flat; it was never tested. On the wheels this engine
+  runs the budget really does change the grouping — three primes per group,
+  one fewer lookup on EVERY candidate.
+* `LIT_SURV` 0.095 -> **0.11**, which lands on 5 primes on the two-level
+  wheel and 7 on the three-level one. Neighbours 0.94x and 0.93x.
+* `K2_SURV` 0.012 -> **0.0057** (19 primes -> 25). The direction is the
+  interesting part and it only makes sense after v5d: a CHEAPER tail wants
+  MORE compaction in front of it, because what round 2 now saves is not
+  divergent block work but entries written to and read back from a global
+  queue.
+* `K2_GROUP_MAX` 2^14 -> 2^16 (1.04x). `tpb` 256, `cpt` 32, `spb` 8,
+  `UNROLL` 4, tail grid — all re-swept, all unmoved (UNROLL and the tail
+  grid measured flat to 0.2% across 8x ranges).
+
+### v5c — the prefix reduction, hoisted out of the inner loop. KEPT: 1.04x
+
+E11 (below) said 71% of the prefix was arithmetic and 29% lookups, so the
+target was the 64-bit multiply-high. A candidate is `off = b0 + W1*m` with
+`m = A - D` (plus W2 when that borrows), b0 and A fixed for a whole inner
+loop and D fixed for the whole block, so
+
+    off mod Q = ((b0 + W1*A) mod Q - (W1*D) mod Q [+ W mod Q]) mod Q
+
+and every 64-bit reduction leaves the per-candidate path: one per block per
+group, one per first-level residue, each amortised over SPB candidates.
+What is left is a select between two precomputed values (the borrow picks
+which), a subtract and a conditional add — three 32-bit instructions where
+v4 issued `__umul64hi` and its correction.
+
+**It is worth 1.04x, and getting there taught more than the number.** The
+first version measured **0.98x** and the register count did not move: nvcc
+had answered by REMATERIALISING the precomputed values back into the loop
+rather than spending registers on them. Told to hold them
+(`__launch_bounds__`), it used 72 registers, dropped from five resident
+blocks per SM to three, and measured **0.79x**. The values only pay from
+SHARED memory, where they cost no registers at all.
+
+That is the finding: **this kernel is bound by OCCUPANCY, not by
+instruction issue.** v3 measured issue-bound and was right then; six
+structural changes later it is not, and every collapse in this round traces
+to the same budget — an SM divides 128 KB between shared and L1, the
+resident blocks take their cut of it FIRST, and the group tables have to
+live in what is left. 0.29x at a shallower compaction point (queues grew),
+0.36x at cpt 64 and 0.29x at cpt 128 (queues grew), 0.33x at wider groups
+(tables grew). One budget, three faces.
+
+Since the base now folds into the per-residue value, a hoisted group's
+table no longer needs the second copy v4 gives everything else
+(`HOIST_TABLE_REPS`). Measured 1.000x on its own — 69 KB was already inside
+L1 — but it halves the tables and it is what would buy room if the cliff
+ever moved.
+
+### v5d — the queues hold an INDEX, and the tail is its own kernel
+
+**Queues: 1.02x.** A candidate's identity inside a block is `(jj, ss,
+threadIdx.x)`, which is 13 bits where its offset is 60. The queues are 87%
+of this kernel's shared memory and shared memory is the resource it is
+short of, so they store the index and `off_of` runs the generator's
+arithmetic backwards to rebuild the candidate. 9.5 KB per block -> 2.4 KB.
+
+**Tail: 1.06x.** Round 2 leaves about 1.2% of a block's candidates — ~98
+against 256 threads — so five warps in eight idled while the block waited
+on the single deepest early-exit chain among the survivors. Measured, that
+was **32% of the kernel for 4% of its lookups**. The survivors now go to a
+GLOBAL queue (one atomic per block, not per item — `qn2` is already the
+count) and a second kernel sweeps it with one item per lane and the whole
+device in flight. Capacity is sized from the analytic survival and overflow
+is harmless in the usual way: the block runs that candidate's tail on the
+spot. G16 forces it.
+
+### v5e — the launch flush. KEPT: 1.08x end to end
+
+The host classifies survivors and at the v5 rate that is 2.6 ms against a
+32 ms launch — 8% of a core, and it was costing 7.1% of the RATE because it
+ran while the device was idle. The engine already enqueued the next launch
+before handing back the previous one's survivors, and it made no
+difference: `next()` took the same 30.5 ms whether the host had just done
+3 ms of work or none.
+
+**On WDDM a launch is asynchronous but BATCHED.** The driver holds it in a
+user-mode command buffer until something forces a submit, so the device did
+not start until the host next blocked. Isolated on a 19 ms kernel: spin
+9.5 ms on the host, then synchronise, and the synchronise still takes
+19.0 ms — with a stream query after the launch it takes 9.3 ms. One
+`cudaStreamQuery` per launch, microseconds, and classification went from
+7.1% of the rate to **0.0%** (paired, nine rounds).
+
+This is why the hunt still has no worker pool. The share was 2% at the v4
+rate and would have grown with the engine; instead the work moved off the
+critical path, which asks the machine for nothing.
+
+---
+
+## Measurement E11 — inside the prefix: arithmetic or lookups?
+
+With round 2, the tail and the queue push removed so `kill` feeds nothing,
+three builds differing only in the prefix, on the production shape:
+
+| | median | delta |
+|---|---|---|
+| generation only | 0.0601 s | |
+| + the reduction, no table lookup | 0.2679 s | +0.208 (69 ms/group) |
+| + the lookup (the real prefix) | 0.3510 s | +0.083 (28 ms/group) |
+
+**71% arithmetic, 29% lookups.** That is what pointed at v5c, and it is
+also what rules OUT the obvious alternative: if the lookups were the wall,
+halving them would pay even at the cost of divergence, and it does not
+(see the rejects).
+
+## Measurement E12 — the phase split, re-measured twice
+
+Nested differential ablation, production shape, warmed under load:
+
+| phase | v4 | v5 |
+|-------|----|----|
+| generation | 10.9% | 8.6% |
+| prefix | 53.0% | **40.7%** |
+| queue 1 | 10.6% | 10.2% |
+| round 2 | 11.4% | 21.2% |
+| tail | 14.1% | 19.3% |
+
+Round 2 grew because `K2_SURV` moved it 6 primes deeper, which is a trade
+it wins. The tail's share is now mostly the second kernel (10.7% of the
+total on its own), not idle lanes.
+
+## Priced and REJECTED in v5 — do not retry
+
+* **Warp-aggregated queue pushes. 0.887x.** One shared atomic per warp
+  instead of one per surviving candidate (ballot / popcount / shuffle),
+  the textbook fix for a sparse push. It is 1.128x SLOWER here, and it
+  even lowered the register count (72 -> 44) while losing. Same-address
+  shared atomics are already aggregated in the LSU; the ballot and the
+  forced convergence cost more than they save.
+* **Early exit between prefix groups. 0.906x.** Guarding groups 2 and 3
+  with `if (!kill)` would cut lookups per candidate from 3.0 to 1.45. The
+  divergence costs more, and nvcc predicates the guard rather than
+  branching, so the load issues anyway. v3's branchless prefix stands.
+* **Persistent LANES in the tail kernel. 0.95x.** Each lane holding a
+  POSITION rather than a loop, so a dead candidate is replaced without
+  waiting for its neighbours — the standard cure for exactly the
+  divergence this phase has. It costs the UNROLL independent Barrett
+  chains that hide the loop's load latency, and that is worth more.
+* **Wider CRT groups (6 primes in 2 groups, 67 KB of tables). 0.33x.**
+  The L1 budget above. Halving the tables first (`HOIST_TABLE_REPS`) did
+  not buy enough room.
+* **Bigger blocks: cpt 64 -> 0.92x, cpt 128 -> 0.90x, tpb 512 -> 0.85x.**
+  Even after the index queue cut shared memory 3.8x, which is what had
+  made them 0.36x before. The tail queue would fill better; it does not
+  pay for the occupancy.
+* **`__launch_bounds__` to buy registers for the hoisted prefix.**
+  0.82x at 4 blocks/SM, 0.79x at 3, and forcing 5 or 6 spills to local.
+  nvcc's own choice is the best of them.
+* **The L1/shared carveout preference.** Measured 1.08x once, on a run
+  where the device was contended and running at a third of its normal
+  rate, and 1.00x every time on an idle one. Not shipped. Recorded because
+  the first measurement had a 0.6% spread across nine rounds and looked
+  entirely solid — a paired ratio protects against drift WITHIN a run, not
+  against a run taken in a different regime (rule 3, again).
+* **Sieve depth 32768 instead of 65536. 1.026x for 3x the host load** and
+  a re-freeze of every fingerprint. Depth is still nearly free; the deep
+  primes are 0.42% of the tests.
+* **A host worker pool.** Would recover the 7.1% the flush recovered for
+  nothing, and would ask for cores. Superseded, not merely declined.
+
+## Open after v5, in rough order of expected value
+
+0. **Nothing on this list is worth more than about 1.1x, and that is the
+   finding.** The wheel is capped at 47 by arithmetic, so candidates per
+   unit of k line is FIXED at 1.346e-4, and the prefix that every one of
+   them pays is three group tests that cannot be merged (L1) or skipped
+   (divergence). The engine is at a local optimum of its own design.
+
+1. **Overlap the tail kernel with the next launch** — two streams and a
+   double-buffered global queue. Bounded above by the tail kernel's whole
+   cost, 10.7%, and probably far below it: the sieve kernel already
+   saturates the SMs, so concurrency only fills gaps rather than creating
+   capacity. Costs 224 MB more and a synchronisation dance. Unmeasured.
+2. **Round 2 cannot be hoisted, and this is why.** The hoisted form needs
+   `(b0 + W1*A) mod Q` for the candidate's OWN `(thread, jj)`, and round 2
+   is read by a different thread than the one that queued it — so it would
+   have to do the same 64-bit reduction it was trying to avoid. Storing
+   the residues per (thread, jj, group) is 256*4*9*2 values. Closed.
+3. **Past 47 needs a different engine: a k-ORDERED sweep.** If a launch
+   covered a contiguous k window instead of a whole period, `off` would be
+   bounded by the window rather than by W, and the wheel could grow.
+   Sketched: for each `(t, s)` the qualifying third-level residues form one
+   contiguous cyclic run in a sorted table, so it is a binary search per
+   `(t, s)` — 5e9 of them per window, which is negligible against 4e14
+   candidates, but their RESULTS are 40 GB unless the search happens inside
+   the kernel, which makes the work per block variable and the grid
+   dynamic. Worth about 1.4x at 53 and 3.1x at 61, against an engine
+   rewrite and a load-balancing problem. Priced, not started.
+4. **`CKPT_LAUNCHES` holds the half-second interval** and will need
+   raising the next time the engine gets materially faster, for the reason
+   the old `SEG_BLOCKS` comment gives.
+5. **SCORE1L pays 12% for machinery production gains from** — the split
+   tail costs it 3.9% and the index queue 1.3%, measured on that shape
+   directly. Its launches are 6 ms where production's are 32 ms, so the
+   tail kernel's fixed cost lands five times harder. Kept anyway:
+   production is what the hunt runs, and the price is written here. Its
+   more important job, returning SCORE's fingerprint from different
+   arithmetic, is untouched.

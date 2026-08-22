@@ -19,7 +19,7 @@ Alekseyev's searched-empty bound a(16) > 1.4e13.
 
 THE CLAIM'S FLOOR IS FREE.  a() is non-decreasing (the conditions nest), so
 a(16) >= a(15) = 861,066,640 by definition and nothing below that has to be
-swept at all.  The campaign still starts far below it: at ~2.1e14 k/s the
+swept at all.  The campaign still starts far below it: at ~1.2e15 k/s the
 whole of Alekseyev's range is under a tenth of a second, so this hunt re-derives his
 bound independently before it reaches new ground, and the least-claim rests
 on our own coverage rather than on a citation.

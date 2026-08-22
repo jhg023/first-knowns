@@ -1,17 +1,21 @@
 # BENCHMARKS — square-ladders
 
 The number this project is judged on is `SCORE`, printed by `score.py` and
-only if every correctness gate is green **and** all four frozen shapes
+only if every correctness gate is green **and** all five frozen shapes
 reproduce their work fingerprints exactly. An engine that skips work fails
 the fingerprint and scores 0; an engine that breaks the mathematics fails
 the gates and scores 0.
 
-The rate is **end-to-end k-line per second** — `blocks × W / wall` — which
-is what the hunt is actually paid in, divided by 1e6.
+`SCORE3L` is the shape the hunt actually runs, and since v5 it is the one
+to read for campaign throughput; `SCORE` remains the anchor that is
+comparable all the way back to v1.
+
+The rate is **end-to-end k-line per second** — what the hunt is actually
+paid in, divided by 1e6.
 
 ## The frozen shapes
 
-Four, because one configuration is not a benchmark. Every `k0` is an exact
+Five, because one configuration is not a benchmark. Every `k0` is an exact
 multiple of that shape's wheel modulus; it has to be, since each engine
 floors `k // W` with its own `W`, so a shared cursor is a different
 absolute window per wheel.
@@ -22,6 +26,14 @@ absolute window per wheel.
 | `SCORE1L` | n = 16 | one-level ≤ 23, W = 223,092,870 | 65536 | the **same** window | 303 / 999990048677220 |
 | `SCORE10` | n = 10 | one-level ≤ 13, W = 30,030 | 4096 | `[2.0e9, +6.006e9)` | 2931 / 2555483804 |
 | `SCORE16W` | n = 16 | one-level ≤ 17, W = 510,510 | 1024 | `[1.0e15, +3.0631e10)` | 581 / 999980563688462 |
+| `SCORE3L` | n = 18 | **three-level (23],(37],(47]**, W = 614,889,782,588,491,410 | 65536 | 600 launches from `j = 15` | 19511 / 9328162232848324866 |
+
+`SCORE3L` is measured in **launches**, not wheel periods, and that is a
+property of the engine rather than a convenience: one production period is
+`6.15e17` of line and about ten minutes, so the natural reproducible unit
+below it is one kernel launch — a fixed `(t, s)` sweep at one third-level
+residue. 600 of them is about 20 seconds and just as deterministic a set of
+candidates as a whole period.
 
 `SCORE` and `SCORE1L` cover the **same stretch of line with the same sieve
 depth**, so they must return the identical fingerprint — and they do. The
@@ -47,6 +59,7 @@ helps one and hurts the other is visible instead of averaged away.
 | 2026-08-21 | **v3.3, combined round 2 + derived depths** | **184,801,999** | 36,289,650 | *see below* | *see below* | **6.481×** against v2, **1.13×** against v3.2 |
 | 2026-08-21 | **v3.4, generation amortised over SPB residues** | **207,468,780** | 38,259,663 | *see below* | *see below* | **7.505×** against v2, **1.13×** against v3.3 |
 | 2026-08-22 | **v4, (k, off): the ceiling stops being a machine word** | **203,738,256 – 211,898,189** | 36,299,436 | *see below* | *see below* | **0.982×** against v3.4 interleaved — a 1.8% fee for a 1,138× larger range |
+| 2026-08-22 | **v5, the wheel reaches 47 on three levels** | **261,712,890** | 36,275,951 | 1,641,522 | 16,634,409 | `SCORE3L` **1,212,461,925** — **4.306×** against v4 end to end, interleaved |
 
 The v3 rows' claim is the ratio, not the number. v2's kernel was compiled
 verbatim from the source it had at commit time and run back to back with
@@ -76,15 +89,22 @@ hunt that can find `a(18)` and one that provably cannot.
 
 ## What the campaign costs at this rate
 
-At the v4 production rate of **2.04×10¹⁴ k/s**, measured end-to-end over
-the a(16)/a(17) campaign at **1.49×10¹⁴ k/s** (the campaign rate includes
-classifying and verifying survivors, and it is the honest number to plan
-with) — against the odds model's quantiles, conditioned on the live
-frontier `a(18) > 7.25×10¹⁸` where the v3.4 sweep stopped:
+At the **v5** production rate of **1.21×10¹⁵ k/s** — measured end to end,
+with survivor classification in the loop, which since v5 costs 0.0% of the
+rate rather than being a separate deduction — against the odds model's
+quantiles conditioned on the live frontier `a(18) > 9.65×10¹⁸`:
 
-| target | Q1 | median | Q3 | P90 | P99 |
-|--------|----|--------|----|-----|-----|
-| a(18), from the v3.4 stopping point | 4.5 h | **11.7 h** | 25.8 h | 48 h | 5.0 d |
+| target | Q1 | median | Q3 | P90 |
+|--------|----|--------|----|-----|
+| a(18), v4 at 2.62×10¹⁴ k/s | 2.8 h | 7.3 h | 15.9 h | 29.1 h |
+| **a(18), v5 at 1.21×10¹⁵ k/s** | **0.6 h** | **1.6 h** | **3.4 h** | **6.3 h** |
+
+That is the whole point of the v5 entry: the term that was an overnight run
+is now an afternoon, and P90 — the depth at which not finding it would
+start to be interesting — moved from over a day to six hours.
+
+The line below is the older accounting, kept because it is what justified
+v4's 1.8% fee:
 
 The v3.4 ceiling `9×10¹⁸` sat 19.1% of the way into that distribution:
 sweeping every k the old engine could address left **four chances in five**

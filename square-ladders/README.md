@@ -23,17 +23,14 @@ first break in the five-term plateau. Both are **proved**, not
 probable-prime ([RESULTS.md](RESULTS.md), evidence in
 [`evidence/`](evidence/)).
 
-`a(18)` is open and is the next target. The campaign paused at
-`k = 7.25×10¹⁸` after 13.5 hours — not on a find and not on a decision, but
-because the v3.4 engine had run out of addressable range at `9×10¹⁸`, a
-**machine word** rather than any bound of the problem. Conditioned on that
-cursor the model puts `a(18)`'s Q3 at `2.11×10¹⁹`, already past `2⁶⁴`, so
-no width of integer would have been enough. The engine is now **v4**, which
-carries candidates as `(k, off)` and reduces the offset instead of the
-absolute `k` — its ceiling is the primality-proof bound `1.02×10²²`, a
-1,138× larger range for a measured 1.8% of throughput. From the current
-cursor `a(18)` is about **12 hours** to its median and 5 days to P99, so
-anyone with a CUDA GPU can take this the rest of the way.
+`a(18)` is open and is the next target. The campaign stands at
+`k = 9.65×10¹⁸`, swept empty. The engine is **v5**: candidates are carried
+as `(k, off)` so the ceiling is the primality-proof bound `1.02×10²²`
+rather than a machine word, and the wheel now reaches **47** on three
+CRT levels, which is worth 4.3× end to end over v4 on the same cursor.
+From here `a(18)` is about **1.6 hours** to its median and 6 hours to P90
+on one RTX 4090, so anyone with a CUDA GPU can take this the rest of the
+way in an afternoon.
 
 ## The problem
 
@@ -51,7 +48,7 @@ and why the published list plateaus.
 | Frontier this project inherited | `a(16) > 1.4×10¹³` — Max Alekseyev, in the entry by 2017 |
 | Last edit of any kind | revision #14, Aug 14 2017 |
 | **Found here** | `a(16) = 15,737,271,507,027,492`, `a(17) = 125,811,821,444,034,258` |
-| **Open, and next** | `a(18)`, searched-empty below `7.25×10¹⁸` |
+| **Open, and next** | `a(18)`, searched-empty below `9.65×10¹⁸` |
 | Upper bound | **none published, at any open n** |
 
 Why it is open rather than merely unfinished: the density of qualifying `k`
@@ -99,20 +96,39 @@ candidate is 3.07 against the ~22 marks a marking sieve of the same depth
 would pay. It also makes sieve depth nearly free: 4096 and 262144 measured
 within 2% of each other.
 
-**The wheel is factored.** A measured phase split put candidate generation
-at 11% of the v1 kernel and the Barrett loop at 89%, so the lever was fewer
-candidates, not cheaper tests. (It is 15.3% / 84.7% on the v3 kernel below,
-which is what re-measuring a split after every structural change is for.)
-But a one-level wheel over the primes to 37
-would be 5.5×10⁹ residues (~44 GB). So the engine stores two tables and
-recombines them per candidate by CRT:
+**The wheel is factored, three ways, and it decides everything.** Write
+`S(q)` for the fraction of the `k` line that reaches prime `q` — the
+product of `(1 - w(q')/q')` over all smaller primes. Then the tests the
+engine must do per unit of line is exactly `Σ S(q)` over the primes above
+the wheel, so **the value of putting a prime into the wheel is its own term
+`S(p)`**, and those terms are steeply front-loaded. At `n = 18` the three
+primes `41, 43, 47` are **72% of every test the engine does**.
 
-    x = RES1[t] + W1 * ( (RES2[s] - RES1[t]) * W1^-1  mod W2 )
+They do not fit in a table: `(23, 47]` is 76,038,000 residues. But CRT
+lifting is linear, so the table can be factored and factored again —
 
-5,040 entries beside 1,088,640 give the wheel of all primes to 37 —
-**6.6× fewer candidates per unit of line** than primes to 23 — out of two
-tables that still fit in cache. Measured end-to-end, same window, same run:
-**3.9×**.
+    m = ( A[t] + C[s] + D[u] )  mod W2,      k = base + r1 + W1·m
+
+— and the whole wheel of the primes to 47 comes out of tables of
+**1,088,640, 4,560 and 16,675** entries: 8.3×10¹³ residues from 72 KB.
+One candidate per 7,428 of the line where primes-to-23 gives one per 205.
+Measured end to end against the two-level wheel, interleaved: **3.5×**.
+
+**47 is the last one, and not by choice.** `m` is a 32-bit quantity, so the
+combined second modulus has to stay under `2³²` — primes to 47 make it
+`2.76×10⁹` and primes to 53 make it `1.46×10¹¹`. Widening `m` does not
+help: `W1·m` is what the engine's one-conditional-subtraction reduction
+bounds, so the whole wheel modulus must stay under `2⁶³`, and the primes to
+53 multiply to `3.26×10¹⁹`. Both bounds are functions of the prime set and
+not of how it is split, so no arrangement of levels moves them. G13 checks
+the bound rather than documenting it.
+
+The price is that candidates come out in `(t, s, u)` order, so only a whole
+wheel period — `6.15×10¹⁷` of line, about ten minutes — is contiguous in
+`k`. The launcher therefore carries two cursors: the line it has SWEPT,
+which advances one period at a time and is what a least-`k` claim rests on,
+and the (period, third-level) pair it can RESUME from, which advances every
+launch so a crash still costs half a second.
 
 **The warp pays the maximum, so the block compacts.** The test loop turns
 out to be bound by instruction *issue*: adding 24 independent instructions
@@ -158,6 +174,29 @@ computation and one 64-bit add serve eight candidates instead of one.
 
 Measured against the v2 kernel, interleaved in one run with both engines
 required to agree on every survivor: **7.505×**.
+
+**And then the split moved, so the answers did.** v3 found the kernel bound
+by instruction *issue*; six structural changes later it is bound by
+**occupancy**, and the same lever reverses sign with it. The prefix's
+64-bit reduction really can be hoisted out of the inner loop — a candidate
+is `b0 + W1·m` with `b0` fixed for the whole loop, so `off mod Q` is a
+select, a subtract and a conditional add — but held in *registers* it costs
+72 of them, three resident blocks per SM instead of five, and **0.79×**.
+The same values in *shared memory* are 1.04×. An SM divides 128 KB between
+shared and L1, the resident blocks take their cut of it first, and the
+group tables live in what is left: every collapse measured while tuning
+this kernel is that one budget wearing a different hat.
+
+**The tail is a separate kernel, and the host is free.** Round 2 leaves
+about 1.2% of a block's candidates — 98 against 256 threads — so five warps
+in eight idled while the block waited on the deepest early-exit chain among
+them: 32% of the kernel for 4% of its lookups. Those survivors now go to a
+global queue that a second kernel sweeps with one item per lane. And the
+host's classification, which is 8% of a core, costs **0.0%** of the rate:
+the engine enqueues the next launch before handing back the previous one's
+survivors — and then forces the driver to submit it, because on Windows a
+launch is asynchronous but *batched*, and without that flush the host's
+work runs against an idle device.
 
 **Every primality decision here is a proof, by construction.** The
 largest value is `k·n²+1`, and since v4 the enforced ceiling *is* huntlib's
@@ -208,11 +247,11 @@ separately-searched terms are used.
 Requires an NVIDIA GPU with CuPy, plus numpy and sympy.
 
 ```bash
-python launch.py --selftest    # 24 gates and drills; must end ALL GREEN (~12 s)
+python launch.py --selftest    # 27 gates and drills; must end ALL GREEN (~20 s)
 ```
 
 ```bash
-python score.py                # gates x fingerprinted benchmark (~35 s)
+python score.py                # gates x 5 fingerprinted shapes (~90 s)
 ```
 
 ```bash
@@ -239,20 +278,25 @@ here is built to. Specific to this one:
 - **Three independent implementations.** A sympy-only oracle, a numpy CPU
   engine that marks the dense line with no wheel at all, and a CuPy engine
   that enumerates wheel residues and tests them. G9 pins the GPU stream to
-  the CPU stream bit-for-bit on seven populated windows — both kernels,
-  two filters, heights from `2×10⁹` to the enforced ceiling.
+  the CPU stream bit-for-bit on eleven populated windows — all three
+  kernels (one-, two- and three-level wheels), two filters, heights from
+  `2×10⁹` to the enforced ceiling, the top ones above `2⁶⁴`.
 - **The benchmark checks itself.** `SCORE` and `SCORE1L` sweep the same
   window with the factored and one-level wheels and must return the
   identical fingerprint, so a bug in the CRT constants shows up inside the
   benchmark.
 - **Every optimization is gated at the mechanism, not just end to end.**
-  G14 checks the v3 machinery against its own definitions at the
+  G13, G14 and G16 check the machinery against its own definitions at the
   *production* configuration, which is the one G9 cannot reach with a dense
-  CPU sieve: the split A/C generation tables must reproduce the one-table
-  CRT on sampled pairs, each baked literal prime must carry the same kill
-  set and bit offset as the packed bitmap it replaced, and the shared
-  queue's capacity must equal the candidates a block owns, so "cannot
-  overflow" is arithmetic rather than optimism.
+  CPU sieve: the split `A/C/D` generation tables must reproduce the
+  one-table CRT on sampled triples and recombine to all three levels, each
+  baked literal prime must carry the same kill set and bit offset as the
+  packed bitmap it replaced, and every queue's capacity is a tuning
+  constant rather than a correctness bound — so all three of them are
+  FORCED to overflow and the survivor stream has to come out identical.
+  G16 also chunks the third wheel level three ways and requires the same
+  stream, because a chunking that dropped a residue would lose survivors
+  silently rather than reporting different ones.
 - **Canaries.** The GPU stream rediscovers `a(8)`, `a(9)` and `a(10)` as
   first occurrences at their own filters before any claim is made.
 - **The protocol is tested in both directions.** A genuine run-15 is

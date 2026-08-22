@@ -1,12 +1,12 @@
 """score.py -- gates x fingerprinted benchmark for square-ladders.
 
-Prints a SCORE only if every correctness gate is green AND all four frozen
+Prints a SCORE only if every correctness gate is green AND all five frozen
 benchmark shapes reproduce their work fingerprints exactly (survivor count
 + xor checksum of the surviving k).  An engine that skips work fails the
 fingerprint; an engine that breaks the mathematics fails the gates.  Either
 way it scores nothing.  Optimize under the score, never around it.
 
-Four shapes, because one configuration is not a benchmark:
+Five shapes, because one configuration is not a benchmark:
 
   SCORE     n = 16, factored wheel (23, 37], sieve 65536, at k = 1e15
             -- the PRODUCTION configuration of the a(16) campaign.
@@ -25,6 +25,15 @@ Four shapes, because one configuration is not a benchmark:
             filter on a coarse wheel, which is the knob whose optimum is
             most likely to move under an engine change (OPTIMIZATION.md:
             re-sweep tuning constants after any structural change).
+  SCORE3L   n = 18 on the THREE-level wheel (23],(37],(47] -- the
+            configuration the campaign actually runs, and since v5 the row
+            to read for campaign throughput.  It is denominated in kernel
+            LAUNCHES rather than wheel periods because one production
+            period is 6.15e17 of k line and about ten minutes; a fixed
+            number of launches is one third-level residue's worth of the
+            (t, s) sweep and just as reproducible a set of candidates.
+            The other four keep their windows and their fingerprints, so
+            they stay comparable all the way back to v1.
 
 A change that helps one and hurts another is visible instead of averaged
 away.  The reported rate is END-TO-END k-line per second: blocks * W /
@@ -43,7 +52,8 @@ coverage change -- a new wheel, a new sieve depth -- legitimately moves a
 fingerprint: update it in the same commit and say why in
 OPTIMIZATION_LOG.md.
 
-Wall clock: about 40 s, of which the gates are half.
+Wall clock: about 90 s, of which the gates are a fifth and SCORE3L is
+half.
 """
 
 import pathlib as _pathlib

@@ -39,7 +39,7 @@ them is the owner's decision (CLAUDE.md rule 5).
 | Last term anyone *searched* for, before this | `a(11)`, Donovan Johnson, Sep 27 2008 — the same integer |
 | Searched-empty bound this project inherited | `a(16) > 1.4×10¹³`, Max Alekseyev |
 | **Found here** | `a(16)`, `a(17)` — above |
-| **Open, and next** | `a(18)`, searched-empty below `7.25×10¹⁸` |
+| **Open, and next** | `a(18)`, searched-empty below `9.65×10¹⁸` |
 | Upper bound | none published, at any open `n` |
 
 The plateau is the whole story of this sequence's frontier, so it is worth
@@ -103,22 +103,22 @@ Counts per run length live in the checkpoint and in the 30-second
 
 ## In progress
 
-Nothing is running. The cursor stands at `k = 7,246,150,428,712,325,130`
-after 13.5 hours, with `a(18)` open and its first two rungs (Q1, median)
-passed without a find.
+Nothing is running. The cursor stands at `k = 9,654,847,819,890,303,030`,
+with `a(18)` open and its first three rungs (Q1, median, Q3) passed
+without a find.
 
-That is not a surprise and it is not bad luck — it is where the v3.4
-engine ran out of addressable range. Conditioned on `a(18) > 7.25×10¹⁸`,
-the model puts its median at `1.35×10¹⁹` and its **Q3 at `2.11×10¹⁹`,
-which is past `2⁶⁴`**. The v4 engine (see
-[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)) exists because of that number:
-its ceiling is the primality-proof bound `1.02×10²²`, not a machine word,
-so the hunt now ends when the term is found rather than when the engine
-gives out.
+That is not bad luck — the campaign twice stopped for reasons that were
+not the mathematics. The first was the v3.4 engine running out of
+addressable range at `9×10¹⁸`, a machine word; conditioned on the cursor
+at the time, `a(18)`'s Q3 was already past `2⁶⁴`, so no integer width
+would have been enough. The **v4** engine's ceiling is the primality-proof
+bound `1.02×10²²` instead. The second was throughput, and **v5** answered
+it by taking the wheel to 47 — see
+[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md).
 
-From the current cursor, at the measured end-to-end campaign rate of
-`1.49×10¹⁴ k/s`:
+From the current cursor, at the measured end-to-end rate of
+`1.21×10¹⁵ k/s` (v4 was `2.62×10¹⁴`):
 
-- `a(18)` — median **11.7 h**, Q3 25.8 h, P90 2.0 days, P99 5.0 days
-- `a(19)` — Q1 `1.71×10¹⁹`, median `6.98×10¹⁹`; both now inside the
+- `a(18)` — Q1 0.6 h, median **1.6 h**, Q3 3.4 h, P90 6.3 h
+- `a(19)` — Q1 `1.71×10¹⁹`, median `6.98×10¹⁹`; both well inside the
   engine's range, where under v3.4 neither was
