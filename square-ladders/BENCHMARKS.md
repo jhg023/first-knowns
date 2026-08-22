@@ -43,13 +43,22 @@ helps one and hurts the other is visible instead of averaged away.
 | 2026-08-21 | **v2, factored wheel (23, 37]** | **28,576,161 – 42,988,406** | 7,265,536 – 11,195,714 | 638,515 – 643,702 | 2,450,722 – 2,526,485 | **3.9×** against `SCORE1L` in the same run |
 | 2026-08-21 | **v3, cheap tests + block compaction** | **129,397,475** | 25,231,327 | 1,671,119 | 8,223,863 | **4.014×** against v2 interleaved in one run |
 | 2026-08-21 | **v3.1, second compaction round** | **136,117,250** | 26,623,079 | 2,417,096 | 8,502,831 | **4.721×** against v2, **1.209×** against v3 |
+| 2026-08-21 | **v3.2, CRT-combined prefix** | **162,963,133** | 36,251,384 | 3,123,895 | 17,523,227 | **5.735×** against v2, **1.19×** against v3.1 |
 
 The v3 rows' claim is the ratio, not the number. v2's kernel was compiled
 verbatim from the source it had at commit time and run back to back with
 the live engine on the `SCORE` window, seven rounds each, the frozen
 fingerprint `303/999990048677220` checked on every run of both: v2
 1029.5 ms / v3 256.5 ms, **4.014×**, per-round 3.893–4.079; then v2
-1030.4 ms / v3.1 218.3 ms, **4.721×**, per-round 4.580–4.790. The same session measured v2 at `SCORE` 31,634,366, which
+1030.4 ms / v3.1 218.3 ms, **4.721×**, per-round 4.580–4.790; then
+v2 1038.1 ms / v3.2 181.0 ms, **5.735×**, per-round 5.691–5.792
+with one 4.949 outlier.
+
+`SCORE16W` is the row to look at for v3.2: it rose **2.3×**, far more
+than the others, because it runs a coarse wheel and a shallow sieve, so
+a larger share of its work is the prefix the change makes cheap. That is
+the four-shape benchmark doing its job — a change that helps one shape
+far more than another is visible instead of averaged away. The same session measured v2 at `SCORE` 31,634,366, which
 is inside the v2 range above and near its top — so the 4.5× one would get
 by dividing the two ledger rows is the ambient swing flattering the
 comparison, and 4.014× is the honest figure.
@@ -67,6 +76,15 @@ with no code change between them, the card sitting at 2535 MHz of a 3120
 MHz maximum on the later pair. That is the ~30% ambient swing
 OPTIMIZATION.md rule 3 exists to warn about, and it is why this ledger
 quotes a range rather than a headline.
+
+It happened again on v3.2, and harder. One `score.py` run read **280,149,693**
+against a reproducible cluster of **162,277,567 / 162,762,345 /
+163,021,130** on the three runs immediately after it — same binary, same
+argument, nothing changed between them, all gates green and all four
+fingerprints exact in every case. That is a **1.72×** spread on a correct
+run, wider than the 1.5× v2 saw. The ledger records the reproducible
+figure, not the lucky one, and the outlier is written down here because a
+benchmark that only ever reports its best sample is not a benchmark.
 
 What does *not* move is `SCORE / SCORE1L`, measured inside a single run on
 the same window: **3.84× and 3.94×** across those three runs, against
@@ -114,18 +132,17 @@ then unmeasurably small; there is no reason to go shallower.
 
 ## What the campaign costs at this rate
 
-At the v3.1 production rate of **1.36×10¹⁴ k/s** — the interleaved A/B and
-`score.py` agreed to three figures this time (1.360 and 1.361×10¹⁴), which
-they did not under v3 — against the odds model's quantiles:
+At the v3.2 production rate of **1.63×10¹⁴ k/s** (`score.py` 1.630, the
+interleaved A/B 1.640) — against the odds model's quantiles:
 
 | target | Q1 | median | Q3 | P90 |
 |--------|----|--------|----|-----|
-| a(16) | 3.9 s | **16 s** | 50 s | 1.9 min |
-| a(17) | 1.6 min | **7.2 min** | 24 min | 55 min |
-| a(18) | 54 min | **4.1 h** | 12.9 h | *past the ceiling* |
+| a(16) | 3.3 s | **13 s** | 42 s | 1.6 min |
+| a(17) | 1.3 min | **6.0 min** | 20 min | 46 min |
+| a(18) | 45 min | **3.4 h** | 10.8 h | *past the ceiling* |
 
 The engine's whole enforced range — everything below `K_CEIL = 9×10¹⁸` — is
-**18.4 hours** of sweeping, down from 3.6 days under v2. That is the useful
+**15.3 hours** of sweeping, down from 3.6 days under v2. That is the useful
 way to state the budget here: this is not a hunt that needs a stopping
 rule, it is a hunt that can be run to its own ceiling **overnight**, at
 which point `a(16)`, `a(17)` and `a(18)` are either found or bounded below
@@ -146,8 +163,8 @@ not done.
 
 ## Load
 
-There is no host worker pool, by construction. A segment is eight wheel
-blocks (5.94×10¹³ of line, ~0.44 s of device time) and yields about 640
+There is no host worker pool, by construction. A segment is twelve wheel
+blocks (8.90×10¹³ of line, ~0.55 s of device time) and yields about 960
 survivors, each costing a handful of 64-bit Miller-Rabin tests —
 milliseconds of host work per second of device work. Nothing to ramp, no
 core count to size. Segment size is chosen for crash cost, not throughput,
@@ -155,7 +172,7 @@ and it was **re-swept on v3**: the rate is flat from 1 to 16 blocks per
 segment (1.158–1.163×10¹⁴ k/s, 0.4% across a 16× range), with the split
 sweep's fingerprint identical at every setting.
 
-It went from 2 blocks to 8, and the reason is the interesting part. What
+It went from 2 blocks to 8 and then to 12, and the reason is the interesting part. What
 was actually chosen in v2 was a **segment duration** of about half a
 second — that is what an interrupt costs to redo, and it is also the
 denominator that prices `--gpu-yield-ms`. v3 made a block 4× faster, so
@@ -163,12 +180,12 @@ leaving the constant at 2 would have quietly cut the segment to 0.13 s and
 turned a 20 ms yield from 4% of the rate into **16%**, and `--gentle`'s
 40 ms into **31%** — a documented price becoming false with no code change
 near it, and no benchmark able to see it (OPTIMIZATION.md rule 7). At 8
-blocks the segment is about half a second, an interrupt costs about half a
-second, the checkpoint fsync is 0.7% overhead, and the throttles cost what
-their help text says: at v3.1's rate the segment is 0.44 s, so
-`--gpu-yield-ms 20` is about 4.6% and `--gentle` (40 ms) about 9.2%. Those
-two numbers are the ones to re-derive the next time the engine gets
-materially faster; they are why the constant is expressed as a duration
-and not as a block count. The engine holds 0.03 GiB of VRAM (34.6 MB: an 8.7 MB
+12 blocks the segment is 0.55 s, an interrupt costs about half a second,
+the checkpoint fsync is under 1% overhead, and the throttles cost what
+their help text says: `--gpu-yield-ms 20` is about 3.7% of the rate and
+`--gentle` (40 ms) about 7.3%. The constant has now moved twice for the
+same reason — it is pinned to a DURATION, so every engine speedup has to
+raise the block count to keep it — and that is the constant working as
+intended rather than churning. The engine holds 0.03 GiB of VRAM (34.6 MB: an 8.7 MB
 first-level residue table, a 25.3 MB forbidden-residue bitmap, and 0.6 MB
 of everything else).

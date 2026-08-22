@@ -58,10 +58,17 @@ they multiply.  v3 takes both:
     so a test issues ONE 128-bit uniform load instead of three loads.
 
   * The first LIT primes are baked into the generated source as literals
-    (OPTIMIZATION.md 2.5).  For q < 64 the whole forbidden set fits in a
-    64-bit literal, so those tests read no table at all: `(KILL >> r) & 1`.
-    Primes 41..61 are the six that kill 90% of candidates and every one of
-    them is under 64.
+    (OPTIMIZATION.md 2.5) and CRT-COMBINED in groups.  "Killed by 41 or by
+    43" is a function of k mod (41*43) alone, so a group of primes costs
+    one reduction and one bitmap lookup rather than one of each per prime,
+    and the production prefix is six primes in THREE tests.  Group size is
+    bounded by LIT_GROUP_MAX, and that bound is the whole subtlety: the
+    combined table has to stay in L1, and the cliff is sharp -- 1.19x at
+    1 KB, 1.18x at 33 KB, but 0.25x at 76 KB and 0.39x at 536 KB.  This is
+    the same idea OPTIMIZATION.md 2.10 records as REJECTED in
+    euler-prime-runs, and it pays here for a reason worth naming: that
+    kernel was bound by load COUNT, this one by instruction ISSUE, so
+    trading instructions for a load is the right way round.
 
   * The generation CRT is algebraic, not arithmetic.  m = ((r2 - r1)*INV)
     mod W2 = (r2*INV - r1*INV) mod W2, and each half is a function of one
@@ -130,7 +137,13 @@ K2_DEFAULT = 12              # second compaction round: branchless to here
 UNROLL = 4                   # independent Barrett chains in the queue tail
 HIT_CAP = 1 << 16            # survivors buffered per launch
 RES_MAX = 1 << 24            # refuse a one-level wheel table bigger than this
-LIT_INLINE_Q = 64            # below this, a prime's kill set is a u64 literal
+LIT_INLINE_Q = 64            # below this, a group's kill set is a u64 literal
+# Largest modulus a CRT-combined prefix group may reach.  This is the
+# knob that keeps the combined tables in L1, and the cliff is sharp:
+# measured 1.19x at 1 KB of table and 1.18x at 33 KB, but 0.25x at
+# 76 KB and 0.39x at 536 KB.  8192 puts the production prefix in three
+# pairs (41*43, 47*53, 59*61) totalling 981 bytes.
+LIT_GROUP_MAX = 1 << 13
 
 # How much margin the shared queues carry over their ANALYTIC occupancy.
 # Survival through a prefix is an exact product over the primes involved
@@ -201,31 +214,73 @@ def wheel(n, p1, lo=1):
     return W, res
 
 
-def lit_prefix(n, primes, nlit):
-    """The first `nlit` sieve primes, as straight-line CUDA with literals.
+def lit_groups(primes, nlit, budget=LIT_GROUP_MAX):
+    """Group the first `nlit` sieve primes for CRT-combined testing.
 
-    No table load for the modulus, the magic or the bit offset; and for
-    q < LIT_INLINE_Q no table load at all, because the whole forbidden set
-    is a 64-bit immediate.  `off` walks the same cumulative offsets the
-    packed bitmap uses, so a literal test and a table test address the
-    identical bit -- G14 checks that against killed_residues directly.
+    "Killed by 41 or by 43" is a function of k mod (41*43) alone, so a
+    group of primes costs ONE reduction and ONE bitmap lookup instead of
+    one of each per prime.  Groups are grown greedily while the product
+    stays under `budget`, and the budget is what keeps the combined tables
+    L1-resident: measured, the win is 1.19x at 1 KB and 1.18x at 33 KB, but
+    it INVERTS to 0.39x at 536 KB and 0.25x at 76 KB.  See the header.
     """
-    lines, off = [], 0
-    for q in primes[:nlit]:
-        mg = (1 << 64) // q
-        if q < LIT_INLINE_Q:
+    groups, cur, prod = [], [], 1
+    for i in range(nlit):
+        q = primes[i]
+        if cur and prod * q > budget:
+            groups.append(cur)
+            cur, prod = [], 1
+        cur.append(i)
+        prod *= q
+    if cur:
+        groups.append(cur)
+    return groups
+
+
+def lit_prefix(n, primes, groups):
+    """(CUDA source, packed table) for the CRT-combined literal prefix.
+
+    Every modulus, magic number and table offset is a compile-time literal
+    (OPTIMIZATION.md 2.5), so a group test loads nothing but its own bit.
+    A group whose modulus is under LIT_INLINE_Q needs no table at all --
+    the entire forbidden set is a 64-bit immediate.
+
+    The table for a group is the OR of its primes' forbidden sets lifted to
+    the product modulus, which is exactly "killed by at least one of them",
+    so the survivor set is identical to testing them one at a time; G14
+    checks that against killed_residues directly.
+    """
+    lines, words, off_bits = [], [], 0
+    for g in groups:
+        qs = [primes[i] for i in g]
+        Q = 1
+        for q in qs:
+            Q *= q
+        mg = (1 << 64) // Q
+        head = ("            { unsigned int r = (unsigned int)k - "
+                f"(unsigned int)__umul64hi(k, {mg}ULL) * {Q}u; "
+                f"if (r >= {Q}u) r -= {Q}u; ")
+        if Q < LIT_INLINE_Q:
             mask = 0
-            for u in killed_residues(q, n):
+            for u in killed_residues(qs[0], n):
                 mask |= 1 << u
-            hit = f"kill |= (unsigned int)(({mask}ULL >> r) & 1ULL);"
-        else:
-            hit = (f"const unsigned int b = {off}u + r; "
-                   f"kill |= (bits[b >> 5] >> (b & 31)) & 1u;")
-        lines.append("            { unsigned int r = (unsigned int)k - "
-                     f"(unsigned int)__umul64hi(k, {mg}ULL) * {q}u; "
-                     f"if (r >= {q}u) r -= {q}u; {hit} }}")
-        off += q
-    return "\n".join(lines)
+            lines.append(head + f"kill |= (unsigned int)(({mask}ULL >> r) "
+                                f"& 1ULL); }}")
+            continue
+        tab = np.zeros((Q + 31) // 32, dtype=np.uint32)
+        idx = np.arange(Q)
+        for q in qs:
+            bad = np.array(killed_residues(q, n), dtype=np.int64)
+            b = np.nonzero(np.isin(idx % q, bad))[0]
+            np.bitwise_or.at(tab, b >> 5,
+                             (np.uint32(1) << (b & 31)).astype(np.uint32))
+        lines.append(head + f"const unsigned int b = {off_bits}u + r; "
+                            f"kill |= (gbits[b >> 5] >> (b & 31)) & 1u; }}")
+        words.append(tab)
+        off_bits += tab.size * 32
+    table = (np.concatenate(words) if words
+             else np.zeros(1, dtype=np.uint32))
+    return "\n".join(lines), table
 
 
 _SRC = r"""
@@ -285,7 +340,8 @@ extern "C" __global__ void sieve(
         unsigned long long* out, int* nout, const int cap,
         const uint4* __restrict__ pk,
         const uint2* __restrict__ res1x,
-        const unsigned int* __restrict__ res2c)
+        const unsigned int* __restrict__ res2c,
+        const unsigned int* __restrict__ gbits)
 {
     /* Sized from the analytic survival plus QCAP_SIGMA sigma, NOT from the
        impossible worst case: a queue big enough for "every candidate
@@ -457,6 +513,7 @@ class GpuEngine:
             raise ValueError("no sieve primes above the wheel")
         self.lit = min(lit, len(self.primes))
         self.k2 = min(max(k2, self.lit), len(self.primes))
+        self.groups = lit_groups(self.primes, self.lit)
 
         # packed forbidden-residue bitmap: q bits per prime, concatenated
         offs, tot = [], 0
@@ -496,15 +553,17 @@ class GpuEngine:
         self.q2cap = (_qcap(self.tile, self.surv[self.k2], qcap_sigma)
                       if self.k2 > self.lit else 1)
 
+        prefix_src, gtable = lit_prefix(n, self.primes, self.groups)
+        self.d_gbits = cp.asarray(gtable)
+
         key = (n, self.W1, self.W2, q2, tpb, jpt, self.lit, self.k2,
-               self.q1cap, self.q2cap)
+               self.q1cap, self.q2cap, tuple(map(tuple, self.groups)))
         if key not in _MODCACHE:
             src = _SRC % {"w1": self.W1, "w2": self.W2, "w": self.W,
                           "two": 1 if self.R2 > 1 else 0, "lit": self.lit,
                           "k2": self.k2, "jpt": jpt, "tpb": tpb,
                           "unroll": UNROLL, "q1cap": self.q1cap,
-                          "q2cap": self.q2cap,
-                          "prefix": lit_prefix(n, self.primes, self.lit)}
+                          "q2cap": self.q2cap, "prefix": prefix_src}
             _MODCACHE[key] = cp.RawModule(code=src, options=("-std=c++14",),
                                           backend="nvrtc")
         self.k_sieve = _MODCACHE[key].get_function("sieve")
@@ -520,7 +579,8 @@ class GpuEngine:
 
     def bytes_held(self):
         n = (self.d_res1x.nbytes + self.d_bits.nbytes + self.d_pk.nbytes
-             + self.d_out.nbytes + self.d_res2c.nbytes)
+             + self.d_out.nbytes + self.d_res2c.nbytes
+             + self.d_gbits.nbytes)
         return int(n)
 
     # ---------------------------------------------------------------- sieve
@@ -545,7 +605,8 @@ class GpuEngine:
                          (np.uint64(self.W * (j0 + lo)), np.int32(self.R1),
                           np.int32(len(self.primes)), self.d_bits,
                           self.d_out, self.d_n, np.int32(HIT_CAP),
-                          self.d_pk, self.d_res1x, self.d_res2c))
+                          self.d_pk, self.d_res1x, self.d_res2c,
+                          self.d_gbits))
             cnt = int(self.d_n.get()[0])
             if cnt > HIT_CAP:
                 raise RuntimeError(
@@ -766,28 +827,46 @@ def g14_v3_mechanisms():
 
         primes = [q for q in primerange(p2 + 1, q2 + 1)]
         nlit = min(LIT_DEFAULT, len(primes))
-        src = lit_prefix(n, primes, nlit)
-        off = 0
-        for q in primes[:nlit]:
-            bad = killed_residues(q, n)
-            if q < LIT_INLINE_Q:
+        groups = lit_groups(primes, nlit)
+        src, table = lit_prefix(n, primes, groups)
+        if sum(len(g) for g in groups) != nlit or \
+                [i for g in groups for i in g] != list(range(nlit)):
+            return False, (f"G14 FAIL: n={n}: the prefix grouping "
+                           f"{groups} does not cover the first {nlit} "
+                           f"primes exactly once, in order")
+        off_bits = 0
+        for g in groups:
+            qs = [primes[i] for i in g]
+            Q = 1
+            for q in qs:
+                Q *= q
+            if Q > LIT_GROUP_MAX:
+                return False, (f"G14 FAIL: n={n}: group {qs} has modulus "
+                               f"{Q} over the {LIT_GROUP_MAX} budget that "
+                               f"keeps the combined table in L1")
+            if f"* {Q}u;" not in src or \
+                    f"__umul64hi(k, {(1 << 64) // Q}ULL)" not in src:
+                return False, (f"G14 FAIL: n={n}: modulus {Q} or its magic "
+                               f"is not baked into the prefix source")
+            # every residue mod Q must agree with "killed by some q in g"
+            want = np.zeros(Q, dtype=bool)
+            for q in qs:
+                bad = np.array(killed_residues(q, n), dtype=np.int64)
+                want |= np.isin(np.arange(Q) % q, bad)
+            if Q < LIT_INLINE_Q:
                 mask = 0
-                for u in bad:
+                for u in killed_residues(qs[0], n):
                     mask |= 1 << u
-                if f"{mask}ULL >> r" not in src:
-                    return False, (f"G14 FAIL: n={n}: the literal kill mask "
-                                   f"for q={q} is not in the emitted source")
-                if [u for u in range(q) if (mask >> u) & 1] != bad:
-                    return False, (f"G14 FAIL: n={n}: literal mask for q={q}"
-                                   f" != killed_residues")
-            elif f"{off}u + r" not in src:
-                return False, (f"G14 FAIL: n={n}: the bit offset for q={q} "
-                               f"is not the packed bitmap's offset {off}")
-            if f"* {q}u;" not in src or f"__umul64hi(k, {(1 << 64) // q}ULL)" \
-                    not in src:
-                return False, (f"G14 FAIL: n={n}: q={q} or its magic is not "
-                               f"baked into the literal prefix")
-            off += q
+                got = np.array([(mask >> u) & 1 for u in range(Q)], bool)
+            else:
+                b = off_bits + np.arange(Q)
+                got = ((table[b >> 5] >> (b & 31)) & 1).astype(bool)
+                off_bits += ((Q + 31) // 32) * 32
+            if not np.array_equal(got, want):
+                return False, (f"G14 FAIL: n={n}: the combined table for "
+                               f"{qs} (modulus {Q}) disagrees with "
+                               f"killed_residues at "
+                               f"{int(np.flatnonzero(got != want)[0])}")
 
     # The queues are sized from the survival rate rather than the worst
     # case, so overflow is POSSIBLE -- and the whole design rests on it
@@ -818,9 +897,12 @@ def g14_v3_mechanisms():
                        f"(0, tile = {prod.tile}]")
     return True, (f"G14 ok: the split A/C generation tables reproduce the "
                   f"one-table CRT on 9000 sampled pairs at (n,p1,p2) = "
-                  f"(16,23,37), (17,23,37), (16,23,31); the {LIT_DEFAULT} "
-                  f"baked literal-prefix primes carry the same kill sets and "
-                  f"bit offsets as the packed bitmap; production queues hold "
+                  f"(16,23,37), (17,23,37), (16,23,31); the CRT-combined "
+                  f"prefix groups cover the first {LIT_DEFAULT} primes "
+                  f"exactly once in order, stay inside the {LIT_GROUP_MAX} "
+                  f"modulus budget, and each group's table agrees with "
+                  f"killed_residues on EVERY residue of its modulus; "
+                  f"production queues hold "
                   f"{prod.q1cap} and {prod.q2cap} of a {prod.tile}-candidate "
                   f"block (analytic occupancy {prod.tile * prod.surv[prod.lit]:.0f}"
                   f" and {prod.tile * prod.surv[prod.k2]:.0f}); and with the "

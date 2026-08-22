@@ -451,9 +451,105 @@ right; it was just the uncompacted engine doing nearly half the work. A
 capacity that is a tuning constant fails by getting slower, which is the
 failure mode worth having.
 
-## Open after v3.1, in rough order of expected value
+---
 
-1. **A third compaction round is probably closed, and unmeasured.** After
+## Measurement 7 — the phase split, a third time
+
+Nested differential ablation on v3.1: four kernels, each a *prefix* of the
+real one, so every stage is a difference and nothing downstream changes.
+Each truncated variant keeps its queue live (thread 0 folds the last entry
+and the count into the output counter) so nvcc cannot delete the writes.
+
+| stage | ms | share | (v3, one round) |
+|-------|----|-------|-----------------|
+| generation | 58.4 | **27.8%** | 15.3% |
+| literal prefix + queue 1 | 89.7 | **42.7%** | — |
+| round 2 + queue 2 | 14.1 | 6.7% | — |
+| early-exit tail | 48.1 | 22.9% | — |
+
+The split has moved twice now and it moved a *lot*: the phase that was 11%
+of v1 and 15% of v3 is 28% of v3.1, purely because everything around it got
+cheaper. And the biggest single phase is the literal prefix — six
+branchless reductions run on *every* candidate.
+
+## v3.2 — CRT-combine the prefix. KEPT: 1.19×
+
+"Killed by 41 or by 43" is a function of `k mod 1763` alone, so a *group*
+of primes costs one reduction and one bitmap lookup instead of one of each
+per prime. Six tests become three, against a table of 981 bytes.
+
+Cumulative against v2, interleaved in one run: **5.735×** (per-round 5.691,
+4.949, 5.761, 5.715, 5.720, 5.792, 5.771 — v2 1038.1 ms, v3.2 181.0 ms).
+`SCORE 162,963,133`.
+
+**This idea is recorded as REJECTED in OPTIMIZATION.md §2.10**, from
+euler-prime-runs, and re-reading *why* is what made it worth trying here.
+That kernel was bound by load COUNT and already had a 21.5 KB table, so
+combining bought one load at the price of a much larger table and measured
+0.62× at 86 KB. This kernel is the opposite on both counts: bound by
+instruction ISSUE (measurement 5), with a prefix that issues **zero** loads
+because each `q < 64` kill set is a 64-bit immediate. Trading ~10
+instructions per prime for ~9 instructions plus one load per group is the
+right way round here and the wrong way round there. A decline is only as
+good as its stated reason, and the reason has to be re-read against the
+*current* kernel, not inherited.
+
+The size cliff §2.10 warns about is real, and sharp:
+
+| grouping | table | ratio |
+|----------|-------|-------|
+| 6 singles (v3.1) | 0 B | 1.000 |
+| **3 pairs** (41·43, 47·53, 59·61) | **981 B** | **1.189** |
+| 2 triples (41·43·47, 53·59·61) | 33.4 KB | 1.184 |
+| triple + 3 singles | 10.1 KB | 1.135 |
+| 3 triples (prefix of 9) | 75.8 KB | **0.246** |
+| quad + pair (41·43·47·53, 59·61) | 536.5 KB | **0.394** |
+
+Between 33 KB and 76 KB the change inverts — the tables fall out of L1.
+`LIT_GROUP_MAX = 8192` bounds a group's *modulus*, which is what keeps them
+inside, and it is expressed as a modulus rather than a byte count so that
+every configuration the gates run gets a sensible grouping automatically
+(the `n=10, q2=4096` shape groups as 17·19·23, 29·31, 37).
+
+`SCORE16W` rose **2.3×** where the others rose ~1.2×: it runs a coarse
+wheel and a shallow sieve, so a much larger share of its work is the prefix
+this change makes cheap. That is the four-shape benchmark doing its job.
+
+Constants re-swept once more: the prefix stays at 6 primes (4 is 0.944, 5
+is 0.964, 7 is 0.969, 8 is 1.138 against 3 pairs' 1.189) and `K2` stays at
+12 (10 is 0.958, 14 is 0.994, 16 is 0.922).
+
+### Termination test (OPTIMIZATION.md Part 3.1)
+
+Every phase above 5% of v3.1, with a verdict. This is the table that says
+what is *left*, not that nothing is.
+
+| phase | share | verdict |
+|-------|-------|---------|
+| literal prefix | 42.7% | attacked: CRT-combined 6 primes into 3 tests, **1.19×**, with the table cliff located (inverts between 33 and 76 KB). Depth re-swept and unchanged. Not yet re-split after the change |
+| generation | 27.8% | **unsearched since the algebraic CRT (1.043×)**. Now the second-largest phase and the least examined. Its `res1x` table is re-read once per second-level residue — 44 GB per wheel block, ~830 GB/s of L2 — so whether it is issue-bound or bandwidth-bound is not known, and a padding ablation would settle it in five minutes |
+| early-exit tail | 22.9% | partly attacked: `UNROLL` swept (flat past 4), reached earlier by the second compaction round. The CRT-combining above has **not** been tried here, and its first few primes are the ones that matter |
+| round 2 + queue 2 | 6.7% | attacked: it *is* the second compaction round, 1.21×. `K2` swept both ways around 12. Combining its primes untried |
+
+Nothing here is finished; three of four rows carry a named, unpriced lever.
+
+## Open after v3.2, in rough order of expected value
+
+0. **Re-measure the phase split a fourth time, then attack generation.**
+   It was 27.8% before this change made everything else cheaper, so it is
+   now the largest or second-largest phase and it has had exactly one
+   optimization. First question, and it is a five-minute padding ablation:
+   `res1x` is 8.7 MB and is re-read for every one of the 5,040 second-level
+   residues — 44 GB per wheel block — so is generation issue-bound or
+   L2-bandwidth-bound? The answer picks the lever: fewer instructions, or a
+   narrower table (`r1` as u32 beside `A` as u16 is 6 bytes rather than 8,
+   a free 25%), or a different loop order that reuses `res1x` across `s`.
+1. **CRT-combine the tail's first primes too.** The tail is 22.9% and the
+   prefix trick returned 1.19× on the same kind of work; the tail's
+   early-exit structure means only its first few primes matter, and those
+   are small enough to pair. Unmeasured.
+
+2. **A third compaction round is probably closed, and unmeasured.** After
    round 2 the block holds ~47 survivors against 128 threads, so a third
    round has fewer items than the block has lanes and cannot fill a warp
    that is not already full — §2.2's "rare-and-deep stages are already
@@ -461,7 +557,7 @@ failure mode worth having.
    should be priced before it is believed: the same argument was made
    about round 2 and was wrong, for reasons that turned out to be about
    shared memory rather than about populations.
-2. **The (23, 43] wheel — 2.10× modelled, and both published blockers turn
+3. **The (23, 43] wheel — 2.10× modelled, and both published blockers turn
    out to be softer than they looked.** The `gridDim.y` cap does **not**
    need the `(t,s)` flattening the v2 log describes: `R2 = 3,402,000`
    residues can be chunked on the host in slices of 65,535 exactly the way
@@ -481,14 +577,14 @@ failure mode worth having.
    qualifying `s` for each `t` form one contiguous cyclic run findable by
    binary search. The second is the general fix and would also keep the
    checkpoint fine-grained.
-3. **Re-measure the phase split, again.** It was 15.3% generation / 84.7%
+4. **Re-measure the phase split, again.** It was 15.3% generation / 84.7%
    test loop on the one-round v3, and the test loop has since got another
    1.21× cheaper, so generation is now the larger share it has ever been.
    The next round should re-derive it before choosing anything — Rule 1's
    corollary has now moved an optimum in this project **five** times
    (sieve depth, LIT twice, tpb, JPT), and three of those moves were in
    the direction opposite to the obvious guess.
-4. **`SEG_BLOCKS` — re-swept, and done for now.** Flat from 1 to 16 blocks
+5. **`SEG_BLOCKS` — re-swept, and done for now.** Flat from 1 to 16 blocks
    on v3 (0.4% across a 16× range), so still not a throughput knob. Set to
    8 to hold the SEGMENT DURATION near half a second, which is what the
    crash cost and the `--gpu-yield-ms` price are both denominated in. It
