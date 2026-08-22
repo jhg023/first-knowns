@@ -190,6 +190,18 @@ from sqladder_search import (Q2_DEFAULT, CpuEngine, k_ceil,
 
 P1_DEFAULT = 23              # first-level wheel: the primes up to here
 P2_DEFAULT = 37              # second-level wheel: the primes in (P1, P2]
+# THIRD-level wheel: the primes in (P2, P3].  A prime put into the wheel
+# removes S(q) = prod_{q' < q}(1 - w(q')/q') tests from every unit of k
+# line, and at n = 18 the three primes 41, 43, 47 are 72% of all the tests
+# the engine does -- they are the largest terms of that sum and they were
+# out of reach only because their residues will not fit in one table.
+# Three levels put them in two tables of 4,560 and 16,675.
+#
+# 47 IS THE LAST ONE, and not by choice: m is a u32 and W1*m is what the
+# one-conditional-subtraction reduction bounds, so the combined second
+# modulus must stay under 2^32.  Primes to 47 make it 2.76e9; adding 53
+# makes it 1.46e11.  The engine raises rather than wrapping.
+P3_DEFAULT = 47
 TPB_DEFAULT = 256            # threads per block   (re-swept every version)
 # Second-level residues per BLOCK.  k = base + r1 + W1*m with
 # m = A[t] + C[s], so for a fixed t the quantity base + r1 does not
@@ -222,23 +234,59 @@ CPT_DEFAULT = 32
 # configuration: the first compaction goes where about 9.5% of
 # candidates are left, the second where about 1.2% are.  On the
 # production shape that reproduces 6 and 16 exactly.
-LIT_SURV = 0.095             # first compaction point: survival target
-K2_SURV = 0.012              # second compaction point: survival target
+# Re-swept on the three-level wheel: the optimum is the first compaction
+# at ~10% survival on BOTH wheels, and 0.11 is the target that lands there
+# on each (two-level: 5 primes, 0.092; three-level: 7 primes, 0.103).  The
+# neighbours are 0.94x and 0.29x -- see the L1 note on LIT_GROUP_MAX for
+# why going SHALLOWER is the catastrophic direction.
+LIT_SURV = 0.11              # first compaction point: survival target
+# Re-swept once the tail moved into its own kernel, and it moved a long
+# way: 0.012 (19 primes) is 0.98x of 0.0057 (25 primes).  The direction is
+# the interesting part -- a CHEAPER tail wants MORE compaction before it,
+# not less, because what the second round now saves is not divergent block
+# work but entries written to and read back from a global queue.
+K2_SURV = 0.0057             # second compaction point: survival target
 UNROLL = 4                   # independent Barrett chains in the queue tail
 HIT_CAP = 1 << 16            # survivors buffered per launch
 RES_MAX = 1 << 24            # refuse a one-level wheel table bigger than this
 LIT_INLINE_Q = 64            # below this, a group's kill set is a u64 literal
-# Largest modulus a CRT-combined prefix group may reach.  This is the
-# knob that keeps the combined tables in L1, and the cliff is sharp:
-# measured 1.19x at 1 KB of table and 1.18x at 33 KB, but 0.25x at
-# 76 KB and 0.39x at 536 KB.  8192 puts the production prefix in three
-# pairs (41*43, 47*53, 59*61) totalling 981 bytes.
-LIT_GROUP_MAX = 1 << 13
+# Largest modulus a CRT-combined prefix group may reach, and the total
+# table budget that goes with it.  This is the knob that keeps the
+# combined tables in L1, and the cliff is sharp -- but it is NOT where the
+# v3 sweep put it, and re-reading that sweep is what unlocked 1.11x here.
+# It measured "1.19x at 1 KB, 1.18x at 33 KB" and concluded the win was
+# flat, so it shipped 1 KB.  What it had actually measured is that a
+# budget of 8192 and a budget of 262144 produce THE SAME GROUPING at that
+# geometry -- pairs either way, because a third prime needs a modulus of
+# 82861 -- so the two points were the same binary.  On the wheels this
+# engine runs now the budget really does change the grouping (three primes
+# per group instead of two, one fewer test on EVERY candidate) and it is
+# worth 1.11x on the two-level wheel and 1.08x on the three-level one.
+#
+# The cliff is real and it is an L1 CARVEOUT budget, not a table budget:
+# an SM has 128 KB shared with L1, the resident blocks' queues take their
+# cut of it FIRST, and whatever is left has to hold the group tables.
+# Measured at n = 18 on the three-level wheel: 69 KB of tables against
+# 9.5 KB of queues per block is the optimum; 147 KB of tables is 0.34x,
+# and 61 KB of tables against 14.6 KB of queues is 0.29x -- the same
+# cliff reached from the other side, which is why the byte budget below
+# is a guard on the SUM and not on either half.
+LIT_GROUP_MAX = 1 << 18
+GROUP_BYTES_MAX = 96 << 10
+# Copies of each HOISTED group's pattern.  v4 stores every table twice so a
+# launch can reach `(off + base) mod Q` with a bare add; the hoisted prefix
+# does not need that, because it folds the base into its per-residue value
+# once per first-level residue instead (see lit_prefix).  One copy halves
+# the prefix tables, 50 KB to 25 KB, and L1 is the resource this kernel is
+# actually short of.  Left as a constant because it is exactly the knob the
+# L1 cliff is measured against: 2 is v4's behaviour and still works here.
+HOIST_TABLE_REPS = 1
 # The same budget for round 2's groups.  They sit on a much smaller
 # population -- the queue, not every candidate -- so they can afford a
-# bigger table before the L1 cliff bites.  Swept: 16384 beats 8192 by
-# 1.06x and 65536 only ties it, so this is the knee, not the peak.
-K2_GROUP_MAX = 1 << 14
+# bigger table before the L1 cliff bites.  Re-swept on the three-level
+# wheel, where the round-2 range is longer (it starts at 83 now, not 61):
+# 8192 is 0.96x, 32768 is 1.03x, 65536 is 1.04x.
+K2_GROUP_MAX = 1 << 16
 
 # How much margin the shared queues carry over their ANALYTIC occupancy.
 # Survival through a prefix is an exact product over the primes involved
@@ -260,6 +308,13 @@ QCAP_SIGMA = 6.0
 # pay 200,000 launches for one benchmark.  Measured flat to within 2.6%
 # across the range (OPTIMIZATION_LOG, measurement 6).
 CAND_PER_LAUNCH = 1 << 30
+
+# Ceiling on the GLOBAL tail queue, in candidates.  One launch's round-2
+# survivors are about 1.2% of its candidates, which at production is 5.8e7
+# and 465 MB; this caps the allocation and the overflow path takes any
+# excess, so it costs correctness nothing.
+Q3_MAX = 1 << 26
+TAIL_BLOCKS_PER_SM = 64
 
 # The one-conditional-subtraction reduction is exact only below 2^63.  In
 # v3.4 that was a bound on k, and it is what capped the campaign at 9e18.
@@ -330,8 +385,49 @@ def lit_groups(primes, nlit, budget=LIT_GROUP_MAX, start=0):
     return groups
 
 
-def lit_prefix(n, primes, groups, table="gbits", indent=12, pname="gp"):
+def _group_bytes(primes, groups, reps=2):
+    """Bytes the packed tables of these groups occupy: reps*Q bits each."""
+    tot = 0
+    for g in groups:
+        Q = 1
+        for i in g:
+            Q *= primes[i]
+        if Q >= LIT_INLINE_Q:
+            tot += ((reps * Q + 31) // 32) * 4
+    return tot
+
+
+def _fit_groups(primes, nlit, budget, start, cap=GROUP_BYTES_MAX, reps=2):
+    """Greedy groups under `budget`, halved until they fit `cap` bytes."""
+    while True:
+        groups = lit_groups(primes, nlit, budget, start)
+        if budget <= 1 or _group_bytes(primes, groups, reps) <= cap:
+            return groups
+        budget //= 2
+
+
+def lit_prefix(n, primes, groups, table="gbits", indent=12, pname="gp",
+               hoist=None):
     """(CUDA source, packed table, group descriptors) for CRT-combined tests.
+
+    With `hoist = (W1, W)` the group tests are emitted in the DECOMPOSED
+    form, which is what the prefix runs.  A candidate is
+    `off = b0 + W1*m`, `m = A - D` (plus W2 when that borrows), with b0 and
+    A fixed for a whole inner loop and D fixed for the whole block, so
+
+        off mod Q = ((b0 + W1*A) mod Q  - (W1*D) mod Q  [+ W mod Q]) mod Q
+
+    and every 64-bit reduction moves OUT of the per-candidate path: one per
+    block per group for `(W1*D) mod Q`, one per first-level residue for
+    `(b0 + W1*A) mod Q`, amortised over SPB candidates apiece.  What is
+    left per candidate is a select between the two precomputed values (the
+    borrow decides which), one subtract and one conditional add -- three
+    32-bit instructions where v4 issued a 64-bit multiply-high and its
+    correction.  The measurement that forced this: 71% of the prefix was
+    the arithmetic and only 29% the table lookups.
+
+    Round 2 does NOT get this form and cannot: it reads offsets back out of
+    a shared queue, where the decomposition has been thrown away.
 
     Every modulus and magic number is a compile-time literal
     (OPTIMIZATION.md 2.5), so a group test loads nothing but its own bit.
@@ -362,15 +458,45 @@ def lit_prefix(n, primes, groups, table="gbits", indent=12, pname="gp"):
     launch: (kind, Q, payload).
     """
     lines, words, descs, off_bits = [], [], [], 0
+    decl, blockpre, jjpre = [], [], []
     for gi, g in enumerate(groups):
         qs = [primes[i] for i in g]
         Q = 1
         for q in qs:
             Q *= q
         mg = (1 << 64) // Q
-        head = (" " * indent + "{ unsigned int r = (unsigned int)off - "
-                f"(unsigned int)__umul64hi(off, {mg}ULL) * {Q}u; "
-                f"if (r >= {Q}u) r -= {Q}u; ")
+        red = (f"unsigned int r = (unsigned int)xx - "
+               f"(unsigned int)__umul64hi(xx, {mg}ULL) * {Q}u; "
+               f"if (r >= {Q}u) r -= {Q}u; ")
+        if hoist is None:
+            head = (" " * indent + "{ unsigned int r = (unsigned int)off - "
+                    f"(unsigned int)__umul64hi(off, {mg}ULL) * {Q}u; "
+                    f"if (r >= {Q}u) r -= {Q}u; ")
+        else:
+            W1, W = hoist
+            decl.append(f"    __shared__ unsigned int pd{gi}[SPB]; "
+                        f"unsigned int x0_{gi}, x1_{gi};")
+            blockpre.append(
+                f"            {{ const unsigned long long xx = "
+                f"(unsigned long long){W1}u * (unsigned long long)dcur; "
+                + red + f"pd{gi}[ss] = r; }}")
+            # The launch base folds in HERE, once per first-level residue,
+            # which is why a hoisted group's table does not have to be
+            # stored twice the way v4's per-prime bitmap is.  Halving them
+            # is what buys the L1 room for wider groups.
+            fold = ("" if Q < LIT_INLINE_Q or HOIST_TABLE_REPS != 1 else
+                    f"r += (unsigned int){pname}{gi}; "
+                    f"if (r >= {Q}u) r -= {Q}u; ")
+            jjpre.append(
+                f"            {{ const unsigned long long xx = b0 + "
+                f"(unsigned long long){W1}u * (unsigned long long)e1.y; "
+                + red + fold + f"x0_{gi} = r; r += {W % Q}u; "
+                f"x1_{gi} = (r >= {Q}u) ? r - {Q}u : r; }}")
+            head = (" " * indent
+                    + f"{{ const unsigned int a = BW ? x1_{gi} : x0_{gi}; "
+                      f"const unsigned int e = pd{gi}[SS]; "
+                      f"unsigned int r = a - e; "
+                      f"if (a < e) r += {Q}u; ")
         if Q < LIT_INLINE_Q:
             mask = 0
             for u in killed_residues(qs[0], n):
@@ -379,25 +505,45 @@ def lit_prefix(n, primes, groups, table="gbits", indent=12, pname="gp"):
                                 f"& 1ULL); }}")
             descs.append(("inline", Q, mask))
             continue
-        tab = np.zeros((2 * Q + 31) // 32, dtype=np.uint32)
+        # ONE copy of the pattern when the base is folded per residue
+        # (hoisted groups), TWO when the test has to reach it with a bare
+        # add (round 2, which gets no decomposition to fold into).
+        single = hoist is not None and HOIST_TABLE_REPS == 1
+        reps = (0,) if single else (0, Q)
+        tab = np.zeros((len(reps) * Q + 31) // 32, dtype=np.uint32)
         idx = np.arange(Q)
         for q in qs:
             bad = np.array(killed_residues(q, n), dtype=np.int64)
             b = np.nonzero(np.isin(idx % q, bad))[0]
-            for rep in (0, Q):
+            for rep in reps:
                 br = b + rep
                 np.bitwise_or.at(tab, br >> 5,
                                  (np.uint32(1) << (br & 31)).astype(np.uint32))
-        lines.append(head + f"const unsigned int b = (unsigned int){pname}{gi}"
-                            f" + r; "
-                            f"kill |= ({table}[b >> 5] >> (b & 31)) "
-                            f"& 1u; }}")
+        if hoist is None:
+            lines.append(head + f"const unsigned int b = "
+                                f"(unsigned int){pname}{gi} + r; "
+                                f"kill |= ({table}[b >> 5] >> (b & 31)) "
+                                f"& 1u; }}")
+            descs.append(("table", Q, off_bits))
+        elif HOIST_TABLE_REPS == 1:
+            lines.append(head + f"const unsigned int b = {off_bits}u + r; "
+                                f"kill |= ({table}[b >> 5] >> (b & 31)) "
+                                f"& 1u; }}")
+            descs.append(("modq", Q, off_bits))
+        else:
+            lines.append(head + f"const unsigned int b = "
+                                f"(unsigned int){pname}{gi} + r; "
+                                f"kill |= ({table}[b >> 5] >> (b & 31)) "
+                                f"& 1u; }}")
+            descs.append(("table", Q, off_bits))
         words.append(tab)
-        descs.append(("table", Q, off_bits))
         off_bits += tab.size * 32
     table = (np.concatenate(words) if words
              else np.zeros(1, dtype=np.uint32))
-    return "\n".join(lines), table, descs
+    if hoist is None:
+        return "\n".join(lines), table, descs
+    return ("\n".join(lines), table, descs, "\n".join(decl),
+            "\n".join(blockpre), "\n".join(jjpre))
 
 
 def group_params(descs, base):
@@ -412,6 +558,10 @@ def group_params(descs, base):
         if kind == "inline":
             m = ((payload >> gb) | (payload << (Q - gb))) & ((1 << Q) - 1)
             out.append(np.uint64(m))
+        elif kind == "modq":
+            # a hoisted group folds the base into its per-residue value, so
+            # what it wants is the residue itself and its table is one copy
+            out.append(np.uint64(gb))
         else:
             out.append(np.uint64(payload + gb))
     return out
@@ -422,6 +572,8 @@ _SRC = r"""
 #define W2C  %(w2)du
 #define WC   %(w)dULL
 #define TWOLEVEL %(two)d
+#define THREELEVEL %(three)d
+#define NU   %(nu)d
 #define SPB  %(spb)d
 #define LITN %(lit)d
 #define K2   %(k2)d
@@ -430,6 +582,20 @@ _SRC = r"""
 #define UNROLL %(unroll)d
 #define Q1CAP %(q1cap)d
 #define Q2CAP %(q2cap)d
+#define LOGTPB %(logtpb)d
+#define LOGSPB %(logspb)d
+#define QTYPE %(qtype)s
+
+/* WHAT THE QUEUES HOLD.  Not the candidate -- its INDEX in the block, which
+   is (jj, ss, threadIdx.x) and so fits in log2(tile) = 13 bits where the
+   offset needs 60.  The queues are 87%% of this kernel's shared memory and
+   shared memory is what it is really short of: an SM divides 128 KB between
+   shared and L1, the resident blocks take their cut first, and the group
+   tables have to live in what is left.  Every collapse measured while
+   tuning this kernel -- 0.36x at cpt 64, 0.29x at cpt 128, 0.33x at wider
+   groups -- is that budget, not arithmetic.  Four bytes per queued
+   candidate instead of sixteen is what buys them back. */
+#define QIDX(JJ, SS) ((QTYPE)(((JJ) * SPB + (SS)) * TPB + threadIdx.x))
 
 /* One test against the packed per-prime uint4 (magic_lo, magic_hi, q,
    boff).  The remainder correction is 32-bit: the true value of
@@ -478,25 +644,63 @@ __device__ __forceinline__ bool tail_survives(
 #define EMIT(K) { const int _p = atomicAdd(nout, 1); \
                   if (_p < cap) out[_p] = (K); }
 
+
 /* One candidate, start to finish: run the CRT-combined prefix on it and
    either queue it or -- if the queue is full -- finish it on the spot.  A
    macro, because the loop nest below is written twice: once with bounds
    checks and once, for every block but the last, without. */
-#define CAND(K) { \
+#define CAND(K, BW, SS, JJ) { \
     const unsigned long long off = (K); \
     unsigned int kill = 0u; \
 %(prefix_m)s
     if (!kill) { \
         const int p = atomicAdd(&qn, 1); \
-        if (p < Q1CAP) qk[p] = off; \
+        if (p < Q1CAP) qk[p] = QIDX(JJ, SS); \
         else if (tail_survives(off, np_, LITN, pk, bits)) EMIT(off) \
     } }
 
-/* m = A[t] + C[s] reduced mod W2.  Both are already under W2, so the sum
-   is under 2*W2 and one subtraction is enough -- and unsigned wraparound
-   turns that into a min, because if m < W2 then m - W2 wraps to something
-   huge and the min keeps m. */
-#define M_OF(A, C) min((A) + (C), (A) + (C) - W2C)
+/* One candidate of the inner loop: the borrow out of `A - D` is what
+   decides m, and it is ALSO what decides which of the two precomputed
+   group residues the hoisted prefix reads, so it is computed once and
+   handed to both.  See lit_prefix's `hoist`. */
+#define STEP(A, DD, SS, JJ) { \
+    const unsigned int _d = (DD); \
+    const unsigned int _bw = ((A) < _d); \
+    const unsigned int _m = _bw ? ((A) - _d + W2C) : ((A) - _d); \
+    CAND(b0 + (unsigned long long)W1C * _m, _bw, SS, JJ) }
+
+/* m = A[t] + C[s] reduced mod W2, taken from D = W2 - C rather than from
+   C, because `A + C` is NOT a quantity a u32 can hold once there is a
+   third wheel level: W2 is then 2.76e9 and a sum of two residues overflows,
+   after which the old min-trick silently keeps the wrong branch.  A - D
+   never overflows; when it borrows, adding W2 back wraps to exactly A + C,
+   which is below W2 in precisely that branch.  Three instructions either
+   way, so the block stores D and never C. */
+#define M_OF(A, D) (((A) >= (D)) ? ((A) - (D)) : ((A) - (D) + W2C))
+
+/* Rebuild a candidate from its block index.  The generator's own arithmetic
+   run backwards: the thread that dequeues is not the thread that queued, so
+   D has to be readable by any of them and lives in shared. */
+__device__ __forceinline__ unsigned long long off_of(
+        const unsigned int qi, const unsigned long long base,
+        const uint2* __restrict__ res1x,
+        const unsigned int* d2)
+{
+    const int tid = qi & (TPB - 1);
+    const int rest = qi >> LOGTPB;
+#if TWOLEVEL
+    const int jj = rest >> LOGSPB;
+#else
+    const int jj = rest;
+#endif
+    const uint2 e1 = res1x[blockIdx.x * (TPB * JPT) + jj * TPB + tid];
+    unsigned long long off = base + (unsigned long long)e1.x;
+#if TWOLEVEL
+    const unsigned int dd = d2[rest & (SPB - 1)];
+    off += (unsigned long long)W1C * M_OF(e1.y, dd);
+#endif
+    return off;
+}
 
 /* No base0.  The launch's absolute base is a Python int on the host; what
    the device gets is the per-prime and per-group folding of it (pk.w, the
@@ -506,9 +710,11 @@ extern "C" __global__ void sieve(
         const int np_,
         const unsigned int* __restrict__ bits,
         unsigned long long* out, int* nout, const int cap,
+        unsigned long long* q3, int* n3, const int q3cap,
         const uint4* __restrict__ pk,
         const uint2* __restrict__ res1x,
         const unsigned int* __restrict__ res2c,
+        const unsigned int* __restrict__ res2d, const int u0,
         const unsigned int* __restrict__ gbits,
         const unsigned int* __restrict__ g2bits%(gparams)s)
 {
@@ -519,24 +725,53 @@ extern "C" __global__ void sieve(
        that does not fit runs its tail on the spot, uncompacted, which is
        the same arithmetic and so the same answer.  G14 forces that path
        and checks the stream is unchanged. */
-    __shared__ unsigned long long qk[Q1CAP];
-    __shared__ unsigned long long qk2[Q2CAP];
+    __shared__ QTYPE qk[Q1CAP];
+    __shared__ QTYPE qk2[Q2CAP];
     __shared__ int qn;
     __shared__ int qn2;
+    __shared__ int q3b;
     if (threadIdx.x == 0) { qn = 0; qn2 = 0; }
     __syncthreads();
 
-    /* the z-slice's offset from the launch base -- not an absolute k */
-    const unsigned long long base = WC * (unsigned long long)blockIdx.z;
+    /* gridDim.z carries the wheel-period offset from the launch base AND,
+       when there is a third wheel level, that level's residue: z = period *
+       NU + u.  With NU == 1 the compiler folds both operations away and
+       this is exactly the line v4 emitted.  The engine only ever batches
+       periods when the whole third level fits in one launch, so u0 is zero
+       whenever the quotient can be non-zero. */
+    const unsigned long long base = WC
+                                  * (unsigned long long)(blockIdx.z / NU);
     const int tbase = blockIdx.x * (blockDim.x * JPT) + threadIdx.x;
+    /* The block's per-second-level-residue data, all of it in SHARED and
+       built by SPB threads: D = W2 - C, which the generator subtracts and
+       which off_of has to be able to read for ANY ss (the thread that
+       dequeues is not the thread that queued it), and the hoisted prefix's
+       precomputed group residues, which may NOT go in registers -- held per
+       thread they cost 72 registers, three resident blocks per SM instead
+       of five, and 0.79x.  This kernel is bound by OCCUPANCY, not by
+       instruction issue, so a block preamble spends shared, never
+       registers.  Declared unconditionally because off_of takes it either
+       way; a one-level wheel has SPB == 1 and this is four bytes. */
+    __shared__ unsigned int d2[SPB];
 #if TWOLEVEL
-    /* the block's SPB second-level residues, held in registers and reused
-       by every one of its first-level residues */
+#if THREELEVEL
+    const unsigned int cb = res2d[u0 + (int)(blockIdx.z %% NU)];
+#endif
     const int s0 = blockIdx.y * SPB;
-    unsigned int c2[SPB];
-#pragma unroll
-    for (int ss = 0; ss < SPB; ++ss)
-        c2[ss] = res2c[min(s0 + ss, R2 - 1)];
+%(pdecl)s
+    if ((int)threadIdx.x < SPB) {
+        const int ss = threadIdx.x;
+        unsigned int c = res2c[min(s0 + ss, R2 - 1)];
+#if THREELEVEL
+        /* both are already reduced, but their sum is not a u32 quantity */
+        const unsigned long long cc = (unsigned long long)c + cb;
+        c = (unsigned int)(cc >= (unsigned long long)W2C ? cc - W2C : cc);
+#endif
+        const unsigned int dcur = W2C - c;
+        d2[ss] = dcur;
+%(blockpre)s
+    }
+    __syncthreads();
     const int nss = min(SPB, R2 - s0);
     const bool full = (tbase + (JPT - 1) * TPB < R1) && (nss == SPB);
 #else
@@ -551,12 +786,13 @@ extern "C" __global__ void sieve(
         for (int jj = 0; jj < JPT; ++jj) {
             const uint2 e1 = res1x[tbase + jj * TPB];
             const unsigned long long b0 = base + (unsigned long long)e1.x;
+%(jjpre)s
 #if TWOLEVEL
 #pragma unroll
             for (int ss = 0; ss < SPB; ++ss)
-                CAND(b0 + (unsigned long long)W1C * M_OF(e1.y, c2[ss]))
+                STEP(e1.y, d2[ss], ss, jj)
 #else
-            CAND(b0)
+            CAND(b0, 0u, 0, jj)
 #endif
         }
     } else {
@@ -566,11 +802,16 @@ extern "C" __global__ void sieve(
                 const uint2 e1 = res1x[t];
                 const unsigned long long b0 = base
                                             + (unsigned long long)e1.x;
+%(jjpre)s
 #if TWOLEVEL
-                for (int ss = 0; ss < nss; ++ss)
-                    CAND(b0 + (unsigned long long)W1C * M_OF(e1.y, c2[ss]))
+                /* unrolled with a guard rather than looped to nss: SS
+                   indexes a register array and has to stay a compile-time
+                   constant, or the array lands in local memory */
+#pragma unroll
+                for (int ss = 0; ss < SPB; ++ss)
+                    if (ss < nss) STEP(e1.y, d2[ss], ss, jj)
 #else
-                CAND(b0)
+                CAND(b0, 0u, 0, jj)
 #endif
             }
         }
@@ -583,19 +824,65 @@ extern "C" __global__ void sieve(
        again.  Combining these was worth 1.06x and moved K2 from 12 to 16 --
        cheaper tests buy more of them. */
     for (int idx = threadIdx.x; idx < n1; idx += TPB) {
-        const unsigned long long off = qk[idx];
+        const unsigned int qi = qk[idx];
+        const unsigned long long off = off_of(qi, base, res1x, d2);
         unsigned int kill = 0u;
 %(round2)s
         if (!kill) {
             const int p = atomicAdd(&qn2, 1);
-            if (p < Q2CAP) qk2[p] = off;
+            if (p < Q2CAP) qk2[p] = (QTYPE)qi;
             else if (tail_survives(off, np_, K2, pk, bits)) EMIT(off)
         }
     }
     __syncthreads();
     const int n2 = min(qn2, Q2CAP);
+
+    /* THE TAIL DOES NOT RUN HERE.  A block reaches this point with about
+       1.2%% of its candidates left -- ~98 of them against TPB threads --
+       so five warps in eight sit idle while the block waits on the single
+       deepest early-exit chain among the survivors.  Measured, that cost
+       32%% of the kernel for 4%% of its lookups.  So the survivors are
+       appended to a GLOBAL queue and swept by a second kernel that has one
+       item per lane and the whole device in flight.
+       One atomic per BLOCK, not per item: qn2 is already the count. */
+    if (threadIdx.x == 0) q3b = (n2 > 0) ? atomicAdd(n3, n2) : 0;
+    __syncthreads();
     for (int idx = threadIdx.x; idx < n2; idx += TPB) {
-        const unsigned long long off = qk2[idx];
+        const unsigned long long off = off_of(qk2[idx], base, res1x, d2);
+        const int p = q3b + idx;
+        /* the same bargain the shared queues make: capacity is a tuning
+           constant, and overflow is HARMLESS -- the candidate runs its
+           tail on the spot, which is the same arithmetic */
+        if (p < q3cap) q3[p] = off;
+        else if (tail_survives(off, np_, K2, pk, bits)) EMIT(off)
+    }
+}
+
+/* The tail, as its own kernel: every lane holds a candidate, the grid is
+   sized to the device rather than to a block's leftovers, and a long
+   early-exit chain stalls one lane instead of a whole block.  `n3` is read
+   on the DEVICE, so no host round trip separates the two kernels. */
+extern "C" __global__ void tailsweep(
+        const unsigned long long* __restrict__ q3, const int* __restrict__ n3,
+        const int q3cap,
+        unsigned long long* out, int* nout, const int cap,
+        const int np_, const uint4* __restrict__ pk,
+        const unsigned int* __restrict__ bits)
+{
+    const int n = min(*n3, q3cap);
+    const int stride = gridDim.x * blockDim.x;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    /* A plain grid-stride loop, and deliberately so.  A warp here still
+       runs to the deepest early-exit chain among its 32 items, and the
+       obvious fix -- persistent LANES, each holding a position rather than
+       a loop so a dead candidate is replaced without waiting for its
+       neighbours -- was built and measured 0.95x: it costs the UNROLL
+       independent Barrett chains that hide this loop's load latency, and
+       that is worth more here than the divergence it removes.  Priced and
+       rejected; do not rebuild it. */
+    for (; i < n; i += stride) {
+        const unsigned long long off = q3[i];
         if (tail_survives(off, np_, K2, pk, bits)) EMIT(off)
     }
 }
@@ -622,12 +909,15 @@ def _qcap(tile, surv, sigma=QCAP_SIGMA):
 class GpuEngine:
     """Wheel-generated candidates, Barrett-tested against a bitmap."""
 
-    def __init__(self, n, p1=P1_DEFAULT, p2=P2_DEFAULT, q2=Q2_DEFAULT,
+    def __init__(self, n, p1=P1_DEFAULT, p2=P2_DEFAULT, p3=P3_DEFAULT,
+                 q2=Q2_DEFAULT,
                  tpb=TPB_DEFAULT, cpt=CPT_DEFAULT, spb=SPB_DEFAULT,
-                 jpt=None, lit=None, k2=None, qcap_sigma=QCAP_SIGMA):
+                 jpt=None, lit=None, k2=None, qcap_sigma=QCAP_SIGMA,
+                 nu=None):
         import cupy as cp
         self.cp = cp
-        self.n, self.p1, self.p2, self.q2, self.tpb = n, p1, p2, q2, tpb
+        self.n, self.p1, self.p2, self.p3 = n, p1, p2, p3
+        self.q2, self.tpb = q2, tpb
 
         self.W1, res1 = wheel(n, p1)
         if self.W1 >= 1 << 32:
@@ -638,30 +928,60 @@ class GpuEngine:
         self.R1 = int(res1.size)
 
         if p2 and p2 > p1:
-            self.W2, res2 = wheel(n, p2, lo=p1)
-            if self.W2 >= 1 << 32 or self.W1 * self.W2 >= 1 << 63:
-                raise ValueError(
-                    f"second-level wheel {self.W1}*{self.W2} exceeds the "
-                    f"enforced u32/2^63 limits")
+            W2a, res2 = wheel(n, p2, lo=p1)
             self.R2 = int(res2.size)
             if self.R2 > 65535:
                 raise ValueError(
                     f"second-level wheel has {self.R2} residues; the kernel "
                     f"maps them to gridDim.y, which CUDA caps at 65535")
-            self.W = self.W1 * self.W2
-            self.R = self.R1 * self.R2
-            self.inv = pow(self.W1 % self.W2, -1, self.W2)
             wheel_top = p2
         else:
-            self.W2, self.R2, self.inv, res2 = 1, 1, 0, None
-            self.W, self.R = self.W1, self.R1
+            W2a, res2, self.R2 = 1, None, 1
             wheel_top = p1
+        # THE THIRD LEVEL.  Its residues ride gridDim.z beside the wheel
+        # period, and its own modulus multiplies into W2, so the kernel's
+        # inner loop is untouched: a candidate is still base + r1 + W1*m.
+        if p3 and p3 > wheel_top and self.R2 > 1:
+            W2b, res3 = wheel(n, p3, lo=wheel_top)
+            self.R3 = int(res3.size)
+            if self.R3 > 65535:
+                raise ValueError(
+                    f"third-level wheel has {self.R3} residues; they ride "
+                    f"gridDim.z, which CUDA caps at 65535")
+            wheel_top = p3
+        else:
+            W2b, res3, self.R3 = 1, None, 1
+        self.W2 = W2a * W2b
+        self.W2a, self.W2b = W2a, W2b
+        if self.R2 > 1:
+            if self.W2 >= 1 << 32 or self.W1 * self.W2 >= 1 << 63:
+                raise ValueError(
+                    f"second-level wheel {self.W1}*{self.W2} exceeds the "
+                    f"enforced u32/2^63 limits -- m is a u32 and W1*m is "
+                    f"the quantity the one-subtraction reduction bounds, so "
+                    f"this is where the wheel stops (at n = 18 the last "
+                    f"prime that fits is 47)")
+            self.W = self.W1 * self.W2
+            self.R = self.R1 * self.R2 * self.R3
+            self.inv = pow(self.W1 % self.W2, -1, self.W2)
+        else:
+            self.inv = 0
+            self.W, self.R = self.W1, self.R1
 
-        # The generation tables.  m = ((r2 - r1)*inv) mod W2 splits into
-        # one term per index: A[t] = (-r1*inv) mod W2 and C[s] = r2*inv mod
-        # W2, so the kernel adds them and conditionally subtracts W2.
-        # uint64 is exact here because both factors are reduced mod
-        # W2 < 2^32 first, so the product stays under 2^64.
+        # The generation tables.  m = ((r2 - r1)*inv) mod W2 splits into one
+        # term per index: A[t] = (-r1*inv) mod W2, and r2 -- the residue mod
+        # the WHOLE second modulus -- splits again by CRT across the second
+        # and third levels, because CRT lifting is linear:
+        #
+        #   r2 = EA*r2a + EB*r2b (mod W2),  EA = W2b*(W2b^-1 mod W2a), etc.
+        #
+        # so C[s] = r2a*KA mod W2 and D[u] = r2b*KB mod W2 with KA = EA*inv,
+        # KB = EB*inv, and the kernel adds three reduced numbers instead of
+        # storing their R2a*R3 combinations.  That is what keeps a wheel of
+        # 8.3e13 residues in two tables of 4,560 and 16,675.
+        #
+        # uint64 is exact throughout: every factor is reduced mod its own
+        # modulus first, and the widest product here is r2b*KB < W2b*W2.
         w2 = np.uint64(self.W2)
         r1u = res1.astype(np.uint64)
         res1x = np.empty((self.R1, 2), dtype=np.uint32)
@@ -669,11 +989,24 @@ class GpuEngine:
         if self.R2 > 1:
             a = (r1u % w2) * np.uint64(self.inv) % w2
             res1x[:, 1] = ((w2 - a) % w2).astype(np.uint32)
-            c = (res2.astype(np.uint64) % w2) * np.uint64(self.inv) % w2
+            if self.R3 > 1:
+                ka = W2b * pow(W2b % W2a, -1, W2a) % self.W2
+                kb = W2a * pow(W2a % W2b, -1, W2b) % self.W2
+            else:
+                ka, kb = 1, 0
+            ka = np.uint64(ka * self.inv % self.W2)
+            c = (res2.astype(np.uint64) % np.uint64(W2a)) * ka % w2
             self.d_res2c = cp.asarray(c.astype(np.uint32))
+            if self.R3 > 1:
+                kbi = np.uint64(kb * self.inv % self.W2)
+                d = (res3.astype(np.uint64) % np.uint64(W2b)) * kbi % w2
+                self.d_res2d = cp.asarray(d.astype(np.uint32))
+            else:
+                self.d_res2d = cp.zeros(1, dtype=np.uint32)
         else:
             res1x[:, 1] = 0
             self.d_res2c = cp.zeros(1, dtype=np.uint32)
+            self.d_res2d = cp.zeros(1, dtype=np.uint32)
         self.d_res1x = cp.asarray(res1x.ravel())
 
         self.primes = [q for q in primerange(wheel_top + 1, q2 + 1)]
@@ -698,9 +1031,17 @@ class GpuEngine:
                     else min(lit, len(self.primes)))
         self.k2 = (max(self.lit, depth_for(K2_SURV)) if k2 is None
                    else min(max(k2, self.lit), len(self.primes)))
-        self.groups = lit_groups(self.primes, self.lit)
-        self.groups2 = lit_groups(self.primes, self.k2, K2_GROUP_MAX,
-                                  start=self.lit)
+        # Grow the groups greedily, then shrink the modulus budget until
+        # the tables fit GROUP_BYTES_MAX.  A cap on the modulus alone is
+        # the wrong shape for an L1 budget -- the same cap builds 1 KB at
+        # one filter and 500 KB at another -- and this engine now runs
+        # wheels far enough apart for that to matter.
+        reps = HOIST_TABLE_REPS if self.R2 > 1 else 2
+        self.groups = _fit_groups(self.primes, self.lit, LIT_GROUP_MAX, 0,
+                                  GROUP_BYTES_MAX, reps=reps)
+        left = GROUP_BYTES_MAX - _group_bytes(self.primes, self.groups, reps)
+        self.groups2 = _fit_groups(self.primes, self.k2, K2_GROUP_MAX,
+                                   self.lit, max(left, 0))
 
         # Packed forbidden-residue bitmap, 2q bits per prime: each pattern
         # is stored TWICE so that a launch can shift a prime's window by
@@ -737,23 +1078,60 @@ class GpuEngine:
                               dtype=np.uint64)
         self.d_pk = cp.asarray(pk.ravel())
         self.d_bits = cp.asarray(bits)
-        self.d_out = cp.empty(HIT_CAP, dtype=np.uint64)
-        self.d_n = cp.zeros(1, dtype=np.int32)
+        # TWO survivor buffers, because the host classifies what the sieve
+        # returns and that work is 8% of a device second at this rate.  A
+        # launch is enqueued BEFORE the previous launch's survivors are
+        # handed to the caller, so the caller's classification runs while
+        # the device is busy.  The readback of launch i-1 still syncs on
+        # i-1 alone -- i is not enqueued yet -- so no stream juggling is
+        # needed for it, only two buffers.
+        self.d_out = [cp.empty(HIT_CAP, dtype=np.uint64) for _ in range(2)]
+        self.d_n = [cp.zeros(1, dtype=np.int32) for _ in range(2)]
+        self._buf = 0
+        self._flush = cp.cuda.Stream.null
+        self.d_n3 = cp.zeros(1, dtype=np.int32)
 
         # a one-level wheel has no second level to spread a block over,
         # so the candidates per thread come back from SPB into JPT
-        self.spb = max(1, min(spb, self.R2))
+        # rounded DOWN to a power of two: the queues index candidates by
+        # (jj, ss, tid) and unpack ss with a shift
+        self.spb = 1 << (max(1, min(spb, self.R2)).bit_length() - 1)
         self.jpt = jpt if jpt is not None else max(1, cpt // self.spb)
         self.tile = self.tpb * self.jpt * self.spb   # candidates per block
-        self.per_launch = max(1, min(65535, CAND_PER_LAUNCH // self.R))
+        # The queues hold a candidate's block index, decoded by shifts, so
+        # both factors of that index have to be powers of two.
+        self.logtpb = self.tpb.bit_length() - 1
+        self.logspb = self.spb.bit_length() - 1
+        if (1 << self.logtpb) != self.tpb or (1 << self.logspb) != self.spb:
+            raise ValueError(
+                f"tpb={self.tpb} and spb={self.spb} must both be powers of "
+                f"two: the shared queues store a candidate's (jj, ss, tid) "
+                f"index rather than its offset, and it is unpacked by shifts")
+        # gridDim.z is ONE budget shared by the wheel periods a launch
+        # batches and the third-level residues it carries, z = period*NU + u,
+        # so the split is forced rather than chosen: periods may be batched
+        # only when the WHOLE third level fits in one launch, since otherwise
+        # z / NU is not the period.  With no third level NU is 1 and this is
+        # the v4 arithmetic exactly.
+        cand_per_u = self.R1 * self.R2
+        self.nu = max(1, min(self.R3, 65535,
+                             CAND_PER_LAUNCH // max(cand_per_u, 1)
+                             if nu is None else nu))
+        self.per_launch = (1 if self.nu < self.R3 else
+                           max(1, min(65535 // self.nu,
+                                      CAND_PER_LAUNCH // self.R)))
         # v4's one-subtraction bound: the largest quantity the kernel ever
         # reduces is the offset of the last candidate in a launch, plus a
         # prime's worth of slack from the folded base.  Trimming the batch
         # is the fix if a very wide wheel ever reaches it -- not a cap on k.
-        while (self.per_launch * self.W + self.q2 >= REDUCE_MAX
+        # (per_launch + 1) and not per_launch: the hoisted prefix reduces
+        # `b0 + W1*A`, whose b0 already carries the batch and whose second
+        # term reaches W1*W2 = W, so the largest reduced quantity is one
+        # wheel period wider than the largest offset.
+        while ((self.per_launch + 1) * self.W + self.q2 >= REDUCE_MAX
                and self.per_launch > 1):
             self.per_launch //= 2
-        if self.per_launch * self.W + self.q2 >= REDUCE_MAX:
+        if (self.per_launch + 1) * self.W + self.q2 >= REDUCE_MAX:
             raise ValueError(
                 f"one wheel block is W = {self.W}, and W + q2 is not below "
                 f"2^63: the kernel's single conditional subtraction is only "
@@ -763,9 +1141,26 @@ class GpuEngine:
         self.q1cap = _qcap(self.tile, self.surv[self.lit], qcap_sigma)
         self.q2cap = (_qcap(self.tile, self.surv[self.k2], qcap_sigma)
                       if self.k2 > self.lit else 1)
+        # The GLOBAL tail queue, sized the same analytic way one launch at a
+        # time, and capped: overflow is harmless (the block runs that
+        # candidate's tail inline), so this is a memory budget, not a bound.
+        cand = self.R1 * self.R2 * self.nu * self.per_launch
+        self.q3cap = min(Q3_MAX,
+                         max(1024, _qcap(cand, self.surv[self.k2],
+                                         qcap_sigma)))
 
-        prefix_src, gtable, self.gdesc = lit_prefix(
-            n, self.primes, self.groups, pname="gp")
+        # The prefix gets the DECOMPOSED form whenever there is a second
+        # level to decompose against; round 2 never can (it reads offsets
+        # back out of the queue).
+        if self.R2 > 1:
+            (prefix_src, gtable, self.gdesc,
+             pdecl, blockpre, jjpre) = lit_prefix(
+                n, self.primes, self.groups, pname="gp",
+                hoist=(self.W1, self.W))
+        else:
+            prefix_src, gtable, self.gdesc = lit_prefix(
+                n, self.primes, self.groups, pname="gp")
+            pdecl = blockpre = jjpre = ""
         self.d_gbits = cp.asarray(gtable)
         r2_src, g2table, self.gdesc2 = lit_prefix(
             n, self.primes, self.groups2, table="g2bits", indent=8,
@@ -781,20 +1176,35 @@ class GpuEngine:
         prefix_m = "\n".join(ln + " \\" for ln in prefix_src.split("\n"))
 
         key = (n, self.W1, self.W2, q2, tpb, self.jpt, self.spb,
-               self.lit, self.k2,
+               self.lit, self.k2, self.R3, self.nu,
                self.q1cap, self.q2cap, tuple(map(tuple, self.groups)),
                tuple(map(tuple, self.groups2)))
         if key not in _MODCACHE:
             src = _SRC % {"w1": self.W1, "w2": self.W2, "w": self.W,
                           "two": 1 if self.R2 > 1 else 0, "lit": self.lit,
+                          "three": 1 if self.R3 > 1 else 0, "nu": self.nu,
                           "k2": self.k2, "jpt": self.jpt, "tpb": tpb,
                           "spb": self.spb,
+                          "logtpb": self.logtpb, "logspb": self.logspb,
+                          "qtype": ("unsigned short" if self.tile <= 65535
+                                    else "unsigned int"),
                           "unroll": UNROLL, "q1cap": self.q1cap,
                           "q2cap": self.q2cap, "prefix_m": prefix_m,
+                          "pdecl": pdecl, "blockpre": blockpre,
+                          "jjpre": jjpre,
                           "round2": r2_src, "gparams": gparams}
             _MODCACHE[key] = cp.RawModule(code=src, options=("-std=c++14",),
                                           backend="nvrtc")
         self.k_sieve = _MODCACHE[key].get_function("sieve")
+        self.k_tail = _MODCACHE[key].get_function("tailsweep")
+        self.d_q3 = cp.empty(self.q3cap, dtype=np.uint64)
+        # Blocks in the tail sweep, as a multiple of the SM count.  Swept:
+        # 8x per SM is 1.000, 64x is 1.025 and it is flat from there to
+        # 256x, so this is the knee.  It oversubscribes deliberately -- the
+        # loop is latency-bound per item, so what fills the device is items
+        # in flight, not a single wave.
+        self.tail_grid = TAIL_BLOCKS_PER_SM * cp.cuda.runtime.\
+            getDeviceProperties(cp.cuda.Device().id)["multiProcessorCount"]
 
     # ------------------------------------------------------------- geometry
     def j_of(self, k):
@@ -807,8 +1217,10 @@ class GpuEngine:
 
     def bytes_held(self):
         n = (self.d_res1x.nbytes + self.d_bits.nbytes + self.d_pk.nbytes
-             + self.d_out.nbytes + self.d_res2c.nbytes
-             + self.d_gbits.nbytes + self.d_g2bits.nbytes)
+             + sum(b.nbytes for b in self.d_out)
+             + self.d_res2c.nbytes + self.d_res2d.nbytes
+             + self.d_gbits.nbytes + self.d_g2bits.nbytes
+             + self.d_q3.nbytes)
         return int(n)
 
     # ---------------------------------------------------------------- sieve
@@ -861,30 +1273,122 @@ class GpuEngine:
                 "wheel argument has an exception zone there and a kill by q "
                 "needs value > q")
         out = []
+        for _, _, surv in self.sweep(j0, j1):
+            out.extend(surv)
+        return sorted(out)
+
+    def sweep(self, j0, j1, u_from=0):
+        """Yield (j_next, u_next, survivors) after every kernel launch.
+
+        `(j_next, u_next)` is a RESUMABLE cursor and `u_next == 0` means the
+        stronger thing: every k below `j_next * W` has been swept, so the
+        coverage claim may advance.  The two differ because a third wheel
+        level makes candidates come out in (t, s, u) order rather than in k
+        order, and only a whole period is contiguous in k -- so work is
+        resumable per launch (a crash costs one), while COVERAGE is only
+        ever claimed per period.  With no third level the two coincide and
+        every launch ends a period, which is what v4 did.
+
+        The bounds are checked EAGERLY, here, and the launches are a
+        separate generator: a `yield` in this body would defer every check
+        to the first `next()`, and a caller that built the iterator and
+        never consumed it would sail past the ceiling in silence.  The CPU
+        engine carries the same split for the same reason, and the ceiling
+        drill is what catches it.
+        """
+        j0, j1, u_from = int(j0), int(j1), int(u_from)
+        ceil = k_ceil(self.n)
+        if j1 * self.W > ceil:
+            raise ValueError(f"k {j1 * self.W} past the enforced ceiling "
+                             f"{ceil}")
+        if j0 * self.W <= max(K_FLOOR, self.q2):
+            raise ValueError(
+                "engines refuse to run at or below max(K_FLOOR, q2): the "
+                "wheel argument has an exception zone there and a kill by q "
+                "needs value > q")
+        return self._sweep(j0, j1, u_from)
+
+    def _sweep(self, j0, j1, u_from):
+        cp = self.cp
         gx = (self.R1 + self.tpb * self.jpt - 1) // (self.tpb * self.jpt)
         gy = (self.R2 + self.spb - 1) // self.spb
+        pending = None
         for lo in range(0, j1 - j0, self.per_launch):
             n_l = min(self.per_launch, j1 - j0 - lo)
             base = self.W * (j0 + lo)
+            # _launch_base rewrites the folded tables, so the launch it
+            # belongs to must not be enqueued while an older one is still
+            # reading them -- drain first.
+            drained = self._collect(pending)
+            pending = None
             gps = self._launch_base(base)
-            self.d_n.fill(0)
-            self.k_sieve((gx, gy, n_l), (self.tpb,),
-                         (np.int32(self.R1),
-                          np.int32(self.R2),
-                          np.int32(len(self.primes)), self.d_bits,
-                          self.d_out, self.d_n, np.int32(HIT_CAP),
-                          self.d_pk, self.d_res1x, self.d_res2c,
-                          self.d_gbits, self.d_g2bits, *gps))
-            cnt = int(self.d_n.get()[0])
-            if cnt > HIT_CAP:
-                raise RuntimeError(
-                    f"survivor buffer overflow: {cnt} > {HIT_CAP}; the "
-                    f"window is too wide or the sieve too shallow")
-            if cnt:
-                # offsets from the device; the absolute k is made here
-                offs = cp.asnumpy(self.d_out[:cnt])
-                out.extend(base + int(o) for o in offs)
-        return sorted(out)
+            if drained is not None:
+                yield drained
+            for u0 in range(u_from, self.R3, self.nu):
+                nu_l = min(self.nu, self.R3 - u0)
+                nxt = u0 + nu_l
+                cur = ((j0 + lo + n_l, 0) if nxt >= self.R3
+                       else (j0 + lo, nxt))
+                # Read the PREVIOUS launch first: that copy waits on it
+                # alone, because this launch has not been enqueued yet.
+                done = self._collect(pending)
+                b = self._buf = self._buf ^ 1
+                self.d_n[b].fill(0)
+                self.d_n3.fill(0)
+                self.k_sieve((gx, gy, n_l * nu_l), (self.tpb,),
+                             (np.int32(self.R1),
+                              np.int32(self.R2),
+                              np.int32(len(self.primes)), self.d_bits,
+                              self.d_out[b], self.d_n[b], np.int32(HIT_CAP),
+                              self.d_q3, self.d_n3, np.int32(self.q3cap),
+                              self.d_pk, self.d_res1x, self.d_res2c,
+                              self.d_res2d, np.int32(u0),
+                              self.d_gbits, self.d_g2bits, *gps))
+                # the queue count is read on the DEVICE, so these two chain
+                # back to back with no host round trip between them
+                self.k_tail((self.tail_grid,), (self.tpb,),
+                            (self.d_q3, self.d_n3, np.int32(self.q3cap),
+                             self.d_out[b], self.d_n[b], np.int32(HIT_CAP),
+                             np.int32(len(self.primes)), self.d_pk,
+                             self.d_bits))
+                pending = (base, b, cur)
+                # FLUSH.  A launch is asynchronous but on WDDM it is also
+                # BATCHED: the driver holds it in a user-mode command buffer
+                # until something forces a submit, so without this the
+                # device does not start until the host next blocks -- and
+                # the host's classification, which is what the double buffer
+                # exists to overlap, runs against an IDLE device.  Measured
+                # on a 19 ms kernel: spin 9.5 ms on the host, then sync, and
+                # the sync still takes 19.0 ms without the query and 9.3 ms
+                # with it.  A stream query costs microseconds and is the
+                # documented way to flush.
+                self._flush.done
+                # ...and only now hand the caller the previous launch, so
+                # whatever it does with the survivors runs against a busy
+                # device rather than an idle one
+                if done is not None:
+                    yield done
+            u_from = 0
+        done = self._collect(pending)
+        if done is not None:
+            yield done
+
+    def _collect(self, pending):
+        """(j_next, u_next, survivors) for an enqueued launch, or None."""
+        if pending is None:
+            return None
+        base, b, (jn, un) = pending
+        cnt = int(self.d_n[b].get()[0])
+        if cnt > HIT_CAP:
+            raise RuntimeError(
+                f"survivor buffer overflow: {cnt} > {HIT_CAP}; the "
+                f"window is too wide or the sieve too shallow")
+        surv = []
+        if cnt:
+            # offsets from the device; the absolute k is made here
+            offs = self.cp.asnumpy(self.d_out[b][:cnt])
+            surv = sorted(base + int(o) for o in offs)
+        return jn, un, surv
 
     def survivors_k(self, k_lo, k_hi):
         """Same stream, clipped to an arbitrary half-open k window."""
@@ -980,32 +1484,38 @@ def g9_gpu_matches_cpu():
     # only W1, W2 and W1^-1 change -- so these exercise its arithmetic in
     # full, and G13 pins the production constants themselves.
     ceil16 = k_ceil(16)
-    cases = ((10, 13, None, 256, 2 * 10 ** 9, 4 * 10 ** 6),
-             (16, 13, None, 128, 10 ** 12, 2 * 10 ** 7),
-             (16, 17, None, 256, 9 * 10 ** 14, 10 ** 8),
-             (16, 23, None, 64, ceil16 - 3 * 223_092_870, 3 * 10 ** 7),
-             (16, 13, 23, 128, 10 ** 12, 2 * 10 ** 7),
-             (16, 13, 17, 256, 9 * 10 ** 14, 10 ** 8),
-             (16, 11, 23, 64, ceil16 - 3 * 223_092_870, 3 * 10 ** 7))
+    cases = ((10, 13, None, None, 256, 2 * 10 ** 9, 4 * 10 ** 6),
+             (16, 13, None, None, 128, 10 ** 12, 2 * 10 ** 7),
+             (16, 17, None, None, 256, 9 * 10 ** 14, 10 ** 8),
+             (16, 23, None, None, 64, ceil16 - 3 * 223_092_870, 3 * 10 ** 7),
+             (16, 13, 23, None, 128, 10 ** 12, 2 * 10 ** 7),
+             (16, 13, 17, None, 256, 9 * 10 ** 14, 10 ** 8),
+             (16, 11, 23, None, 64, ceil16 - 3 * 223_092_870, 3 * 10 ** 7),
+             # THREE-level: the v5 kernel, at splits small enough that a
+             # dense CPU sieve can still follow a populated window
+             (10, 11, 13, 17, 256, 2 * 10 ** 9, 4 * 10 ** 6),
+             (16, 11, 13, 17, 64, 10 ** 12, 2 * 10 ** 7),
+             (16, 13, 17, 19, 128, 9 * 10 ** 14, 4 * 10 ** 7),
+             (16, 17, 19, 23, 256, ceil16 - 3 * 223_092_870, 3 * 10 ** 7))
     total = 0
-    for n, p1, p2, q2, k_lo, span in cases:
-        eng = GpuEngine(n, p1=p1, p2=p2, q2=q2)
+    for n, p1, p2, p3, q2, k_lo, span in cases:
+        eng = GpuEngine(n, p1=p1, p2=p2, p3=p3, q2=q2)
         got = eng.survivors_k(k_lo, k_lo + span)
         cpu = CpuEngine(n, q2=q2)
         want = [k for c in cpu.survivors(k_lo, k_lo + span) for k in c]
         if got != want:
             gs, ws = set(got), set(want)
-            return False, (f"G9 FAIL: n={n} p1={p1} p2={p2} q2={q2} at "
-                           f"k~{k_lo:.3g}: GPU {len(got)} vs CPU "
+            return False, (f"G9 FAIL: n={n} p1={p1} p2={p2} p3={p3} q2={q2} "
+                           f"at k~{k_lo:.3g}: GPU {len(got)} vs CPU "
                            f"{len(want)}, diff {sorted(gs ^ ws)[:4]}")
         if not got:
-            return False, (f"G9 FAIL: n={n} p1={p1} p2={p2} at k~{k_lo:.3g} "
-                           f"is empty -- vacuous parity check")
+            return False, (f"G9 FAIL: n={n} p1={p1} p2={p2} p3={p3} at "
+                           f"k~{k_lo:.3g} is empty -- vacuous parity check")
         total += len(got)
-    return True, (f"G9 ok: GPU stream == CPU stream on 7 populated windows "
-                  f"({total} survivors) -- one-level AND two-level wheels, "
-                  f"filters n = 10, 16, heights 2e9 -> {ceil16:.3g}, the top "
-                  f"two windows ABOVE 2^64")
+    return True, (f"G9 ok: GPU stream == CPU stream on {len(cases)} populated "
+                  f"windows ({total} survivors) -- one-level, two-level AND "
+                  f"three-level wheels, filters n = 10, 16, heights 2e9 -> "
+                  f"{ceil16:.3g}, the top windows ABOVE 2^64")
 
 
 def g13_production_wheel_constants():
@@ -1021,38 +1531,57 @@ def g13_production_wheel_constants():
     """
     rng = np.random.default_rng(20260821)
     from sqladder_reference import w as w_formula
-    for n, p1, p2 in ((16, 23, 37), (16, 23, 31), (17, 23, 37)):
+    for n, p1, p2, p3 in ((16, 23, 37, None), (16, 23, 31, None),
+                          (17, 23, 37, None), (18, 23, 37, 47)):
         W1, r1 = wheel(n, p1)
-        W2, r2 = wheel(n, p2, lo=p1)
+        W2a, r2 = wheel(n, p2, lo=p1)
+        if p3:
+            W2b, r3 = wheel(n, p3, lo=p2)
+            EA = W2b * pow(W2b % W2a, -1, W2a)
+            EB = W2a * pow(W2a % W2b, -1, W2b)
+        else:
+            W2b, r3, EA, EB = 1, np.zeros(1, dtype=np.int64), 1, 0
+        W2 = W2a * W2b
+        if W2 >= 1 << 32:
+            return False, (f"G13 FAIL: n={n} ({p1},{p2},{p3}]: W2 = {W2} "
+                           f"needs more than a u32, which is the bound that "
+                           f"stops the wheel at 47")
         inv = pow(W1 % W2, -1, W2)
         if W1 % W2 * inv % W2 != 1:
             return False, f"G13 FAIL: n={n} ({p1},{p2}]: W1^-1 is wrong"
+        top = p3 or p2
         want = 1
-        for q in primerange(2, p2 + 1):
+        for q in primerange(2, top + 1):
             want *= q - w_formula(q, n)
-        if r1.size * r2.size != want:
-            return False, (f"G13 FAIL: n={n} ({p1},{p2}]: {r1.size}*{r2.size}"
-                           f" != {want}")
+        if r1.size * r2.size * r3.size != want:
+            return False, (f"G13 FAIL: n={n} ({p1},{p2},{p3}]: "
+                           f"{r1.size}*{r2.size}*{r3.size} != {want}")
         killed = {q: set(killed_residues(q, n))
-                  for q in primerange(2, p2 + 1)}
+                  for q in primerange(2, top + 1)}
         ts = rng.integers(0, r1.size, 4000)
         ss = rng.integers(0, r2.size, 4000)
-        for t, s in zip(ts.tolist(), ss.tolist()):
-            a, b = int(r1[t]), int(r2[s])
-            x = a + W1 * (((b - a) * inv) % W2)
+        us = rng.integers(0, r3.size, 4000)
+        for t, sx, u in zip(ts.tolist(), ss.tolist(), us.tolist()):
+            a, b = int(r1[t]), int(r2[sx])
+            c = int(r3[u])
+            bc = (EA * b + EB * c) % W2           # the CRT of the two halves
+            x = a + W1 * (((bc - a) * inv) % W2)
             if not 0 <= x < W1 * W2:
                 return False, f"G13 FAIL: n={n} CRT value {x} out of range"
-            if x % W1 != a or x % W2 != b:
+            if x % W1 != a or x % W2a != b or (p3 and x % W2b != c):
                 return False, (f"G13 FAIL: n={n} CRT value {x} does not "
-                               f"recombine to ({a}, {b})")
+                               f"recombine to ({a}, {b}, {c})")
             for q, bad in killed.items():
                 if x % q in bad:
-                    return False, (f"G13 FAIL: n={n} ({p1},{p2}]: CRT value "
-                                   f"{x} is killed by q={q}")
-    return True, ("G13 ok: the production wheel constants (W1, W2, W1^-1) "
-                  "are exact at (n,p1,p2) = (16,23,37), (16,23,31), "
-                  "(17,23,37); 4000 sampled CRT residues per config "
-                  "recombine correctly and survive every wheel prime")
+                    return False, (f"G13 FAIL: n={n} ({p1},{p2},{p3}]: CRT "
+                                   f"value {x} is killed by q={q}")
+    return True, ("G13 ok: the wheel constants (W1, W2a, W2b, W1^-1 and the "
+                  "two CRT lifts) are exact at (n,p1,p2,p3) = (16,23,37,-), "
+                  "(16,23,31,-), (17,23,37,-) and the production "
+                  "(18,23,37,47); 4000 sampled CRT residues per config "
+                  "recombine to all THREE levels and survive every wheel "
+                  "prime; and W2 is checked under 2^32, which is the bound "
+                  "that stops the wheel at 47")
 
 
 def g14_v3_mechanisms():
@@ -1075,31 +1604,55 @@ def g14_v3_mechanisms():
                    not optimism.
     """
     rng = np.random.default_rng(20260822)
-    for n, p1, p2, q2 in ((16, 23, 37, 65536), (17, 23, 37, 65536),
-                          (16, 23, 31, 4096)):
+    cases = ((16, 23, 37, None, 65536), (17, 23, 37, None, 65536),
+             (16, 23, 31, None, 4096), (18, 23, 37, 47, 65536))
+    for n, p1, p2, p3, q2 in cases:
         W1, r1 = wheel(n, p1)
-        W2, r2 = wheel(n, p2, lo=p1)
+        W2a, r2 = wheel(n, p2, lo=p1)
+        if p3:
+            W2b, r3 = wheel(n, p3, lo=p2)
+            # the CRT lift of the two second-level halves, exactly as the
+            # engine builds it: r2 = EA*r2a + EB*r2b (mod W2)
+            EA = W2b * pow(W2b % W2a, -1, W2a)
+            EB = W2a * pow(W2a % W2b, -1, W2b)
+        else:
+            W2b, r3, EA, EB = 1, np.zeros(1, dtype=np.int64), 1, 0
+        W2 = W2a * W2b
         inv = pow(W1 % W2, -1, W2)
         w2u, r1u = np.uint64(W2), r1.astype(np.uint64)
         a = (r1u % w2u) * np.uint64(inv) % w2u
         A = ((w2u - a) % w2u).astype(np.int64)
-        C = ((r2.astype(np.uint64) % w2u) * np.uint64(inv) % w2u
+        ka = np.uint64(EA * inv % W2)
+        kb = np.uint64(EB * inv % W2)
+        C = ((r2.astype(np.uint64) % np.uint64(W2a)) * ka % w2u
              ).astype(np.int64)
-        for t, s in zip(rng.integers(0, r1.size, 3000).tolist(),
-                        rng.integers(0, r2.size, 3000).tolist()):
-            m_split = (int(A[t]) + int(C[s])) % W2
-            if int(A[t]) >= W2 or int(C[s]) >= W2:
+        D = ((r3.astype(np.uint64) % np.uint64(W2b)) * kb % w2u
+             ).astype(np.int64)
+        for t, s, u in zip(rng.integers(0, r1.size, 3000).tolist(),
+                           rng.integers(0, r2.size, 3000).tolist(),
+                           rng.integers(0, r3.size, 3000).tolist()):
+            m_split = (int(A[t]) + int(C[s]) + int(D[u])) % W2
+            if max(int(A[t]), int(C[s]), int(D[u])) >= W2:
                 return False, (f"G14 FAIL: n={n}: a split table entry is "
                                f"not reduced mod W2, so the kernel's single "
                                f"conditional subtract is not enough")
-            m_ref = ((int(r2[s]) - int(r1[t])) * inv) % W2
+            # the ONE-TABLE reference: the residue mod the whole second
+            # modulus, recombined from its two halves by CRT
+            r2u = (EA * int(r2[s]) + EB * int(r3[u])) % W2
+            m_ref = ((r2u - int(r1[t])) * inv) % W2
             if m_split != m_ref:
-                return False, (f"G14 FAIL: n={n} ({p1},{p2}]: A[{t}]+C[{s}] "
-                               f"gives m={m_split}, CRT says {m_ref}")
-            if int(r1[t]) + W1 * m_split != int(r1[t]) + W1 * m_ref:
-                return False, f"G14 FAIL: n={n}: reconstructed x differs"
+                return False, (f"G14 FAIL: n={n} ({p1},{p2},{p3}]: "
+                               f"A[{t}]+C[{s}]+D[{u}] gives m={m_split}, "
+                               f"CRT says {m_ref}")
+            x = int(r1[t]) + W1 * m_split
+            if x % W1 != int(r1[t]) or x % W2a != int(r2[s]):
+                return False, (f"G14 FAIL: n={n}: reconstructed x does not "
+                               f"recombine to its own residues")
+            if p3 and x % W2b != int(r3[u]):
+                return False, (f"G14 FAIL: n={n}: the THIRD level's residue "
+                               f"is not the one reconstructed")
 
-        eng = GpuEngine(n, p1=p1, p2=p2, q2=q2)
+        eng = GpuEngine(n, p1=p1, p2=p2, p3=p3, q2=q2)
         primes = eng.primes
 
         # The compaction depths are DERIVED from the survival curve, not
@@ -1184,8 +1737,9 @@ def g14_v3_mechanisms():
     # FORCED: an engine whose queues hold 32 entries against a block that
     # owns thousands takes the fallback for nearly every candidate, and its
     # stream must be identical to the properly-sized engine's.
-    ref = GpuEngine(16, p1=13, p2=23, q2=128)
-    tiny = GpuEngine(16, p1=13, p2=23, q2=128, qcap_sigma=-1e9)
+    ref = GpuEngine(16, p1=13, p2=23, p3=None, q2=128)
+    tiny = GpuEngine(16, p1=13, p2=23, p3=None, q2=128,
+                     qcap_sigma=-1e9)
     if tiny.q1cap > 32 or (tiny.k2 > tiny.lit and tiny.q2cap > 32):
         return False, (f"G14 FAIL: the forced-overflow engine still has "
                        f"room ({tiny.q1cap}, {tiny.q2cap}) -- the drill "
@@ -1205,8 +1759,9 @@ def g14_v3_mechanisms():
                        f"({prod.q1cap}, {prod.q2cap}) are not within "
                        f"(0, tile = {prod.tile}]")
     return True, (f"G14 ok: the split A/C generation tables reproduce the "
-                  f"one-table CRT on 9000 sampled pairs at (n,p1,p2) = "
-                  f"(16,23,37), (17,23,37), (16,23,31); the compaction "
+                  f"one-table CRT on 12000 sampled triples at "
+                  f"(n,p1,p2,p3) = (16,23,37,-), (17,23,37,-), (16,23,31,-) "
+                  f"and the production (18,23,37,47); the compaction "
                   f"depths derive from the survival curve (production "
                   f"LIT={prod.lit}, K2={prod.k2}); the CRT-combined prefix "
                   f"and round-2 groups cover their prime ranges exactly "
@@ -1242,7 +1797,7 @@ def g15_k_off_representation():
          campaign will meet -- including above 2^64.
     """
     # 1. base-shift invariance
-    eng = GpuEngine(16, p1=13, p2=23, q2=512)
+    eng = GpuEngine(16, p1=13, p2=23, p3=None, q2=512)
     j0 = eng.j_of(10 ** 12)
     eng.per_launch = 1
     one = eng.survivors_j(j0, j0 + 6)
@@ -1290,6 +1845,17 @@ def g15_k_off_representation():
         gtab = (eng.cp.asnumpy(eng.d_gbits), eng.cp.asnumpy(eng.d_g2bits))
         for gi, ((kind, Q, payload), gp) in enumerate(zip(descs, gps)):
             tab = gtab[0 if gi < len(eng.gdesc) else 1]
+            if kind == "modq":
+                # A HOISTED group folds the base into its per-residue value
+                # (lit_prefix, `hoist`), so its table is one copy and its
+                # scalar is the residue itself -- there is no second copy to
+                # index into and the claim to check is exactly that.
+                if int(gp) != base % Q:
+                    return False, (f"G15 FAIL: hoisted group {gi} (modulus "
+                                   f"{Q}) at base {base:.4g}: scalar "
+                                   f"{int(gp)} is not base mod Q = "
+                                   f"{base % Q}")
+                continue
             for r in range(Q):
                 if kind == "inline":
                     hit = bool((int(gp) >> r) & 1)
@@ -1316,9 +1882,70 @@ def _tab_bit(tab, off_bits, u):
     return bool((tab[b >> 5] >> (b & 31)) & 1)
 
 
+def g16_v5_mechanisms():
+    """The three things v5 added that nothing else can see fail.
+
+    G9 proves the whole pipeline against a dense CPU sieve, but only at
+    splits it can follow, and only in the configuration the engine happens
+    to CHOOSE.  Each of these is a place where a wrong answer would be
+    silent -- fewer survivors, not different ones -- so each is forced.
+
+      1. THE GLOBAL TAIL QUEUE OVERFLOWS HARMLESSLY.  Its capacity is sized
+         from the analytic survival, so overflow is possible by design and
+         has to cost nothing but speed: a candidate that does not fit runs
+         its tail in the block that produced it.  Forced by setting the
+         capacity to zero, which sends EVERY candidate down the fallback.
+      2. THE THIRD LEVEL CHUNKS WITHOUT MOVING THE STREAM.  gridDim.z
+         carries the third-level residue, so a launch covers only part of
+         it and the host loops; a chunking that dropped or repeated a
+         residue would quietly change coverage.  Checked against nu forced
+         to 1, 2 and 3 against the unchunked engine.
+      3. THE QUEUES INDEX CANDIDATES, and the index is unpacked by shifts,
+         so tpb and spb must be powers of two.  Checked by construction:
+         asking for a non-power raises rather than silently mis-decoding.
+    """
+    n, p1, p2, p3, q2 = 16, 13, 17, 19, 128
+    lo, span = 9 * 10 ** 14, 4 * 10 ** 7
+    ref = GpuEngine(n, p1=p1, p2=p2, p3=p3, q2=q2)
+    want = ref.survivors_k(lo, lo + span)
+    if not want:
+        return False, "G16 FAIL: the drill window is empty -- vacuous"
+
+    flood = GpuEngine(n, p1=p1, p2=p2, p3=p3, q2=q2)
+    flood.q3cap = 0                    # every tail runs in the sieve block
+    if flood.survivors_k(lo, lo + span) != want:
+        return False, ("G16 FAIL: with the global tail queue forced to zero "
+                       "the survivor stream changed -- the overflow "
+                       "fallback is not the same arithmetic")
+
+    for nu in (1, 2, 3):
+        e = GpuEngine(n, p1=p1, p2=p2, p3=p3, q2=q2, nu=nu)
+        if e.nu != min(nu, e.R3):
+            return False, f"G16 FAIL: nu={nu} was not honoured ({e.nu})"
+        if e.survivors_k(lo, lo + span) != want:
+            return False, (f"G16 FAIL: chunking the third level at nu={nu} "
+                           f"changed the stream")
+
+    for bad in (dict(tpb=192), dict(spb=6, cpt=24)):
+        try:
+            GpuEngine(n, p1=p1, p2=p2, p3=p3, q2=q2, **bad)
+        except ValueError:
+            pass
+        else:
+            if bad.get("tpb"):
+                return False, (f"G16 FAIL: tpb={bad['tpb']} is not a power "
+                               f"of two and was accepted")
+    return True, (f"G16 ok: the global tail queue's overflow fallback leaves "
+                  f"the stream IDENTICAL with the capacity forced to zero "
+                  f"({len(want)} survivors); chunking the third level at "
+                  f"nu = 1, 2, 3 against R3 = {ref.R3} does not move it; and "
+                  f"a non-power-of-two tpb raises rather than mis-decoding "
+                  f"the queue index")
+
+
 GATES = [g7_wheel_matches_oracle, g8_wheel_partitions_the_period,
          g13_production_wheel_constants, g14_v3_mechanisms,
-         g9_gpu_matches_cpu, g15_k_off_representation]
+         g9_gpu_matches_cpu, g15_k_off_representation, g16_v5_mechanisms]
 
 # Ctrl+C is a normal exit everywhere in this repo (CONVENTIONS.md
 # "Stopping a run"): one path out, no traceback, exit 130.

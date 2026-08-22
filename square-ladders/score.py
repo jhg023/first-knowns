@@ -61,16 +61,25 @@ import sqladder_reference                                       # noqa: E402
 import sqladder_search                                          # noqa: E402
 from sqladder_gpu import GpuEngine                              # noqa: E402
 
-# label, n, p1, p2, q2, j0, blocks, expected count, expected xor
+# label, n, p1, p2, p3, q2, j0, blocks, launches, expected count, xor
+#
+# `blocks` sweeps whole wheel periods.  `launches` is for SCORE3L and is
+# there because a production period is 6.15e17 of line and about ten
+# minutes: the three-level wheel carries its third level on gridDim.z, so
+# the natural unit below a period is one KERNEL LAUNCH, and a fixed number
+# of them is just as reproducible a set of candidates.  Its fingerprint is
+# over the survivors of those launches.
 SHAPES = [
-    ("SCORE",    16, 23,   37, 65536,        134,      4,  303,
+    ("SCORE",    16, 23,   37, None, 65536,        134,      4, None,  303,
      999990048677220),
-    ("SCORE1L",  16, 23, None, 65536,    4457242, 133052,  303,
+    ("SCORE1L",  16, 23, None, None, 65536,    4457242, 133052, None,  303,
      999990048677220),
-    ("SCORE10",  10, 13, None,  4096,      66600, 200000, 2931,
+    ("SCORE10",  10, 13, None, None,  4096,      66600, 200000, None, 2931,
      2555483804),
-    ("SCORE16W", 16, 17, None,  1024, 1958825488,  60000,  581,
+    ("SCORE16W", 16, 17, None, None,  1024, 1958825488,  60000, None,  581,
      999980563688462),
+    ("SCORE3L",  18, 23,   37,   47, 65536,         15,   None,  600, 19511,
+     9328162232848324866),
 ]
 
 
@@ -89,16 +98,35 @@ def main():
         return 1
 
     ok_all = True
-    for label, n, p1, p2, q2, j0, blocks, count, xor in SHAPES:
-        eng = GpuEngine(n, p1=p1, p2=p2, q2=q2)
-        eng.survivors_j(j0, j0 + blocks)                # warm on the window
+    for label, n, p1, p2, p3, q2, j0, blocks, launches, count, xor in SHAPES:
+        eng = GpuEngine(n, p1=p1, p2=p2, p3=p3, q2=q2)
 
-        def work():
-            return eng.survivors_j(j0, j0 + blocks)
+        if launches is None:
+            units = blocks                       # wheel periods
+            per_unit = eng.R                     # candidates in one
+            line = blocks * eng.W
 
-        runs = 3 if blocks * eng.R > 10 ** 10 else 5
-        rate_blocks, ok = scoring.fingerprint_benchmark(
-            work, blocks, count, xor, runs=runs, sync=sync)
+            def work():
+                return eng.survivors_j(j0, j0 + blocks)
+        else:
+            units = launches                     # kernel launches
+            per_unit = eng.R1 * eng.R2 * eng.nu
+            line = launches * per_unit / eng.density()
+
+            def work():
+                out = []
+                it = eng.sweep(j0, j0 + 1)
+                for i, (_, _, sv) in enumerate(it):
+                    out.extend(sv)
+                    if i + 1 >= launches:
+                        break
+                it.close()
+                return sorted(out)
+
+        work()                                          # warm on the window
+        runs = 3 if units * per_unit > 10 ** 10 else 5
+        rate_units, ok = scoring.fingerprint_benchmark(
+            work, units, count, xor, runs=runs, sync=sync)
         if not ok:
             got = work()
             g = 0
@@ -107,11 +135,12 @@ def main():
             print(f"  ({label}: got count={len(got)} xor={g})")
             ok_all = False
             continue
-        rate_k = rate_blocks * eng.W
-        wheel = f"({p1},{p2}]" if p2 else f"<={p1}"
+        rate_k = rate_units * line / units
+        wheel = (f"<={p1}" if not p2 else
+                 f"({p1}],({p2}],({p3}]" if p3 else f"({p1},{p2}]")
         print(f"benchmark {label}: {rate_k:.3e} k/s over "
-              f"[{j0 * eng.W:.4e}, +{blocks * eng.W:.4e}) "
-              f"({rate_blocks * eng.R:.3e} candidates/s, wheel {wheel} "
+              f"[{j0 * eng.W:.4e}, +{line:.4e}) "
+              f"({rate_units * per_unit:.3e} candidates/s, wheel {wheel} "
               f"W={eng.W}, sieve {q2}, fingerprint {count}/{xor})")
         print(f"{label} {rate_k / 1e6:,.0f}")
     return 0 if ok_all else 1
