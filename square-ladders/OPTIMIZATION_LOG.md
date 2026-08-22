@@ -665,20 +665,48 @@ from, production is what the hunt runs, and the price is written down here.
 
 ## Open after v3.4, in rough order of expected value
 
-0. **Re-measure the phase split a fifth time.** Generation has had three
-   optimizations now (algebraic CRT, guard + min-subtract, and the SPB
-   amortisation) and the test loop has had four, so the balance is unknown
-   again. Nothing should be chosen before it is re-derived — this project
-   has now had an optimum move under it seven times.
-1. **CRT-combine the tail's first primes too.** The tail was 22.9% before
-   round 2 reached deeper, and the same trick has now paid twice (1.19× in
-   the prefix, 1.06× in round 2). The tail's early exit means only its
-   first few primes matter and those are small enough to pair, but its
-   per-prime data is a runtime table rather than literals, so it needs a
-   group table for the first few and a fall-through to the plain loop.
-   Unmeasured.
+0. **The phase split, re-measured on v3.4 — and it has moved again.**
+   Nested differential ablation, 24-block window, 1,939 survivors every
+   run:
 
-2. **A third compaction round is probably closed, and unmeasured.** After
+   | phase | v3.1 | v3.4 |
+   |-------|------|------|
+   | generation | 27.8% | **9.6%** |
+   | CRT-combined prefix + queue 1 | 42.7% | **57.6%** |
+   | round 2 + queue 2 | 6.7% | 10.3% |
+   | early-exit tail | 22.9% | 22.4% |
+
+   The SPB amortisation did to generation exactly what it was built to do
+   — 27.8% down to 9.6% — and the prefix is now well over half the kernel.
+
+1. **Reduce the prefix from `(b0 mod Q, m)` instead of from `k`.
+   Unmeasured, and the best-looking lever left.** The prefix is three
+   CRT-group tests per candidate, each a full 64-bit Barrett reduction of
+   `k`. But the SPB restructure already hands the kernel `k` in two
+   pieces, `k = b0 + W1·m`, with `b0` fixed for the whole inner loop:
+
+       k mod Q = (b0 mod Q + (W1 mod Q)·m) mod Q
+
+   so `b0 mod Q` can be formed **once per jj**, amortised over SPB
+   candidates, leaving one 32-bit multiply-add and one 32-bit Barrett per
+   candidate per group. The `__umul64hi` — five or six instructions on its
+   own — leaves the inner loop entirely. Exact, because `(W1 mod Q)·m` is
+   congruent to `W1·m` mod Q whether or not `m` is reduced, and it fits in
+   u32 (`Q ≤ 8192`, `m < W2 = 33263`, so the sum is under 2.8×10⁸); the
+   32-bit Barrett then leaves the remainder in `[0, 2Q)`, one conditional
+   subtraction, the same theorem one word narrower. Guard needed:
+   `Q · W2 < 2^32` must be asserted, since a wider second-level wheel
+   would break it. Estimated 1.1–1.2× on a phase worth 57.6%; a harness
+   for it is written but was not run.
+
+2. **CRT-combine the tail's first primes.** Unchanged from below — the
+   tail is 22.4% and the same trick has paid twice already.
+3. **The tail's group table, in detail.** Its per-prime data is a runtime
+   table rather than literals, so combining needs a group table for the
+   first few tail primes and a fall-through to the plain loop. Only the
+   first few matter, because of the early exit.
+
+4. **A third compaction round is probably closed, and unmeasured.** After
    round 2 the block holds ~47 survivors against 128 threads, so a third
    round has fewer items than the block has lanes and cannot fill a warp
    that is not already full — §2.2's "rare-and-deep stages are already
@@ -686,7 +714,7 @@ from, production is what the hunt runs, and the price is written down here.
    should be priced before it is believed: the same argument was made
    about round 2 and was wrong, for reasons that turned out to be about
    shared memory rather than about populations.
-3. **The (23, 43] wheel — 2.10× modelled, and both published blockers turn
+5. **The (23, 43] wheel — 2.10× modelled, and both published blockers turn
    out to be softer than they looked.** The `gridDim.y` cap does **not**
    need the `(t,s)` flattening the v2 log describes: `R2 = 3,402,000`
    residues can be chunked on the host in slices of 65,535 exactly the way
@@ -706,14 +734,14 @@ from, production is what the hunt runs, and the price is written down here.
    qualifying `s` for each `t` form one contiguous cyclic run findable by
    binary search. The second is the general fix and would also keep the
    checkpoint fine-grained.
-4. **Re-measure the phase split, again.** It was 15.3% generation / 84.7%
+6. **(Superseded by item 0.)** It was 15.3% generation / 84.7%
    test loop on the one-round v3, and the test loop has since got another
    1.21× cheaper, so generation is now the larger share it has ever been.
    The next round should re-derive it before choosing anything — Rule 1's
    corollary has now moved an optimum in this project **five** times
    (sieve depth, LIT twice, tpb, JPT), and three of those moves were in
    the direction opposite to the obvious guess.
-5. **`SEG_BLOCKS` — re-swept, and done for now.** Flat from 1 to 16 blocks
+7. **`SEG_BLOCKS` — re-swept, and done for now.** Flat from 1 to 16 blocks
    on v3 (0.4% across a 16× range), so still not a throughput knob. Set to
    8 to hold the SEGMENT DURATION near half a second, which is what the
    crash cost and the `--gpu-yield-ms` price are both denominated in. It
