@@ -1,0 +1,255 @@
+# shift-ladders — A130003 and A110096
+
+> Every line of code in this project was authored by Claude (Anthropic's
+> AI) at the repository owner's direction. The mathematics, the gates, the
+> engines and this document are all machine-written; results, when there
+> are any, are machine-verified and human-reviewed. That audit trail is
+> deliberate and it stays.
+
+**A130003** asks for the least `m` such that `m + 4^k` is prime for every
+`k = 1..n`, and **A110096** asks the same question of `2^k`. They are
+*shift ladders*: one unknown, `n` conditions that differ only by an
+additive constant, and a killed set that is a **geometric orbit** rather
+than the quadratic one of this repo's square and Dickson ladders. Eighteen
+terms of A130003 are published and the last of them,
+`a(18) = 1,158,174,141,556,287`, was found by Jens Kruse Andersen in **June
+2007**; nothing has touched that frontier in nineteen years. A110096 has
+sixteen, the last three from Bert Dobbelaere in April 2021. Neither entry
+carries an upper bound of any kind, at any open `n`.
+
+**Status: ACTIVE — engine green, no sweep run yet.** The five-file skeleton
+is complete and its full battery is green (28 gates and drills), the
+benchmark's five shapes reproduce their frozen fingerprints, and both
+families' odds models validate on ten independently-searched known terms.
+**No production sweep has been run and there are no results to report** —
+starting a campaign is the owner's command (CLAUDE.md rule 0a).
+
+The next open terms are `a(19)` of A130003 and `a(17)` of A110096, at
+model medians of `5.75×10¹⁶` and `2.03×10²⁰` — **3.5 hours** and
+**1.8 hours** of one RTX 4090 at the v1 engine's measured rate. Read those
+as floors and budget 2-3× (see [the odds model](#the-odds-model)).
+
+## The problem
+
+    A(b, n) = least m >= 1 with m + b^k prime for all k = 1..n
+
+The conditions nest, so `A(b, ·)` is non-decreasing and a single lucky `m`
+can settle several terms at once — which is exactly what happened at
+A130003's `a(10) = 4503` (it cleared `k = 11, 12, 13, 14` for free) and at
+five separate places in A110096.
+
+| | A130003 | A110096 |
+|---|---|---|
+| Sequence | [A130003](https://oeis.org/A130003) (`nonn`, `hard`, `more`) | [A110096](https://oeis.org/A110096) (`nonn`, `more`) |
+| Base | `b = 4` | `b = 2` |
+| Published terms | `a(1)..a(18)` | `a(1)..a(16)` |
+| Frontier | `a(18) = 1,158,174,141,556,287` | `a(16) = 143,924,005,810,811,655` |
+| Found by | Jens Kruse Andersen, **Jun 08 2007** | Bert Dobbelaere, Apr 24 2021 |
+| Author | Farideh Firoozbakht, May 30 2007 | Joseph L. Pe, Sep 05 2005 |
+| Other link | Rivera, [Puzzle 403](http://www.primepuzzles.net/puzzles/puzz_403.htm) | Rivera Puzzle 379 cluster; A193109 |
+| **Open, and next** | `a(19)` | `a(17)` |
+| Upper bound | **none published, at any open n** | **none published, at any open n** |
+
+Why they are open rather than merely unfinished: the density of qualifying
+`m` falls like `1/(log m)ⁿ`, so each extra condition costs a further factor
+of roughly `log m` worth of line. Both are conjecturally infinite for every
+`n` — the constellation `{b, b², …, bⁿ}` is admissible at every `n`
+(proved in `shiftladder_reference`), so Dickson's conjecture applies and a
+find **confirms** the guiding conjecture and can never refute it.
+A110096's entry records that argument (Charles R Greathouse IV, Oct 2011).
+
+**A130003's frontier is the stale one, and it is stale by nineteen
+years.** Rivera's Puzzle 403 — the entry's only link — was re-read when
+this project was built: Andersen's table there ends on the same
+`a(18)`, and the only bound on the page is Bernardo Boncompagni's
+long-superseded `2.84×10¹¹`. Nothing anywhere is past it.
+
+## The mathematics of the engine
+
+Fix a prime `q`. Then `q | m + b^k` exactly when `m ≡ -b^k (mod q)`, so
+the residues of `m` that `q` kills are
+
+    K(q,n,b) = { -b^k mod q : 1 <= k <= n }
+
+and the engine sieves `m` against `K(q,n,b)` and nothing else. Note what is
+absent: no inverse, no quadratic character, no case on whether `q | m`. Its
+size is exactly
+
+    w(q,n,b) = |K(q,n,b)| = 1              if q | b
+                          = min(n, ord_q(b))  otherwise
+
+proved in `shiftladder_reference.py`: negation is a bijection, so `|K|` is
+the number of distinct `b^k` for `k = 1..n`, and the powers of `b` cycle
+with period `ord_q(b)`. Since `w ≤ q-1 < q` always, no prime divides every
+value — the admissibility that makes this a hunt rather than a wild goose
+chase.
+
+**The two bases are not the same problem, and `ord` is the whole reason.**
+
+    ord_q(4) = ord_q(2) / gcd(2, ord_q(2))  <=  (q-1)/2   for every odd q
+
+while `ord_q(2)` reaches `q-1` at every `q` for which 2 is a primitive
+root. So at `b = 2` and `q ≤ n+1` with 2 primitive mod `q`, `w = q-1`:
+**every** nonzero residue dies and `m` must be *divisible* by `q`. From
+`n ≥ 4` that already forces `3 | m` and `5 | m`, and with `m` odd every
+term of A110096 above the exception zone is `15 mod 30` — an observation
+A193109 records without proof, which is this lemma. At `b = 4` nothing of
+the sort happens: 2 of 3 residues survive mod 3 and 3 of 5 mod 5.
+
+The consequence is a wheel that differs by three thousand times between two
+sequences that read identically:
+
+| | A130003 (b = 4, n = 19) | A110096 (b = 2, n = 17) |
+|---|---|---|
+| wheel primes | ≤ 23 | ≤ 37 |
+| modulus `W` | 2.23×10⁸ | 7.42×10¹² |
+| residues | 1,572,480 | 5,391,360 |
+| **survivors per unit line** | **7.1×10⁻³** | **7.3×10⁻⁷** |
+
+and that single column sets everything downstream: the line rate (four
+orders of magnitude apart at the same candidate rate), the singular series
+(A110096's is 12,000× larger), and how deep a table has to go before it
+stops fitting. The two effects nearly cancel in cost per term, which is why
+both families belong in one project rather than two.
+
+**The kernel.** The CPU engine materialises the dense `m` line and marks
+arithmetic progressions into it. The GPU engine never forms the line: it
+enumerates the wheel's residues and *tests* each candidate against a packed
+forbidden-residue bitmap by Barrett magic-multiply, bailing out at the
+first kill. With the wheel at 23 the expected number of tests before a kill
+is about three, which is what makes sieve depth nearly free — and `q2` is
+65536 in production for exactly that reason.
+
+**Candidates are carried as `(m, off)` from the first commit.** `m = base +
+off` with `base` a host-side big integer that never reaches the device and
+`off < per_launch · W` the only thing the kernel reduces; `base mod q` is
+folded once per launch, per prime, on the host. So no machine word bounds
+this search, and the enforced ceiling is the primality-proof bound
+`k_ceil(n, b) = 3.317×10²⁴ − bⁿ` rather than `2⁶⁴`. That is
+OPTIMIZATION.md 2.7 applied at the start instead of retrofitted:
+square-ladders raised its ceiling twice, and the second time cost a
+campaign stretch. G15 checks that the survivor stream does not depend on
+where the launch base was put, at `m = 10¹²`, `2⁶⁴`, `10²⁴` and `3×10²⁴`.
+
+**Every primality decision here is a proof, by construction.** The largest
+value is `m + bⁿ`, and the offset is *additive*: `4²¹` is `4.4×10¹²`
+against a bound of `3.317×10²⁴`, so the ceiling is essentially the bound
+itself for both families. Gate G10 pins it tight to a single `m`, per
+`(n, b)`. This project will not need a probable-prime qualifier for a very
+long time.
+
+**The wheel is a flat residue table, and that is v1's one deliberate
+simplification.** A factored multi-level table — the same CRT lift applied
+to a table too large to hold, as square-ladders does to reach 47 — is the
+first optimization this project owes, and it is priced at roughly 14× for
+A130003 in [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md). The numbers in this
+README are v1's measured numbers, not that projection.
+
+## The odds model
+
+Bateman-Horn over the `n` linear forms `f_k(m) = m + b^k`, with the
+singular series computed numerically from the same `w(q,n,b)` the sieve is
+built from. Stated **before** any sweep (`model_results.json`):
+
+| term | Q1 | median | Q3 | P90 |
+|------|----|--------|----|-----|
+| A130003 a(19) | 1.40×10¹⁶ | **5.75×10¹⁶** | 1.98×10¹⁷ | 5.06×10¹⁷ |
+| A130003 a(20) | 2.60×10¹⁷ | **1.42×10¹⁸** | 5.41×10¹⁸ | 1.42×10¹⁹ |
+| A130003 a(21) | 8.43×10¹⁸ | **4.73×10¹⁹** | 1.77×10²⁰ | 4.57×10²⁰ |
+| A110096 a(17) | 5.03×10¹⁹ | **2.03×10²⁰** | 6.06×10²⁰ | 1.34×10²¹ |
+| A110096 a(18) | 4.34×10²¹ | **1.74×10²²** | 5.14×10²² | 1.13×10²³ |
+| A110096 a(19) | 1.43×10²³ | **5.67×10²³** | 1.66×10²⁴ | 3.61×10²⁴ |
+
+**Validation (gate G11).** If the modelled intensity is right, its integral
+up to the first occurrence is `Exp(1)` — mean 1. Pooled over both families
+at the ten independently-searched knowns it is **mean 0.88**, spread
+0.10–2.65:
+
+    A110096  a(10) 0.77  a(11) 0.82  a(12) 1.68  a(14) 2.65  a(15) 0.50
+    A130003  a(10) 0.57  a(15) 0.24  a(16) 0.10  a(17) 1.07  a(18) 0.45
+
+Pooling is not mixing evidence: it is one model, and each family alone
+offers four or five draws, which cannot tell a factor-of-two error from
+noise. Ten can.
+
+**One vote per condition.** Both sequences are riddled with riders —
+A130003's `a(11)`–`a(14)` are one integer, A110096 repeats at `a(2)`,
+`a(4)`, `a(6)`, `a(8)`, `a(13)` and `a(16)`. A rider was never searched
+for, so its `E` is identically zero and scoring it would manufacture
+agreement out of nothing. Only terms that strictly exceed their predecessor
+are used.
+
+**Read every median above as a floor.** This repo has now scored seven
+first occurrences across its two ladder projects and they land at a mean
+model quantile of **0.85** where a correct model gives 0.50; square-ladders
+measured its own optimism factor at 3.7× with a 95% interval [1.25, 17.7]
+that excludes 1, *while its census showed the modelled intensity right to
+2%*. Mean count right, first occurrence late. Budget 2-3× the medians
+above before expecting a term, and treat a term that arrives on the median
+as luck rather than as calibration.
+
+## Running it
+
+Requires an NVIDIA GPU with CuPy, plus numpy and sympy.
+
+```bash
+python launch.py --selftest    # 28 gates and drills; must end ALL GREEN (~25 s)
+```
+
+```bash
+python score.py                # gates x 5 fingerprinted shapes (~40 s)
+```
+
+```bash
+python launch.py --status      # where a cursor stands; reads, never writes
+```
+
+The hunt itself is **the owner's command** (CLAUDE.md rule 0a) and is
+started deliberately, never by automation:
+
+```bash
+python launch.py               # A130003 (base 4), the default
+```
+
+```bash
+python launch.py --base 2      # A110096 instead
+```
+
+Each family keeps its own checkpoint under its own config key, and neither
+campaign will read the other's cursor. The hunt is indefinite by default,
+resumable, checkpointed every segment, and stops cleanly on Ctrl+C with
+exit 130. `--to` caps the depth, `--stop-on-discovery` exits once **this
+run** confirms a find, and `--gentle` trades about a third of the rate for
+a noticeably freer desktop.
+
+## Trust
+
+Read [CONVENTIONS.md](../CONVENTIONS.md) for the machinery every project
+here is built to. Specific to this one:
+
+- **Three independent implementations.** A sympy-only oracle, a numpy CPU
+  engine that marks the dense line with no wheel at all, and a CuPy engine
+  that enumerates wheel residues and tests them. G9 pins the GPU stream to
+  the CPU stream bit-for-bit on six populated windows across both bases,
+  from `m = 2×10⁴` to `1.8×10¹⁹`, the top two **above 2⁶⁴**.
+- **The killed set is built three ways.** The oracle walks every residue
+  and tests divisibility; the engines negate the orbit of `b`; the closed
+  form says `min(n, ord_q(b))`. G2b and G3 require all three to agree, in
+  both directions, for every prime below 300 at six filters and both bases.
+- **The benchmark checks itself.** `SCORE` and `SCORE1L` sweep the
+  *identical absolute window* with the wheel at 23 and at 13 — 7,429×
+  as many periods — and must return the same seven survivors and the same
+  checksum, so a bug in the CRT lift shows up inside the benchmark.
+- **Canaries.** The GPU stream rediscovers A130003 `a(15)` and A110096
+  `a(9)` and `a(10)` as first occurrences at their own filters, sweeping
+  from the engine floor, with the sub-period prefix cleared on the CPU so
+  "first" is a claim about the line and not about a window.
+- **The protocol is tested in both directions, on both families.** Each
+  frontier term is accepted at its true run with a factor witness for its
+  stopper; a run one too long, and an earlier term mislabelled as the
+  frontier's run, are both rejected.
+- **Ceilings raise rather than compute** — the primality-proof cap, the
+  engine floor, the Barrett bound on the wheel modulus, and the flat
+  table's own size limit (the b = 2 wheel reaches 1.29×10⁹ residues at
+  p1 = 47, and asking for it must refuse rather than fail 183 GiB into an
+  allocation). All four drilled.
