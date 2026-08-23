@@ -18,16 +18,18 @@ sixteen, the last three from Bert Dobbelaere in April 2021. Neither entry
 carries an upper bound of any kind, at any open `n`.
 
 **Status: ACTIVE — engine green, no sweep run yet.** The five-file skeleton
-is complete and its full battery is green (28 gates and drills), the
+is complete and its full battery is green (29 gates and drills), the
 benchmark's five shapes reproduce their frozen fingerprints, and both
 families' odds models validate on ten independently-searched known terms.
 **No production sweep has been run and there are no results to report** —
 starting a campaign is the owner's command (CLAUDE.md rule 0a).
 
 The next open terms are `a(19)` of A130003 and `a(17)` of A110096, at
-model medians of `5.75×10¹⁶` and `2.03×10²⁰` — **3.5 hours** and
-**1.8 hours** of one RTX 4090 at the v1 engine's measured rate. Read those
-as floors and budget 2-3× (see [the odds model](#the-odds-model)).
+model medians of `5.75×10¹⁶` and `2.03×10²⁰` — **3.1 minutes** and
+**1.8 minutes** of one RTX 4090 at the v2 engine's measured sustained rate.
+Read those as floors and budget 2-3× (see [the odds model](#the-odds-model));
+even at 3× the median, every open term either model has a prediction for
+lands inside a week.
 
 ## The problem
 
@@ -101,24 +103,42 @@ sequences that read identically:
 
 | | A130003 (b = 4, n = 19) | A110096 (b = 2, n = 17) |
 |---|---|---|
-| wheel primes | ≤ 23 | ≤ 37 |
+| flat table's primes | ≤ 23 | ≤ 37 |
 | modulus `W` | 2.23×10⁸ | 7.42×10¹² |
 | residues | 1,572,480 | 5,391,360 |
-| **survivors per unit line** | **7.1×10⁻³** | **7.3×10⁻⁷** |
+| bit planes carry the wheel to | 79 (3 planes) | 113 (5 planes) |
+| plane survival `d2` | 8.79×10⁻³ | 8.26×10⁻³ |
+| **candidates per unit line** | **6.2×10⁻⁵** | **6.0×10⁻⁹** |
 
-and that single column sets everything downstream: the line rate (four
-orders of magnitude apart at the same candidate rate), the singular series
+and that last row sets everything downstream: the line rate (four orders of
+magnitude apart at the same candidate rate), the singular series
 (A110096's is 12,000× larger), and how deep a table has to go before it
 stops fitting. The two effects nearly cancel in cost per term, which is why
-both families belong in one project rather than two.
+both families belong in one project rather than two. Note the third row —
+the two families end up at almost the same plane survival by *different*
+routes, because `p2` is derived per configuration from a cost model rather
+than pinned per base.
 
 **The kernel.** The CPU engine materialises the dense `m` line and marks
 arithmetic progressions into it. The GPU engine never forms the line: it
-enumerates the wheel's residues and *tests* each candidate against a packed
-forbidden-residue bitmap by Barrett magic-multiply, bailing out at the
-first kill. With the wheel at 23 the expected number of tests before a kill
-is about three, which is what makes sieve depth nearly free — and `q2` is
-65536 in production for exactly that reason.
+generates only the `m` that survive the wheel and *tests* each of those
+against a packed forbidden-residue bitmap by Barrett magic-multiply,
+bailing out at the first kill. A lane needs about three tests, which is
+what makes sieve depth nearly free — and `q2` is 65536 in production for
+exactly that reason. But a *warp* of 32 lanes runs to the deepest of its
+32, which measured 13.96 against that mean of 2.78, so the tests are run in
+branchless slices over a dense queue and the survivors compacted between
+slices, every lane alive. The slice boundaries come out of the survival
+curve, not out of a prime count.
+
+The engine is v2 and it is **83x, 49x and 47x** faster than v1 on the two
+production shapes and the cross-check shape, measured interleaved and
+paired with every fingerprint re-checked ([BENCHMARKS.md](BENCHMARKS.md),
+[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)). One further **1.198x is
+measured and deliberately unshipped**: it moves `p1`, and `p1` sets `W`,
+which is the unit every frozen benchmark window and the coverage cursor are
+counted in — amending that anchor is the owner's call rather than an
+optimization pass's.
 
 **Candidates are carried as `(m, off)` from the first commit.** `m = base +
 off` with `base` a host-side big integer that never reaches the device and
@@ -138,12 +158,33 @@ itself for both families. Gate G10 pins it tight to a single `m`, per
 `(n, b)`. This project will not need a probable-prime qualifier for a very
 long time.
 
-**The wheel is a flat residue table, and that is v1's one deliberate
-simplification.** A factored multi-level table — the same CRT lift applied
-to a table too large to hold, as square-ladders does to reach 47 — is the
-first optimization this project owes, and it is priced at roughly 14× for
-A130003 in [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md). The numbers in this
-README are v1's measured numbers, not that projection.
+**The wheel is two mechanisms, and the second one is why this engine is
+fast.** The primes up to `p1` are a flat residue table, which is all v1
+had; a table cannot hold more than that, and 23 is where it stops. The
+primes above it go in as **bit planes over the period index**, which is a
+different object entirely. Write `m = j*W + r`. Then
+
+    q | m  <=>  (j + Binv_q · r) mod q  in  Binv_q · K(q),   Binv_q = W⁻¹ mod q
+
+and once `r` is fixed that is a condition on **`j` alone**, periodic with
+period `q`. So a group of primes above the flat wheel has one fixed
+surviving-`j` set mod their product, and **one 32-bit load and one `and`
+filter thirty-two consecutive periods**. Folding a prime into a plane costs
+a few hundred KB, not a factor of `q` in a table, so the wheel reaches 79
+at `b = 4` and 113 at `b = 2` — where a flat table at 47 would already have
+asked numpy for 183 GiB.
+
+Two properties make it fit *this* problem. The shift is **additive**, so
+every residue's killed set is a translate of one fixed set and one `u32`
+per residue per plane is the whole per-residue state. And **`W` does not
+change**: the plane primes never enter the modulus, so a period still means
+what it meant, coverage still advances every launch, a v1 cursor is
+inherited rather than re-denominated, and every frozen benchmark window is
+the same window. A factored multi-level table — the thing v1's log said to
+build next, and what square-ladders does — would have multiplied `W` by
+2.8×10⁹, giving a period of `6.1×10¹⁷` against an `a(19)` median of
+`5.75×10¹⁶`: the coverage claim would have advanced in steps ten times
+wider than the entire hunt.
 
 ## The odds model
 
@@ -193,11 +234,11 @@ as luck rather than as calibration.
 Requires an NVIDIA GPU with CuPy, plus numpy and sympy.
 
 ```bash
-python launch.py --selftest    # 28 gates and drills; must end ALL GREEN (~25 s)
+python launch.py --selftest    # 29 gates and drills; must end ALL GREEN (~45 s)
 ```
 
 ```bash
-python score.py                # gates x 5 fingerprinted shapes (~40 s)
+python score.py                # gates x 5 fingerprinted shapes (~70 s)
 ```
 
 ```bash
@@ -229,9 +270,20 @@ here is built to. Specific to this one:
 
 - **Three independent implementations.** A sympy-only oracle, a numpy CPU
   engine that marks the dense line with no wheel at all, and a CuPy engine
-  that enumerates wheel residues and tests them. G9 pins the GPU stream to
+  that generates wheel survivors and tests them. G9 pins the GPU stream to
   the CPU stream bit-for-bit on six populated windows across both bases,
   from `m = 2×10⁴` to `1.8×10¹⁹`, the top two **above 2⁶⁴**.
+- **Every v2 mechanism is checked against something that does not share its
+  arithmetic (G16).** The bit planes are checked against plain divisibility
+  in BOTH directions on thousands of (residue, period) pairs — a plane that
+  killed too much would silently lose survivors, and a sparse parity window
+  could miss it. The round schedule must come out as a survival *fraction*,
+  so the same target has to produce different depths at `n = 19` and
+  `n = 10`. All four queue capacities are forced to token size and the
+  stream must be identical, which is what makes "capacity is a tuning
+  constant, not a correctness bound" a checkable claim rather than a
+  comment. And a launch too short to fill one block tile must spread the
+  block across residues and still return the same stream.
 - **The killed set is built three ways.** The oracle walks every residue
   and tests divisibility; the engines negate the orbit of `b`; the closed
   form says `min(n, ord_q(b))`. G2b and G3 require all three to agree, in
@@ -249,7 +301,14 @@ here is built to. Specific to this one:
   stopper; a run one too long, and an earlier term mislabelled as the
   frontier's run, are both rejected.
 - **Ceilings raise rather than compute** — the primality-proof cap, the
-  engine floor, the Barrett bound on the wheel modulus, and the flat
-  table's own size limit (the b = 2 wheel reaches 1.29×10⁹ residues at
-  p1 = 47, and asking for it must refuse rather than fail 183 GiB into an
-  allocation). All four drilled.
+  engine floor, the Barrett bound on the wheel modulus, the flat table's
+  own size limit (the b = 2 wheel reaches 1.29×10⁹ residues at p1 = 47, and
+  asking for it must refuse rather than fail 183 GiB into an allocation),
+  and the bit planes' total budget. All drilled.
+- **The cursor's unit is asserted, not just described.** The config key
+  names the wheel, which is documentation; the checkpoint stores `W` and
+  the campaign refuses to read a cursor counted in a different period,
+  which is the half that does not depend on the description being right
+  (OPTIMIZATION.md 2.9). v2 leaves `W` alone, so a v1 cursor is inherited
+  rather than re-denominated — and the cursor-policy drill puts every one
+  of the three readers in front of a checkpoint written under each key.

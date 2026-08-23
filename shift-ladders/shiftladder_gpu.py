@@ -8,49 +8,76 @@ windows at several heights, including above 2^64.
 
 WHAT THE KERNEL DOES.  A candidate is killed by a prime q exactly when
 m mod q lands in K(q,n,b) = { -b^k mod q }, so the engine never forms a
-value: it enumerates the m that already survive every prime up to the
-WHEEL, and tests each of those against the remaining primes by one Barrett
-reduction and one bit lookup, bailing out at the first kill.  With the
-wheel at 23 (base 4) the expected number of tests before a kill is about
-three, which is what makes the sieve depth nearly free.
+value.  It generates only the m that survive every prime up to the WHEEL and
+tests those against the remaining primes by one Barrett reduction and one
+bit lookup each, bailing out at the first kill.
 
-  m = base + off,   base = j0 * W (a host big int),   off < nper * W
+  m = j*W + r,   W = prod(q <= p1),   r a wheel residue,   j a period index
 
-THE (m, off) CARRY IS HERE FROM THE FIRST COMMIT, and that is deliberate.
-OPTIMIZATION.md 2.7 says to carry candidates as a pair rather than let a
-machine word bound the search, because the alternative is growing a second
-engine at 2^64 later; square-ladders raised its ceiling twice and the
-second time cost a campaign stretch.  Nothing on this device ever holds an
-absolute m: the kernel reduces `basemod[t] + off`, where `basemod[t] =
-base mod q_t` is folded once per launch on the host.  The enforced ceiling
-is therefore the primality-proof bound (3.317e24 minus b^n), not a word,
-and G15 checks that the stream does not depend on where the launch base
-was put.
+THE WHEEL IS TWO MECHANISMS, AND THE SECOND ONE IS v2.  The primes up to p1
+are a flat residue table, as in v1.  The primes in (p1, p2] are BIT PLANES
+OVER THE PERIOD INDEX, and that is the whole of this engine's advantage:
 
-THE WHEEL IS A FLAT RESIDUE TABLE, and this is v1's one deliberate
-simplification.  The table holds every m mod W that survives the primes up
-to p1, built by CRT lifting (gated against the oracle's brute-force walk in
-G7).  The two families need different p1 for the same reason they have
-different everything -- ord_q(2) reaches q-1 where ord_q(4) cannot exceed
-(q-1)/2, so the b = 2 wheel is thousands of times sparser and its table
-stays small much further up:
+    q | m  <=>  (j*W + r) mod q in K(q)
+            <=>  (j + Binv_q * r) mod q  in  Binv_q * K(q)  =: K'(q)
 
-    b = 4, n = 19, p1 = 23:  1,572,480 residues mod 2.23e8  (7.1e-3 of line)
-    b = 2, n = 17, p1 = 37:  5,391,360 residues mod 7.42e12 (7.3e-7 of line)
+with Binv_q = W^-1 mod q, which exists because q > p1 does not divide W.
+Read the right-hand side again: once r is fixed it is a condition on j
+ALONE, and it is periodic in j with period q.  So a group g of primes above
+the wheel has a fixed surviving-j set S_g mod Q_g = prod(g), stored as a bit
+plane, and ONE 32-bit load plus ONE and filters THIRTY-TWO consecutive
+periods.  That is OPTIMIZATION.md 2.1 -- tabulate the periodic quantity the
+inner loop recomputes and process a block per step -- applied to the WHEEL
+rather than to the sieve, and it is why this project can afford a wheel to
+79 or 113 where a residue table dies at 23.
 
-A factored multi-level wheel -- the same CRT lift applied to a table too
-big to hold, as square-ladders does to reach 47 -- is the FIRST
-optimization this project owes and is priced in OPTIMIZATION_LOG.md.  It
-is not here yet, and the campaign numbers in the README say so.
+Two things make it fit this problem rather than the general one:
+
+  * The shift is additive.  A multiplicative ladder's kill condition is not
+    a translate of a fixed set, so no single plane serves every residue;
+    here `cr` (one u32 per residue per group) is the whole per-residue
+    state, and the launch base folds into one more scalar per group.
+  * W IS UNCHANGED.  The plane primes never enter the modulus, so `sweep(j0,
+    j1)` still means [j0*W, j1*W), coverage still advances every launch, the
+    checkpoint's period unit is the same one v1 stored, and the frozen
+    benchmark windows are the same windows.  A factored wheel of the kind
+    square-ladders uses would have multiplied W by 2.8e9 and made the
+    coverage claim advance in steps ten times wider than the whole hunt.
+
+THE TEST LOOP IS COMPACTED, TWICE OVER (OPTIMIZATION.md 2.2).  A lane needs
+about three tests but a warp of 32 runs to the deepest of them -- measured
+on v1, 13.96 against a mean of 2.78, a 5.0x tax.  So the kernel runs slices
+of the test primes BRANCHLESSLY over a dense shared queue and compacts the
+survivors between slices, every lane alive.  The slice boundaries are
+derived from the SURVIVAL CURVE and not from a prime count: a coarser wheel
+or a smaller filter kills faster, and a fixed depth there tests past the
+point where anything is left to kill.
+
+  * The in-block chain stops at TAIL_SURV, because a block that has whittled
+    itself down to a percent of its candidates has more idle warps than
+    working ones.
+  * What is left goes to a GLOBAL queue and a second kernel sweeps it with
+    one item per lane, the whole device in flight -- and that kernel runs a
+    compaction chain of its OWN, which is worth having there for exactly the
+    reason it was not worth having in the block: its blocks are full.
+
+THE (m, off) CARRY IS HERE FROM THE FIRST COMMIT (OPTIMIZATION.md 2.7).
+Nothing on this device ever holds an absolute m: the kernel reduces the
+launch OFFSET, and `base mod q` is folded once per launch on the host into
+the uint4's `boff` slot against a DOUBLED kill bitmap, so it costs no
+instruction in the hot loop.  The enforced ceiling is therefore the
+primality-proof bound (3.317e24 minus b^n), not a machine word, and G15
+checks that the stream does not depend on where the launch base was put.
 
 Gates here: G7 (the CRT-lifted wheel == the oracle's period walk), G8 (the
-wheel is exactly prod(q - w) residues, duplicate-free, none of them
-killed), G9 (GPU stream == CPU stream on populated windows, both bases,
-including above 2^64), G15 (the stream is invariant under the launch base
-and the launch split, which is what makes the (m, off) carry checkable).
+wheel is exactly prod(q - w) residues, duplicate-free, none of them killed),
+G9 (GPU stream == CPU stream on populated windows, both bases, including
+above 2^64), G15 (the stream is invariant under the launch base and the
+launch split), G16 (the v2 mechanisms: the bit planes against direct
+divisibility, the derived schedules, and the three overflow fallbacks forced
+and checked identical).
 """
 
-import math
 import pathlib as _pathlib
 import sys as _sys
 
@@ -64,29 +91,85 @@ from shiftladder_reference import K_FLOOR, w                    # noqa: E402
 from shiftladder_search import (CpuEngine, Q2_DEFAULT,          # noqa: E402
                                 k_ceil, killed_residues, m_floor)
 
-# The wheel top per base.  Both are the largest prime whose flat residue
-# table still fits comfortably in device memory at the production filter;
-# they differ by six primes because the b = 2 wheel is far sparser.
+# The flat residue table's top per base.  It sets W and therefore the unit
+# of the coverage cursor, so it is a per-base CONSTANT and not something the
+# engine tunes: moving it re-denominates every checkpoint.  The wheel gets
+# deeper through the bit planes, which leave W alone.
 P1_DEFAULT = {4: 23, 2: 37}
 
-# Barrett reduces `basemod + off`, which must stay a u64.  Keeping it under
-# 2^63 leaves a full bit of margin and is what bounds a launch: nper * W +
-# q2 < REDUCE_MAX.  Stated as an enforced constant, not an assumption
-# (CONVENTIONS.md "Numeric hygiene"); the ceiling drill exercises it.
+# Barrett reduces the launch offset, which must stay a u64 and under 2^63
+# for ONE conditional subtraction to be exact (see TEST in the kernel).
+# That bounds nper * W, a property of the WHEEL AND THE BATCHING, both of
+# which the engine picks -- never of m, which the mathematics picks.
 REDUCE_MAX = 1 << 63
 
-# The flat residue table's own ceiling.  v1 holds the whole wheel as a
-# list, so "which primes fit in the wheel" is a MEMORY question and it is
-# answered here, by refusing, rather than by an allocation that fails
-# 183 GiB in: the b = 2 wheel reaches 1.29e9 residues at p1 = 47.  A
-# multi-level wheel is what raises this, and that is the first
-# optimization on the list.
+# The flat table's own ceiling.  "Which primes fit in the flat wheel" is a
+# MEMORY question and it is answered by refusing, not by an allocation that
+# fails 183 GiB in: the b = 2 wheel reaches 1.29e9 residues at p1 = 47.  The
+# bit planes are what raise the wheel now, so this bound stops mattering to
+# throughput and stays only as a guard.
 RES_MAX = 1 << 25                # 33.5M residues = 268 MB as int64
-HIT_CAP = 1 << 20                # survivors per launch before we refuse
-TPB = 256
+HIT_CAP = 1 << 16                # survivors buffered per launch
 
+# --------------------------- the bit-plane wheel ---------------------------
+# Bits in one plane before a new group is started.  Bigger planes mean FEWER
+# groups and so fewer loads per period, which is the thing the generation
+# phase is paid in; the counterweight is cache.  Swept interleaved on both
+# production shapes: 2^26 beat 2^20 / 2^22 / 2^24, because at 2^26 the b = 4
+# wheel's first five primes (29..43, 5.9e7 residues) merge into ONE plane.
+PLANE_BITS_MAX = 1 << 26
+# All planes together.  A guard, not a tuning constant: p2 is derived and a
+# pathological argument should refuse rather than allocate.
+PLANE_TOTAL_MAX = 1 << 31        # 256 MB of planes
+P2_SEARCH_MAX = 400              # how far pick_p2 looks
+
+# ------------------------------ the kernel ---------------------------------
+TPB_DEFAULT = 128
+WPT_DEFAULT = 8                  # 32-bit plane words per thread
+# TPB * WPT is the block's WORK ITEMS, and 1024 of them is the knee: swept
+# interleaved over 64..512 threads and 1..32 words, 1.54x-1.64x over 256 on
+# three shapes and 1.29x on the fourth.  It is a candidates-per-block knob
+# in disguise -- at a deep wheel a narrower block reaches its compaction
+# rounds with fewer candidates than it has threads.
+RPB_MAX = 8                      # residues a block may cover when j is short
+UNROLL = 4                       # independent Barrett chains in a tail loop
+QCAP_SIGMA = 6.0                 # sigma of headroom on an analytic queue
+ROUND_RATIO = 0.65               # survival drop that ends a compaction round
+TAIL_SURV = 0.10                 # where the block hands over to the tail
+TAIL2_SURV = 0.01                # where the tail kernel stops compacting
+MAX_ROUNDS = 10
+TTILE_MUL = 4                    # tail-kernel shared tile, in blocks of TPB
+TAIL_BLOCKS_PER_SM = 64
+# CRT-combined test units: "killed by 79 or by 83" is a function of
+# m mod (79*83) alone, so a unit costs ONE reduction and ONE lookup instead
+# of one of each per prime.  Measured near-null here (see OPTIMIZATION_LOG),
+# and the cap is small deliberately -- the wide settings hit the L1 cliff.
+UNIT_Q_MAX = 1 << 13
+CAND_SLOTS = 1 << 33             # j-slots (R * periods) aimed at per launch
+# Global tail queue ceiling, and the one constant here that the FROZEN
+# BENCHMARK CANNOT SEE (OPTIMIZATION.md 2.13).  The queue is sized from
+# per_launch, and SCORE's window is 8,192 periods -- a QUARTER of one
+# production launch -- so on the benchmark the queue never fills and every
+# capacity from 2^23 up measures identical.  Swept on a multi-launch span
+# instead, at the launch size a campaign actually runs: 2^23 overflows 79%
+# of the tail into the in-block fallback and costs 1.19x, and the ceiling
+# has to clear the analytic need (3.2e7 entries at the b = 4 production
+# wheel) or the campaign quietly runs at two thirds of its rate while the
+# score says nothing is wrong.
+Q3_MAX = 1 << 26                 # 537 MB, and see _pick_q3cap
+
+# What the pieces cost, in units of ONE PACKED TEST (measured: 1.054 ps per
+# candidate-test on SCORE, against 2.184 ps for v1's spelling of the same
+# test).  They exist so the bit-plane wheel's top can be DERIVED per
+# configuration rather than pinned per base: the measured optimum moved from
+# 47 to 113 across the five benchmark shapes, and shipping a constant would
+# be the "carry the fraction, not the count" mistake in another spelling.
+GEN_W = 3.8                      # one plane read, per 32 periods
+EXTRACT = 1.4                    # ffs + queue push, per candidate
+ROUNDC = 1.4                     # dequeue + rebuild + push, per round
 
 _WHEELS = {}
+_MODULES = {}
 
 
 def wheel(n, b, p1):
@@ -98,19 +181,15 @@ def wheel(n, b, p1):
     period; G7 pins the two together on small p1, which is the only place
     the walk is affordable.
 
-    The residues are int64, which is a claim and not a convenience: W is
-    bounded by REDUCE_MAX below (the Barrett input has to stay a u64), so
-    a wheel whose modulus would not fit is refused here rather than
-    wrapping silently.
+    BOTH ceilings are computed before a single residue is built: the modulus
+    and the residue count are plain products, so a wheel that would not fit
+    is refused here rather than part way through an allocation.  (It was the
+    other way round for one commit, and the b = 2 wheel at p1 = 47 asked
+    numpy for 183 GiB.)
     """
     key = (n, b, p1)
     if key in _WHEELS:
         return _WHEELS[key]
-    # BOTH ceilings are computed before a single residue is built: the
-    # modulus and the residue count are plain products, so a wheel that
-    # would not fit is refused here rather than part way through an
-    # allocation.  (It was the other way round for one commit, and the
-    # b = 2 wheel at p1 = 47 asked numpy for 183 GiB.)
     qs = list(primerange(2, p1 + 1))
     W_final, R_final = 1, 1
     for q in qs:
@@ -121,8 +200,9 @@ def wheel(n, b, p1):
                          f"{REDUCE_MAX}: pick a smaller p1")
     if R_final > RES_MAX:
         raise ValueError(f"a flat wheel at p1 = {p1} would hold {R_final} "
-                         f"residues, past RES_MAX = {RES_MAX}: it needs the "
-                         f"multi-level table, not a bigger allocation")
+                         f"residues, past RES_MAX = {RES_MAX}: raise the "
+                         f"wheel with bit planes (p2), not with a bigger "
+                         f"allocation")
     W, res = 1, np.zeros(1, dtype=np.int64)
     for q in qs:
         killed = np.array(sorted(killed_residues(q, n, b)), dtype=np.int64)
@@ -138,120 +218,677 @@ def wheel(n, b, p1):
     return W, res
 
 
-class GpuEngine:
-    """Wheel enumeration plus a Barrett test loop, on the device."""
+def plane_groups(p1, p2, budget=PLANE_BITS_MAX):
+    """Partition the primes in (p1, p2] into bit-plane groups.
 
-    KERNEL = r"""
-extern "C" __global__ void shift_sieve(
-    const unsigned long long* __restrict__ res, const int R,
-    const unsigned long long W,
-    const int np_,
-    const unsigned int* __restrict__ pq,
-    const unsigned long long* __restrict__ magic,
-    const unsigned int* __restrict__ bmoff,
-    const unsigned int* __restrict__ basemod,
-    const unsigned int* __restrict__ bits,
-    unsigned long long* out, unsigned int* cnt, const int cap)
+    Greedy, in order, growing a group while its product stays under
+    `budget`.  The product is the plane's period in bits, so the budget is
+    what keeps a plane cache-resident.
+    """
+    out, cur, prod = [], [], 1
+    for q in primerange(p1 + 1, p2 + 1):
+        if cur and prod * q > budget:
+            out.append((tuple(cur), prod))
+            cur, prod = [], 1
+        cur.append(q)
+        prod *= q
+    if cur:
+        out.append((tuple(cur), prod))
+    return out
+
+
+def build_planes(n, b, p1, p2, ypad, budget=PLANE_BITS_MAX):
+    """The packed surviving-j bit planes for the primes in (p1, p2].
+
+    Plane g holds bit z set when `z mod q not in Binv_q * K(q)` for every q
+    in the group -- i.e. when a period index congruent to z survives the
+    whole group.  It is stored with `ypad + 128` bits of its own head copied
+    onto the end, so a read that starts anywhere in [0, Q) and runs a whole
+    block's worth of periods further never wraps and never needs a modulo.
+    """
+    W = 1
+    for q in primerange(2, p1 + 1):
+        W *= q
+    planes = []
+    for prs, Q in plane_groups(p1, p2, budget):
+        alive = np.ones(Q, dtype=bool)
+        for q in prs:
+            binv = pow(W % q, -1, q)
+            for u in killed_residues(q, n, b):
+                alive[(binv * u) % q::q] = False
+        nbits = (Q + ypad + 128 + 63) // 64 * 64
+        rep = np.resize(alive, nbits)               # periodic head copy
+        planes.append({"primes": prs, "Q": Q,
+                       "words": np.packbits(rep,
+                                            bitorder="little").view(np.uint32),
+                       "density": float(alive.mean())})
+    total = sum(int(p["words"].size) * 32 for p in planes)
+    if total > PLANE_TOTAL_MAX or total >= (1 << 32):
+        raise ValueError(f"the bit planes for (p1, p2] = ({p1}, {p2}] would "
+                         f"hold {total} bits, past PLANE_TOTAL_MAX = "
+                         f"{PLANE_TOTAL_MAX} or the u32 index the kernel "
+                         f"uses: lower p2")
+    return planes
+
+
+def plane_shifts(res, planes, W):
+    """cr[g][i] = CRT_g(Binv_q * res[i] mod q), one u32 per residue.
+
+    The whole per-residue state of the bit-plane wheel.  A candidate's plane
+    index is `(cbase_g + cr_g[i] + j_local) mod Q_g`, and CRT is a ring
+    isomorphism, so the launch base contributes one more scalar per group
+    and never a per-candidate operation.
+    """
+    out = []
+    for g in planes:
+        Q = g["Q"]
+        acc = np.zeros(res.size, dtype=np.int64)
+        for q in g["primes"]:
+            binv = pow(W % q, -1, q)
+            a = (res % q) * binv % q
+            M = Q // q
+            acc += a * M % Q * pow(M, -1, q) % Q
+        out.append((acc % Q).astype(np.uint32))
+    return out
+
+
+def test_units(p2, q2, qmax=UNIT_Q_MAX):
+    """CRT-combine the test primes into units of bounded modulus.
+
+    A unit's kill pattern is a function of m mod Q = prod(unit), so one
+    reduction and one lookup decide the whole unit.  The primes stay in
+    order, so the survival curve -- and the round schedule cut from it --
+    change only in granularity.
+    """
+    out, cur, prod = [], [], 1
+    for q in primerange(p2 + 1, q2 + 1):
+        if cur and prod * q > qmax:
+            out.append((tuple(cur), prod))
+            cur, prod = [], 1
+        cur.append(q)
+        prod *= q
+    if cur:
+        out.append((tuple(cur), prod))
+    return out
+
+
+def survival(n, b, units):
+    """S[i] = the fraction of wheel survivors still alive after i units."""
+    S, cur = [1.0], 1.0
+    for prs, _Q in units:
+        for q in prs:
+            cur *= 1.0 - w(q, n, b) / q
+        S.append(cur)
+    return S
+
+
+def schedule(S, npr, ratio, tail, start=0):
+    """Round boundaries in the unit list, cut from the survival CURVE.
+
+    A round ends when survival has fallen by `ratio`; the chain stops when
+    survival reaches `tail`.  Boundaries are FRACTIONS made into counts per
+    configuration, never counts carried between configurations.
+    """
+    b = [int(start)]
+    while len(b) <= MAX_ROUNDS and b[-1] < npr and S[b[-1]] > tail:
+        want = S[b[-1]] * ratio
+        d = b[-1] + 1
+        while d < npr and S[d] > want:
+            d += 1
+        b.append(min(d, npr))
+    return b
+
+
+def model_cost(n, b, p1, p2, q2, budget=PLANE_BITS_MAX, ratio=ROUND_RATIO,
+               tail=TAIL_SURV, qmax=UNIT_Q_MAX):
+    """Modelled cost per unit of m line, in tests, for a wheel top of p2.
+
+    Generation is `ng` plane reads per 32 periods; everything else is per
+    CANDIDATE, and the round chain is priced off the survival curve exactly.
+    Rule 2: this generates the candidate and prices what is declined.  It is
+    never the evidence -- the value it picks is checked by a sweep around it,
+    and the measured curve is flat over a wide plateau either side.
+    """
+    d2 = 1.0
+    for q in primerange(p1 + 1, p2 + 1):
+        d2 *= (q - w(q, n, b)) / q
+    ng = len(plane_groups(p1, p2, budget))
+    units = test_units(p2, q2, qmax)
+    S = survival(n, b, units)
+    npr = len(units)
+    bn = schedule(S, npr, ratio, tail)
+    rounds = sum(S[bn[i]] * (bn[i + 1] - bn[i] + ROUNDC)
+                 for i in range(len(bn) - 1))
+    s0 = S[bn[-1]]
+    tl = (sum(1.0 - (1.0 - S[j] / s0) ** 32 for j in range(bn[-1], npr + 1))
+          * s0) if s0 > 0 else 0.0
+    return ng * GEN_W / 32.0 + d2 * (EXTRACT + rounds + tl)
+
+
+def pick_p2(n, b, p1, q2, **kw):
+    """The bit-plane wheel top that minimises the modelled cost."""
+    cands = [q for q in primerange(p1, min(q2, P2_SEARCH_MAX) + 1)] or [p1]
+    return min(cands, key=lambda x: model_cost(n, b, p1, x, q2, **kw))
+
+
+def _qcap(tile, surv, sigma=QCAP_SIGMA):
+    """Queue capacity from the ANALYTIC survival plus sigma of margin.
+
+    The count in a block is a sum of `tile` near-independent Bernoullis, so
+    its mean and standard deviation are both known exactly
+    (OPTIMIZATION.md 2.6).  Sizing for the impossible worst case instead
+    would cost shared memory, and shared memory costs blocks per SM -- so
+    overflow is made HARMLESS rather than impossible: a candidate that does
+    not fit runs its tail on the spot, which is the same arithmetic and so
+    the same answer.  Capacity is a tuning constant, not a correctness
+    bound, and G16 proves it by forcing the path.
+    """
+    mean = tile * surv
+    sd = (tile * surv * max(1.0 - surv, 0.0)) ** 0.5
+    cap = int(mean + sigma * sd) + 32
+    return int(min(int(tile), (cap + 31) // 32 * 32))
+
+
+_SRC = r"""
+#define TPB    %(tpb)d
+#define WPT    %(wpt)d
+#define NG     %(ng)d
+#define Q1CAP  %(q1cap)d
+#define Q2CAP  %(q2cap)d
+#define NROUND %(nround)d
+#define W1C    %(w1)dULL
+#define UNROLL %(unroll)d
+#define RPBMAX %(rpbmax)d
+#define TTILE  %(ttile)d
+#define TCAP   %(tcap)d
+#define TROUND %(tround)d
+
+/* One test against the packed per-unit uint4 (magic_lo, magic_hi, Q, boff).
+   The remainder is 32-bit: the true value of off - qhat*Q lies in [0, 2Q)
+   and arithmetic mod 2^32 is exact for a value that small.  ONE conditional
+   subtraction is enough, and that is a theorem rather than a hope: with
+   M = floor(2^64/Q) and x < 2^63,
+
+       x*M/2^64 = x/Q - x*s/(Q*2^64),   s = 2^64 mod Q < Q,
+
+   so the error term is under 1/2, qhat > x/Q - 3/2, and qhat is therefore
+   floor(x/Q) or one less.  What is reduced is the launch OFFSET, bounded by
+   W * per_launch, so the bound holds at every height and REDUCE_MAX enforces
+   it against the wheel instead of against the mathematics.
+
+   The launch base arrives through e.w, which the host set to
+   `2Q-block base + (base mod Q)`; the bitmap holds each unit's pattern
+   TWICE, so `e.w + r` lands in the right copy and `(off + base) mod Q` is
+   read without ever adding the two. */
+#define TEST(IDX, DST) { \
+    const uint4 e = pk[IDX]; \
+    const unsigned long long mg = ((unsigned long long)e.y << 32) | e.x; \
+    unsigned int r = (unsigned int)off \
+                   - (unsigned int)__umul64hi(off, mg) * e.z; \
+    if (r >= e.z) r -= e.z; \
+    const unsigned int bb = e.w + r; \
+    DST |= (bits[bb >> 5] >> (bb & 31)) & 1u; }
+
+/* The uncompacted remainder: every lane entering this is alive, so the
+   early exit costs what it should, and UNROLL independent Barrett chains
+   hide the dependent-chain latency. */
+__device__ __forceinline__ bool tail_survives(
+        const unsigned long long off, const int np_, const int from,
+        const uint4* __restrict__ pk, const unsigned int* __restrict__ bits)
 {
-    const int ri = blockIdx.x * blockDim.x + threadIdx.x;
-    if (ri >= R) return;
-    /* one block row per period: no 64-bit division in the inner index */
-    const unsigned long long off =
-        (unsigned long long)blockIdx.y * W + res[ri];
-    for (int t = 0; t < np_; ++t) {
-        const unsigned int q = pq[t];
-        /* the absolute m never exists on the device: the base arrives
-           already reduced, per prime, folded on the host once per launch */
-        const unsigned long long p = (unsigned long long)basemod[t] + off;
-        const unsigned long long qhat = __umul64hi(p, magic[t]);
-        unsigned long long r = p - qhat * (unsigned long long)q;
-        if (r >= q) r -= q;
-        if (r >= q) r -= q;
-        const unsigned int idx = bmoff[t] + (unsigned int)r;
-        if ((bits[idx >> 5] >> (idx & 31)) & 1u) return;   /* killed */
+    int i = from;
+    for (; i + UNROLL <= np_; i += UNROLL) {
+        unsigned int kill = 0u;
+#pragma unroll
+        for (int z = 0; z < UNROLL; ++z) TEST(i + z, kill)
+        if (kill) return false;
     }
-    const unsigned int slot = atomicAdd(cnt, 1u);
-    if (slot < (unsigned int)cap) out[slot] = off;
+    for (; i < np_; ++i) {
+        unsigned int kill = 0u;
+        TEST(i, kill)
+        if (kill) return false;
+    }
+    return true;
+}
+
+#define EMIT(V) { const int _p = atomicAdd(nout, 1); \
+                  if (_p < cap) out[_p] = (V); }
+
+/* THE TAIL DOES NOT RUN IN THE SIEVE BLOCK.  A block reaches the end of its
+   round chain with a few percent of its candidates -- a couple of dozen
+   against TPB threads -- so most warps sit idle while the block waits on the
+   single deepest early-exit chain among the survivors.  So the survivors go
+   to a GLOBAL queue and this kernel sweeps it with one item per lane and the
+   whole device in flight.  `n3` is read ON THE DEVICE, so the two kernels
+   chain with no host round trip, and there is one atomic per BLOCK.
+
+   And it COMPACTS, for the same reason the sieve kernel does: a warp of tail
+   items still runs to the deepest chain among its 32.  The difference -- and
+   the reason these rounds are worth running HERE and were not worth running
+   back in the sieve block -- is that every block in this kernel is full. */
+extern "C" __global__ void tailsweep(
+        const unsigned long long* __restrict__ q3,
+        const int* __restrict__ n3, const int q3cap,
+        unsigned long long* out, int* nout, const int cap,
+        const int np_, const uint4* __restrict__ pk,
+        const unsigned int* __restrict__ bits)
+{
+    __shared__ unsigned long long ta[TTILE];
+    __shared__ unsigned long long tb[TCAP];
+    __shared__ int tn[TROUND > 0 ? TROUND : 1];
+    const int n = min(*n3, q3cap);
+    for (int base = blockIdx.x * TTILE; base < n; base += gridDim.x * TTILE) {
+        const int m = min(TTILE, n - base);
+        if ((int)threadIdx.x < TROUND) tn[threadIdx.x] = 0;
+        for (int i = threadIdx.x; i < m; i += TPB) ta[i] = q3[base + i];
+        __syncthreads();
+        const int tm1 = m;
+%(trounds)s
+        __syncthreads();
+    }
+}
+
+/* The block's tile is (rpb residues) x (wact words of j), chosen by the HOST
+   so that TPB*WPT work items always land on real work: a launch with few
+   periods spreads a block over more residues instead of masking off three
+   quarters of its threads.  Both factors are powers of two, so the
+   decomposition is a shift and a mask. */
+#define OFF_OF(RL, YL) (r1s[RL] + W1C * (unsigned long long)(ybase + (YL)))
+
+extern "C" __global__ void sieve(
+        const unsigned long long* __restrict__ res, const int R,
+        const unsigned int* __restrict__ crv,     /* NG planes, R each */
+        const unsigned int* __restrict__ gbits,
+        const unsigned int* __restrict__ cbase,   /* NG per-launch shifts */
+        const int nper,
+        const int rpb, const int logw,
+        const int np_,
+        const uint4* __restrict__ pk,
+        const unsigned int* __restrict__ bits,
+        unsigned long long* q3, int* n3, const int q3cap,
+        unsigned long long* out, int* nout, const int cap)
+{
+    __shared__ int q3b;
+    __shared__ unsigned short qk[Q1CAP];
+    __shared__ unsigned short qk2[Q2CAP];
+    __shared__ int qn;
+    __shared__ int qcnt[NROUND > 0 ? NROUND : 1];
+    __shared__ unsigned int zc[RPBMAX * (NG > 0 ? NG : 1)];
+    __shared__ unsigned long long r1s[RPBMAX];
+    const int wact = 1 << logw;
+    const int ymask = (wact << 5) - 1;
+    const int r1base = blockIdx.x * rpb;
+    const int nrl = min(rpb, R - r1base);
+    const int ybase = blockIdx.y * (wact << 5);
+    const int nyb = min(wact << 5, nper - ybase);
+    if (threadIdx.x == 0) qn = 0;
+    if ((int)threadIdx.x < NROUND) qcnt[threadIdx.x] = 0;
+    if ((int)threadIdx.x < nrl) r1s[threadIdx.x] = res[r1base + threadIdx.x];
+%(zbcalc)s
+    __syncthreads();
+
+    /* ---- generation: NG plane reads filter 32 periods per load ---- */
+    unsigned int mine[WPT];
+    int cnt = 0;
+#pragma unroll
+    for (int i = 0; i < WPT; ++i) {
+        const int idx = threadIdx.x + i * TPB;
+        const int rl = idx >> logw;
+        const int wrd = idx & (wact - 1);
+        const int y0 = wrd << 5;
+        unsigned int mask = 0u;
+        if (rl < nrl && y0 < nyb) {
+            mask = (y0 + 32 <= nyb) ? 0xFFFFFFFFu
+                                    : ((1u << (nyb - y0)) - 1u);
+%(gload)s
+        }
+        mine[i] = mask;
+        cnt += __popc(mask);
+    }
+
+    /* warp-aggregated queue push: one shared atomic per warp rather than
+       one per candidate */
+    int scan = cnt;
+#pragma unroll
+    for (int d = 1; d < 32; d <<= 1) {
+        const int v = __shfl_up_sync(0xFFFFFFFFu, scan, d);
+        if ((threadIdx.x & 31) >= d) scan += v;
+    }
+    const int wsum = __shfl_sync(0xFFFFFFFFu, scan, 31);
+    int wbase = 0;
+    if ((threadIdx.x & 31) == 31) wbase = atomicAdd(&qn, wsum);
+    wbase = __shfl_sync(0xFFFFFFFFu, wbase, 31);
+    int p = wbase + scan - cnt;
+#pragma unroll
+    for (int i = 0; i < WPT; ++i) {
+        unsigned int mask = mine[i];
+        const int idx = threadIdx.x + i * TPB;
+        const int key0 = ((idx >> logw) << (logw + 5))
+                       | ((idx & (wact - 1)) << 5);
+        while (mask) {
+            const int t = __ffs(mask) - 1;
+            mask &= mask - 1u;
+            const int key = key0 + t;
+            if (p < Q1CAP) qk[p] = (unsigned short)key;
+            else {
+                const unsigned long long off =
+                    OFF_OF(key >> (logw + 5), key & ymask);
+                if (tail_survives(off, np_, 0, pk, bits)) EMIT(off)
+            }
+            ++p;
+        }
+    }
+    __syncthreads();
+    const int nq1 = min(qn, Q1CAP);
+
+    /* ---- compaction rounds: a slice of the test units run BRANCHLESSLY
+            over a dense queue (every lane alive, so the warp pays what a
+            lane pays), then the survivors compacted again ---- */
+%(rounds)s
 }
 """
 
-    def __init__(self, n, b, p1=None, q2=Q2_DEFAULT, per_launch=None):
+
+class GpuEngine:
+    """Bit-plane wheel, compacted Barrett test loop, and a tail kernel."""
+
+    def __init__(self, n, b, p1=None, q2=Q2_DEFAULT, per_launch=None,
+                 p2=None, tpb=TPB_DEFAULT, wpt=WPT_DEFAULT,
+                 plane_bits=PLANE_BITS_MAX, round_ratio=ROUND_RATIO,
+                 tail_surv=TAIL_SURV, tail2_surv=TAIL2_SURV,
+                 unit_q_max=UNIT_Q_MAX, force_caps=None):
         import cupy as cp
         self.cp = cp
         self.n, self.b, self.q2 = int(n), int(b), int(q2)
         self.p1 = int(p1 if p1 is not None else P1_DEFAULT[b])
+        self.tpb, self.wpt = int(tpb), int(wpt)
+        self.yblk = self.tpb * 32 * self.wpt
+        self.plane_bits = int(plane_bits)
+        self.unit_q_max = int(unit_q_max)
+
+        # --- the wheel: flat table to p1, bit planes to p2 ---
         self.W, res = wheel(self.n, self.b, self.p1)
         self.R = int(res.size)
+        want_p2 = (int(p2) if p2 is not None
+                   else pick_p2(self.n, self.b, self.p1, self.q2,
+                                budget=self.plane_bits, ratio=round_ratio,
+                                tail=tail_surv, qmax=self.unit_q_max))
+        self.p2 = max(self.p1, min(want_p2, self.q2))
+        self.planes = build_planes(self.n, self.b, self.p1, self.p2,
+                                   self.yblk, self.plane_bits)
+        self.ng = len(self.planes)
+        self.d2 = 1.0
+        for g in self.planes:
+            self.d2 *= g["density"]
+
+        # --- the test units and the two round schedules ---
+        self.units = test_units(self.p2, self.q2, self.unit_q_max)
+        self.npr = len(self.units)
+        self._S = survival(self.n, self.b, self.units)
+        self.bounds = schedule(self._S, self.npr, round_ratio, tail_surv)
+        self.tbounds = schedule(self._S, self.npr, round_ratio, tail2_surv,
+                                start=self.bounds[-1])
+
+        # --- device tables ---
         self.d_res = cp.asarray(res.astype(np.uint64))
+        crs = plane_shifts(res, self.planes, self.W)
+        self.d_cr = (cp.asarray(np.concatenate(crs)) if crs
+                     else cp.zeros(1, dtype=cp.uint32))
+        # goff is a BIT offset into the concatenated planes
+        self.goff, acc, tot = [], [], 0
+        for g in self.planes:
+            self.goff.append(tot * 32)
+            acc.append(g["words"])
+            tot += int(g["words"].size)
+        self.d_gbits = (cp.asarray(np.concatenate(acc)) if acc
+                        else cp.zeros(1, dtype=cp.uint32))
+        self.d_cbase = cp.zeros(max(self.ng, 1), dtype=cp.uint32)
 
-        self.primes = [q for q in primerange(self.p1 + 1, self.q2 + 1)]
-        self.d_pq = cp.asarray(np.array(self.primes, dtype=np.uint32))
-        self.d_magic = cp.asarray(barrett_magics(self.primes))
-        # one bit per residue per prime, concatenated; the offsets are the
-        # running sum, so a lookup is one add and one shift
+        # packed per-unit constants + the DOUBLED kill bitmap
+        Qs = [Q for _p, Q in self.units]
+        mag = (barrett_magics(Qs).astype(np.uint64) if Qs
+               else np.zeros(0, dtype=np.uint64))
         offs, total = [], 0
-        for q in self.primes:
+        for Q in Qs:
             offs.append(total)
-            total += q
-        self.bmoff = np.array(offs, dtype=np.uint32)
-        self.d_bmoff = cp.asarray(self.bmoff)
-        bits = np.zeros((total + 31) // 32, dtype=np.uint32)
-        for t, q in enumerate(self.primes):
-            for u in killed_residues(q, self.n, self.b):
-                i = offs[t] + u
-                bits[i >> 5] |= np.uint32(1) << np.uint32(i & 31)
+            total += 2 * Q
+        bits = np.zeros(max(1, (total + 31) // 32), dtype=np.uint32)
+        for t, (prs, Q) in enumerate(self.units):
+            killed = np.zeros(2 * Q, dtype=bool)
+            for q in prs:
+                for u in killed_residues(q, self.n, self.b):
+                    killed[u::q] = True
+            idx = np.nonzero(killed)[0] + offs[t]
+            np.bitwise_or.at(bits, idx >> 5,
+                             np.uint32(1) << (idx & 31).astype(np.uint32))
         self.d_bits = cp.asarray(bits)
+        self._boff = np.array(offs, dtype=np.uint64)
+        self._qs = np.array(Qs, dtype=np.uint64)
+        # W mod Q per unit, so a launch's base fold is one vectorised step
+        # instead of thousands of big-int divisions -- see _basemod.
+        self._wmod = np.array([self.W % int(q) for q in Qs] or [0],
+                              dtype=np.uint64)[:max(len(Qs), 1)]
+        self._pk = np.zeros((max(self.npr, 1), 4), dtype=np.uint32)
+        if self.npr:
+            self._pk[:, 0] = (mag & 0xFFFFFFFF).astype(np.uint32)
+            self._pk[:, 1] = (mag >> 32).astype(np.uint32)
+            self._pk[:, 2] = self._qs.astype(np.uint32)
+        self.d_pk = cp.zeros(max(self.npr, 1) * 4, dtype=cp.uint32)
 
-        # A launch covers whole periods, so `per_launch` is bounded by the
-        # Barrett input and by gridDim.y -- both enforced, neither assumed.
-        # The DEFAULT is sized from the wheel rather than fixed, because a
-        # coarse wheel has few residues per period: 64 periods is 1e8
-        # candidates at p1 = 23 and 65,000 at p1 = 13, and at the second of
-        # those the per-launch host work would be most of the wall clock.
-        # Aim at a constant amount of DEVICE work instead -- 2^29
-        # candidates, which is where both families plateau in an
-        # interleaved sweep (1.15x over 128 periods at base 4, 1.43x over
-        # 12 at base 2; see OPTIMIZATION_LOG.md).
+        # --- queues, launch size, kernels ---
+        self.q1cap = _qcap(self.yblk, self.d2)
+        tile = max(self.yblk * self.d2, 1.0)
+        self.q2cap = max(32, _qcap(tile, self._S[self.bounds[1]]
+                                   if len(self.bounds) > 1 else 1.0))
+        self.ttile = self.tpb * TTILE_MUL
+        s0 = self._S[self.bounds[-1]]
+        nxt = (self._S[self.tbounds[1]] / s0
+               if len(self.tbounds) > 1 and s0 > 0 else 1.0)
+        self.tcap = max(32, _qcap(self.ttile, min(1.0, nxt)))
+        self.per_launch = self._pick_launch(per_launch)
+        self.q3cap = self._pick_q3cap()
+        # Queue capacities are TUNING constants, never correctness bounds:
+        # every overflow path finishes the candidate on the spot with the
+        # same arithmetic.  G16 forces all four small and requires the
+        # identical stream, which is the only way that claim is checkable.
+        for k, v in (force_caps or {}).items():
+            setattr(self, k, int(v))
+        self.d_q3 = cp.empty(self.q3cap, dtype=cp.uint64)
+        self.d_n3 = cp.zeros(1, dtype=cp.int32)
+        self.d_out = cp.empty(HIT_CAP, dtype=cp.uint64)
+        self.d_cnt = cp.zeros(1, dtype=cp.int32)
+        self.k_sieve, self.k_tail = self._build()
+        self.tail_grid = TAIL_BLOCKS_PER_SM * cp.cuda.runtime.\
+            getDeviceProperties(cp.cuda.Device().id)["multiProcessorCount"]
+
+    # --------------------------------------------------------- geometry
+    def _pick_launch(self, per_launch):
+        """Periods per launch: aimed at CAND_SLOTS, bounded by Barrett.
+
+        An EXPLICIT per_launch is honoured exactly -- it is how the gates
+        force a launch split, and rounding it to a whole block tile would
+        turn "18 periods in one launch against six" into two identical
+        single-launch sweeps and make that check vacuous.  Only the DERIVED
+        value is rounded to whole tiles, where it costs nothing.
+        """
         cap = max(1, (REDUCE_MAX - self.q2) // self.W)
-        want = per_launch or max(1, (1 << 29) // max(self.R, 1))
-        self.per_launch = int(min(want, cap, 65535))
-        if self.per_launch < 1:
+        if per_launch:
+            want = int(per_launch)
+        else:
+            want = max(1, CAND_SLOTS // max(self.R, 1))
+            want = max(self.yblk, (want // self.yblk) * self.yblk)
+        out = int(min(want, cap))
+        if out < 1:
             raise ValueError(f"one period ({self.W}) already exceeds the "
                              f"Barrett bound {REDUCE_MAX}")
-        self.d_out = cp.empty(HIT_CAP, dtype=cp.uint64)
-        self.d_cnt = cp.zeros(1, dtype=cp.uint32)
-        self.kernel = cp.RawKernel(self.KERNEL, "shift_sieve")
+        return out
+
+    def _pick_q3cap(self):
+        """Global tail queue: analytic occupancy plus margin, capped.
+
+        Overflow costs correctness nothing -- an item that does not fit runs
+        its tail inside the sieve block, which is the same arithmetic -- but
+        it costs a fifth of the rate at production launch size, so the
+        ceiling is set to clear the analytic need rather than to be tidy.
+        `q3_short` says whether it did, and config() reports it.
+        """
+        cands = self.R * self.per_launch * self.d2
+        want = int(cands * self._S[self.bounds[-1]] * 1.25) + 4096
+        cap = int(min(Q3_MAX, max(4096, want)))
+        self.q3_short = want > cap
+        return cap
+
+    def _tile(self, nper):
+        """(wact, rpb, logw): the block's (words of j) x (residues) tile."""
+        wpb = self.tpb * self.wpt
+        need = max(1, (int(nper) + 31) // 32)
+        logw = 0
+        while (1 << logw) < min(need, wpb):
+            logw += 1
+        wact = 1 << logw
+        return wact, max(1, min(RPB_MAX, wpb // wact)), logw
+
+    # --------------------------------------------------- generated source
+    def _rounds_src(self):
+        """The in-block compaction chain, then the push to the tail queue."""
+        bufs = [("qk", "Q1CAP"), ("qk2", "Q2CAP")]
+        cur, n, out = 0, "nq1", []
+        for r in range(len(self.bounds) - 1):
+            b0, b1 = self.bounds[r], self.bounds[r + 1]
+            src, _ = bufs[cur]
+            dst, dcap = bufs[1 - cur]
+            out.append(f"""    for (int idx = threadIdx.x; idx < {n}; idx += TPB) {{
+        const int key = {src}[idx];
+        const unsigned long long off = OFF_OF(key >> (logw + 5), key & ymask);
+        unsigned int kill = 0u;
+#pragma unroll
+        for (int t = {b0}; t < {b1}; ++t) TEST(t, kill)
+        if (!kill) {{
+            const int q = atomicAdd(&qcnt[{r}], 1);
+            if (q < {dcap}) {dst}[q] = (unsigned short)key;
+            else if (tail_survives(off, np_, {b1}, pk, bits)) EMIT(off)
+        }}
+    }}
+    __syncthreads();
+    const int nq{r + 2} = min(qcnt[{r}], {dcap});""")
+            cur = 1 - cur
+            n = f"nq{r + 2}"
+        src, _ = bufs[cur]
+        out.append(f"""    if (threadIdx.x == 0) q3b = ({n} > 0) ? atomicAdd(n3, {n}) : 0;
+    __syncthreads();
+    for (int idx = threadIdx.x; idx < {n}; idx += TPB) {{
+        const int key = {src}[idx];
+        const unsigned long long off = OFF_OF(key >> (logw + 5), key & ymask);
+        const int p = q3b + idx;
+        if (p < q3cap) q3[p] = off;
+        else if (tail_survives(off, np_, {self.bounds[-1]}, pk, bits))
+            EMIT(off)
+    }}""")
+        return chr(10).join(out)
+
+    def _trounds_src(self):
+        """The tail kernel's own compaction chain, ping-ponged in shared."""
+        bufs = [("ta", "TTILE"), ("tb", "TCAP")]
+        cur, n, out = 0, "tm1", []
+        for r in range(len(self.tbounds) - 1):
+            b0, b1 = self.tbounds[r], self.tbounds[r + 1]
+            src, _ = bufs[cur]
+            dst, dcap = bufs[1 - cur]
+            out.append(f"""        for (int i = threadIdx.x; i < {n}; i += TPB) {{
+            const unsigned long long off = {src}[i];
+            unsigned int kill = 0u;
+#pragma unroll
+            for (int t = {b0}; t < {b1}; ++t) TEST(t, kill)
+            if (!kill) {{
+                const int q = atomicAdd(&tn[{r}], 1);
+                if (q < {dcap}) {dst}[q] = off;
+                else if (tail_survives(off, np_, {b1}, pk, bits)) EMIT(off)
+            }}
+        }}
+        __syncthreads();
+        const int tm{r + 2} = min(tn[{r}], {dcap});""")
+            cur = 1 - cur
+            n = f"tm{r + 2}"
+        src, _ = bufs[cur]
+        out.append(f"""        for (int i = threadIdx.x; i < {n}; i += TPB) {{
+            const unsigned long long off = {src}[i];
+            if (tail_survives(off, np_, {self.tbounds[-1]}, pk, bits))
+                EMIT(off)
+        }}""")
+        return chr(10).join(out)
+
+    def _build(self):
+        cp = self.cp
+        cases, gl = [], []
+        for gi, g in enumerate(self.planes):
+            cases.append(f"""        case {gi}: {{
+            if (z >= {g['Q']}ULL) z -= {g['Q']}ULL;
+            z = (z + (unsigned long long)ybase) % {g['Q']}ULL;
+            zc[u] = (unsigned int)z + {self.goff[gi]}u; break; }}""")
+            gl.append(f"""            {{ const unsigned int c = zc[zb + {gi}];
+              const unsigned int* B = gbits + (c >> 5) + wrd;
+              mask &= __funnelshift_r(B[0], B[1], c & 31); }}""")
+        zbcalc = ""
+        if self.ng:
+            zbcalc = ("""    for (int u = threadIdx.x; u < nrl * NG; u += TPB) {
+        const int rl = u / NG;
+        const int g  = u - rl * NG;
+        unsigned long long z = (unsigned long long)cbase[g]
+                    + (unsigned long long)crv[g * R + r1base + rl];
+        switch (g) {
+""" + chr(10).join(cases) + """
+        }
+    }""")
+            gl.insert(0, "            const int zb = rl * NG;")
+        src = _SRC % {
+            "tpb": self.tpb, "wpt": self.wpt, "ng": self.ng,
+            "q1cap": self.q1cap, "q2cap": self.q2cap, "w1": self.W,
+            "unroll": UNROLL, "rpbmax": RPB_MAX,
+            "nround": len(self.bounds) - 1, "ttile": self.ttile,
+            "tcap": self.tcap, "tround": len(self.tbounds) - 1,
+            "rounds": self._rounds_src(), "trounds": self._trounds_src(),
+            "zbcalc": zbcalc, "gload": chr(10).join(gl)}
+        self.src = src
+        if src not in _MODULES:
+            _MODULES[src] = cp.RawModule(code=src, options=("-std=c++14",),
+                                         backend="nvrtc")
+        mod = _MODULES[src]
+        return mod.get_function("sieve"), mod.get_function("tailsweep")
 
     # ------------------------------------------------------------ metadata
     def config(self):
-        return {"engine": "v1", "n": self.n, "b": self.b, "p1": self.p1,
-                "q2": self.q2, "W": self.W, "R": self.R,
-                "per_launch": self.per_launch}
+        return {"engine": "v2", "n": self.n, "b": self.b, "p1": self.p1,
+                "p2": self.p2, "q2": self.q2, "W": self.W, "R": self.R,
+                "ng": self.ng, "d2": self.d2, "units": self.npr,
+                "bounds": list(self.bounds), "tbounds": list(self.tbounds),
+                "per_launch": self.per_launch, "tpb": self.tpb,
+                "wpt": self.wpt, "q1cap": self.q1cap, "q2cap": self.q2cap,
+                "q3cap": self.q3cap, "ttile": self.ttile, "tcap": self.tcap,
+                "q3_short": self.q3_short}
 
     def nbytes(self):
-        return int(self.d_res.nbytes + self.d_bits.nbytes + self.d_pq.nbytes
-                   + self.d_magic.nbytes + self.d_bmoff.nbytes
-                   + self.d_out.nbytes)
+        return int(self.d_res.nbytes + self.d_cr.nbytes + self.d_gbits.nbytes
+                   + self.d_bits.nbytes + self.d_pk.nbytes
+                   + self.d_q3.nbytes + self.d_out.nbytes)
 
     def density(self):
-        """Wheel survivors per unit of m line -- the cost driver."""
-        return self.R / self.W
+        """Candidates per unit of m line -- what the wheel is worth."""
+        return self.R * self.d2 / self.W
 
     # --------------------------------------------------------------- sweep
     def sweep(self, j0, j1):
         """Yield (j_next, survivors) after every launch.
 
-        `j_next` is BOTH cursors at once: the flat wheel emits a period's
-        candidates within one launch, so the line below j_next * W is
-        swept and the work resumes there too.  When the multi-level wheel
-        lands, the two separate (CONVENTIONS.md "Two cursors, when coverage
-        is coarser than work") -- and the launcher is already written to
-        take them as two.
+        `j_next` is BOTH cursors at once: the wheel emits every candidate of
+        a period inside one launch, so the line below j_next * W is swept and
+        the work resumes there too.  The bit planes do not change that --
+        they filter j, they do not reorder it, which is exactly why W is
+        still the period the checkpoint counts in.
 
-        The bounds are checked EAGERLY, here, and the launches are a
-        separate generator: a `yield` in this body would defer every check
-        to the first `next()`, and a caller that built the iterator and
-        never consumed it would sail past the ceiling in silence.
+        The bounds are checked EAGERLY, here, and the launches are a separate
+        generator: a `yield` in this body would defer every check to the
+        first `next()`, and a caller that built the iterator and never
+        consumed it would sail past the ceiling in silence.
         """
         j0, j1 = int(j0), int(j1)
         ceil = k_ceil(self.n, self.b)
@@ -265,34 +902,54 @@ extern "C" __global__ void shift_sieve(
                 "needs value > q")
         return self._sweep(j0, j1)
 
+    def _basemod(self, lo):
+        """`(lo*W) mod Q` for every test unit, without a big-int division.
+
+        (lo*W) mod Q = ((W mod Q) * (lo mod Q)) mod Q, and both factors are
+        under 2^32 with Q under 2^17, so the product is exact in u64 for any
+        lo whatsoever -- one vectorised numpy step for the whole table.
+        Doing it the obvious way was 6,519 Python divisions of a big int per
+        SWEEP, which is 4.4 ms against a 5.5 ms launch: 44% of the wall clock
+        of the frozen SCORE window, which is one launch wide.
+        """
+        if lo < (1 << 64):
+            return (self._wmod * (np.uint64(lo) % self._qs)) % self._qs
+        # lo outgrows u64 only on a wheel far too narrow to hunt with, where
+        # the modulo cannot be vectorised.  Kept exact anyway: a gate runs
+        # here, and a gate that quietly went wrong at the top of the range is
+        # the failure this path exists to prevent.
+        return np.array([(int(wm) * (lo % int(q))) % int(q)
+                         for wm, q in zip(self._wmod, self._qs)],
+                        dtype=np.uint64)
+
     def _sweep(self, j0, j1):
         cp = self.cp
-        grid_x = (self.R + TPB - 1) // TPB
-        # `base mod q` for 6,500 primes is 6,500 big-int divisions, and at
-        # one per launch that was HALF the wall clock of a production
-        # launch and 97% of a coarse-wheel one.  The base advances by a
-        # fixed step between launches, so it is computed in full once per
-        # sweep and stepped in numpy after that; a short final launch falls
-        # back to the full computation, which happens at most once.
-        step = np.array([(self.per_launch * self.W) % q for q in self.primes],
-                        dtype=np.uint64)
-        pq64 = np.array(self.primes, dtype=np.uint64)
-        basemod = None
         for lo in range(j0, j1, self.per_launch):
             nper = min(self.per_launch, j1 - lo)
             base = self.W * lo
-            if basemod is None:
-                basemod = np.array([base % q for q in self.primes],
-                                   dtype=np.uint64)
-            d_basemod = cp.asarray(basemod.astype(np.uint32))
-            basemod = (basemod + step) % pq64 if nper == self.per_launch                 else None
+            if self.npr:
+                self._pk[:, 3] = (self._boff
+                                  + self._basemod(lo)).astype(np.uint32)
+                self.d_pk.set(self._pk.ravel())
+            if self.ng:
+                self.d_cbase.set(np.array([lo % g["Q"] for g in self.planes],
+                                          dtype=np.uint32))
             self.d_cnt.fill(0)
-            self.kernel((grid_x, nper), (TPB,),
-                        (self.d_res, np.int32(self.R),
-                         np.uint64(self.W), np.int32(len(self.primes)),
-                         self.d_pq, self.d_magic, self.d_bmoff, d_basemod,
-                         self.d_bits, self.d_out, self.d_cnt,
-                         np.int32(HIT_CAP)))
+            self.d_n3.fill(0)
+            wact, rpb, logw = self._tile(nper)
+            grid = ((self.R + rpb - 1) // rpb,
+                    (nper + (wact << 5) - 1) // (wact << 5))
+            self.k_sieve(grid, (self.tpb,),
+                         (self.d_res, np.int32(self.R), self.d_cr,
+                          self.d_gbits, self.d_cbase, np.int32(nper),
+                          np.int32(rpb), np.int32(logw), np.int32(self.npr),
+                          self.d_pk, self.d_bits, self.d_q3, self.d_n3,
+                          np.int32(self.q3cap), self.d_out, self.d_cnt,
+                          np.int32(HIT_CAP)))
+            self.k_tail((self.tail_grid,), (self.tpb,),
+                        (self.d_q3, self.d_n3, np.int32(self.q3cap),
+                         self.d_out, self.d_cnt, np.int32(HIT_CAP),
+                         np.int32(self.npr), self.d_pk, self.d_bits))
             cnt = int(self.d_cnt.get()[0])
             if cnt > HIT_CAP:
                 raise RuntimeError(
@@ -404,8 +1061,8 @@ def g15_stream_is_invariant_under_the_base():
     Two checks, and the second is the one that matters for (m, off): the
     same window swept in one launch and in six must give the identical
     stream, and a window whose base is a big int far above 2^64 must give
-    the stream the CPU engine gives -- which is only true if `basemod` is
-    the exact fold of that base.
+    the stream the CPU engine gives -- which is only true if the per-unit
+    `boff` fold and the per-plane `cbase` shift are both exact.
     """
     b, n, p1, q2 = 4, 8, 11, 64
     eng1 = GpuEngine(n, b, p1=p1, q2=q2, per_launch=64)
@@ -439,9 +1096,98 @@ def g15_stream_is_invariant_under_the_base():
                   f"bounded by a machine word")
 
 
-GATES = [g7_wheel_matches_oracle, g8_wheel_is_exactly_the_product,
-         g9_gpu_matches_cpu, g15_stream_is_invariant_under_the_base]
+def g16_v2_mechanisms():
+    """The v2 mechanisms, each checked against something independent.
 
+    1. THE BIT PLANES.  A plane says a period index survives a group of
+       primes; divisibility says whether m = j*W + r does.  They must agree
+       for every (residue, period) pair sampled -- BOTH ways, because a
+       plane that killed too much would silently lose survivors and a
+       sparse parity window could miss it.
+    2. THE SCHEDULES ARE FRACTIONS.  The round boundaries come out of the
+       survival curve, so the same target must produce DIFFERENT depths at
+       two configurations whose curves differ.  A count carried between
+       configurations is the bug this checks for, and it is the one
+       square-ladders paid 22% for.
+    3. THE FOUR OVERFLOW PATHS.  Every queue capacity is a tuning constant,
+       never a correctness bound: an item that does not fit finishes on the
+       spot with the same arithmetic.  All four are forced to a token size
+       and the stream must be identical.
+    4. THE ADAPTIVE TILE.  A launch too short to fill a block's word tile
+       must spread the block over residues instead, and give the same
+       stream as a launch wide enough not to.
+    """
+    # 1 -- planes against divisibility, both directions
+    n, b, p1, p2 = 12, 4, 13, 47
+    W, res = wheel(n, b, p1)
+    planes = build_planes(n, b, p1, p2, 1024)
+    crs = plane_shifts(res, planes, W)
+    pprimes = [q for g in planes for q in g["primes"]]
+    ktab = {q: set(killed_residues(q, n, b)) for q in pprimes}
+    seen = [0, 0]
+    for i in range(0, res.size, max(1, res.size // 97)):
+        r = int(res[i])
+        for j in range(400, 460):
+            alive_plane = True
+            for gi, g in enumerate(planes):
+                z = (int(crs[gi][i]) + j) % g["Q"]
+                if not ((int(g["words"][z >> 5]) >> (z & 31)) & 1):
+                    alive_plane = False
+                    break
+            m = j * W + r
+            alive_true = all(m % q not in ktab[q] for q in pprimes)
+            if alive_plane != alive_true:
+                return False, (f"G16 FAIL: the plane says {alive_plane} for "
+                               f"m={m} (r={r}, j={j}); divisibility says "
+                               f"{alive_true}")
+            seen[int(alive_true)] += 1
+    if not seen[0] or not seen[1]:
+        return False, (f"G16 FAIL: the plane check was one-sided "
+                       f"({seen[0]} killed, {seen[1]} kept)")
+
+    # 2 -- the schedule is a fraction, not a count
+    units = test_units(47, 65536, UNIT_Q_MAX)
+    sa = schedule(survival(19, 4, units), len(units), ROUND_RATIO, TAIL_SURV)
+    sb = schedule(survival(10, 4, units), len(units), ROUND_RATIO, TAIL_SURV)
+    if sa == sb:
+        return False, ("G16 FAIL: the round schedule is identical at n = 19 "
+                       "and n = 10, so it is a count and not a fraction")
+
+    # 3 -- every overflow path, forced, stream unchanged
+    n, b, p1, q2 = 12, 4, 13, 128
+    lo, span = 3_000_000, 2_000_000
+    ref = GpuEngine(n, b, p1=p1, q2=q2).survivors_m(lo, lo + span)
+    if len(ref) < 32:
+        return False, f"G16 FAIL: the overflow window holds only {len(ref)}"
+    tiny = GpuEngine(n, b, p1=p1, q2=q2,
+                     force_caps={"q1cap": 32, "q2cap": 32, "q3cap": 4096,
+                                 "tcap": 32})
+    if tiny.survivors_m(lo, lo + span) != ref:
+        return False, ("G16 FAIL: with every queue forced tiny the stream "
+                       "changed")
+
+    # 4 -- the adaptive tile: a launch shorter than one block tile
+    narrow = GpuEngine(n, b, p1=p1, q2=q2, per_launch=64)
+    if narrow._tile(64)[1] <= 1:
+        return False, ("G16 FAIL: a 64-period launch did not spread the "
+                       "block over residues -- rpb stayed 1")
+    if narrow.survivors_m(lo, lo + span) != ref:
+        return False, "G16 FAIL: the narrow-launch tile changed the stream"
+    return True, (f"G16 ok: bit planes == divisibility BOTH ways on "
+                  f"{sum(seen)} (residue, period) pairs ({seen[0]} killed, "
+                  f"{seen[1]} kept); the round schedule is a survival "
+                  f"FRACTION (depths {sa} at n=19 vs {sb} at n=10); all four "
+                  f"queues forced to token size leave the stream identical "
+                  f"({len(ref)} survivors); and a launch shorter than one "
+                  f"block tile spreads over residues with the same stream")
+
+
+GATES = [g7_wheel_matches_oracle, g8_wheel_is_exactly_the_product,
+         g9_gpu_matches_cpu, g15_stream_is_invariant_under_the_base,
+         g16_v2_mechanisms]
+
+# Ctrl+C is a normal exit everywhere in this repo (CONVENTIONS.md
+# "Stopping a run"): one path out, no traceback, exit 130.
 if __name__ == "__main__":
     def _gates():
         for g in GATES:

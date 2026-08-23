@@ -101,11 +101,11 @@ Q2 = cpu.Q2_DEFAULT               # sieve depth
 CKPT_LAUNCHES = 16
 M_START = 10 ** 6                 # above max(K_FLOOR, Q2); see the docstring
 CENSUS_FLOOR = 8                  # runs shorter than this are not even counted
-ENGINE_VERSION = "v1"
+ENGINE_VERSION = "v2"
 
 
-def config_key(b):
-    return (f"{ref.FAMILIES[b]['oeis'].lower()}-{ENGINE_VERSION}"
+def config_key(b, engine=None):
+    return (f"{ref.FAMILIES[b]['oeis'].lower()}-{engine or ENGINE_VERSION}"
             f"-p1{gpu.P1_DEFAULT[b]}-q2{Q2}-seg{CKPT_LAUNCHES}")
 
 
@@ -128,11 +128,19 @@ def ledger_path(b):
 # deliberately empty rather than absent: the next engine version edits
 # THESE and the drill in --selftest puts every reader in front of the
 # result.
-INHERITS = ()          # engine versions covering the IDENTICAL m line
+# v2 raised the wheel with BIT PLANES over the period index, which leaves W
+# -- and therefore the unit the cursor counts in, and the survivor stream
+# itself -- exactly as v1 had them (shiftladder_gpu, and the frozen
+# fingerprints reproduce).  So a v1 cursor is INHERITED, not adopted: it
+# covers the identical line, indices and all.  Anything that moved coverage
+# would belong in REDENOMINATE instead.
+INHERITS = ("v1",)     # engine versions covering the IDENTICAL m line
 REDENOMINATE = ()      # older cursors whose coverage claim is adopted, floored
 
-_POLICIES = {b: checkpoint.CursorPolicy(ckpt_path(b), config_key(b),
-                                        accept=INHERITS, adopt=REDENOMINATE)
+_POLICIES = {b: checkpoint.CursorPolicy(
+                    ckpt_path(b), config_key(b),
+                    accept=tuple(config_key(b, e) for e in INHERITS),
+                    adopt=tuple(config_key(b, e) for e in REDENOMINATE))
              for b in ref.FAMILIES}
 
 
@@ -202,11 +210,23 @@ class Campaign:
         self.discoveries = 0
         self.near = 0
         self.j = None
+        self._stored_w = 0
         self.hb = Heartbeat(interval=args.heartbeat)
         self._t0 = time.time()
         self._snapshot = None
         self.loaded = self.load()
         self.eng = gpu.GpuEngine(self.filter_n(), self.b, q2=Q2)
+        # STORE THE UNIT NEXT TO THE NUMBER AND ASSERT IT ON LOAD
+        # (OPTIMIZATION.md 2.9).  The config key DESCRIBES the wheel, which
+        # is documentation; this is the assertion, and it is the half that
+        # does not depend on the description being right.  It has to run
+        # after the engine exists, which is why it is here and not in load().
+        if self._stored_w and self._stored_w != int(self.eng.W):
+            raise ValueError(
+                f"{self.ckpt} counts periods of W = {self._stored_w:,} but "
+                f"this engine's period is {int(self.eng.W):,}: the cursor "
+                f"means something else and has to be re-denominated, not "
+                f"read")
         if self.j is None:
             self.j = max(M_START, cpu.m_floor(Q2) + 1) // self.eng.W + 1
         self.boundary = self.j
@@ -294,6 +314,7 @@ class Campaign:
             # floor the claim into this engine's periods, never round up
             log("STAGE", f"checkpoint written by {st.get('key')} adopted: it "
                          f"claims the line swept to m = {int(st['m']):,}")
+        self._stored_w = int(st.get("W", 0))
         self.j = int(st["j"])
         self.found = dict(st.get("found", {}))
         self.census = {int(r): int(c) for r, c in st.get("census", {}).items()}

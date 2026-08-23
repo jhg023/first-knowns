@@ -41,11 +41,17 @@ that wrong produces two engines that are both right and appear to
 disagree; it happened in another project in this repo during an A/B.
 
 Frozen 2026-08-23 on the v1 engine (flat wheel table, one Barrett test
-loop).  A deliberate coverage change -- a new wheel, a new sieve depth --
-legitimately moves a fingerprint: update it in the same commit and say why
-in OPTIMIZATION_LOG.md.
+loop) and REPRODUCED UNCHANGED by v2 -- which is the point of a wheel
+change: folding a prime into the wheel removes candidates, never survivors,
+so the fingerprint still applies and says so.  A deliberate COVERAGE change
+-- a different sieve depth -- would legitimately move one: update it in the
+same commit and say why in OPTIMIZATION_LOG.md.
 
-Wall clock: about 40 s, of which the gates are half.
+The candidate rate printed beside each score is the rate after BOTH wheel
+mechanisms (flat table x bit planes), so it is `m/s * density()` and not
+`blocks/s * R`; at the v2 wheel those differ by two orders of magnitude.
+
+Wall clock: about 70 s, of which the gates are most.
 """
 
 import pathlib as _pathlib
@@ -112,10 +118,13 @@ def main():
             ok_all = False
             continue
         rate_m = rate_blocks * eng.W
+        # candidates, not residues: the bit-plane wheel keeps only d2 of the
+        # flat table's residues, so R alone would overstate this by 100x
+        cand = rate_m * eng.density()
         print(f"benchmark {label}: {rate_m:.3e} m/s over "
               f"[{j0 * eng.W:.4e}, +{line:.4e}) "
-              f"({rate_blocks * eng.R:.3e} candidates/s, base {b}, filter "
-              f"n={n}, wheel <={p1} W={eng.W}, sieve {q2}, "
+              f"({cand:.3e} candidates/s, base {b}, filter "
+              f"n={n}, wheel <={p1}+planes<={eng.p2} W={eng.W}, sieve {q2}, "
               f"fingerprint {count}/{xor})")
         print(f"{label} {rate_m / 1e6:,.0f}")
     return 0 if ok_all else 1
