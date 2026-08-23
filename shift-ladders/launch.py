@@ -104,9 +104,9 @@ CENSUS_FLOOR = 8                  # runs shorter than this are not even counted
 ENGINE_VERSION = "v2"
 
 
-def config_key(b, engine=None):
+def config_key(b, engine=None, p1=None):
     return (f"{ref.FAMILIES[b]['oeis'].lower()}-{engine or ENGINE_VERSION}"
-            f"-p1{gpu.P1_DEFAULT[b]}-q2{Q2}-seg{CKPT_LAUNCHES}")
+            f"-p1{p1 or gpu.P1_DEFAULT[b]}-q2{Q2}-seg{CKPT_LAUNCHES}")
 
 
 def ckpt_path(b):
@@ -128,19 +128,28 @@ def ledger_path(b):
 # deliberately empty rather than absent: the next engine version edits
 # THESE and the drill in --selftest puts every reader in front of the
 # result.
-# v2 raised the wheel with BIT PLANES over the period index, which leaves W
-# -- and therefore the unit the cursor counts in, and the survivor stream
-# itself -- exactly as v1 had them (shiftladder_gpu, and the frozen
-# fingerprints reproduce).  So a v1 cursor is INHERITED, not adopted: it
-# covers the identical line, indices and all.  Anything that moved coverage
-# would belong in REDENOMINATE instead.
-INHERITS = ("v1",)     # engine versions covering the IDENTICAL m line
-REDENOMINATE = ()      # older cursors whose coverage claim is adopted, floored
+# TWO CLASSES OF OLD KEY, AND THEY ARE NOT INTERCHANGEABLE.
+#
+#   accept  the old configuration counted periods of the SAME W and swept
+#           the same line, so the cursor carries over untouched.  v2 raised
+#           the wheel with BIT PLANES over the period index, which leave W
+#           alone -- so at base 2, where p1 never moved, a v1 cursor is
+#           inherited exactly.
+#   adopt   the old configuration counted periods of a DIFFERENT W.  At
+#           base 4 p1 moved 23 -> 29 for a measured 1.198x, so W is 29x
+#           wider and a stored period index means something else.  Only
+#           the arithmetic claim "every m below this is swept" carries
+#           over, and `load` re-denominates it by FLOORING into this
+#           engine's periods so no gap can open.
+INHERIT_B2 = (("v1", 37),)
+ADOPT_B4 = (("v1", 23), ("v2", 23))
 
 _POLICIES = {b: checkpoint.CursorPolicy(
                     ckpt_path(b), config_key(b),
-                    accept=tuple(config_key(b, e) for e in INHERITS),
-                    adopt=tuple(config_key(b, e) for e in REDENOMINATE))
+                    accept=tuple(config_key(b, e, w)
+                                 for e, w in (INHERIT_B2 if b == 2 else ())),
+                    adopt=tuple(config_key(b, e, w)
+                                for e, w in (ADOPT_B4 if b == 4 else ())))
              for b in ref.FAMILIES}
 
 
@@ -211,6 +220,7 @@ class Campaign:
         self.near = 0
         self.j = None
         self._stored_w = 0
+        self._adopted = None
         self.hb = Heartbeat(interval=args.heartbeat)
         self._t0 = time.time()
         self._snapshot = None
@@ -221,6 +231,13 @@ class Campaign:
         # is documentation; this is the assertion, and it is the half that
         # does not depend on the description being right.  It has to run
         # after the engine exists, which is why it is here and not in load().
+        if self._adopted:
+            log("STAGE",
+                f"checkpoint written by {self._adopted[0]} ADOPTED: it "
+                f"claims the line swept to m = {self._adopted[1]:,}, which "
+                f"floors to period {self.j:,} of this engine's W = "
+                f"{int(self.eng.W):,} (m = {self.j * int(self.eng.W):,}) -- "
+                f"floored, so no line is skipped")
         if self._stored_w and self._stored_w != int(self.eng.W):
             raise ValueError(
                 f"{self.ckpt} counts periods of W = {self._stored_w:,} but "
@@ -309,13 +326,18 @@ class Campaign:
         st, kind = self.cursor.load(warn=lambda m: log("STAGE", m))
         if not st:
             return False
-        if kind == "adopted":
-            # nothing to adopt yet (REDENOMINATE is empty); when there is,
-            # floor the claim into this engine's periods, never round up
-            log("STAGE", f"checkpoint written by {st.get('key')} adopted: it "
-                         f"claims the line swept to m = {int(st['m']):,}")
         self._stored_w = int(st.get("W", 0))
-        self.j = int(st["j"])
+        if kind == "adopted":
+            # a different W: the stored period INDEX is meaningless here, so
+            # only the coverage claim carries over, floored into this
+            # engine's periods.  Flooring is the whole point -- rounding up
+            # would skip line that was never swept.  The W assertion below
+            # is skipped for exactly this case, and only this case.
+            self._stored_w = 0
+            self._adopted = (st.get("key"), int(st["m"]))
+            self.j = int(st["m"]) // gpu.wheel_modulus(self.b)
+        else:
+            self.j = int(st["j"])
         self.found = dict(st.get("found", {}))
         self.census = {int(r): int(c) for r, c in st.get("census", {}).items()}
         self.passed = list(st.get("passed", []))
@@ -772,6 +794,58 @@ def _stop_on_discovery_drill():
                   "finding something, and DOES stop on the next new find")
 
 
+def _other_family_cursor_drill(base):
+    """The OTHER family's policy, put in front of every key it declares.
+
+    `drills.standard` exercises the policy of the base the selftest was run
+    for, and the two families do not declare the same old keys: base 4
+    ADOPTS two p1 = 23 cursors (its flat wheel moved 23 -> 29), base 2
+    INHERITS one v1 cursor (its p1 never moved).  Drilling only one of them
+    leaves the other's classification unproven -- and a launcher whose
+    battery is green and whose campaign will not start is the exact failure
+    CursorPolicy exists to prevent, twice over in this repo.
+    """
+    import tempfile
+    other = 2 if int(base) == 4 else 4
+    tmp = tempfile.mkdtemp(prefix="shiftladder-cursor-")
+    path = str(pathlib.Path(tmp) / "c.json")
+    pol = _POLICIES[other].at(path)
+    seen = []
+    try:
+        for key in pol.readable():
+            checkpoint.save(path, {"key": key, "j": 7, "m": 11,
+                                   "W": int(gpu.wheel_modulus(other))})
+            st, kind = pol.load()
+            if not st or kind is None:
+                return False, (f"CURSOR FAIL: base {other} will not read a "
+                               f"checkpoint keyed {key}")
+            pol.refuse_mismatch()          # must NOT raise
+            seen.append(kind)
+        checkpoint.save(path, {"key": "not-a-real-key", "j": 7, "m": 11})
+        st, _k = pol.load()
+        if st:
+            return False, (f"CURSOR FAIL: base {other} read a foreign key")
+        try:
+            pol.refuse_mismatch()
+            return False, (f"CURSOR FAIL: base {other} did not refuse a "
+                           f"foreign key")
+        except checkpoint.CursorRefused:
+            pass
+    finally:
+        for f in pathlib.Path(tmp).glob("*"):
+            try:
+                f.unlink()
+            except OSError:
+                pass
+        try:
+            pathlib.Path(tmp).rmdir()
+        except OSError:
+            pass
+    return True, (f"cursor policy (base {other}) ok: all {len(seen)} declared "
+                  f"key(s) pass BOTH readers with the right classification "
+                  f"({', '.join(seen)}); an unknown key refuses")
+
+
 def _two_families_stay_apart():
     """The two campaigns must not be able to read each other's cursor.
 
@@ -803,6 +877,7 @@ def selftest(base=4):
         lambda c: event_kind(*c), _event_cases()))
     for d in drills.standard(cursor=_POLICIES[base]):
         rows.append(d)
+    rows.append(_other_family_cursor_drill(base))
     for d in (_ceiling_drill, _canary_hunt, _protocol_drill, _resume_drill,
               _stop_on_discovery_drill, _two_families_stay_apart,
               _campaign_wiring_drill):

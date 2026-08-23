@@ -8,15 +8,19 @@ way it scores nothing.  Optimize under the score, never around it.
 
 Five shapes, because one configuration is not a benchmark:
 
-  SCORE     b = 4, n = 19, wheel to 23, sieve 65536 -- the PRODUCTION
+  SCORE     b = 4, n = 19, flat wheel to 29, sieve 65536 -- the PRODUCTION
             configuration of the A130003 campaign, and the row to read for
-            campaign throughput.
+            campaign throughput.  Its window is FOUR launches wide, which
+            is deliberate: a window narrower than a launch cannot exercise
+            anything the engine sizes from per_launch, and this benchmark
+            was blind to exactly that once already (see OPTIMIZATION_LOG).
   SCORE1L   the SAME WINDOW and the same sieve on the COARSE wheel (13).
-            It sweeps 7,429 times as many periods to cover the identical
+            It sweeps 215,441 times as many periods to cover the identical
             line and it must return the IDENTICAL fingerprint: two
             different wheels enumerating the same candidates, so a bug in
-            the CRT lift shows up here as a mismatch inside the benchmark
-            itself rather than as a wrong answer months later.
+            the CRT lift or in a bit plane shows up here as a mismatch
+            inside the benchmark itself rather than as a wrong answer
+            months later.
   SCORE2    b = 2, n = 17, wheel to 37, sieve 65536 -- the PRODUCTION
             configuration of the A110096 campaign.  Its wheel is 3,000x
             sparser than base 4's, so its line rate is four orders of
@@ -36,16 +40,22 @@ wall, the quantity the hunt is actually paid in, divided by 1e6.
 
 Every j0 is a period index, so each window is exactly aligned to its own
 wheel -- and SCORE1L's is deliberately the SAME ABSOLUTE WINDOW as
-SCORE's, which is only possible because W(23) = W(13) * 7429.  Getting
+SCORE's, which is only possible because W(29) = W(13) * 215441.  Getting
 that wrong produces two engines that are both right and appear to
 disagree; it happened in another project in this repo during an A/B.
 
-Frozen 2026-08-23 on the v1 engine (flat wheel table, one Barrett test
-loop) and REPRODUCED UNCHANGED by v2 -- which is the point of a wheel
-change: folding a prime into the wheel removes candidates, never survivors,
-so the fingerprint still applies and says so.  A deliberate COVERAGE change
--- a different sieve depth -- would legitimately move one: update it in the
-same commit and say why in OPTIMIZATION_LOG.md.
+SCORE2, SCORE4W and SCORE10 were frozen 2026-08-23 on the v1 engine and are
+REPRODUCED UNCHANGED by v2 -- which is the point of a wheel change: folding
+a prime into the wheel removes candidates, never survivors, so a fingerprint
+still applies and says so.
+
+SCORE and SCORE1L were RE-FROZEN the same day when p1 moved 23 -> 29 at
+base 4.  That is not a wheel change of the same kind: p1 sets W, and both
+windows are expressed in periods of W, so they are different windows and
+must be.  The old pair (j0 = 4482439 / 33300039331, 8192 / 60858368 blocks,
+fingerprint 7 / 998631924604311) is recorded here and in BENCHMARKS.md so
+the two generations stay auditable even though their SCOREs are not
+directly comparable.
 
 The candidate rate printed beside each score is the rate after BOTH wheel
 mechanisms (flat table x bit planes), so it is `m/s * density()` and not
@@ -69,10 +79,10 @@ from shiftladder_gpu import GpuEngine                           # noqa: E402
 
 # label, b, n, p1, q2, j0, blocks, expected count, expected xor
 SHAPES = [
-    ("SCORE",    4, 19, 23, 65536,      4482439,       8192,  7,
-     998631924604311),
-    ("SCORE1L",  4, 19, 13, 65536,  33300039331,   60858368,  7,
-     998631924604311),
+    ("SCORE",    4, 19, 29, 65536,       154567,       4096, 73,
+     1038246173448745),
+    ("SCORE1L",  4, 19, 13, 65536,  33300069047,  882446336, 73,
+     1038246173448745),
     ("SCORE2",   2, 17, 37, 65536,          135,       2048, 59,
      17289912876387275),
     ("SCORE4W",  4, 19, 13,  1024,  33300033301,   10000000, 5014,

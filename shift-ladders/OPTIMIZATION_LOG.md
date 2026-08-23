@@ -350,7 +350,11 @@ compared, three interleaved rounds:
 residues against `RES_MAX`'s 33.5 million, and at `b = 2` the next step
 (41) needs 129 million, so that family is already at its top.
 
-**It is not shipped, and the reason is a rule rather than a doubt.** `p1`
+**It was priced, put to the owner, and taken.** What follows is the record
+of the question and of what the answer cost; the rule below is why it was a
+question rather than a commit.
+
+**The rule, and why it applies.** `p1`
 sets `W`; `W` is the unit every frozen benchmark window is expressed in and
 the unit the coverage cursor counts in. Moving it changes what `SCORE`'s
 8,192 periods *are*, so the fingerprints move, so the anchor that makes
@@ -373,6 +377,57 @@ Shipping `p1 = 29` in production while the benchmark stayed at 23 is the
 one option that is *not* on the table: `SCORE` would stop describing the
 configuration the hunt actually runs, which is the property the whole
 benchmark exists to have.
+
+**The owner chose to amend the frozen shapes.** What that cost:
+
+- **`SCORE` and `SCORE1L` re-frozen.** They are the only two shapes whose
+  windows are counted in periods of the b = 4 flat wheel. New window
+  `[1.000001e15, +2.649986e13)` — `j0 = 154,567`, 4,096 periods at
+  `W = 6,469,693,230`; fingerprint **73 / 1038246173448745**. `SCORE1L`
+  covers the *identical absolute window* at `p1 = 13`
+  (`j0 = 33,300,069,047`, 882,446,336 periods, because
+  `W(29) = W(13) × 215,441` exactly) and reproduces that fingerprint, so
+  the benchmark's own cross-check survives the move intact. The old pair
+  (7 / 998631924604311) is kept in BENCHMARKS.md; the two generations'
+  SCOREs are not directly comparable and the ledger says so.
+  `SCORE2`, `SCORE4W` and `SCORE10` are untouched — their `p1` did not
+  move, so their windows and fingerprints did not either.
+- **The new window is FOUR launches wide**, deliberately, and this turned
+  out to be worth as much as the speedup. The old one was a quarter of a
+  launch, which is what let the tail queue be mis-tuned invisibly. Widening
+  it cut the benchmark's OWN noise from **31% to 2.4%** across three
+  `score.py` runs (and `SCORE1L`, at 27 launches, to **0.2%**), while the
+  three shapes still inside one launch still swing 23-33%. A benchmark that
+  cannot reach a second launch is not only blind to per-launch tuning; it
+  is a worse instrument for everything else too, because a partial launch's
+  fixed costs are charged to it in full and they are the noisy part.
+- **The launch sizing had to be re-derived, and this is the interesting
+  part.** `R` goes up 15× and `W` up 29×, so at an unchanged `per_launch`
+  a launch would hold 29× the work and the global tail queue would overflow
+  by a factor of twenty. `per_launch` is now derived from a **slot** target
+  (`R × per_launch`, `CAND_SLOTS`) rather than floored at one block tile,
+  and `RPB_MAX` went 8 → 32 so that a launch short in *periods* still fills
+  a block by covering more *residues*. Both families now use all 1,024 of
+  a block's work items, and `b = 2` — which was quietly running with its
+  tail queue at the ceiling — stopped being short as a side effect, worth
+  **1.26×** on `SCORE2` (1.21e12 → 1.53e12) that has nothing to do with
+  `p1` at all.
+- **The cursor policy split per base.** Base 4 now **adopts** its two
+  `p1 = 23` keys — different `W`, so only the coverage claim carries over
+  and `load` floors it into the new periods — while base 2 **inherits** its
+  v1 key, `p1` there never having moved. A new drill puts the *other*
+  family's policy in front of every key it declares, because
+  `drills.standard` only exercises the base the selftest was run for and
+  the two now declare different classes of old key. 30/30.
+
+**Measured, both engines over a COMMON ABSOLUTE WINDOW with the two streams
+compared to each other** (a period-indexed A/B would be comparing two
+different spans now):
+
+| family | v1 | v2 | ratio |
+|---|---|---|---|
+| A130003, `b = 4` | 4.17×10¹² m/s | **3.54×10¹⁴ m/s** | **84.8×** [84.7, 85.5] |
+| A110096, `b = 2` | 2.90×10¹⁶ m/s | **1.29×10¹⁸ m/s** | **44.6×** [41.9, 47.4] |
 
 ## Priced and not done
 

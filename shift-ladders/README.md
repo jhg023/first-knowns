@@ -18,18 +18,18 @@ sixteen, the last three from Bert Dobbelaere in April 2021. Neither entry
 carries an upper bound of any kind, at any open `n`.
 
 **Status: ACTIVE — engine green, no sweep run yet.** The five-file skeleton
-is complete and its full battery is green (29 gates and drills), the
+is complete and its full battery is green (30 gates and drills), the
 benchmark's five shapes reproduce their frozen fingerprints, and both
 families' odds models validate on ten independently-searched known terms.
 **No production sweep has been run and there are no results to report** —
 starting a campaign is the owner's command (CLAUDE.md rule 0a).
 
 The next open terms are `a(19)` of A130003 and `a(17)` of A110096, at
-model medians of `5.75×10¹⁶` and `2.03×10²⁰` — **3.1 minutes** and
-**1.8 minutes** of one RTX 4090 at the v2 engine's measured sustained rate.
-Read those as floors and budget 2-3× (see [the odds model](#the-odds-model));
-even at 3× the median, every open term either model has a prediction for
-lands inside a week.
+model medians of `5.75×10¹⁶` and `2.03×10²⁰` — **2.6 minutes** and
+**2.2 minutes** of one RTX 4090 at the v2 engine's scored rate. Read those
+as floors and budget 2-3× (see [the odds model](#the-odds-model)); even at
+3× the median, every open term either model has a prediction for — three
+apiece — lands inside a fortnight.
 
 ## The problem
 
@@ -103,11 +103,11 @@ sequences that read identically:
 
 | | A130003 (b = 4, n = 19) | A110096 (b = 2, n = 17) |
 |---|---|---|
-| flat table's primes | ≤ 23 | ≤ 37 |
-| modulus `W` | 2.23×10⁸ | 7.42×10¹² |
-| residues | 1,572,480 | 5,391,360 |
+| flat table's primes | ≤ 29 | ≤ 37 |
+| modulus `W` | 6.47×10⁹ | 7.42×10¹² |
+| residues | 23,587,200 | 5,391,360 |
 | bit planes carry the wheel to | 79 (3 planes) | 113 (5 planes) |
-| plane survival `d2` | 8.79×10⁻³ | 8.26×10⁻³ |
+| plane survival `d2` | 1.70×10⁻² | 8.26×10⁻³ |
 | **candidates per unit line** | **6.2×10⁻⁵** | **6.0×10⁻⁹** |
 
 and that last row sets everything downstream: the line rate (four orders of
@@ -115,8 +115,8 @@ magnitude apart at candidate rates within a factor of three), the singular
 series (A110096's is 12,000× larger), and how deep a table has to go before
 it stops fitting. The two effects nearly cancel in cost per term, which is
 why both families belong in one project rather than two. Note the
-plane-survival row — the two families land within 7% of each other by
-*different* routes, one wheel stopping at 79 and the other at 113, because
+plane-survival row — the two families reach it by quite
+different routes, one wheel stopping at 79 and the other at 113, because
 `p2` is derived per configuration from a cost model rather than pinned per
 base.
 
@@ -132,14 +132,11 @@ branchless slices over a dense queue and the survivors compacted between
 slices, every lane alive. The slice boundaries come out of the survival
 curve, not out of a prime count.
 
-The engine is v2 and it is **83x, 49x and 47x** faster than v1 on the two
-production shapes and the cross-check shape, measured interleaved and
-paired with every fingerprint re-checked ([BENCHMARKS.md](BENCHMARKS.md),
-[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)). One further **1.198x is
-measured and deliberately unshipped**: it moves `p1`, and `p1` sets `W`,
-which is the unit every frozen benchmark window and the coverage cursor are
-counted in — amending that anchor is the owner's call rather than an
-optimization pass's.
+The engine is v2 and it is **84.8× faster than v1 at base 4 and 44.6× at
+base 2**, measured over a common absolute window with the two survivor
+streams compared to each other, and every frozen fingerprint reproduced or
+deliberately re-frozen ([BENCHMARKS.md](BENCHMARKS.md),
+[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)).
 
 **Candidates are carried as `(m, off)` from the first commit.** `m = base +
 off` with `base` a host-side big integer that never reaches the device and
@@ -235,11 +232,11 @@ as luck rather than as calibration.
 Requires an NVIDIA GPU with CuPy, plus numpy and sympy.
 
 ```bash
-python launch.py --selftest    # 29 gates and drills; must end ALL GREEN (~45 s)
+python launch.py --selftest    # 30 gates and drills; must end ALL GREEN (~60 s)
 ```
 
 ```bash
-python score.py                # gates x 5 fingerprinted shapes (~70 s)
+python score.py                # gates x 5 fingerprinted shapes (~90 s)
 ```
 
 ```bash

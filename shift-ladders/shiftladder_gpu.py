@@ -93,9 +93,17 @@ from shiftladder_search import (CpuEngine, Q2_DEFAULT,          # noqa: E402
 
 # The flat residue table's top per base.  It sets W and therefore the unit
 # of the coverage cursor, so it is a per-base CONSTANT and not something the
-# engine tunes: moving it re-denominates every checkpoint.  The wheel gets
-# deeper through the bit planes, which leave W alone.
-P1_DEFAULT = {4: 23, 2: 37}
+# engine tunes: moving it re-denominates every checkpoint and re-freezes
+# every benchmark window measured in periods.  The wheel gets deeper through
+# the bit planes, which leave W alone.
+#
+# 29 at b = 4 (raised from 23, measured 1.198x): generation costs `ng` plane
+# reads per 32 periods PER RESIDUE, so its cost per unit of m line is R/W --
+# the flat table's density -- and halving that halves the dominant phase.
+# 29 is also the last step available: p1 = 31 would want 613 million flat
+# residues against RES_MAX's 33.5 million.  b = 2 is already at its top for
+# the same reason (41 would want 129 million).
+P1_DEFAULT = {4: 29, 2: 37}
 
 # Barrett reduces the launch offset, which must stay a u64 and under 2^63
 # for ONE conditional subtraction to be exact (see TEST in the kernel).
@@ -131,7 +139,12 @@ WPT_DEFAULT = 8                  # 32-bit plane words per thread
 # three shapes and 1.29x on the fourth.  It is a candidates-per-block knob
 # in disguise -- at a deep wheel a narrower block reaches its compaction
 # rounds with fewer candidates than it has threads.
-RPB_MAX = 8                      # residues a block may cover when j is short
+# Residues one block may cover.  It bounds nothing but two small shared
+# arrays (RPB_MAX * NG words plus RPB_MAX u64), and it has to be at least
+# TPB*WPT / (words per residue) or a launch short in PERIODS leaves most of
+# the block idle -- which is exactly the shape a deep flat wheel produces,
+# because R goes up and per_launch comes down together.
+RPB_MAX = 32
 UNROLL = 4                       # independent Barrett chains in a tail loop
 QCAP_SIGMA = 6.0                 # sigma of headroom on an analytic queue
 ROUND_RATIO = 0.65               # survival drop that ends a compaction round
@@ -145,7 +158,13 @@ TAIL_BLOCKS_PER_SM = 64
 # of one of each per prime.  Measured near-null here (see OPTIMIZATION_LOG),
 # and the cap is small deliberately -- the wide settings hit the L1 cliff.
 UNIT_Q_MAX = 1 << 13
-CAND_SLOTS = 1 << 33             # j-slots (R * periods) aimed at per launch
+# j-slots (R * periods) aimed at per launch.  This is the invariant, and it
+# is what per_launch is derived FROM: R and per_launch move in opposite
+# directions as p1 changes, and it is their product that sets the work in a
+# launch, the tail queue's occupancy and the coverage step.  2^35 is where
+# the b = 4 wheel already sat before p1 moved (its old per_launch floor of
+# one block tile happened to land there); measured flat from 2^34 to 2^35.
+CAND_SLOTS = 1 << 35
 # Global tail queue ceiling, and the one constant here that the FROZEN
 # BENCHMARK CANNOT SEE (OPTIMIZATION.md 2.13).  The queue is sized from
 # per_launch, and SCORE's window is 8,192 periods -- a QUARTER of one
@@ -218,6 +237,22 @@ def wheel(n, b, p1):
     return W, res
 
 
+def wheel_modulus(b, p1=None):
+    """W for a base, without building the residue table.
+
+    DERIVE THE CONFIGURATION IN EXACTLY ONE PLACE (OPTIMIZATION.md 2.9): the
+    launcher needs W before it has an engine -- to re-denominate an adopted
+    cursor, and to assert the unit of one it keeps -- and a second, private
+    computation of the same quantity is a disagreement waiting for its
+    second implementation to exist.  That is the exact shape of the bug 2.9
+    is written about.
+    """
+    W = 1
+    for q in primerange(2, (p1 or P1_DEFAULT[b]) + 1):
+        W *= q
+    return W
+
+
 def plane_groups(p1, p2, budget=PLANE_BITS_MAX):
     """Partition the primes in (p1, p2] into bit-plane groups.
 
@@ -285,9 +320,12 @@ def plane_shifts(res, planes, W):
         acc = np.zeros(res.size, dtype=np.int64)
         for q in g["primes"]:
             binv = pow(W % q, -1, q)
-            a = (res % q) * binv % q
             M = Q // q
-            acc += a * M % Q * pow(M, -1, q) % Q
+            # M * (M^-1 mod q) mod Q is the CRT basis vector for this prime;
+            # folding it here turns two passes over the residue table into
+            # one, which matters at 23.6 million of them
+            cq = (M * pow(M, -1, q)) % Q
+            acc += (res % q) * binv % q * cq % Q
         out.append((acc % Q).astype(np.uint32))
     return out
 
@@ -715,8 +753,11 @@ class GpuEngine:
         if per_launch:
             want = int(per_launch)
         else:
-            want = max(1, CAND_SLOTS // max(self.R, 1))
-            want = max(self.yblk, (want // self.yblk) * self.yblk)
+            # the largest power of two whose slot count fits the target, so
+            # the block tile divides it exactly and no thread is masked off
+            want, target = 32, max(32, CAND_SLOTS // max(self.R, 1))
+            while want * 2 <= target:
+                want *= 2
         out = int(min(want, cap))
         if out < 1:
             raise ValueError(f"one period ({self.W}) already exceeds the "
