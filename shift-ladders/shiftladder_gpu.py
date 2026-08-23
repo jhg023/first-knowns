@@ -630,8 +630,8 @@ class GpuEngine:
                                 start=self.bounds[-1])
 
         # --- device tables ---
-        self.d_res = cp.asarray(res.astype(np.uint64))
         crs = plane_shifts(res, self.planes, self.W)
+        self.d_res = cp.asarray(res.astype(np.uint64))
         self.d_cr = (cp.asarray(np.concatenate(crs)) if crs
                      else cp.zeros(1, dtype=cp.uint32))
         # goff is a BIT offset into the concatenated planes

@@ -434,11 +434,24 @@ class Campaign:
         target = int(self.args.to or cpu.k_ceil(self.filter_n(), self.b))
         log("STAGE", f"campaign {self.key}")
         log("STAGE", device_report(self.eng.nbytes()))
+        cfg = self.eng.config()
         log("STAGE",
             f"sweeping the m line to {target:.4g}; {self.oeis} filter n = "
             f"{self.filter_n()}; wheel W = {self.eng.W:,} "
-            f"({self.eng.R:,} residues, {100.0 * self.eng.density():.4f}% of "
-            f"the line); resume at m = {self.swept_m():,}")
+            f"({self.eng.R:,} residues) x {cfg['ng']} bit planes to "
+            f"{cfg['p2']}, leaving {100.0 * self.eng.density():.5f}% of the "
+            f"line as candidates; resume at m = {self.swept_m():,}")
+        # The one configuration fault score.py cannot see: the global tail
+        # queue is sized from per_launch, and the frozen benchmark window is
+        # a quarter of one launch, so a ceiling that binds here is invisible
+        # there and costs about a fifth of the rate.  So the campaign says it.
+        if cfg.get("q3_short"):
+            log("STAGE",
+                "note: the global tail queue is at its ceiling "
+                f"({cfg['q3cap']:,} entries), so some of the tail runs "
+                "uncompacted in the sieve block -- correct, and "
+                "measured at about 3% here against 19% at base 4; the "
+                "trade is written up in OPTIMIZATION_LOG.md")
         for n, qs in sorted(model.predictions(
                 self.b, self.frontier(), self.frontier_m(), n_ahead=3).items()):
             log("STAGE", "  a(%d): %s" % (n, "  ".join(

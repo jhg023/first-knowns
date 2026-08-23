@@ -42,18 +42,21 @@ survivors and the same checksum.
 Medians of interleaved paired rounds against v1, every fingerprint checked
 on every run, machine otherwise idle:
 
-| shape | rate | candidates/s | SCORE | v1 | **ratio** |
-|-------|------|--------------|-------|----|-----------|
-| `SCORE` | 3.19×10¹⁴ m/s | 1.98×10¹⁰ | **319,266,425** | 4,461,600 | **82.9×** |
-| `SCORE1L` | 4.31×10¹³ m/s | 2.55×10¹⁰ | 43,086,561 | 1,066,100 | 46.6× |
-| `SCORE2` | 1.20×10¹⁸ m/s | 7.20×10⁹ | **1,198,913,847,806** | 30,611,000,000 | 49.1× |
-| `SCORE4W` | 4.88×10¹³ m/s | 2.89×10¹⁰ | 48,761,874 | 1,007,900 | 58.4× |
-| `SCORE10` | 2.84×10¹² m/s | 8.63×10⁸ | 2,842,848 | 460,960 | 7.2× |
+| shape | rate | candidates/s | SCORE (median of 3) | spread | v1 | **ratio** |
+|-------|------|--------------|---------------------|--------|----|-----------|
+| `SCORE` | 3.19×10¹⁴ m/s | 1.98×10¹⁰ | **319,266,425** | 304M-398M | 4,461,600 | **82.9×** |
+| `SCORE1L` | 4.35×10¹³ m/s | 2.58×10¹⁰ | 43,498,612 | 43.1M-68.4M | 1,066,100 | 46.6× |
+| `SCORE2` | 1.21×10¹⁸ m/s | 7.29×10⁹ | **1,214,327,398,133** | 1.20T-1.33T | 30,611,000,000 | 49.1× |
+| `SCORE4W` | 4.88×10¹³ m/s | 2.89×10¹⁰ | 48,761,874 | 47.0M-49.6M | 1,007,900 | 58.4× |
+| `SCORE10` | 2.84×10¹² m/s | 8.63×10⁸ | 2,842,848 | 2.69M-2.90M | 460,960 | 7.2× |
 
 The ratio column is the median of seven **per-round** ratios measured back
-to back in one session, not two score runs divided (OPTIMIZATION.md rule 3);
-the SCORE column is what `score.py` printed on the same machine the same
-afternoon. `SCORE10` is the outlier and it is the shape that says so on
+to back in one session, not two score runs divided (OPTIMIZATION.md rule 3).
+The SCORE column is the median of three separate `score.py` runs with the
+full range beside it, because one run is not a number: the spread across
+those three reaches 1.31× on `SCORE` and 1.59× on `SCORE1L`, which is the
+ambient drift this project's ledger has warned about since v1 and the
+reason no decision in OPTIMIZATION_LOG.md rests on a single reading. `SCORE10` is the outlier and it is the shape that says so on
 purpose: at `n = 10` the survival curve is shallow, so 93% of that shape's
 time is in the tail and the wheel has much less to remove.
 

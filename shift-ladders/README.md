@@ -111,13 +111,14 @@ sequences that read identically:
 | **candidates per unit line** | **6.2×10⁻⁵** | **6.0×10⁻⁹** |
 
 and that last row sets everything downstream: the line rate (four orders of
-magnitude apart at the same candidate rate), the singular series
-(A110096's is 12,000× larger), and how deep a table has to go before it
-stops fitting. The two effects nearly cancel in cost per term, which is why
-both families belong in one project rather than two. Note the third row —
-the two families end up at almost the same plane survival by *different*
-routes, because `p2` is derived per configuration from a cost model rather
-than pinned per base.
+magnitude apart at candidate rates within a factor of three), the singular
+series (A110096's is 12,000× larger), and how deep a table has to go before
+it stops fitting. The two effects nearly cancel in cost per term, which is
+why both families belong in one project rather than two. Note the
+plane-survival row — the two families land within 7% of each other by
+*different* routes, one wheel stopping at 79 and the other at 113, because
+`p2` is derived per configuration from a cost model rather than pinned per
+base.
 
 **The kernel.** The CPU engine materialises the dense `m` line and marks
 arithmetic progressions into it. The GPU engine never forms the line: it
