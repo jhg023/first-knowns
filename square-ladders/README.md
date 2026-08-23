@@ -14,23 +14,29 @@ value cleared `i = 12, 13, 14, 15` for free. The run stops at a single
 composite, `861066640·16² + 1 = 220433059841 = 47 · 149 · 31476947`, and
 that lone factorization is the entire reason `a(16)` stayed open for
 eighteen years. The only work since was Max Alekseyev's searched-empty
-bound `a(16) > 1.4×10¹³` — until this project found `a(16)` and `a(17)`.
+bound `a(16) > 1.4×10¹³` — until this project found `a(16)`, `a(17)` and
+`a(18)`.
 
-**Status: PAUSED — open to others.** `a(16) = 15,737,271,507,027,492` and
-`a(17) = 125,811,821,444,034,258` were found and verified on 2026-08-21/22
-— the first terms of this sequence anyone has found since 2008, and the
-first break in the five-term plateau. Both are **proved**, not
-probable-prime ([RESULTS.md](RESULTS.md), evidence in
+**Status: PAUSED — open to others.** `a(16) = 15,737,271,507,027,492`,
+`a(17) = 125,811,821,444,034,258` and
+**`a(18) = 109,927,810,420,106,024,208`** were found and verified on
+2026-08-21/23 — the first terms of this sequence anyone has found since
+2008, and the first break in the five-term plateau. All three are
+**proved**, not probable-prime ([RESULTS.md](RESULTS.md), evidence in
 [`evidence/`](evidence/)).
 
-`a(18)` is open and is the next target. The campaign stands at
-`k = 9.65×10¹⁸`, swept empty. The engine is **v5**: candidates are carried
-as `(k, off)` so the ceiling is the primality-proof bound `1.02×10²²`
-rather than a machine word, and the wheel now reaches **47** on three
-CRT levels, which is worth 4.3× end to end over v4 on the same cursor.
-From here `a(18)` is about **1.6 hours** to its median and 6 hours to P90
-on one RTX 4090, so anyone with a CUDA GPU can take this the rest of the
-way in an afternoon.
+`a(18)` is `5.96 × 2⁶⁴`, which is the point of the **v5** engine in one
+number: candidates are carried as `(k, off)` so the ceiling is the
+primality-proof bound `1.02×10²²` rather than a machine word, and the
+wheel reaches **47** on three CRT levels, worth 4.3× end to end over v4.
+It took 20.7 h to sweep the `1.00×10²⁰` of line from the v4 cursor to it,
+at `1.35×10¹⁵ k/s` — and it landed at model quantile **0.9996**, 7.5×
+past the P90 the model stated before the run.
+
+`a(19)` is open and the campaign is paused at `k = 1.10×10²⁰`, swept
+empty. Its median is `2.72×10²⁰` — 33 hours of one RTX 4090 from that
+cursor, and the model owes you a discount: see
+[the scorecard](#the-odds-model).
 
 ## The problem
 
@@ -47,8 +53,8 @@ and why the published list plateaus.
 | Last *searched* term, before this | `a(11)`, Donovan Johnson, Sep 27 2008 |
 | Frontier this project inherited | `a(16) > 1.4×10¹³` — Max Alekseyev, in the entry by 2017 |
 | Last edit of any kind | revision #14, Aug 14 2017 |
-| **Found here** | `a(16) = 15,737,271,507,027,492`, `a(17) = 125,811,821,444,034,258` |
-| **Open, and next** | `a(18)`, searched-empty below `9.65×10¹⁸` |
+| **Found here** | `a(16) = 15,737,271,507,027,492`, `a(17) = 125,811,821,444,034,258`, `a(18) = 109,927,810,420,106,024,208` |
+| **Open, and next** | `a(19)`, searched-empty below `1.10×10²⁰` |
 | Upper bound | **none published, at any open n** |
 
 Why it is open rather than merely unfinished: the density of qualifying `k`
@@ -225,12 +231,38 @@ Quantiles for `a(16)` are measured from Alekseyev's bound, not from
 `a(15)`: crediting the model for ground somebody else already cleared would
 make every prediction optimistic.
 
-**How it did.** `a(16)` came in at `1.57×10¹⁶` — model quantile **0.899**,
-right at the stated P90. `a(17)` at `1.26×10¹⁷` — quantile **0.530**,
-essentially on the median. Two terms is far too few to score a model with
-and no optimism factor is claimed from them; recorded here because the
-quantile a find lands at is the only honest way to keep score, and it is
-cheaper to write it down now than to reconstruct it later.
+**How it did.** Each find is scored at the quantile it landed on, measured
+from the floor the search for it actually started at:
+
+| term | found at | model quantile |
+|------|----------|----------------|
+| a(16) | `1.57×10¹⁶` | 0.899 |
+| a(17) | `1.26×10¹⁷` | 0.530 |
+| **a(18)** | `1.10×10²⁰` | **0.9996** |
+
+`a(18)` is the one that matters. It came in at **40× the median and 6.9×
+the P90** of the live ladder — 2.3× past P99, at a depth the model gave
+about a 1-in-2,400 chance of reaching empty. Summed as a Poisson exposure
+the three finds cost **10.98 expected hits for 3 actual**, so this model
+runs **3.7× hot**, and with three events the exact 95% interval on the
+optimism factor is **[1.25, 17.7]** — it excludes 1. Three terms is still
+a small sample, but it is no longer a sample that can be waved away, and
+the sibling project `dickson-ladders` independently measured 2.26× [1.03,
+8.31] on four finds of the same class of model.
+
+**And the census says the intensity is not the problem.** The obvious
+reading of a 3.7× optimism factor — "the modelled density of hits is too
+high" — is ruled out by this campaign's own census
+([RESULTS.md](RESULTS.md#census)): over 86,531 classified survivors the
+observed counts per run length sit at **1.022×** the same model's
+prediction, flat from run 8 to run 17, and the measured probability that a
+run-`r` survivor reaches `r+1` is 0.39-0.40 at every rung against a
+predicted 0.392. The mean number of hits is right; it is the *waiting time
+to the first one* that comes out long. That is the signature of a
+first-occurrence distribution more clustered than Poisson, not of a wrong
+density — and it is why the operational advice from this project is to
+read every quantile in the table above as a **floor**, and to budget 2-3×
+its median before a term is expected to fall.
 
 **Validation (gate G11).** If the modelled intensity is right, its integral
 up to the first occurrence is `Exp(1)` — mean 1. On the independently
@@ -248,7 +280,7 @@ separately-searched terms are used.
 Requires an NVIDIA GPU with CuPy, plus numpy and sympy.
 
 ```bash
-python launch.py --selftest    # 27 gates and drills; must end ALL GREEN (~20 s)
+python launch.py --selftest    # 29 gates and drills; must end ALL GREEN (~20 s)
 ```
 
 ```bash

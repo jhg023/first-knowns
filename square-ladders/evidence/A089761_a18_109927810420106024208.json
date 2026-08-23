@@ -1,0 +1,157 @@
+{
+ "sequence": "A089761",
+ "k": 109927810420106024208,
+ "run": 18,
+ "settles": [
+  18
+ ],
+ "values": {
+  "1": 109927810420106024209,
+  "2": 439711241680424096833,
+  "3": 989350293780954217873,
+  "4": 1758844966721696387329,
+  "5": 2748195260502650605201,
+  "6": 3957401175123816871489,
+  "7": 5386462710585195186193,
+  "8": 7035379866886785549313,
+  "9": 8904152644028587960849,
+  "10": 10992781042010602420801,
+  "11": 13301265060832828929169,
+  "12": 15829604700495267485953,
+  "13": 18577799960997918091153,
+  "14": 21545850842340780744769,
+  "15": 24733757344523855446801,
+  "16": 28141519467547142197249,
+  "17": 31769137211410640996113,
+  "18": 35616610576114351843393
+ },
+ "verification": {
+  "mr_chain": true,
+  "sympy_bpsw": true,
+  "resieve_other_wheel": true,
+  "stopper_composite": true
+ },
+ "stopper": {
+  "i": 19,
+  "value": 39683939561658274739089,
+  "factor": 643991
+ },
+ "certificates": {
+  "1": {
+   "proof": "deterministic-mr",
+   "N": 109927810420106024209,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "2": {
+   "proof": "deterministic-mr",
+   "N": 439711241680424096833,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "3": {
+   "proof": "deterministic-mr",
+   "N": 989350293780954217873,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "4": {
+   "proof": "deterministic-mr",
+   "N": 1758844966721696387329,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "5": {
+   "proof": "deterministic-mr",
+   "N": 2748195260502650605201,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "6": {
+   "proof": "deterministic-mr",
+   "N": 3957401175123816871489,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "7": {
+   "proof": "deterministic-mr",
+   "N": 5386462710585195186193,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "8": {
+   "proof": "deterministic-mr",
+   "N": 7035379866886785549313,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "9": {
+   "proof": "deterministic-mr",
+   "N": 8904152644028587960849,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "10": {
+   "proof": "deterministic-mr",
+   "N": 10992781042010602420801,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "11": {
+   "proof": "deterministic-mr",
+   "N": 13301265060832828929169,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "12": {
+   "proof": "deterministic-mr",
+   "N": 15829604700495267485953,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "13": {
+   "proof": "deterministic-mr",
+   "N": 18577799960997918091153,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "14": {
+   "proof": "deterministic-mr",
+   "N": 21545850842340780744769,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "15": {
+   "proof": "deterministic-mr",
+   "N": 24733757344523855446801,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "16": {
+   "proof": "deterministic-mr",
+   "N": 28141519467547142197249,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "17": {
+   "proof": "deterministic-mr",
+   "N": 31769137211410640996113,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "18": {
+   "proof": "deterministic-mr",
+   "N": 35616610576114351843393,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  }
+ },
+ "least_claim": {
+  "swept_from": 1000000,
+  "swept_to": 109927810420106024208,
+  "wheel": 614889782588491410,
+  "sieve_depth": 65536,
+  "monotone_floor": 861066640
+ },
+ "engine": "a089761-v5-p123-p237-p347-q265536-seg16"
+}
