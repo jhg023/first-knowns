@@ -17,23 +17,26 @@ terms of A130003 were published and the last of them,
 sixteen, the last three from Bert Dobbelaere in April 2021. Neither entry
 carries an upper bound of any kind, at any open `n`.
 
-**Four new terms, in 18.1 hours of one RTX 4090:**
+**Five new terms, in 28.3 hours of one RTX 4090:**
 
     A130003  a(19) =                13,268,589,982,417,023
              a(20) =             6,120,156,516,528,136,867
     A110096  a(17) =       305,948,728,878,647,722,725
              a(18) =       760,056,834,873,121,351,995
+             a(19) = 564,052,872,977,379,795,315,735
 
-`a(19)` of A130003 landed **117 seconds** into the campaign, which is what
-a nineteen-year-old frontier with no published bound below it looks like
-once the engine is right. Both A110096 terms are above `2⁶⁴`. Every
-primality decision in all four is a proof rather than a probable-prime
-call. The exact integers, all values, the certificates and the factor
+`a(19)` of A130003 landed **117 seconds** into the first campaign, which is
+what a nineteen-year-old frontier with no published bound below it looks
+like once the engine is right. `a(19)` of A110096 is the newest, found
+2026-08-27 on the re-optimised engine, and at 24 digits it is `30,577×`
+above `2⁶⁴`; all three A110096 terms are above it. Every primality decision
+in all five is a proof rather than a probable-prime call. The exact integers, all values, the certificates and the factor
 witnesses are in [`evidence/`](evidence/); the claims and the verification
 are in [RESULTS.md](RESULTS.md).
 
-**Status: ACTIVE — 5.3× and 5.8× faster than the campaigns that found
-those four, and ready to resume.** Two passes got it there. The first
+**Status: ACTIVE — A130003 `a(21)` is being hunted right now**, at a
+measured `8.20×10¹⁴ m/s`, which is `5.77×` the campaign that found this
+project's first two terms. Two optimization passes got it there. The first
 found that `check_rungs` rebuilt the progress ladder from the odds model
 once per segment — 1,080 numerical integrals for an answer that changes
 only when a term is found, about four fifths of a 17-hour run — and cached
@@ -45,18 +48,23 @@ base 2. Fixing it, raising the plane budget, re-sweeping the test units
 against the new wheel, taking base 2's flat table to `p1 = 41`, and
 deriving the launch size from the tail queue instead of a slot count
 measured **1.537× (base 4) and 2.380× (base 2)** on the resume
-configurations. The full battery is green (32 gates and drills), all five
-benchmark shapes reproduce a fingerprint, and both cursors resume in
-place: A130003 at `m = 8.95×10¹⁸` with `a(21)` open, A110096 at
-`m = 3.62×10²¹` with `a(19)` open.
+configurations. The full battery is green (32 gates and drills) and all
+five benchmark shapes reproduce a fingerprint.
 
-At the current rate — `7.5×10¹⁴ m/s` at base 4 and `1.07×10¹⁹` at base 2 —
-`a(21)` of A130003 is **1.2 days** of sweeping to its median and `a(19)` of
-A110096 about **15 hours** — read as floors (see [the odds
-model](#the-odds-model)). Past those terms, A110096 runs into the
-engine's primality-proof ceiling: the model puts `a(20)` below it with only
-19% probability, so a further term on that family means wiring huntlib's
-BLS75 certificates into the verification path. A130003 has room to `a(23)`.
+**The first campaign on that engine found A110096 `a(19)` in 10.2 hours**,
+sweeping `5.6×10²³` of line at `1.53×10¹⁹ m/s` — 9.7× the campaign that
+found `a(17)` and `a(18)` three days before, and 1.43× what was projected
+for it. A130003 resumed from `m = 8.95×10¹⁸` and is running now.
+
+At the measured rates — `8.20×10¹⁴ m/s` at base 4 and `1.53×10¹⁹` at
+base 2 — `a(21)` of A130003 is **25.6 hours** of sweeping to its median,
+read as a floor (see [the odds model](#the-odds-model)). **A110096 is now
+out of ceiling rather than out of engine:** with `a(19)` found at
+`5.64×10²³`, the proof bound `3.317×10²⁴` sits only `5.9×` above the
+largest value already proved, and the model puts `a(20)` below it with just
+**13.4%** probability. A further term on that family means wiring huntlib's
+BLS75 certificates into the verification path — the machinery is built and
+gated, it is simply not on this path. A130003 has room to `a(23)`.
 
 ## The problem
 
@@ -76,8 +84,8 @@ five separate places in A110096.
 | Found by | Jens Kruse Andersen, **Jun 08 2007** | Bert Dobbelaere, Apr 24 2021 |
 | Author | Farideh Firoozbakht, May 30 2007 | Joseph L. Pe, Sep 05 2005 |
 | Other link | Rivera, [Puzzle 403](http://www.primepuzzles.net/puzzles/puzz_403.htm) | Rivera Puzzle 379 cluster; A193109 |
-| **Found here** | `a(19)`, `a(20)` | `a(17)`, `a(18)` |
-| **Open, and next** | `a(21)`, empty below `8.95×10¹⁸` | `a(19)`, empty below `3.62×10²¹` |
+| **Found here** | `a(19)`, `a(20)` | `a(17)`, `a(18)`, `a(19)` |
+| **Open, and next** | `a(21)`, empty below `8.95×10¹⁸` — **running now** | `a(20)`, empty below `5.64×10²³`; only 13.4% of it is under the proof ceiling |
 | Upper bound | **none published, at any open n** | **none published, at any open n** |
 
 Why they are open rather than merely unfinished: the density of qualifying
@@ -261,45 +269,55 @@ measured from the floor its own search started at):
 | A130003 `a(20)` | `6.12×10¹⁸` | `1.64×10¹⁸` | 1.426 | 0.760 |
 | A110096 `a(17)` | `3.06×10²⁰` | `2.03×10²⁰` | 0.899 | 0.593 |
 | A110096 `a(18)` | `7.60×10²⁰` | `1.97×10²²` | 0.042 | 0.041 |
+| A110096 `a(19)` | `5.64×10²³` | `5.82×10²³` | 0.679 | **0.493** |
 
-Two early, one late, one on the nose: **2.64 expected hits for 4 actual**,
-an optimism factor of **0.66×** with an exact 95% interval of
-**[0.30, 2.43]**, which contains 1. And the census
-([RESULTS.md](RESULTS.md#census)) says the intensity underneath it is right
-to within 1% over 15,457 classified values on both families at once. On
-its own four draws, this model is not measurably wrong in either direction.
+Two early, one late, two on the nose — and the newest landed at quantile
+**0.493** against the 0.500 a correct model gives, 3% below its own
+predicted depth, the closest call this repository has scored. Pooled:
+**3.32 expected hits for 5 actual**, an optimism factor of **0.66×** with
+an exact (Garwood) 95% interval of **[0.28, 2.05]**, which contains 1. The
+fifth draw moved the point estimate by 0.004 and cut the interval's width
+by a fifth. And the census ([RESULTS.md](RESULTS.md#census)) says the
+intensity underneath it is right to within 1% over 15,457 classified values
+on both families at once. On its own five draws, this model is not
+measurably wrong in either direction.
 
-**Read every median above as a floor anyway.** Four draws cannot separate
+**Read every median above as a floor anyway.** Five draws cannot separate
 0.66× from 2×, and the three ladder projects in this repository have now
-scored eleven first occurrences between them at a pooled optimism factor of
-**2.06×**, 95% interval **[1.23, 4.13]** — still excluding 1, still with
-each project's census showing the modelled *intensity* right to a percent
-or two. Mean count right, first occurrence late. Their mean model quantile
-is 0.69 against the 0.50 a correct model gives; the four finds above are
-what pulled it down from 0.85. Budget 2-3× the medians before expecting a
+scored **twelve** first occurrences between them at a pooled optimism
+factor of **1.95×**, 95% interval **[1.11, 3.76]** — still excluding 1,
+though by less than it did, and still with each project's census showing
+the modelled *intensity* right to a percent or two. Mean count right, first
+occurrence late. Their mean model quantile is 0.67 against the 0.50 a
+correct model gives; the five finds above are what pulled it down from
+0.85. Budget 2-3× the medians before expecting a
 term, and treat a term that arrives on the median as luck rather than as
 calibration.
 
 **The live ladder**, re-derived from the frontiers this project set. The
-table above is the pre-sweep record and stays as it was; four of its six
-rows are now settled terms, and the two that are still open — `a(21)` and
-`a(19)` — are re-derived here from the floors those finds moved
-(CONVENTIONS.md, "a rung retires with its term"):
+table above is the pre-sweep record and stays as it was; **five of its six
+rows are now settled terms**, and every row here is re-derived from the
+floors those finds moved (CONVENTIONS.md, "a rung retires with its term").
+`a(21)` of A130003 is the only open term this project is hunting:
 
 | term | Q1 | median | Q3 | P90 | P(below the engine's ceiling) |
 |------|----|--------|----|-----|-------------------------------|
 | A130003 a(21) | 2.84×10¹⁹ | **8.45×10¹⁹** | 2.41×10²⁰ | 5.51×10²⁰ | 100% |
 | A130003 a(22) | 4.17×10²⁰ | **1.93×10²¹** | 6.65×10²¹ | 1.64×10²² | 100% |
 | A130003 a(23) | 1.38×10²² | **6.89×10²²** | 2.40×10²³ | 5.92×10²³ | 99.8% |
-| A110096 a(19) | 1.52×10²³ | **5.82×10²³** | 1.68×10²⁴ | 3.64×10²⁴ | 88.5% |
-| A110096 a(20) | 5.28×10²⁴ | **2.07×10²⁵** | 5.99×10²⁵ | 1.30×10²⁶ | **19%** |
-| A110096 a(21) | 2.00×10²⁶ | **7.76×10²⁶** | 2.24×10²⁷ | 4.82×10²⁷ | **2%** |
+| A110096 a(20) | 7.39×10²⁴ | **2.39×10²⁵** | 6.45×10²⁵ | 1.36×10²⁶ | **13.4%** |
+| A110096 a(21) | 2.08×10²⁶ | **7.89×10²⁶** | 2.25×10²⁷ | 4.85×10²⁷ | **1.4%** |
 
-That last column is the one to read. The ceiling is
-`k_ceil(n, b) = 3.317×10²⁴ − bⁿ`, the primality-proof bound, and A110096's
-values outgrow it two terms from here while A130003's do not: the base-2
-family has about one more term in range, and going past it means proving
-larger primes rather than making the engine faster.
+That last column is the one to read, and `a(19)` moved it. The ceiling is
+`k_ceil(n, b) = 3.317×10²⁴ − bⁿ`, the primality-proof bound; before the
+find it sat `88.5%` above A110096's next term, and now the next term is
+`a(20)` at **13.4%**. The base-2 family has effectively run out of range
+one term sooner than the pre-sweep table expected, because `a(19)` landed
+at `5.64×10²³` — within a factor of six of the bound itself. A130003 is
+untouched by this and has room to `a(23)`. Going further on base 2 means
+proving larger primes, not making the engine faster: huntlib's BLS75
+certificates are built and gated, they are simply not wired into this
+project's verification path.
 
 ## Running it
 

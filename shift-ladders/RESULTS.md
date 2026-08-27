@@ -5,9 +5,10 @@ verification each one survived.
 
 ## Verified finds
 
-**Four, from the campaigns of 2026-08-23/24** — two on each family, and on
-A130003 they are the first terms anyone has found since Jens Kruse
-Andersen's `a(18)` in **June 2007**, nineteen years ago.
+**Five.** Four from the campaigns of 2026-08-23/24 — two on each family,
+and on A130003 the first terms anyone has found since Jens Kruse Andersen's
+`a(18)` in **June 2007**, nineteen years ago — and A110096's `a(19)` from
+the campaign of **2026-08-27**, the first run on the re-optimised engine.
 
 ### A130003 (`b = 4`)
 
@@ -37,18 +38,30 @@ Andersen's `a(18)` in **June 2007**, nineteen years ago.
     m + 2^k is prime for k = 1 .. 18
     stopped by m + 2^19 = 760056834873121876283 = 157 * ...
 
-Both A110096 terms are **above 2⁶⁴** — `16.6×` and `41.2×` it. Carrying
-candidates as `(m, off)` from the first commit is what put them in range,
-and it cost nothing to do it that way at the start (OPTIMIZATION.md 2.7);
+#### `a(19) = 564,052,872,977,379,795,315,735`  — 2026-08-27
+
+    m = 564052872977379795315735
+    m + 2^k is prime for k = 1 .. 19
+    stopped by m + 2^20 = 564052872977379796364311
+                        = 29 * 68902187 * 282285656160457
+
+Twenty-four digits, and `15 mod 30` as the lemma in
+[README.md](README.md#the-mathematics-of-the-engine) requires of every
+A110096 term above the exception zone. All three A110096 terms are **above
+2⁶⁴** — `16.6×`, `41.2×` and `30,577×` it. Carrying candidates as
+`(m, off)` from the first commit is what put them in range, and it cost
+nothing to do it that way at the start (OPTIMIZATION.md 2.7);
 square-ladders retrofitted the same property and paid for it twice.
 
-All four survived all four verification legs below, and every primality
-decision in all four is a **proof**, not a probable-prime call: the largest
-value anywhere in the set is `760,056,834,873,121,614,139`, which is
-`4,364×` below huntlib's deterministic Miller-Rabin bound of `3.317×10²⁴`,
-so the certificates read `deterministic-mr` throughout (gate G10). The
-exact integers, all values `m + b^k`, the certificates and the factor
-witnesses are in [`evidence/`](evidence/).
+All five survived all four verification legs below, and every primality
+decision in all five is a **proof**, not a probable-prime call — but the
+margin is no longer comfortable. The largest value anywhere in the set is
+now `564,052,872,977,379,795,840,023`, which is `5.88×` below huntlib's
+deterministic Miller-Rabin bound of `3.317×10²⁴`, where before `a(19)` it
+was `4,364×`. The certificates still read `deterministic-mr` throughout
+(gate G10); one more term on this family will not. The exact integers, all
+values `m + b^k`, the certificates and the factor witnesses are in
+[`evidence/`](evidence/).
 
 Nothing has been submitted anywhere. These are records; what happens to
 them is the owner's decision (CLAUDE.md rule 5).
@@ -60,8 +73,8 @@ them is the owner's decision (CLAUDE.md rule 5).
 | Last published term | `a(18) = 1,158,174,141,556,287` | `a(16) = 143,924,005,810,811,655` |
 | Found by | Jens Kruse Andersen, **Jun 08 2007** | Bert Dobbelaere, Apr 24 2021 |
 | Searched-empty bound inherited | none — the frontier was the term itself | none |
-| **Found here** | `a(19)`, `a(20)` | `a(17)`, `a(18)` |
-| **Open, and next** | `a(21)`, searched-empty below `8.95×10¹⁸` | `a(19)`, searched-empty below `3.62×10²¹` |
+| **Found here** | `a(19)`, `a(20)` | `a(17)`, `a(18)`, `a(19)` |
+| **Open, and next** | `a(21)`, searched below `8.95×10¹⁸` and running | `a(20)`, searched-empty below `5.64×10²³` |
 | Upper bound | none published, at any open `n` | none published, at any open `n` |
 
 Neither entry carried a published bound of any kind, so the floor for each
@@ -92,13 +105,13 @@ at base 4 and 2,384 at base 2. Four of them were discoveries and seven
 were `[NEAR]`, one condition short of the open term (4 at base 4, 3 at
 base 2); every one of the rest was counted and nothing else.
 
-**No find carried a rider.** All four settled exactly one term, and that is
+**No find carried a rider.** All five settled exactly one term, and that is
 what the model expects at these depths rather than a surprise. A rider
 needs `m + b^(n+1)` prime at the value that *stopped* at `n` — and that
 value was never sieved, because the campaign's filter was `n`. So its
-chance is roughly `S(n+1)/S(n) / log m`, which is 0.19, 0.16, 0.06 and 0.12
-at the four finds: **0.52 riders expected over the four, and a 57% chance
-of exactly none.** The 0.4-per-step figure this file carried before the
+chance is roughly `S(n+1)/S(n) / log m`, which is 0.19, 0.16, 0.06, 0.12
+and 0.10 at the five finds: **0.63 riders expected over the five, and a
+53% chance of exactly none.** The 0.4-per-step figure this file carried before the
 sweep is the *small-`m`* regime that produced the historical riders — it is
 0.38 at A130003's `a(10) = 4503` and 0.95 at A110096's `a(4) = 15`. Riders
 are a property of the depth, and this hunt is four to eighteen orders of
@@ -133,7 +146,13 @@ Counts per run length live in the checkpoint and in the 30-second
 `[STATUS]` heartbeat, never as per-value listings. `python launch.py
 --status` prints them, per family.
 
-Both campaigns' final tallies, against what the *same* Bateman-Horn
+**The table below is the 2026-08-23/24 campaigns.** The third campaign's
+counts are added after it and are NOT scored against the model: the model
+column here was computed for the windows and filters those two campaigns
+ran, and re-deriving it for a third window with a different filter is work
+that has not been done. Counting it and saying so is the whole convention.
+
+Those two campaigns' final tallies, against what the *same* Bateman-Horn
 intensity predicts once the sieve's own retention is folded in — a run-`r`
 survivor also needs its values at `k = r+1 … n` free of factors below
 65536, and each family's filter `n` rose as its own finds landed, so the
@@ -173,14 +192,48 @@ Measured: `13,073 / 5.78×10⁶ = 2.26×10⁻³` and
 classification and the model's intensity agree to within 5% on a quantity
 none of them shares machinery for.
 
+### The third campaign (A110096, 2026-08-27)
+
+37,673 classified values in 10.17 hours, sweeping `3.62×10²¹` to
+`5.64×10²³` at filter `n = 19`. The right-hand column is the cumulative
+tally the checkpoint carries; the extension ratio is `c(r+1) / c(r)`,
+printed only where the denominator is 30 or more.
+
+| run | this campaign | cumulative | extends |
+|-----|---------------|------------|---------|
+| 8 | 23,836 | 25,200 | 0.367 |
+| 9 | 8,741 | 9,355 | 0.376 |
+| 10 | 3,288 | 3,504 | 0.354 |
+| 11 | 1,163 | 1,265 | 0.332 |
+| 12 | 386 | 427 | 0.456 |
+| 13 | 176 | 207 | 0.312 |
+| 14 | 55 | 64 | 0.236 |
+| 15 | 13 | 14 | — |
+| 16 | 11 | 15 | — |
+| 17 | 1 | 2 | — |
+| 18 | 2 | 3 | — |
+| 19 | 1 | 1 | — |
+
+Pooled over `r = 8 … 14` the extension ratio is **0.367**, against
+the **0.424** the first two campaigns measured on this family. The fall is
+expected and is roughly the right size: an extension needs one more prime,
+so the probability goes as `1 / log m`, and this campaign's line sits two
+orders of magnitude higher — `log(5.6×10²³) / log(3.6×10²¹) = 1.10`, and
+`0.424 / 1.10 = 0.385` against 0.367 measured. That is a 5%
+agreement on a quantity nothing here shares machinery for, but it is not a
+clean test: the filter also moved from 17 to 19 between the campaigns, and
+the filter changes the sieve retention that the ratio also contains. It is
+recorded as a consistency check, not as a validation.
+
 This is the census earning its keep, and it is why it is counted rather
 than narrated. In square-ladders it settled an overdue term without
-stopping the hunt; here it does the opposite job. Two of the four finds
+stopping the hunt; here it does the opposite job. Two of the five finds
 below landed early, at quantiles 0.24 and 0.04, and the census is what says
 that is a property of the *waiting time* rather than an intensity that is
-too low — a model under-counting hits by the 1.5× the four finds suggest
-would have shown up in 15,457 counted values long before it showed up in
-four, and it does not: the counts land at 0.991 and 0.992.
+too low — a model under-counting hits by the 1.5× the finds suggest would
+have shown up in 15,457 counted values long before it showed up in five,
+and it does not: the counts land at 0.991 and 0.992. The newest find landed
+at quantile 0.493, which is the waiting time agreeing as well.
 
 ## How the finds scored
 
@@ -194,39 +247,46 @@ sequence carries a published bound.
 | A130003 `a(20)` | `6.12×10¹⁸` | `1.64×10¹⁸` | 1.426 | 0.760 |
 | A110096 `a(17)` | `3.06×10²⁰` | `2.03×10²⁰` | 0.899 | 0.593 |
 | A110096 `a(18)` | `7.60×10²⁰` | `1.97×10²²` | 0.042 | 0.041 |
+| A110096 `a(19)` | `5.64×10²³` | `5.82×10²³` | 0.679 | **0.493** |
 
-Two early, one late, one on the nose. Pooled as Poisson exposure the four
-finds cost **2.64 expected hits for 4 actual**, an optimism factor of
-**0.66×** with an exact 95% interval of **[0.30, 2.43]** — which contains
-1, and is the first point estimate in this repository that sits *below*
-it (euler-prime-runs measured 1.9, dickson-ladders 2.26, square-ladders
-3.66). On its own evidence this model is not measurably wrong in either
-direction, and the census above says why that is worth believing rather
-than a coincidence: the intensity is right to 1%.
+**`a(19)` landed on the median** — quantile 0.493, against the 0.500 a
+correct model gives, and 3% below its own predicted depth. It is the
+closest call this repository has scored.
+
+Two early, one late, two on the nose. Pooled as Poisson exposure the five
+finds cost **3.32 expected hits for 5 actual**, an optimism factor of
+**0.66×** with an exact (Garwood) 95% interval of **[0.28, 2.05]** — which
+contains 1, and is the only point estimate in this repository that sits
+*below* it (euler-prime-runs measured 1.9, dickson-ladders 2.26,
+square-ladders 3.66). The fifth draw moved the point estimate by 0.004 and
+cut the interval's width by a fifth: this is what accumulating evidence
+looks like when the model is right. The census above says why that is worth
+believing rather than a coincidence: the intensity is right to 1%.
 
 That is a real disagreement with the sibling projects, and it is scored
 against them in [README.md](README.md#the-odds-model) rather than papered
-over. Do not read it as a licence to trust the medians: four draws cannot
-separate 0.66× from 2×, and pooled over the eleven first occurrences the
-three ladder projects have now scored between them, the optimism factor is
-still **2.06×**, still excluding 1.
+over. Do not read it as a licence to trust the medians: five draws still
+cannot separate 0.66× from 2×, and pooled over the **twelve** first
+occurrences the three ladder projects have now scored between them the
+optimism factor is **1.95×**, 95% interval **[1.11, 3.76]** — still
+excluding 1, though by less than it did.
 
 ## What the campaign cost
 
-| | A130003 (b = 4) | A110096 (b = 2) |
-|---|---|---|
-| started | 2026-08-23 15:53 | 2026-08-24 09:20 |
-| stopped | 2026-08-24 09:19 | 2026-08-24 09:58 |
-| **wall clock** | **17.44 h** | **38.2 min** |
-| first find | `a(19)` at **117 s** | `a(17)` at **9.5 min** |
-| second find | `a(20)` at **12.04 h** | `a(18)` at **15.8 min** |
-| line swept | `8.95×10¹⁸` | `3.62×10²¹` |
-| end-to-end rate | `1.42×10¹⁴ m/s` | `1.58×10¹⁸ m/s` |
+| | A130003 (b = 4) | A110096 (b = 2) | A110096 again (b = 2) |
+|---|---|---|---|
+| started | 2026-08-23 15:53 | 2026-08-24 09:20 | 2026-08-27 01:37 |
+| stopped | 2026-08-24 09:19 | 2026-08-24 09:58 | 2026-08-27 11:49 |
+| **wall clock** | **17.44 h** | **38.2 min** | **10.17 h** |
+| first find | `a(19)` at **117 s** | `a(17)` at **9.5 min** | `a(19)` at **10.1 h** |
+| second find | `a(20)` at **12.04 h** | `a(18)` at **15.8 min** | — |
+| line swept | `8.95×10¹⁸` | `3.62×10²¹` | `5.60×10²³` |
+| end-to-end rate | `1.42×10¹⁴ m/s` | `1.58×10¹⁸ m/s` | **`1.53×10¹⁹ m/s`** |
 
-**Four terms for 18.1 hours of one GPU**, on two sequences that had stood
+**Five terms for 28.3 hours of one GPU**, on two sequences that had stood
 for nineteen and five years. `a(19)` of A130003 arrived 117 seconds into
-the campaign, which is what a nineteen-year-old frontier with no published
-bound below it looks like once the engine is right.
+the first campaign, which is what a nineteen-year-old frontier with no
+published bound below it looks like once the engine is right.
 
 Those end-to-end rates were **not** the engine's rates: the campaigns ran
 at 29% and 41% of what the kernel does in the same configuration. The cause
@@ -238,51 +298,60 @@ It has since been fixed (the ladder is cached on the frontier), measured at
 **3.47× and 2.42×** on the real segment loop. A second pass then found the
 engine's wheel top four primes short at base 4 and six at base 2 — the cost
 model priced a bit-plane read at four times what it costs — and took base
-2's flat table to `p1 = 41`, for a further **1.537× and 2.380×**. The next
-campaign sweeps at about `7.5×10¹⁴` and `1.07×10¹⁹ m/s`
-([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)). The four terms above were
-found the slow way, at a nineteenth and a twenty-fifth of that.
+2's flat table to `p1 = 41`, for a further **1.537× and 2.380×**
+([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)).
+
+**The third campaign is the check on all of that, and it beat the
+projection.** Predicted `1.07×10¹⁹ m/s`; measured `1.53×10¹⁹` end to end
+over 10.17 hours and `5.60×10²³` of line — **9.7×** the campaign that found
+`a(17)` and `a(18)` three days earlier, and 1.43× the projection itself.
+The projection was conservative because it discounted the engine rate by a
+device share measured on the OLD configuration, where the launch was eight
+times shorter in periods and the per-launch host costs were charged against
+a smaller launch. The first four terms were found the slow way, at a
+nineteenth and a twenty-fifth of what the engine now does.
 
 ## In progress
 
-Both campaigns are **ready to resume**, 5.3× and 5.8× faster than the ones
-that found the four terms above, at the cursors the owner stopped them at:
+**A130003 is being hunted now.** The campaign started 2026-08-27 12:05
+from `m = 8,945,717,917,245,419,310` at filter `n = 21`, looking for
+`a(21)`, and its own first minutes measure **`8.20×10¹⁴ m/s`** — `5.77×`
+the campaign that found `a(19)` and `a(20)`, and 1.09× the projection.
 
-| | A130003 (b = 4) | A110096 (b = 2) |
-|---|---|---|
-| cursor | `m = 8,945,717,917,245,419,310` | `m = 3,616,316,383,800,763,212,570` |
-| filter now | `n = 21` | `n = 19` |
-| open term | `a(21)` | `a(19)` |
-| odds it should have appeared already | 5.0% | 1.8% |
+| | `a(21)` of A130003 | | |
+|---|---|---|---|
+| | depth | at the old rate | **at `8.20×10¹⁴`** |
+| Q1 | `2.84×10¹⁹` | 38 h | **6.6 h** |
+| median | `8.45×10¹⁹` | 148 h | **25.6 h** |
+| Q3 | `2.41×10²⁰` | 454 h | **78.7 h** |
+| P90 | `5.51×10²⁰` | 1061 h | **183.7 h** |
 
-From those cursors, at the rate the engine now measures (`7.5×10¹⁴` and
-`1.07×10¹⁹ m/s`), with the rate the first campaigns actually ran at kept
-alongside:
+`a(21)` is not overdue: the model gave it only a 5.0% chance of having
+appeared below the cursor, so the previous campaign was stopped early on
+its ladder rather than stalled on it. A130003 has room — `a(21)`, `a(22)`
+and `a(23)` sit below the proof ceiling with probability 100%, 100% and
+99.8%.
 
-| | `a(21)` of A130003 | | | `a(19)` of A110096 | | |
-|---|---|---|---|---|---|---|
-| | depth | as it ran | **now** | depth | as it ran | **now** |
-| Q1 | `2.84×10¹⁹` | 37 h | **7 h** | `1.52×10²³` | 19 h | **4 h** |
-| median | `8.45×10¹⁹` | 144 h | **28 h** | `5.82×10²³` | 76 h | **15 h** |
-| Q3 | `2.41×10²⁰` | 443 h | **85 h** | `1.68×10²⁴` | 220 h | **44 h** |
-| P90 | `5.51×10²⁰` | 1036 h | **199 h** | `3.64×10²⁴` | 477 h | **95 h** |
+**A110096 has run out of ceiling, not out of engine.** With `a(19)` found
+at `5.64×10²³`, the enforced bound `k_ceil(n, b) = 3.317×10²⁴ − bⁿ` is only
+`5.9×` above the largest value already proved, and the model puts `a(20)`
+below it with probability **13.4%** and `a(21)` with **1.4%**:
 
-**A110096 is close to running out of range, and A130003 is not.** The
-enforced ceiling is the primality-proof bound, `k_ceil(n, b) = 3.317×10²⁴ −
-bⁿ`, and the model puts `a(19)` of A110096 below it with probability
-**88.5%** — but `a(20)` with probability **19%**, and `a(21)` with **2%**.
-A130003 is comfortable by comparison: `a(21)`, `a(22)` and `a(23)` sit
-below the ceiling with probability 100%, 100% and 99.8%. So the base-2
-family has roughly one more term in it before the ceiling has to be lifted,
-and lifting it means wiring huntlib's BLS75 certificates into the
-verification path in place of deterministic Miller-Rabin — the machinery is
-already built and gated, it is simply not on this path. That is a decision
-for whoever resumes, not a defect.
+| term | Q1 | median | Q3 | P90 | P(below the ceiling) |
+|------|----|--------|----|-----|----------------------|
+| A110096 a(20) | `7.39×10²⁴` | **`2.39×10²⁵`** | `6.45×10²⁵` | `1.36×10²⁶` | **13.4%** |
+| A110096 a(21) | `2.08×10²⁶` | **`7.89×10²⁶`** | `2.25×10²⁷` | `4.85×10²⁷` | **1.4%** |
 
-Neither term is overdue: the model gave each only a 5.0% and 1.8% chance
-of having appeared by the cursor, so both campaigns were stopped early on
-their own ladders rather than stalled on them. And every depth above is the
-model's own, from a family of models this repository has caught running
-about 2× hot pooled across eleven finds — so read them as floors rather
-than forecasts, while noting that this project's own four finds are the
-ones that argue the other way.
+At `1.53×10¹⁹ m/s` the median of `a(20)` is about **18 days** of sweeping,
+and seven times out of eight the term is not there to be found: the engine
+would refuse the line before reaching it. Continuing that family means
+wiring huntlib's BLS75 certificates into the verification path in place of
+deterministic Miller-Rabin — the machinery is already built and gated, it
+is simply not on this path. That is a decision for the owner, not a defect,
+and it is now the *only* thing standing between this engine and `a(20)`.
+
+Every depth above is the model's own, from a family of models this
+repository has caught running about 2× hot pooled across twelve finds — so
+read them as floors rather than forecasts, while noting that this project's
+own five finds are the ones that argue the other way, and that the fifth
+landed at quantile 0.493.

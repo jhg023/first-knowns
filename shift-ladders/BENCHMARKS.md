@@ -243,17 +243,28 @@ the pre-fix column kept so the change is legible:
 
 | target | from | median | line to sweep | as the campaign ran | **now** |
 |--------|------|--------|---------------|---------------------|---------|
-| A130003 `a(21)` | `8.95×10¹⁸` | `8.45×10¹⁹` | `7.6×10¹⁹` | 6.0 d | **1.2 d** |
-| A130003 `a(22)` | " | `1.93×10²¹` | `1.9×10²¹` | 153 d | 29 d |
-| A110096 `a(19)` | `3.62×10²¹` | `5.82×10²³` | `5.8×10²³` | 3.2 d | **15 h** |
-| A110096 `a(20)` | " | `2.07×10²⁵` | `2.1×10²⁵` | 113 d | 23 d — and only 19% of it is under the engine's ceiling |
+| A130003 `a(21)` | `8.95×10¹⁸` | `8.45×10¹⁹` | `7.6×10¹⁹` | 6.0 d | **25.7 h** — running |
+| A130003 `a(22)` | " | `1.93×10²¹` | `1.9×10²¹` | 153 d | 26.8 d |
+| A110096 `a(19)` | `3.62×10²¹` | `5.82×10²³` | `5.6×10²³` | 3.2 d | **FOUND in 10.2 h** |
+| A110096 `a(20)` | `5.64×10²³` | `2.39×10²⁵` | `2.3×10²⁵` | — | 17.6 d — but only **13.4%** of it is under the engine's ceiling |
 
-at about `7.5×10¹⁴ m/s` for `b = 4` and `1.07×10¹⁹ m/s` for `b = 2`: the
-engine rates measured on the resume configurations, discounted by the
-device share the segment loop measured (94.7% and 89.8%).
+at the rates the campaigns themselves measured: `8.20×10¹⁴ m/s` for
+`b = 4` (from the running campaign's own first minutes) and `1.53×10¹⁹`
+for `b = 2` (from the 10.2-hour campaign that found `a(19)`).
+
+**The `a(19)` row is this table's own check, and it passed.** The version
+written on 2026-08-27 projected `15 h` at `1.07×10¹⁹ m/s`; the campaign
+took `10.2 h` at `1.53×10¹⁹` and found the term at `5.64×10²³`, three
+percent below its predicted median. The projection was 1.43× conservative
+because it discounted the engine's benchmark rate by a device share
+measured on the OLD configuration, where the launch was eight times shorter
+in periods and the per-launch host costs were charged against a smaller
+launch. Under-projecting is the right direction for this column to err in,
+but the reason is worth keeping: a device share is a property of a
+configuration, not of an engine.
 
 Two things this table is not. It is not a forecast: the medians are the
-model's, and this repo's ladder models run about 2× late pooled over eleven
+model's, and this repo's ladder models run about 2× late pooled over twelve
 finds, so multiply before expecting a term (README, "The odds model").
 
 And it is not the ceiling. The version of this paragraph written on
