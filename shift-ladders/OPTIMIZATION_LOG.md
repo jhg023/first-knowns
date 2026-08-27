@@ -523,7 +523,7 @@ argument, and all four checks are worth keeping:
   `sleep(0.002)` returns in 2.52 ms [2.02, 2.75] here. It had not, and the
   flag was not used anyway.
 
-### The fix, priced but NOT applied
+### The fix, APPLIED 2026-08-27 — 3.47x and 2.42x
 
 **Memoise the ladder on the frontier it was derived from.** `ladder()`
 depends on exactly `(b, frontier(), frontier_m(), filter_n())`, and all
@@ -538,22 +538,107 @@ the frontier moving *is* the invalidation. What is being removed is not the
 guarantee, it is 1,080 numerical integrals per segment recomputing an
 identical answer.
 
-Priced from the budget above:
+**Measured, not projected.** A paired, interleaved A/B of the REAL segment
+loop — `Campaign`'s own inner loop against a scratch checkpoint, three
+segments per arm, three rounds, arms alternating within each round:
 
-| | now | with the ladder cached | on `a(21)` / `a(19)` at the median |
+| | rebuild (before) | cached (after) | ratio |
 |---|---|---|---|
-| base 4 | `1.45×10¹⁴ m/s` | `4.87×10¹⁴ m/s` — **3.35×** | 6.0 d → **1.8 d** |
-| base 2 | `2.12×10¹⁸ m/s` | `4.85×10¹⁸ m/s` — **2.29×** | 3.2 d → **1.4 d** |
+| base 4 | `1.274×10¹⁴ m/s` (51.9 ms/launch) | `3.788×10¹⁴` (17.5 ms) | — |
+| base 2 | `5.186×10¹⁷ m/s` (58.6 ms/launch) | `1.098×10¹⁸` (27.9 ms) | — |
 
-and both landing figures agree with the free-GPU device rates measured
-independently (`5.08×10¹⁴`, `5.21×10¹⁸`), which is the check that the
-budget has nothing else hiding in it.
+That arm ran at the *published* frontier (filter 19 / 17, a fresh scratch
+checkpoint), which is the wrong configuration for a resume. Re-run with the
+checkpoint seeded so the frontier is this project's own, at the filters a
+resume actually uses, 12 segments each:
 
-It is **not applied here** because it changes the campaign hot path and
-belongs in a commit that A/Bs it against a real segment loop, with the
-owner's call on the caching contract — not in a documentation pass. **Do
-not touch the kernel before this lands.** At base 4 it is worth 3.35×,
-and the largest measured item left inside the engine is 5%.
+| | campaign, as it ran | after | ratio |
+|---|---|---|---|
+| base 4, n = 21 | `1.453×10¹⁴ m/s` | **`5.046×10¹⁴ m/s`** | **3.47×** |
+| base 2, n = 19 | `2.119×10¹⁸ m/s` | **`5.119×10¹⁸ m/s`** | **2.42×** |
+
+Two independent corroborations that the budget has nothing else in it:
+the "before" arm reproduces the campaign's own launch times (51.9 vs 45.6
+ms, 58.6 vs 57.4 ms), and the "after" rates land on the free-GPU device
+rates measured separately (`5.08×10¹⁴`, `5.21×10¹⁸`). The loop is now
+**94.7% and 89.8% device**:
+
+| per launch | base 4, n = 21 | base 2, n = 19 |
+|---|---|---|
+| sweep | 12.44 ms — 94.7% | 21.33 ms — 89.8% |
+| classify | 0.17 ms — 1.3% | 1.84 ms — 7.8% |
+| checkpoint | 0.52 ms — 3.9% | 0.57 ms — 2.4% |
+| rungs | **0.00 ms** | **0.00 ms** |
+
+`a(21)` at the median goes 6.0 d → **1.7 d**, `a(19)` 3.2 d → **1.3 d**.
+
+**A measurement artefact worth recording, because it nearly shipped as a
+finding.** The first split run after the fix showed `rungs` at 26.8
+ms/launch and looked like the cache had not worked. It had: the run was
+four segments long, and the ONE-TIME build (1,755 ms at a fresh frontier
+with 7 rungs already behind the cursor) smeared across them at 429 ms each
+and read as a steady per-segment cost. Printing the rebuild counter settled
+it in one line — 1 build, then 0.0 ms forever. **A one-time cost divided by
+a short run is indistinguishable from a recurring one**; measure the
+steady state, and count the events rather than inferring them from a mean.
+
+**The drills that keep it honest.** A cache without a test for its
+invalidation is how the dickson-ladders incident comes back.
+`huntlib.rungs.gate_live_ladder` proves 51 reads at a standing frontier
+cost 1 build, that a find costs exactly one more and moves the aim from
+a(12) to a(13) with no retired rung served from cache, and that
+`frontier_m`, the filter and `invalidate()` each force a rebuild on their
+own. The campaign-wiring drill proves the same on this launcher's own
+wiring: 75 ladder reads at a standing frontier cost **zero** rebuilds, and
+setting a find moves the frontier, costs exactly one rebuild, and takes the
+aim off `a(19)`.
+
+**And those gates were not running anywhere.** `huntlib.rungs.GATES` — the
+ladder-retirement drill written *because* of dickson-ladders, and kept in
+huntlib expressly because the rule is repo-wide — was included by exactly
+one project's `score.py` and by no launcher at all. It is now part of
+`drills.standard()`, so every project gets both ladder gates: this battery
+went 30 → 32.
+
+### Measured alongside it and DECLINED, with numbers
+
+Both were swept in the same session, so nobody re-runs them.
+
+**1. Precomputing `b**k` in the run-length classifier. REJECTED, 0.993x /
+1.001x.** The classifier is `while mr_is_prime(m + b ** (r+1))`, and the
+exponentiation looked like free money at base 2 where classification is
+7.8% of the launch. Measured on real survivors from each resume window
+(72 and 182 of them, five paired rounds): 65.5 -> 66.0 us per survivor at
+base 4 and 70.9 -> 70.8 at base 2. It is **entirely Miller-Rabin**; the
+`b**k` is noise. The only thing that would move this row is a cheaper
+primality test or taking classification off the critical path, and at
+1.3% / 7.8% neither is worth the machine (CONVENTIONS.md, sizing).
+
+**2. Raising base 4's `per_launch` 1024 -> 2048. DECLINED, 1.025x
+[0.986, 1.118].** OPTIMIZATION.md's re-sweep rule applies here because the
+filter moved 19 -> 21, so the derived launch size was re-swept at the
+resume configuration, interleaved, fingerprint (survivor count) checked on
+every run:
+
+| `per_launch` | rate | vs best | `q3_short` | memory |
+|---|---|---|---|---|
+| 256 | `2.72×10¹⁴` | 0.473x | False | — |
+| 512 | `4.12×10¹⁴` | 0.716x | False | — |
+| **1024 (derived)** | `5.40×10¹⁴` | 0.938x | False | 678 MiB |
+| 2048 | `5.51×10¹⁴` | 0.972x | False | 852 MiB |
+| 4096 | `5.76×10¹⁴` | **1.000x** | **True** | 1015 MiB |
+| 8192 | `5.24×10¹⁴` | 0.951x | True | 1015 MiB |
+| 16384 | `5.30×10¹⁴` | 0.962x | True | 1015 MiB |
+
+The peak at 4096 is only 1.07x over the derived value and it sits **past
+the tail queue's ceiling** (`q3_short = True`), the regime this log already
+prices at ~19% and the launcher prints a warning about; beyond it the curve
+turns over. So the only safe step is 2048, and a paired 10-round A/B put it
+at **1.025x, range [0.986, 1.118]** — an interval containing 1 — for
++174 MiB. Declined under the load rule ("when two settings tie on
+throughput take the one that asks for less machine"), and because a
+per-base constant is exactly what this engine derives everything else to
+avoid. Base 2's derived 16384 **is** its optimum, so nothing to do there.
 
 Two process notes this cost, both of them rules already written down:
 
@@ -566,6 +651,15 @@ Two process notes this cost, both of them rules already written down:
   look for.** Two families that agree to 1% on an absolute overhead while
   disagreeing by 10⁴ on everything else is not a coincidence; it named the
   suspect class (host, per launch, work-independent) before the suspect.
+
+Both are now repo-wide rules rather than one project's scar tissue:
+CONVENTIONS.md "The model is EXPENSIVE, and the segment loop may not call
+it" and the wall-clock clause in the sizing procedure, OPTIMIZATION.md
+§2.14 and the campaign-loop clause under Rule 1, and a line in CLAUDE.md's
+new-project checklist. `square-ladders` has the same shape — a `ladder()`
+that calls `model.predictions` (473 ms there) from `check_rungs` — and is
+saved only by a very long period; its log carries a note and its gates were
+NOT run here (CLAUDE.md rule 2).
 
 ### `--gentle`'s advertised price is not reproduced
 

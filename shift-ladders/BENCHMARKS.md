@@ -153,18 +153,40 @@ Measured end to end from each checkpoint's own `elapsed` and swept `m`:
 | A110096 (`b = 2`) | `3.62×10²¹` | 38.2 min | `1.58×10¹⁸ m/s` | `2.12×10¹⁸` (n = 19) | `5.21×10¹⁸ m/s` (n = 19 at the cursor) |
 
 The campaigns bought **29% and 41%** of what the kernel does in the same
-configuration, and **that gap is larger than anything left in the kernel.**
-Measured per launch — the campaign's own unit — it is a fixed **32.0 ms and
-32.3 ms** on two families whose launches differ by four orders of magnitude
-in line swept, and it has been traced: **`check_rungs` rebuilds the whole
-progress ladder from the odds model once per segment**, which is 1,080
-numerical integrals at 0.509 ms each, or 578 ms and 541 ms — 36.1 and
+configuration, and that gap was larger than anything left in the kernel.
+Measured per launch — the campaign's own unit — it was a fixed **32.0 ms
+and 32.3 ms** on two families whose launches differ by four orders of
+magnitude in line swept, and it was traced: **`check_rungs` rebuilt the
+whole progress ladder from the odds model once per segment**, 1,080
+numerical integrals at 0.509 ms each — 578 ms and 541 ms, or 36.1 and
 33.8 ms per launch. A 17-hour base-4 campaign spent about four fifths of
 its wall clock recomputing an answer that changes only when a term is
-found. The full budget, and the frontier-keyed cache that fixes it for
-**3.35× and 2.29×**, are in
-[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md); it is priced there, not
-applied, because it changes the campaign hot path.
+found.
+
+**FIXED.** The ladder is cached on the frontier
+(`huntlib.rungs.LiveLadder`). Measured paired and interleaved on the real
+segment loop, median of three rounds:
+
+| | campaign | after | ratio |
+|---|---|---|---|
+| A130003 (`b = 4`, n = 21) | `1.45×10¹⁴ m/s` | **`5.05×10¹⁴ m/s`** | **3.47×** |
+| A110096 (`b = 2`, n = 19) | `2.12×10¹⁸ m/s` | **`5.12×10¹⁸ m/s`** | **2.42×** |
+
+landing on the free-GPU device rates measured independently
+(`5.08×10¹⁴`, `5.21×10¹⁸`), which is the check that nothing else was
+hiding in the budget. The segment loop is now **94.7% and 89.8% device**:
+
+| per launch | base 4, n = 21 | base 2, n = 19 |
+|---|---|---|
+| sweep (device) | 12.44 ms — 94.7% | 21.33 ms — 89.8% |
+| classify | 0.17 ms — 1.3% | 1.84 ms — 7.8% |
+| checkpoint | 0.52 ms — 3.9% | 0.57 ms — 2.4% |
+| rungs | **0.00 ms** | **0.00 ms** |
+| **total** | **13.13 ms** | **23.75 ms** |
+
+The budget, the two further candidates measured at 1.00 and declined, and
+the drills that keep the cache honest are in
+[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md).
 
 One thing the campaign settled in the engine's favour: **a higher filter is
 faster**, monotonically. At the base-4 cursor the same 4,096-period window
@@ -175,22 +197,25 @@ the usual, and worth knowing before pricing `a(22)`.
 
 ### Where the next terms sit
 
-From the paused cursors, at each campaign's own last-stretch rate and at
-the device rate the same configuration reaches on a free GPU:
+From the cursors each campaign is paused at, at the **post-fix** rate, with
+the pre-fix column kept so the change is legible:
 
-| target | from | median | line to sweep | at the campaign rate | at the device rate |
-|--------|------|--------|---------------|----------------------|--------------------|
-| A130003 `a(21)` | `8.95×10¹⁸` | `8.45×10¹⁹` | `7.6×10¹⁹` | **6.0 d** | **1.7 d** |
+| target | from | median | line to sweep | old rate | **now** |
+|--------|------|--------|---------------|----------|---------|
+| A130003 `a(21)` | `8.95×10¹⁸` | `8.45×10¹⁹` | `7.6×10¹⁹` | 6.0 d | **1.7 d** |
 | A130003 `a(22)` | " | `1.93×10²¹` | `1.9×10²¹` | 153 d | 44 d |
-| A110096 `a(19)` | `3.62×10²¹` | `5.82×10²³` | `5.8×10²³` | **3.2 d** | **1.3 d** |
-| A110096 `a(20)` | " | `2.07×10²⁵` | `2.1×10²⁵` | 113 d | 46 d — and only 19% of it is under the engine's ceiling |
+| A110096 `a(19)` | `3.62×10²¹` | `5.82×10²³` | `5.8×10²³` | 3.2 d | **1.3 d** |
+| A110096 `a(20)` | " | `2.07×10²⁵` | `2.1×10²⁵` | 113 d | 47 d — and only 19% of it is under the engine's ceiling |
+
+at `5.05×10¹⁴ m/s` for `b = 4` and `5.12×10¹⁸ m/s` for `b = 2`, both
+measured on the segment loop rather than on the benchmark.
 
 Two things this table is not. It is not a forecast: the medians are the
 model's, and this repo's ladder models run about 2× late pooled over eleven
 finds, so multiply before expecting a term (README, "The odds model"). And
-it is not the ceiling of what the hardware can do — the last column is what
-closing the campaign-rate gap would buy, and it is a better trade than any
-kernel work now on the table.
+it is no longer far from what the hardware can do — the loop is 90-95%
+device now, so the next real gain would have to come out of the kernel,
+where the largest measured item left is 5%.
 
 Wall clock of the tools themselves, so they can be planned against the
 five-minute rule: `launch.py --selftest` ~60 s, `score.py` ~90 s.

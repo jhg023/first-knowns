@@ -200,6 +200,19 @@ same way it is built to a correctness protocol. The procedure, in order:
    at the configuration the campaign will actually run — not at the
    benchmark's. Everything below needs those two numbers and nothing else
    substitutes for them.
+
+   **And measure WALL CLOCK per unit alongside them, in the segment
+   loop.** Device + host is what the pipeline costs; wall clock is what
+   the campaign pays. When they disagree, the difference is a third thing
+   that belongs to neither, and nothing else in this repo will show it to
+   you: a benchmark measures the engine, a gate measures correctness, and
+   neither ever runs a segment. shift-ladders' two campaigns spent 32 ms
+   per launch — 71% and 56% of their wall clock — inside a `check_rungs`
+   that neither its benchmark nor its battery could see (OPTIMIZATION.md
+   2.14). **A per-launch cost that does not scale with the work is the
+   signature**: two configurations differing by four orders of magnitude
+   in line swept agreed to 1% on that 32 ms, which is not something real
+   work does.
 2. **Size the host pool from the requirement, with margin — never from
    the core count.** Classification cost per survivor times survivors per
    segment, against the device time for that segment, is how many cores
@@ -508,6 +521,43 @@ quantiles must scatter — a model whose knowns all sit at quantile ~0 or
 ~1 is wrong and may not be used to plan. Predictions (median locations,
 probability-by-depth) are stated in the README *before* the run, and the
 finds are scored against them after.
+
+### The model is EXPENSIVE, and the segment loop may not call it (binding)
+
+A campaign's inner loop — the per-segment, per-launch code — **may not
+evaluate the odds model**. Not for a rung ladder, not for an ETA, not for
+a `[STATUS]` line. Derive what the loop needs once per frontier and cache
+it **keyed on the frontier**, with `huntlib.rungs.LiveLadder`.
+
+This is not a micro-optimization, it is a factor of three. A
+`predictions(n_ahead=3)` is 12 quantile bisections x 90 steps = **1,080
+numerical integrals, ~578 ms**. shift-ladders called it once per segment
+from `check_rungs` and spent **about four fifths of a 17-hour campaign**
+recomputing an answer that changes only when a term is found; both its
+families ran at 29% and 41% of their own kernel, and the fix measured
+**3.47x and 2.42x** (OPTIMIZATION.md 2.14).
+
+The reason it was written that way is a *real* rule, which is why this one
+has to be stated next to it: **a rung retires with its term**, so a ladder
+must never outlive the frontier it was derived from (dickson-ladders
+advertised `next a(12) P90` for hours after finding a(12)). `LiveLadder`
+keeps that guarantee structurally — the frontier is the first argument of
+its `get` by signature, so a stale ladder cannot be served — while paying
+for the model once. **Deriving live and deriving repeatedly are different
+requirements**; conflating them is the bug.
+
+Both halves are drilled repo-wide in `huntlib.rungs.gate_live_ladder`,
+which every project now gets through `drills.standard()`: reads at a
+standing frontier must cost **zero** rebuilds, and a find must cost exactly
+one and move the aim. A launcher that owns its ladder should assert it on
+its own wiring too, the way shift-ladders' campaign-wiring drill does.
+
+The trap generalises past ladders. Anything in a segment loop whose inputs
+change only on a find is the same bug: a re-read model file, a re-computed
+singular series, a re-derived ETA. **The tell is a cost per launch that
+does not scale with the work** — two configurations differing by four
+orders of magnitude in line swept agreed to 1% on an absolute 32 ms, and
+that is what named the suspect class before it named the suspect.
 
 ## Logging taxonomy
 

@@ -25,6 +25,7 @@ import tempfile
 from . import checkpoint as _ckpt
 from . import evidence as _ev
 from . import pool as _pool
+from . import rungs as _rungs
 from . import shutdown as _shutdown
 
 
@@ -307,11 +308,20 @@ def standard(pool_factory=None, tmpdir=None, cursor=None):
     that catches "this configuration cannot read its own predecessor's
     checkpoint", which no other gate can see because no other gate ever
     writes an old key.
+
+    The ladder gates ride here for the same reason: they are repo-wide
+    rules (a rung retires with its term; a cached ladder cannot outlive
+    the frontier it came from), and until they were added to this list
+    exactly ONE project ran them -- so the drill written to prevent the
+    dickson-ladders incident was not running in the projects it was
+    written for.  A repo-wide drill that a project has to remember to
+    include is a repo-wide drill that mostly does not run.
     """
     own = tmpdir is None
     tmp = tempfile.mkdtemp(prefix="huntlib-drill-") if own else tmpdir
     try:
         out = [shutdown_drill(), durability_drill(tmp), evidence_drill(tmp)]
+        out.extend(g() for g in _rungs.GATES)
         if cursor is not None:
             out.append(cursor_policy_drill(cursor, tmp))
         if pool_factory is not None:

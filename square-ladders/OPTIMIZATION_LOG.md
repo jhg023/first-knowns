@@ -5,6 +5,31 @@ matter as much as the wins: they are what stops the next person spending a
 day re-deriving a dead end. Read [OPTIMIZATION.md](../OPTIMIZATION.md)
 first; this file is the project-specific ledger.
 
+> **OPEN ITEM FOR WHOEVER RESUMES THIS PROJECT — before any new
+> optimization work.** `Campaign.ladder()` (launch.py) calls
+> `model.predictions(...)`, and `check_rungs` calls it once per period,
+> `next_rung` again on every rung crossing, and the heartbeat again every
+> 30 s. **That call measures 473 ms here.** In `shift-ladders` the
+> identical shape, at a much shorter segment, consumed about four fifths of
+> a 17-hour campaign and its removal was worth **3.47x** (that project's
+> OPTIMIZATION_LOG.md, "The campaign, measured"; OPTIMIZATION.md 2.14; now
+> binding in CONVENTIONS.md, "The model is EXPENSIVE, and the segment loop
+> may not call it").
+>
+> This project is probably saved by arithmetic rather than by design -- its
+> period is long enough that 473 ms is a small fraction of a segment -- but
+> that is a coincidence of `W`, not a property anyone chose, and it would
+> not survive a wheel change. **Measure wall clock per unit of line against
+> device time per unit of line before resuming**, then swap `ladder()` to
+> `huntlib.rungs.LiveLadder` (three lines; the frontier is the first
+> argument of `get` by signature, so a rung still retires with its term).
+>
+> Written from `shift-ladders`. **No code here was touched and this
+> project's gates were NOT run** (CLAUDE.md rule 2). Resuming already
+> requires `python launch.py --selftest` and `python score.py` first --
+> note that huntlib's two ladder gates now ride in `drills.standard()`, so
+> the battery's count here will go up by two.
+
 All measurements are from harnesses that import the **engine** and call it
 on a chosen window. None of them is the campaign (CLAUDE.md rule 0a).
 

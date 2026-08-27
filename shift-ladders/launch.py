@@ -52,17 +52,24 @@ protocol").  A survivor is an m with a run length r:
   None       r < CENSUS_FLOOR: noise, not counted.
 
 LOAD (CONVENTIONS.md "Sizing a hunt so it leaves the machine usable").
-This hunt has NO host worker pool, and the measurement says it needs none:
-at the v1 rate the device produces well under one survivor per launch at
-the production filters, and each survivor costs a handful of Miller-Rabin
-tests.  That is a fraction of a percent of one core, so there is nothing to
-ramp and no core count to size -- and the sizing rule is satisfied by
-measurement rather than by omission.  If a future engine version raises the
-survivor rate by orders of magnitude, that changes and the pool comes back:
-the number to watch is survivors per second, logged in [STATUS].  The
-throttles are `--gpu-yield-ms` and `--gentle`, priced in the help text
-against the checkpoint interval.  No machine setting is ever changed on the
-owner's behalf.
+This hunt has NO host worker pool, and the measurement says it needs none.
+RE-SWEPT at v2 against the segment loop itself, at the filters each family
+resumes at (base 4 n = 21, base 2 n = 19), with the ladder cached:
+
+    base 4   13.13 ms per launch:  sweep 94.7%  classify 1.3%  save 3.9%
+    base 2   23.75 ms per launch:  sweep 89.8%  classify 7.8%  save 2.4%
+
+1.9 and 24.2 survivors per launch, ~70 us of Miller-Rabin each.  Both
+campaigns are DEVICE-BOUND, so there is nothing to ramp and no core count
+to size, and the sizing rule is satisfied by measurement rather than by
+omission.  The number to watch is survivors per second, logged in
+[STATUS]: classification is serial with the device here, so if a future
+engine raises the survivor rate by an order of magnitude the base-2 row
+goes past half and the pool comes back.  The throttles are
+`--gpu-yield-ms` and `--gentle`; the help text's price for `--gentle` is
+NOT reproduced (measured 2.5 ms per launch, about a fifth at base 4, not a
+third) and the disagreement is in OPTIMIZATION_LOG.md rather than silently
+overwritten.  No machine setting is ever changed on the owner's behalf.
 """
 
 import argparse
@@ -78,7 +85,7 @@ from huntlib import shutdown                                    # noqa: E402
 from huntlib.gpu import device_report                           # noqa: E402
 from huntlib.hlog import Heartbeat, banner, census_str, log     # noqa: E402
 from huntlib.primes import factor_witness, mr_is_prime          # noqa: E402
-from huntlib.rungs import Ladder, eta_str                       # noqa: E402
+from huntlib.rungs import Ladder, LiveLadder, eta_str           # noqa: E402
 
 import shiftladder_gpu as gpu                                   # noqa: E402
 import shiftladder_model as model                               # noqa: E402
@@ -222,6 +229,7 @@ class Campaign:
         self._stored_w = 0
         self._adopted = None
         self.hb = Heartbeat(interval=args.heartbeat)
+        self._lad = LiveLadder(self._build_ladder)
         self._t0 = time.time()
         self._snapshot = None
         self.loaded = self.load()
@@ -267,14 +275,28 @@ class Campaign:
         return self.frontier() + 1
 
     # ----------------------------------------------------------------- rungs
+    def _build_ladder(self, frontier, frontier_m, n):
+        ceil = cpu.k_ceil(n, self.b)
+        preds = model.predictions(self.b, frontier, frontier_m,
+                                  n_ahead=3, ceiling=ceil)
+        return Ladder.from_predictions(preds, ceiling=ceil)
+
     def ladder(self):
-        """Derived from the LIVE frontier on every use, never stored, so a
-        find cannot leave the ladder aiming at a retired depth
-        (CONVENTIONS.md: "a rung retires with its term")."""
-        n = self.filter_n()
-        preds = model.predictions(self.b, self.frontier(), self.frontier_m(),
-                                  n_ahead=3, ceiling=cpu.k_ceil(n, self.b))
-        return Ladder.from_predictions(preds, ceiling=cpu.k_ceil(n, self.b))
+        """Derived from the LIVE frontier on every use, so a find cannot
+        leave the ladder aiming at a retired depth (CONVENTIONS.md: "a rung
+        retires with its term") -- and REBUILT only when that frontier
+        moves, which it does a handful of times per campaign.
+
+        Deriving live is the safety property; deriving it again every
+        segment was 1,080 numerical integrals for an identical answer and
+        FOUR FIFTHS of this project's first campaign (OPTIMIZATION_LOG.md,
+        "The campaign, measured").  `LiveLadder` keeps the first and drops
+        the second: the frontier is the first component of its key by
+        signature, so a cached ladder cannot outlive the frontier it came
+        from.  Drilled in huntlib (gate_live_ladder) and here.
+        """
+        return self._lad.get(self.frontier(), self.frontier_m(),
+                             self.filter_n())
 
     def next_rung(self, m):
         return self.ladder().next_rung(m, self.frontier())
@@ -731,6 +753,33 @@ def _campaign_wiring_drill():
         if not nxt or not nxt[0].startswith("a(19)"):
             return False, f"WIRING FAIL: the ladder aims at {nxt}"
         c.check_rungs(c.swept_m())
+        # THE LADDER IS CACHED ON THE FRONTIER, and both halves matter: it
+        # must not rebuild while the frontier stands (that was 4/5 of this
+        # project's first campaign) and it MUST rebuild the moment a find
+        # moves it (that was the dickson-ladders incident).  huntlib's
+        # gate_live_ladder drills the mechanism; this drills the wiring.
+        builds = c._lad.builds
+        for _ in range(25):
+            c.ladder()
+            c.next_rung(c.swept_m())
+            c.check_rungs(c.swept_m())
+        if c._lad.builds != builds:
+            return False, (f"WIRING FAIL: 75 ladder reads at a standing "
+                           f"frontier caused {c._lad.builds - builds} "
+                           f"rebuild(s) -- the segment loop pays the model "
+                           f"again every segment")
+        c.found["19"] = int(ref.KNOWN[4][18]) + 2      # a find, not verified
+        if c.frontier() != 19 or c.filter_n() != 20:
+            return False, "WIRING FAIL: a find did not move the frontier"
+        aim = c.next_rung(c.swept_m())
+        if c._lad.builds != builds + 1:
+            return False, ("WIRING FAIL: the frontier moved and the ladder "
+                           "was served from cache")
+        if not aim or not aim[0].startswith(("a(20)", "engine ceiling")):
+            return False, (f"WIRING FAIL: after finding a(19) the campaign "
+                           f"aims at {aim} -- a retired rung")
+        c.found.pop("19")
+        c._lad.invalidate()
         # round trip
         c.mark_boundary()
         c.save()
@@ -758,9 +807,11 @@ def _campaign_wiring_drill():
             pass
     return True, ("campaign wiring ok: a campaign builds from nothing at the "
                   "right frontier, its status line and rung ladder aim at "
-                  "a(19), a census run is counted and a sub-floor run is "
-                  "not, and the checkpoint round trips through both the "
-                  "normal save and the interrupt snapshot")
+                  "a(19), 75 ladder reads at a standing frontier cost 0 "
+                  "model rebuilds while a find costs exactly 1 and moves "
+                  "the aim off a(19), a census run is counted and a "
+                  "sub-floor run is not, and the checkpoint round trips "
+                  "through both the normal save and the interrupt snapshot")
 
 
 def _stop_on_discovery_drill():

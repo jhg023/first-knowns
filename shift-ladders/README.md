@@ -32,21 +32,22 @@ call. The exact integers, all values, the certificates and the factor
 witnesses are in [`evidence/`](evidence/); the claims and the verification
 are in [RESULTS.md](RESULTS.md).
 
-**Status: PAUSED — open to others.** Both campaigns were stopped by the
-owner on 2026-08-24, A130003 at `m = 8.95×10¹⁸` with `a(21)` open and
-A110096 at `m = 3.62×10²¹` with `a(19)` open. The full battery is green
-(30 gates and drills), the benchmark's five shapes reproduce their frozen
-fingerprints, and both cursors resume in place.
+**Status: ACTIVE — 3.47× faster than the campaign that found those four,
+and ready to resume.** The first campaigns ran at 29% and 41% of their own
+kernel: `check_rungs` rebuilt the progress ladder from the odds model once
+per segment — 1,080 numerical integrals for an answer that changes only
+when a term is found — and that was about four fifths of a 17-hour run.
+The ladder is now cached on the frontier, measured at **3.47× (base 4) and
+2.42× (base 2)** on the real segment loop, and both campaigns are
+device-bound at 95% and 90%. The full battery is green (32 gates and
+drills, two of them new and both about this), the benchmark's five shapes
+reproduce their frozen fingerprints unchanged, and both cursors resume in
+place: A130003 at `m = 8.95×10¹⁸` with `a(21)` open, A110096 at
+`m = 3.62×10²¹` with `a(19)` open.
 
-At the rate each campaign measured, `a(21)` of A130003 is about 6 days of
-sweeping to its median and `a(19)` of A110096 about 3 — read as floors
-(see [the odds model](#the-odds-model)). Both numbers should be **1.8 and
-1.4 days**: the campaigns ran at 29% and 41% of their own kernel, and the
-missing time is not in the kernel at all but in `check_rungs` rebuilding
-the progress ladder from the odds model once per segment. It is measured,
-it is worth 3.35×, and the one-line fix is priced but not applied
-([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)) — **read that before resuming
-either campaign.** Past those terms, A110096 runs into the
+At the post-fix rate, `a(21)` of A130003 is **1.7 days** of sweeping to its
+median and `a(19)` of A110096 **1.3** — read as floors (see [the odds
+model](#the-odds-model)). Past those terms, A110096 runs into the
 engine's primality-proof ceiling: the model puts `a(20)` below it with only
 19% probability, so a further term on that family means wiring huntlib's
 BLS75 certificates into the verification path. A130003 has room to `a(23)`.
@@ -295,7 +296,7 @@ larger primes rather than making the engine faster.
 Requires an NVIDIA GPU with CuPy, plus numpy and sympy.
 
 ```bash
-python launch.py --selftest    # 30 gates and drills; must end ALL GREEN (~60 s)
+python launch.py --selftest    # 32 gates and drills; must end ALL GREEN (~60 s)
 ```
 
 ```bash

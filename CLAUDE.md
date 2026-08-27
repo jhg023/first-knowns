@@ -282,6 +282,20 @@ each README stays.
          budget followed end to end (CONVENTIONS.md "Sizing a hunt so it
          leaves the machine usable"), with priced throttles and no
          machine setting changed on the owner's behalf
+   - [ ] **THE SEGMENT LOOP NEVER CALLS THE ODDS MODEL**, and the loop's
+         WALL CLOCK per unit of line is measured against its device time
+         before the first campaign. A `predictions()` is ~1,080 numerical
+         integrals; shift-ladders ran one per segment and spent four
+         fifths of a 17-hour campaign on it, at 29% of its own kernel --
+         which neither its benchmark nor its 30 green gates could see,
+         because a benchmark measures the engine and a gate measures
+         correctness and neither one runs a segment. Cache what the loop
+         needs on the FRONTIER (`huntlib.rungs.LiveLadder`: the frontier
+         is the first argument of `get` by signature, so a stale ladder
+         cannot be served, and a rung still retires with its term). Watch
+         for the signature -- a per-launch cost that does not scale with
+         the work. CONVENTIONS.md "The model is EXPENSIVE",
+         OPTIMIZATION.md 2.14
    - [ ] a 30-second WALL-CLOCK `[STATUS]` heartbeat on its own thread
          (huntlib.hlog.Heartbeat: mark() at segment boundaries, doing()
          around long steps, checkpoint saves from the main loop only)

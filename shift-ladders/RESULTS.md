@@ -228,23 +228,23 @@ for nineteen and five years. `a(19)` of A130003 arrived 117 seconds into
 the campaign, which is what a nineteen-year-old frontier with no published
 bound below it looks like once the engine is right.
 
-The end-to-end rates are **not** the engine's rates, and the difference is
-the largest lever this project has left: at the configurations each
-campaign was left in, the device measures `5.08×10¹⁴` and `5.21×10¹⁸ m/s`,
-so the campaigns ran at 29% and 41% of what the kernel does. The cause is
-not in the kernel and not in the verification — it is `check_rungs`
+Those end-to-end rates were **not** the engine's rates: the campaigns ran
+at 29% and 41% of what the kernel does in the same configuration. The cause
+was neither the kernel nor the verification — it was `check_rungs`
 rebuilding the progress ladder from the odds model once per segment, 1,080
-numerical integrals for an answer that changes only when a term is found.
-**Roughly four fifths of the 17-hour base-4 campaign went into it.** A
-frontier-keyed cache is worth 3.35× and 2.29× and would put both terms
-below at under two days; it is priced in
-[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) and deliberately not applied in
-a documentation pass.
+numerical integrals for an answer that changes only when a term is found,
+and **roughly four fifths of the 17-hour base-4 campaign went into it.**
+It has since been fixed (the ladder is cached on the frontier), measured at
+**3.47× and 2.42×** on the real segment loop, so the next campaign sweeps
+at `5.05×10¹⁴` and `5.12×10¹⁸ m/s` and is 90-95% device-bound
+([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)). The four terms above were
+found the slow way.
 
 ## In progress
 
-Nothing is running. Both campaigns are paused where the owner stopped
-them:
+Both campaigns are **ready to resume**, 3.47× and 2.42× faster than the
+ones that found the four terms above, at the cursors the owner stopped them
+at:
 
 | | A130003 (b = 4) | A110096 (b = 2) |
 |---|---|---|
@@ -253,16 +253,17 @@ them:
 | open term | `a(21)` | `a(19)` |
 | odds it should have appeared already | 5.0% | 1.8% |
 
-From those cursors, at each campaign's own measured rate and at the device
-rate the same configuration reaches when nothing else is running:
+From those cursors, at the rate the fixed segment loop measures
+(`5.05×10¹⁴` and `5.12×10¹⁸ m/s`), with the rate the first campaigns
+actually ran at kept alongside:
 
 | | `a(21)` of A130003 | | | `a(19)` of A110096 | | |
 |---|---|---|---|---|---|---|
-| | depth | campaign | device | depth | campaign | device |
-| Q1 | `2.84×10¹⁹` | 37 h | 11 h | `1.52×10²³` | 19 h | 8 h |
-| median | `8.45×10¹⁹` | 144 h | 41 h | `5.82×10²³` | 76 h | 31 h |
-| Q3 | `2.41×10²⁰` | 443 h | 127 h | `1.68×10²⁴` | 220 h | 89 h |
-| P90 | `5.51×10²⁰` | 1036 h | 297 h | `3.64×10²⁴` | 477 h | 194 h |
+| | depth | old | **now** | depth | old | **now** |
+| Q1 | `2.84×10¹⁹` | 37 h | **11 h** | `1.52×10²³` | 19 h | **8 h** |
+| median | `8.45×10¹⁹` | 144 h | **42 h** | `5.82×10²³` | 76 h | **31 h** |
+| Q3 | `2.41×10²⁰` | 443 h | **128 h** | `1.68×10²⁴` | 220 h | **91 h** |
+| P90 | `5.51×10²⁰` | 1036 h | **298 h** | `3.64×10²⁴` | 477 h | **197 h** |
 
 **A110096 is close to running out of range, and A130003 is not.** The
 enforced ceiling is the primality-proof bound, `k_ceil(n, b) = 3.317×10²⁴ −

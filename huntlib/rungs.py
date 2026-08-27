@@ -20,6 +20,22 @@ The rule that is easy to get wrong, and was got wrong:
 
 The ceiling rung belongs to no term (`term is None`) and therefore never
 retires -- it is the one rung a campaign is guaranteed to be aiming at.
+
+AND THE REBUILD IS NOT FREE, WHICH THE RULE ABOVE DOES NOT SAY AND COST A
+CAMPAIGN 3.35x.  `Ladder` itself is trivial; what is expensive is BUILDING
+the predictions it is made from.  A Bateman-Horn `predictions(n_ahead=3)`
+is 12 quantile bisections x 90 steps = 1,080 numerical integrals, ~0.5 ms
+each -- 578 ms per call.  shift-ladders called it from `check_rungs` once
+per 16-launch segment and spent about FOUR FIFTHS of a 17-hour campaign
+recomputing an answer that changes only when a term is found (its
+OPTIMIZATION_LOG.md has the budget).
+
+`LiveLadder` below is the way to have both.  It rebuilds only when the
+FRONTIER MOVES, and the frontier is the first component of its key BY
+SIGNATURE -- so a cached ladder cannot outlive the frontier it was derived
+from, which is the whole of what "never store a ladder" was protecting.
+Deriving live and deriving cheaply are not in tension; deriving live and
+deriving REPEATEDLY are what were being confused.
 """
 
 import json
@@ -151,6 +167,128 @@ class Ladder:
         return len(self.rungs) + (1 if self.ceiling is not None else 0)
 
 
+class LiveLadder:
+    """A `Ladder` rebuilt only when the frontier (or the rest of the key)
+    moves.
+
+    Use it wherever a launcher would otherwise call an odds model from its
+    segment loop::
+
+        self._lad = LiveLadder(lambda frontier, fm, n:
+                               Ladder.from_predictions(
+                                   model.predictions(b, frontier, fm,
+                                                     n_ahead=3,
+                                                     ceiling=k_ceil(n)),
+                                   ceiling=k_ceil(n)))
+        ...
+        lad = self._lad.get(self.frontier(), self.frontier_m(),
+                            self.filter_n())
+
+    THE FRONTIER IS THE FIRST ARGUMENT OF `get`, AND THAT IS THE SAFETY
+    PROPERTY, not a convention.  A cache can only serve a stale ladder if
+    its key omits what makes a ladder go stale; here the signature will not
+    let a caller omit it, the same way `checkpoint.CursorPolicy` will not
+    let a caller pass old keys outside a policy.  Put EVERY other input the
+    build depends on -- the frontier's value, the filter, the ceiling --
+    into `rest`, or the cache will serve the wrong ladder when one of them
+    moves on its own.
+
+    `builds` counts rebuilds so a drill can assert the cache is actually a
+    cache (and, more importantly, that it actually invalidates).
+    """
+
+    _MISS = object()
+
+    def __init__(self, build):
+        self._build = build
+        self._key = LiveLadder._MISS
+        self._ladder = None
+        self.builds = 0
+
+    def get(self, frontier, *rest):
+        key = (int(frontier),) + tuple(rest)
+        if self._key is LiveLadder._MISS or key != self._key:
+            self._ladder = self._build(*key)
+            self._key = key
+            self.builds += 1
+        return self._ladder
+
+    def invalidate(self):
+        """Drop the cache unconditionally (for a drill, or a model reload)."""
+        self._key = LiveLadder._MISS
+        self._ladder = None
+
+
+def gate_live_ladder():
+    """(ok, msg): the cache is a cache, and it retires with its term.
+
+    The second half is the point.  This is the dickson-ladders incident
+    re-run THROUGH the cache: if a memoised ladder could outlive its
+    frontier, `next_rung` would go on advertising the found term's P90, and
+    the whole reason `Ladder` refused to store anything would be back.
+    """
+    preds = {11: {"Q1": 1e16, "median": 7.2e16, "Q3": 1.9e17, "P90": 4.0e17},
+             12: {"Q1": 4e18, "median": 1.8e19, "Q3": 5e19, "P90": 9.5e19},
+             13: {"Q1": 5e20, "median": 2.1e21, "Q3": 6e21, "P90": 1.2e22}}
+    calls = []
+
+    def build(frontier, fm, n):
+        calls.append((frontier, fm, n))
+        return Ladder.from_predictions(preds, ceiling=4e22)
+
+    lv = LiveLadder(build)
+    pos = 5.6e19                                   # where a(12) turned up
+
+    first = lv.get(11, 5.51e19, 12)
+    if lv.builds != 1:
+        return False, f"live ladder: first get built {lv.builds} times"
+    # ... and repeated reads at the same frontier do not rebuild at all
+    for _ in range(50):
+        if lv.get(11, 5.51e19, 12) is not first:
+            return False, "live ladder: a same-frontier get returned a "\
+                          "different object"
+    if lv.builds != 1:
+        return False, (f"live ladder: 51 gets at one frontier caused "
+                       f"{lv.builds} builds -- the cache is not caching")
+    nxt = first.next_rung(pos, frontier=11)
+    if nxt is None or not nxt[0].startswith("a(12)"):
+        return False, f"live ladder: before the find the aim was {nxt}"
+
+    # THE FIND.  The frontier moves; the cache must not survive it.
+    after = lv.get(12, 5.51e19, 13)
+    if lv.builds != 2:
+        return False, "live ladder: the frontier moved and nothing rebuilt"
+    aim = after.next_rung(pos, frontier=12)
+    if aim is None or not aim[0].startswith("a(13)"):
+        return False, (f"live ladder: after the find the campaign aims at "
+                       f"{aim} -- a retired rung served from cache")
+    if any(lab.startswith(("a(11)", "a(12)"))
+           for (_t, lab, _d) in after.live(frontier=12)):
+        return False, "live ladder: a settled term's rungs are still live"
+
+    # every other key component invalidates on its own
+    lv.get(12, 5.51e19, 13)
+    if lv.builds != 2:
+        return False, "live ladder: an unchanged key rebuilt"
+    lv.get(12, 9.9e19, 13)                         # frontier_m moved alone
+    if lv.builds != 3:
+        return False, "live ladder: frontier_m moved and nothing rebuilt"
+    lv.get(12, 9.9e19, 14)                         # the filter moved alone
+    if lv.builds != 4:
+        return False, "live ladder: the filter moved and nothing rebuilt"
+    lv.invalidate()
+    lv.get(12, 9.9e19, 14)
+    if lv.builds != 5:
+        return False, "live ladder: invalidate() did not force a rebuild"
+    if calls[0][0] != 11 or calls[1][0] != 12:
+        return False, f"live ladder: build saw the wrong frontiers ({calls})"
+    return True, ("live ladder ok: 51 reads at one frontier cost 1 build, "
+                  "the find rebuilds and moves the aim from a(12) to a(13) "
+                  "with no retired rung served from cache, and frontier_m, "
+                  "the filter and invalidate() each force a rebuild on "
+                  "their own")
+
+
 def gate_ladder():
     """(ok, msg): the ladder ascends, retires with its term, and never
     advertises a depth belonging to a term already found.
@@ -203,4 +341,4 @@ def gate_ladder():
                   "announced once, and only_term isolates one term's line")
 
 
-GATES = [gate_ladder]
+GATES = [gate_ladder, gate_live_ladder]

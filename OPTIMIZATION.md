@@ -109,6 +109,32 @@ processes, without touching the deliberately-slow reference itself — took the
 battery from 9m51s to 1m33s. Anything you run on every change is worth
 measuring on the same terms as the thing it measures.
 
+**AND IT APPLIES TO THE CAMPAIGN LOOP, WHICH IS THE ONE NOBODY TIMES.**
+Everything above is about the kernel and the battery. The segment loop —
+sweep, classify, checkpoint, report progress — sits between them and gets
+measured by nobody, because a benchmark measures the engine, a gate
+measures correctness, and neither one ever runs a segment.
+
+`shift-ladders` measured its kernel's phase split in exquisite detail and
+never once timed a segment. Its campaigns ran at **29% and 41% of their own
+kernel** through a 17-hour hunt. The cause was `check_rungs`, rebuilding
+the progress ladder from the odds model once per segment: 12 quantile
+bisections × 90 steps = **1,080 numerical integrals, 578 ms**, for an
+answer that changes only when a term is found. Four fifths of the campaign.
+The kernel was 13 ms per launch; the thing sitting beside it was 32 ms; and
+every optimization in that project's log until then was aimed at the 13.
+
+The measurement that catches this is not a profiler. It is:
+
+    device seconds per unit of line   vs   WALL-CLOCK seconds per unit of
+                                           line, in the campaign's own
+                                           configuration, at the campaign's
+                                           own filter
+
+If those differ by more than a few percent, the difference is yours to find
+and it is not in the kernel. Then time one segment, step by step. See
+§2.14, which is that story with the numbers.
+
 **Corollary — re-measure after every accepted change.** Optima move, and in
 the case study they moved **four times in one session**:
 
@@ -659,6 +685,75 @@ because changing the anchor that makes scores comparable across engine
 generations is not a change an optimization pass gets to make. Record the
 period count the frozen window holds, so the next person can see the margin
 shrinking before it bites.
+
+### 2.14 Never call the odds model from the segment loop
+
+**The rule.** A campaign's inner loop may not evaluate an odds model. The
+model's answer changes only when the frontier moves — a handful of times in
+a campaign — and computing it is between two and three orders of magnitude
+more expensive than anything else in the loop. Derive it once per frontier
+and cache it on the frontier.
+
+**What it cost.** `shift-ladders`, first campaign, 2026-08-23/24. Per
+launch, at the filters each family was actually running:
+
+| | base 4, n = 21 | base 2, n = 19 |
+|---|---|---|
+| device (sieve + tail + readback) | 13.05 ms | 23.33 ms |
+| host classification | 0.11 ms | 1.30 ms |
+| checkpoint, over its 16-launch segment | 0.45 ms | 0.45 ms |
+| **the campaign actually took** | **45.59 ms** | **57.38 ms** |
+| **unaccounted** | **31.98 ms** | **32.30 ms** |
+
+The same ~32 ms on two families whose launches differ by **four orders of
+magnitude in line swept** and 16× in survivors classified. That signature —
+an absolute per-launch constant that two wildly different configurations
+agree on to 1% — named the suspect class (host, per launch, independent of
+the work) before it named the suspect.
+
+It was `Campaign.ladder()` → `model.predictions(n_ahead=3)`: 3 terms × 4
+quantiles = 12 `quantile()` calls, 90 bisection steps each, **1,080
+`expected()` calls**, each a 3,000-point numerical integral over up to 21
+linear forms. One `expected()` is 0.509 ms, so 1,080 × 0.509 = 550 ms
+predicted against 578 ms and 541 ms measured. Called once per segment from
+`check_rungs`, and again every 30 s by the heartbeat's `status_line` →
+`next_rung`.
+
+**The fix, measured paired and interleaved on the real segment loop:**
+
+| | before | after | ratio |
+|---|---|---|---|
+| base 4 (n = 21) | `1.45×10¹⁴ m/s` | `5.05×10¹⁴ m/s` | **3.47×** |
+| base 2 (n = 19) | `2.12×10¹⁸ m/s` | `5.12×10¹⁸ m/s` | **2.42×** |
+
+and both land on the free-GPU device rates measured independently
+(`5.08×10¹⁴`, `5.21×10¹⁸`), which is the check that nothing else is hiding
+in the budget. The loop is now 95% / 90% device.
+
+**Use `huntlib.rungs.LiveLadder`.** It rebuilds only when the key moves and
+**takes the frontier as the first argument of `get` by signature**, so a
+cached ladder cannot outlive the frontier it came from. That matters
+because the reason these ladders were being rebuilt every time was a real
+rule — a rung retires with its term (CONVENTIONS.md), learned from
+`dickson-ladders` advertising `next a(12) P90` for hours after finding
+a(12). **Deriving live and deriving repeatedly are not the same
+requirement**, and conflating them is what cost the 3.47×. `gate_live_ladder`
+drills both halves: reads at a standing frontier cost zero rebuilds, and a
+find costs exactly one and moves the aim.
+
+**The trap generalises past ladders.** Anything in a segment loop whose
+inputs change only on a find is the same bug: re-derived ETAs, re-read
+model files, re-computed singular series, a `predictions()` call inside a
+`[STATUS]` line. The tell is always the same — cost per launch that does
+not scale with the work.
+
+**Two things measured at the same time and declined**, so nobody re-runs
+them: precomputing `b**k` in the run-length classifier, **0.993× / 1.001×**
+(the classifier is entirely Miller-Rabin; the exponentiation is noise); and
+raising base 4's `per_launch` 1024 → 2048, paired over 10 rounds,
+**1.025× [0.986, 1.118]** for +174 MiB — an interval straddling 1, declined
+under the load rule. The measured optimum, 4096 at 1.07×, sits past the
+tail queue's ceiling and is not a regime to ship a campaign in.
 
 ---
 
