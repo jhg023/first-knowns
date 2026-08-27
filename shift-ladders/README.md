@@ -40,7 +40,13 @@ fingerprints, and both cursors resume in place.
 
 At the rate each campaign measured, `a(21)` of A130003 is about 6 days of
 sweeping to its median and `a(19)` of A110096 about 3 — read as floors
-(see [the odds model](#the-odds-model)). Past those, A110096 runs into the
+(see [the odds model](#the-odds-model)). Both numbers should be **1.8 and
+1.4 days**: the campaigns ran at 29% and 41% of their own kernel, and the
+missing time is not in the kernel at all but in `check_rungs` rebuilding
+the progress ladder from the odds model once per segment. It is measured,
+it is worth 3.35×, and the one-line fix is priced but not applied
+([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)) — **read that before resuming
+either campaign.** Past those terms, A110096 runs into the
 engine's primality-proof ceiling: the model puts `a(20)` below it with only
 19% probability, so a further term on that family means wiring huntlib's
 BLS75 certificates into the verification path. A130003 has room to `a(23)`.

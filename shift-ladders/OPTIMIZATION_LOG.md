@@ -457,20 +457,59 @@ and it is the whole of this finding):
 | device (sieve + tail + readback) | 13.05 ms | 23.33 ms |
 | host classification of them | 0.11 ms | 1.30 ms |
 | checkpoint, amortised over its 16-launch segment | 0.45 ms | 0.45 ms |
-| `--gentle`'s yield, *if it was used* | 2.50 ms | 2.50 ms |
 | **the campaign actually took** | **45.59 ms** | **57.38 ms** |
-| **unaccounted** | **29.48 ms** | **29.80 ms** |
+| **unaccounted** | **31.98 ms** | **32.30 ms** |
 
 Read the last row twice. Two families whose launches differ by **four
 orders of magnitude in line swept** and **16× in survivors classified** lost
-**the same 29.6 ms per launch**. That is not a cost that scales with the
-work — it is a per-launch constant, and the whole 2.4-3.5× is in it.
+**the same ~32 ms per launch**. That is not a cost that scales with the
+work — it is a per-launch constant, and it holds the whole 2.3-3.4×.
+
+Both campaigns were started as plain `python -u launch.py` and
+`python -u launch.py --base 2`, so no throttle was in play: `gpu_yield_ms`
+defaults to 0 and the `time.sleep` in the inner loop never executes. The
+32 ms is real overhead.
+
+**IT IS `check_rungs`, AND IT IS THE PROGRESS LADDER REBUILDING ITSELF
+FROM THE ODDS MODEL ONCE PER SEGMENT.**
+
+    Campaign.ladder()   -> model.predictions(b, frontier, frontier_m,
+                                             n_ahead=3, ceiling=...)
+                        -> 3 terms x 4 quantiles = 12 quantile() calls
+                        -> 90 bisection steps each
+                        -> 1,080 calls to expected()
+                        -> 1,080 numerical integrals, 3,000 points,
+                           over up to 21 linear forms
+
+One `expected()` is **0.509 ms**, so the arithmetic closes before the
+stopwatch does: 1,080 × 0.509 = **550 ms**. Measured, minimum of twelve:
+
+| | `model.predictions()` | per launch, over a 16-launch segment |
+|---|---|---|
+| base 4, frontier `a(20)`, `n = 21` | **578 ms** | **36.1 ms** |
+| base 2, frontier `a(18)`, `n = 19` | **541 ms** | **33.8 ms** |
+
+against the 31.98 and 32.30 ms the budget could not place. It accounts for
+113% and 105% of the gap, which is as close as two independently measured
+quantities get here, and the whole budget now reconciles to within 9% and
+3%:
+
+| | predicted launch | measured launch |
+|---|---|---|
+| base 4 | 13.61 + 36.1 = **49.7 ms** | 45.59 ms |
+| base 2 | 25.08 + 33.8 = **58.9 ms** | 57.38 ms |
+
+So a 17-hour base-4 campaign spent about **four fifths of its wall clock**
+recomputing a progress ladder whose only output is a `[RUNG]` line on the
+rare segment that crosses one. The heartbeat pays for it a second time:
+`status_line` calls `next_rung`, which builds the same ladder again, every
+30 seconds.
 
 **What it is not**, each eliminated by its own measurement rather than by
-argument:
+argument, and all four checks are worth keeping:
 
-- **not the sieve** — the device row above is the kernel doing exactly what
-  the campaign asked it for, at the campaign's own filter and depth;
+- **not the sieve** — the device row is the kernel doing exactly what the
+  campaign asked it for, at the campaign's own filter and depth;
 - **not the host classifier** — 0.11 ms and 1.30 ms, 0.2% and 2.3% of the
   campaign's launch. The v1-era sizing claim in `launch.py` ("this hunt
   needs no worker pool") was made at 85× less device throughput and is
@@ -479,21 +518,66 @@ argument:
   engine change without re-sweeping, and now it has been re-swept;
 - **not the checkpoint** — an fsynced `checkpoint.save` with a `.bak`
   rotation measures 7.2 ms [7.0, 7.4] over 20 writes, once per 16 launches;
-- **not `time.sleep` granularity** — the suspicion was that `--gentle`'s
-  2 ms became a Windows 15.6 ms timer quantum. Measured on this machine:
-  `sleep(0.002)` returns in 2.52 ms [2.02, 2.75]. It does not.
+- **not `time.sleep` granularity** — checked before the flags were known,
+  in case `--gentle`'s 2 ms had become a Windows 15.6 ms timer quantum.
+  `sleep(0.002)` returns in 2.52 ms [2.02, 2.75] here. It had not, and the
+  flag was not used anyway.
 
-**What fits.** The only per-launch constant in the campaign loop is
-`--gpu-yield-ms`'s `time.sleep`, and a run started with
-`--gpu-yield-ms 30` would reproduce both rows to about 1%. **The checkpoint
-does not record which flags a run used**, so this cannot be confirmed from
-the artefacts — which is itself the finding: a campaign rate that cannot be
-compared to a benchmark rate is not a measurement. Before the next
-campaign, record the throttle settings in the checkpoint alongside `engine`
-and `W`; then either this is explained in one line, or ~30 ms per launch of
-real overhead has a place to be found. **Do not touch the kernel first.**
-At base 4 this is worth 3.5× and the largest measured item left inside the
-engine is 5%.
+### The fix, priced but NOT applied
+
+**Memoise the ladder on the frontier it was derived from.** `ladder()`
+depends on exactly `(b, frontier(), frontier_m(), filter_n())`, and all
+four move only when a discovery lands — a handful of times per campaign,
+against tens of thousands of segments. Cache on that tuple and invalidate
+when it changes.
+
+This does not weaken the rule the recompute was there to enforce.
+CONVENTIONS.md wants a ladder that cannot aim at a retired depth, and a
+cache **keyed on the frontier itself** cannot go stale by construction —
+the frontier moving *is* the invalidation. What is being removed is not the
+guarantee, it is 1,080 numerical integrals per segment recomputing an
+identical answer.
+
+Priced from the budget above:
+
+| | now | with the ladder cached | on `a(21)` / `a(19)` at the median |
+|---|---|---|---|
+| base 4 | `1.45×10¹⁴ m/s` | `4.87×10¹⁴ m/s` — **3.35×** | 6.0 d → **1.8 d** |
+| base 2 | `2.12×10¹⁸ m/s` | `4.85×10¹⁸ m/s` — **2.29×** | 3.2 d → **1.4 d** |
+
+and both landing figures agree with the free-GPU device rates measured
+independently (`5.08×10¹⁴`, `5.21×10¹⁸`), which is the check that the
+budget has nothing else hiding in it.
+
+It is **not applied here** because it changes the campaign hot path and
+belongs in a commit that A/Bs it against a real segment loop, with the
+owner's call on the caching contract — not in a documentation pass. **Do
+not touch the kernel before this lands.** At base 4 it is worth 3.35×,
+and the largest measured item left inside the engine is 5%.
+
+Two process notes this cost, both of them rules already written down:
+
+- **OPTIMIZATION.md Rule 1, "measure the phase split first", applies to the
+  CAMPAIGN and not only to the kernel.** This project measured its kernel's
+  phase split in exquisite detail (§ Round 0) and never once timed a
+  segment. Every optimization in this log before this entry was aimed at
+  13.05 ms while 32 ms sat beside it, unlooked at.
+- **A per-launch cost that does not scale with the work is the signature to
+  look for.** Two families that agree to 1% on an absolute overhead while
+  disagreeing by 10⁴ on everything else is not a coincidence; it named the
+  suspect class (host, per launch, work-independent) before the suspect.
+
+### `--gentle`'s advertised price is not reproduced
+
+The help text says "about a third of the rate". The yield measures 2.5 ms
+against a 13.05 ms base-4 device launch — about a fifth, and it would be
+5% of the campaign's launch as the campaign actually ran. The help text is
+left alone rather than overwritten: the two numbers may be measuring
+different things, and replacing someone's measurement with a
+differently-scoped one is how a log stops being evidence. Re-measure it
+deliberately once the ladder is cached, then change both.
+
+Neither campaign used it. Both were started as plain `python -u launch.py`.
 
 **A structural fact the campaign settled, in the engine's favour: a higher
 filter is faster.** The same 4,096-period window at the base-4 cursor:
@@ -509,14 +593,6 @@ of the line per prime and the wheel gets denser rather than the test loop
 longer. **Every term this project finds makes the next one cheaper per unit
 line.** That is the opposite of the usual, and it means `a(22)`'s cost
 should be priced at its own filter and not extrapolated from `a(21)`'s.
-
-**`--gentle`'s advertised price is not reproduced.** The help text says
-"about a third of the rate"; measured, the yield is 2.5 ms against a
-13.05 ms base-4 launch — about a fifth, and less at base 2. The help text
-is left alone rather than overwritten: the two numbers may be measuring
-different things, and replacing someone's measurement with a
-differently-scoped one is how a log stops being evidence. Re-measure it
-deliberately and then change both.
 
 ## Priced and not done
 

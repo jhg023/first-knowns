@@ -228,14 +228,18 @@ for nineteen and five years. `a(19)` of A130003 arrived 117 seconds into
 the campaign, which is what a nineteen-year-old frontier with no published
 bound below it looks like once the engine is right.
 
-The end-to-end rates are **not** the engine's rates, and the gap is the
-open item of this project: at the configurations each campaign was left in,
-the device measures `5.08×10¹⁴` and `5.21×10¹⁸ m/s`, so the campaigns ran
-at 29% and 41% of what the kernel does. Per launch that is a fixed 29.5 and
-29.8 ms unaccounted for by the sieve, the classifier or the checkpoint —
-identical on two families whose launches differ by four orders of magnitude
-in line. The budget and the one candidate that fits it are in
-[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md).
+The end-to-end rates are **not** the engine's rates, and the difference is
+the largest lever this project has left: at the configurations each
+campaign was left in, the device measures `5.08×10¹⁴` and `5.21×10¹⁸ m/s`,
+so the campaigns ran at 29% and 41% of what the kernel does. The cause is
+not in the kernel and not in the verification — it is `check_rungs`
+rebuilding the progress ladder from the odds model once per segment, 1,080
+numerical integrals for an answer that changes only when a term is found.
+**Roughly four fifths of the 17-hour base-4 campaign went into it.** A
+frontier-keyed cache is worth 3.35× and 2.29× and would put both terms
+below at under two days; it is priced in
+[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) and deliberately not applied in
+a documentation pass.
 
 ## In progress
 

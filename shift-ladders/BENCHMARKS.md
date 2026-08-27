@@ -153,13 +153,18 @@ Measured end to end from each checkpoint's own `elapsed` and swept `m`:
 | A110096 (`b = 2`) | `3.62×10²¹` | 38.2 min | `1.58×10¹⁸ m/s` | `2.12×10¹⁸` (n = 19) | `5.21×10¹⁸ m/s` (n = 19 at the cursor) |
 
 The campaigns bought **29% and 41%** of what the kernel does in the same
-configuration, and **that gap is now larger than anything left in the
-kernel.** Measured per launch — the campaign's own unit — it is a fixed
-**29.5 ms and 29.8 ms**, on two families whose launches differ by four
-orders of magnitude in line swept and 16× in survivors classified. The
-sieve, the host classifier and the checkpoint are each priced and none of
-them is it; the budget and the one candidate that fits are in
-[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md).
+configuration, and **that gap is larger than anything left in the kernel.**
+Measured per launch — the campaign's own unit — it is a fixed **32.0 ms and
+32.3 ms** on two families whose launches differ by four orders of magnitude
+in line swept, and it has been traced: **`check_rungs` rebuilds the whole
+progress ladder from the odds model once per segment**, which is 1,080
+numerical integrals at 0.509 ms each, or 578 ms and 541 ms — 36.1 and
+33.8 ms per launch. A 17-hour base-4 campaign spent about four fifths of
+its wall clock recomputing an answer that changes only when a term is
+found. The full budget, and the frontier-keyed cache that fixes it for
+**3.35× and 2.29×**, are in
+[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md); it is priced there, not
+applied, because it changes the campaign hot path.
 
 One thing the campaign settled in the engine's favour: **a higher filter is
 faster**, monotonically. At the base-4 cursor the same 4,096-period window
