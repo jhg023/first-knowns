@@ -21,11 +21,18 @@ Five shapes, because one configuration is not a benchmark:
             the CRT lift or in a bit plane shows up here as a mismatch
             inside the benchmark itself rather than as a wrong answer
             months later.
-  SCORE2    b = 2, n = 17, wheel to 37, sieve 65536 -- the PRODUCTION
-            configuration of the A110096 campaign.  Its wheel is 3,000x
+  SCORE2    b = 2, n = 19, wheel to 41, sieve 65536 -- the PRODUCTION
+            configuration of the A110096 campaign.  Its wheel is 16,000x
             sparser than base 4's, so its line rate is four orders of
             magnitude higher at the same candidate rate; both numbers are
             printed because only one of them is the thing being optimized.
+            Its FILTER moved with its wheel: w(41,n,2) = min(n, 20), so at
+            n = 17 the p1 = 41 flat table would hold 129 million residues
+            and RES_MAX refuses it -- while at the n = 19 the campaign now
+            runs it holds 44.5 million.  A shape pinned to a filter the
+            hunt has already passed would have had to keep p1 = 37, and a
+            benchmark that stops describing the configuration the campaign
+            runs is the one option this project does not take.
   SCORE4W   the production filter on a coarse wheel and a shallow sieve --
             the knob whose optimum is most likely to move under an engine
             change (OPTIMIZATION.md: re-sweep tuning constants after any
@@ -44,18 +51,31 @@ SCORE's, which is only possible because W(29) = W(13) * 215441.  Getting
 that wrong produces two engines that are both right and appear to
 disagree; it happened in another project in this repo during an A/B.
 
-SCORE2, SCORE4W and SCORE10 were frozen 2026-08-23 on the v1 engine and are
-REPRODUCED UNCHANGED by v2 -- which is the point of a wheel change: folding
-a prime into the wheel removes candidates, never survivors, so a fingerprint
-still applies and says so.
+SCORE4W and SCORE10 were frozen 2026-08-23 on the v1 engine and are
+REPRODUCED UNCHANGED by v2 and by every wheel change since -- which is the
+point: folding a prime into the wheel removes candidates, never survivors,
+so a fingerprint still applies and says so.  The whole 2026-08-27 pass
+that moved p2 79 -> 127 and 89 -> 137 is invisible to all five
+fingerprints, and that is the correct behaviour.
 
-SCORE and SCORE1L were RE-FROZEN the same day when p1 moved 23 -> 29 at
-base 4.  That is not a wheel change of the same kind: p1 sets W, and both
-windows are expressed in periods of W, so they are different windows and
-must be.  The old pair (j0 = 4482439 / 33300039331, 8192 / 60858368 blocks,
-fingerprint 7 / 998631924604311) is recorded here and in BENCHMARKS.md so
-the two generations stay auditable even though their SCOREs are not
-directly comparable.
+THREE SHAPES HAVE BEEN RE-FROZEN, both times because p1 moved and p1 sets
+W -- so the window is a different window and must be:
+
+  2026-08-23  SCORE and SCORE1L, when p1 moved 23 -> 29 at base 4 (1.198x).
+              Old: j0 = 4482439 / 33300039331, 8192 / 60858368 blocks,
+              fingerprint 7 / 998631924604311.
+  2026-08-27  SCORE and SCORE1L again -- NOT for a wheel change but because
+              the derived per_launch reached 4096 and the old 4096-period
+              window had become exactly ONE launch, which is the blindness
+              the four-launch window was introduced to fix.  Same j0, four
+              times the blocks.  Old: 4096 / 882446336 blocks, fingerprint
+              73 / 1038246173448745.
+              SCORE2, when p1 moved 37 -> 41 at base 2 (1.398x) and its
+              filter moved 17 -> 19 with it.  Old: n = 17, p1 = 37,
+              j0 = 135, 2048 blocks, fingerprint 59 / 17289912876387275.
+
+Those numbers are kept here and in BENCHMARKS.md so the generations stay
+auditable even though their SCOREs are not directly comparable.
 
 The candidate rate printed beside each score is the rate after BOTH wheel
 mechanisms (flat table x bit planes), so it is `m/s * density()` and not
@@ -79,12 +99,12 @@ from shiftladder_gpu import GpuEngine                           # noqa: E402
 
 # label, b, n, p1, q2, j0, blocks, expected count, expected xor
 SHAPES = [
-    ("SCORE",    4, 19, 29, 65536,       154567,       4096, 73,
-     1038246173448745),
-    ("SCORE1L",  4, 19, 13, 65536,  33300069047,  882446336, 73,
-     1038246173448745),
-    ("SCORE2",   2, 17, 37, 65536,          135,       2048, 59,
-     17289912876387275),
+    ("SCORE",    4, 19, 29, 65536,       154567,      16384, 255,
+     1106501012061793),
+    ("SCORE1L",  4, 19, 13, 65536,  33300069047, 3529785344, 255,
+     1106501012061793),
+    ("SCORE2",   2, 19, 41, 65536,            3,       8192, 444,
+     1412016495225835572),
     ("SCORE4W",  4, 19, 13,  1024,  33300033301,   10000000, 5014,
      694483282552),
     ("SCORE10",  4, 10, 13,  4096,  33300033301,    2000000, 58213,

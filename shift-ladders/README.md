@@ -32,21 +32,27 @@ call. The exact integers, all values, the certificates and the factor
 witnesses are in [`evidence/`](evidence/); the claims and the verification
 are in [RESULTS.md](RESULTS.md).
 
-**Status: ACTIVE — 3.47× faster than the campaign that found those four,
-and ready to resume.** The first campaigns ran at 29% and 41% of their own
-kernel: `check_rungs` rebuilt the progress ladder from the odds model once
-per segment — 1,080 numerical integrals for an answer that changes only
-when a term is found — and that was about four fifths of a 17-hour run.
-The ladder is now cached on the frontier, measured at **3.47× (base 4) and
-2.42× (base 2)** on the real segment loop, and both campaigns are
-device-bound at 95% and 90%. The full battery is green (32 gates and
-drills, two of them new and both about this), the benchmark's five shapes
-reproduce their frozen fingerprints unchanged, and both cursors resume in
+**Status: ACTIVE — 5.3× and 5.8× faster than the campaigns that found
+those four, and ready to resume.** Two passes got it there. The first
+found that `check_rungs` rebuilt the progress ladder from the odds model
+once per segment — 1,080 numerical integrals for an answer that changes
+only when a term is found, about four fifths of a 17-hour run — and cached
+it on the frontier, for 3.47× and 2.42×. The second found that **the
+wheel's top was DERIVED, and the constant that derived it was four times
+too high**: `GEN_W` priced one bit-plane read at 3.8 packed tests and it
+measures 0.95, so `pick_p2` stopped four primes short at base 4 and six at
+base 2. Fixing it, raising the plane budget, re-sweeping the test units
+against the new wheel, taking base 2's flat table to `p1 = 41`, and
+deriving the launch size from the tail queue instead of a slot count
+measured **1.537× (base 4) and 2.380× (base 2)** on the resume
+configurations. The full battery is green (32 gates and drills), all five
+benchmark shapes reproduce a fingerprint, and both cursors resume in
 place: A130003 at `m = 8.95×10¹⁸` with `a(21)` open, A110096 at
 `m = 3.62×10²¹` with `a(19)` open.
 
-At the post-fix rate, `a(21)` of A130003 is **1.7 days** of sweeping to its
-median and `a(19)` of A110096 **1.3** — read as floors (see [the odds
+At the current rate — `7.5×10¹⁴ m/s` at base 4 and `1.07×10¹⁹` at base 2 —
+`a(21)` of A130003 is **1.2 days** of sweeping to its median and `a(19)` of
+A110096 about **15 hours** — read as floors (see [the odds
 model](#the-odds-model)). Past those terms, A110096 runs into the
 engine's primality-proof ceiling: the model puts `a(20)` below it with only
 19% probability, so a further term on that family means wiring huntlib's
@@ -122,27 +128,30 @@ term of A110096 above the exception zone is `15 mod 30` — an observation
 A193109 records without proof, which is this lemma. At `b = 4` nothing of
 the sort happens: 2 of 3 residues survive mod 3 and 3 of 5 mod 5.
 
-The consequence is a wheel that differs by three thousand times between two
-sequences that read identically:
+The consequence is a wheel that differs by sixteen thousand times between
+two sequences that read identically:
 
-| | A130003 (b = 4, n = 19) | A110096 (b = 2, n = 17) |
+| | A130003 (b = 4, n = 21) | A110096 (b = 2, n = 19) |
 |---|---|---|
-| flat table's primes | ≤ 29 | ≤ 37 |
-| modulus `W` | 6.47×10⁹ | 7.42×10¹² |
-| residues | 23,587,200 | 5,391,360 |
-| bit planes carry the wheel to | 79 (3 planes) | 113 (5 planes) |
-| plane survival `d2` | 1.70×10⁻² | 8.26×10⁻³ |
-| **candidates per unit line** | **6.2×10⁻⁵** | **6.0×10⁻⁹** |
+| flat table's primes | ≤ 29 | ≤ 41 |
+| modulus `W` | 6.47×10⁹ | 3.04×10¹⁴ |
+| residues | 23,587,200 | 44,478,720 |
+| bit planes carry the wheel to | 103 (4 planes) | 137 (5 planes) |
+| plane survival `d2` | 3.87×10⁻³ | 5.95×10⁻³ |
+| **candidates per unit line** | **1.4×10⁻⁵** | **8.7×10⁻¹⁰** |
 
 and that last row sets everything downstream: the line rate (four orders of
 magnitude apart at candidate rates within a factor of three), the singular
 series (A110096's is 12,000× larger), and how deep a table has to go before
 it stops fitting. The two effects nearly cancel in cost per term, which is
 why both families belong in one project rather than two. Note the
-plane-survival row — the two families reach it by quite
-different routes, one wheel stopping at 79 and the other at 113, because
-`p2` is derived per configuration from a cost model rather than pinned per
-base.
+plane-survival row — the two families reach it by quite different routes,
+one wheel stopping at 103 and the other at 137, because `p2` is derived per
+configuration from a cost model rather than pinned per base. That
+derivation is also where this engine's largest single error lived: the
+model overpriced a plane read fourfold and every gate stayed green while it
+did, because the wheel's top removes candidates and never survivors
+([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)).
 
 **The kernel.** The CPU engine materialises the dense `m` line and marks
 arithmetic progressions into it. The GPU engine never forms the line: it
@@ -156,9 +165,10 @@ branchless slices over a dense queue and the survivors compacted between
 slices, every lane alive. The slice boundaries come out of the survival
 curve, not out of a prime count.
 
-The engine is v2 and it is **84.8× faster than v1 at base 4 and 44.6× at
-base 2**, measured over a common absolute window with the two survivor
-streams compared to each other, and every frozen fingerprint reproduced or
+The engine is v2 and it was **84.8× faster than v1 at base 4 and 44.6× at
+base 2** when it shipped, and a further **1.54× and 2.38×** since, all
+measured over a common absolute window with the two survivor streams
+compared to each other, and every frozen fingerprint reproduced or
 deliberately re-frozen ([BENCHMARKS.md](BENCHMARKS.md),
 [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)).
 
@@ -192,8 +202,8 @@ and once `r` is fixed that is a condition on **`j` alone**, periodic with
 period `q`. So a group of primes above the flat wheel has one fixed
 surviving-`j` set mod their product, and **one 32-bit load and one `and`
 filter thirty-two consecutive periods**. Folding a prime into a plane costs
-a few hundred KB, not a factor of `q` in a table, so the wheel reaches 79
-at `b = 4` and 113 at `b = 2` — where a flat table at 47 would already have
+a few tens of MB, not a factor of `q` in a table, so the wheel reaches 103
+at `b = 4` and 137 at `b = 2` — where a flat table at 47 would already have
 asked numpy for 183 GiB.
 
 Two properties make it fit *this* problem. The shift is **additive**, so
@@ -326,12 +336,13 @@ hunt is indefinite by default, resumable, checkpointed every segment, and
 stops cleanly on Ctrl+C with exit 130. `--to` caps the depth,
 `--stop-on-discovery` exits once **this run** confirms a find, and
 `--gentle` yields 2 ms after every launch for a noticeably freer desktop.
-Its price is worth re-reading before you use it: the sleep measures ~2.5 ms
-per launch on this machine against an ~11 ms base-4 launch, so about a
-fifth of the rate rather than the third the help text claims. The
+Its price has fallen twice and is now small: the sleep measures ~2.5 ms per
+launch, and a base-4 launch is 4,096 periods rather than 1,024, so it is a
+few percent of the rate rather than the third the help text claims. The
 disagreement is recorded rather than overwritten
 ([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)) — the two numbers may simply
-be measuring different things.
+be measuring different things, and the help text is left as its author
+measured it.
 
 ## Trust
 
@@ -372,13 +383,18 @@ here is built to. Specific to this one:
   frontier's run, are both rejected.
 - **Ceilings raise rather than compute** — the primality-proof cap, the
   engine floor, the Barrett bound on the wheel modulus, the flat table's
-  own size limit (the b = 2 wheel reaches 1.29×10⁹ residues at p1 = 47, and
-  asking for it must refuse rather than fail 183 GiB into an allocation),
-  and the bit planes' total budget. All drilled.
+  own size limit (the b = 2 wheel reaches 3.6×10¹⁰ residues at p1 = 47, and
+  asking for it must refuse rather than fail into a 289 GiB allocation),
+  and the bit planes' total budget. All drilled. `RES_MAX` is a guard and
+  not a tuning constant, and it is the one that hid base 2's `p1 = 41`: the
+  comment beside it quoted a residue count taken at a filter the campaign
+  had already passed.
 - **The cursor's unit is asserted, not just described.** The config key
   names the wheel, which is documentation; the checkpoint stores `W` and
   the campaign refuses to read a cursor counted in a different period,
   which is the half that does not depend on the description being right
-  (OPTIMIZATION.md 2.9). v2 leaves `W` alone, so a v1 cursor is inherited
-  rather than re-denominated — and the cursor-policy drill puts every one
-  of the three readers in front of a checkpoint written under each key.
+  (OPTIMIZATION.md 2.9). `p1` has now moved on both families, so **every
+  key this project has written is `adopt`** — the coverage claim carries
+  over and `load` floors it into the new periods, and no stored period
+  index is ever reused. The cursor-policy drill puts all three readers in
+  front of a checkpoint written under each declared key, per family.

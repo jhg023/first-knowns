@@ -235,16 +235,18 @@ rebuilding the progress ladder from the odds model once per segment, 1,080
 numerical integrals for an answer that changes only when a term is found,
 and **roughly four fifths of the 17-hour base-4 campaign went into it.**
 It has since been fixed (the ladder is cached on the frontier), measured at
-**3.47× and 2.42×** on the real segment loop, so the next campaign sweeps
-at `5.05×10¹⁴` and `5.12×10¹⁸ m/s` and is 90-95% device-bound
+**3.47× and 2.42×** on the real segment loop. A second pass then found the
+engine's wheel top four primes short at base 4 and six at base 2 — the cost
+model priced a bit-plane read at four times what it costs — and took base
+2's flat table to `p1 = 41`, for a further **1.537× and 2.380×**. The next
+campaign sweeps at about `7.5×10¹⁴` and `1.07×10¹⁹ m/s`
 ([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)). The four terms above were
-found the slow way.
+found the slow way, at a nineteenth and a twenty-fifth of that.
 
 ## In progress
 
-Both campaigns are **ready to resume**, 3.47× and 2.42× faster than the
-ones that found the four terms above, at the cursors the owner stopped them
-at:
+Both campaigns are **ready to resume**, 5.3× and 5.8× faster than the ones
+that found the four terms above, at the cursors the owner stopped them at:
 
 | | A130003 (b = 4) | A110096 (b = 2) |
 |---|---|---|
@@ -253,17 +255,17 @@ at:
 | open term | `a(21)` | `a(19)` |
 | odds it should have appeared already | 5.0% | 1.8% |
 
-From those cursors, at the rate the fixed segment loop measures
-(`5.05×10¹⁴` and `5.12×10¹⁸ m/s`), with the rate the first campaigns
-actually ran at kept alongside:
+From those cursors, at the rate the engine now measures (`7.5×10¹⁴` and
+`1.07×10¹⁹ m/s`), with the rate the first campaigns actually ran at kept
+alongside:
 
 | | `a(21)` of A130003 | | | `a(19)` of A110096 | | |
 |---|---|---|---|---|---|---|
-| | depth | old | **now** | depth | old | **now** |
-| Q1 | `2.84×10¹⁹` | 37 h | **11 h** | `1.52×10²³` | 19 h | **8 h** |
-| median | `8.45×10¹⁹` | 144 h | **42 h** | `5.82×10²³` | 76 h | **31 h** |
-| Q3 | `2.41×10²⁰` | 443 h | **128 h** | `1.68×10²⁴` | 220 h | **91 h** |
-| P90 | `5.51×10²⁰` | 1036 h | **298 h** | `3.64×10²⁴` | 477 h | **197 h** |
+| | depth | as it ran | **now** | depth | as it ran | **now** |
+| Q1 | `2.84×10¹⁹` | 37 h | **7 h** | `1.52×10²³` | 19 h | **4 h** |
+| median | `8.45×10¹⁹` | 144 h | **28 h** | `5.82×10²³` | 76 h | **15 h** |
+| Q3 | `2.41×10²⁰` | 443 h | **85 h** | `1.68×10²⁴` | 220 h | **44 h** |
+| P90 | `5.51×10²⁰` | 1036 h | **199 h** | `3.64×10²⁴` | 477 h | **95 h** |
 
 **A110096 is close to running out of range, and A130003 is not.** The
 enforced ceiling is the primality-proof bound, `k_ceil(n, b) = 3.317×10²⁴ −

@@ -15,9 +15,9 @@ does, and the wheel is the exchange rate between them.
 
 | shape | base | filter | flat wheel | sieve | window | launches | fingerprint (count / xor) |
 |-------|------|--------|-----------|-------|--------|----------|---------------------------|
-| `SCORE` | 4 | n = 19 | ≤ 29 | 65536 | 4,096 periods from `1.000001×10¹⁵` | 4 | 73 / 1038246173448745 |
-| `SCORE1L` | 4 | n = 19 | ≤ 13 | 65536 | **the same absolute window**, 882,446,336 periods | 27 | 73 / 1038246173448745 |
-| `SCORE2` | 2 | n = 17 | ≤ 37 | 65536 | 2,048 periods from `1.0018×10¹⁵` | ½ | 59 / 17289912876387275 |
+| `SCORE` | 4 | n = 19 | ≤ 29 | 65536 | 16,384 periods from `1.000001×10¹⁵` | 4 | 255 / 1106501012061793 |
+| `SCORE1L` | 4 | n = 19 | ≤ 13 | 65536 | **the same absolute window**, 3,529,785,344 periods | 26 | 255 / 1106501012061793 |
+| `SCORE2` | 2 | n = 19 | ≤ 41 | 65536 | 8,192 periods from `9.1275×10¹⁴` | 4 | 444 / 1412016495225835572 |
 | `SCORE4W` | 4 | n = 19 | ≤ 13 | 1024 | 10,000,000 periods from `1.0000×10¹⁵` | ⅓ | 5014 / 694483282552 |
 | `SCORE10` | 4 | n = 10 | ≤ 13 | 4096 | 2,000,000 periods from `1.0000×10¹⁵` | ¹⁄₁₇ | 58213 / 999951251185409 |
 
@@ -29,13 +29,17 @@ leaves every window and every fingerprint alone. That is the property that
 makes a plane change safe under a frozen benchmark: folding a prime into
 the wheel removes candidates, never survivors.
 
-`p1` is the exception, and it moved once: 23 → 29 at base 4, for a measured
-1.198×. `SCORE` and `SCORE1L` were re-frozen for it (see the ledger); the
-other three shapes do not use that wheel and were not touched.
+`p1` is the exception, and it has now moved on both families: 23 → 29 at
+base 4 (1.198×) and 37 → 41 at base 2 (1.398×). Every shape that names one
+of those wheels was re-frozen for it (see the ledger). `SCORE2` moved its
+FILTER at the same time, 17 → 19, because `w(41,n,2) = min(n, 20)`: the
+p1 = 41 table holds 129 million residues at n = 17 and `RES_MAX` refuses
+it, against 44.5 million at the n = 19 the campaign now runs. `SCORE4W`
+and `SCORE10` use neither wheel and have never been touched.
 
 `SCORE1L` is the one to understand. It sweeps the *identical absolute
 window* as `SCORE` on a coarser flat wheel — 215,441× as many periods,
-because `W(29) = W(13) × 215,441` exactly — and it must return the same 73
+because `W(29) = W(13) × 215,441` exactly — and it must return the same 255
 survivors and the same checksum. Two different wheels enumerating the same
 candidates by different arithmetic, so a bug in the CRT lift or in a bit
 plane shows up inside the benchmark rather than as a wrong answer months
@@ -51,20 +55,57 @@ result in this file:
 
 | shape | window vs one launch | spread over 3 `score.py` runs |
 |---|---|---|
-| `SCORE` (old, 8,192 periods at `W(23)`) | ¼ | **31%** |
-| `SCORE` (new, 4,096 periods at `W(29)`) | 4× | **2.4%** |
-| `SCORE1L` (new) | 27× | **0.2%** |
-| `SCORE2` | ½ | 23% |
+| `SCORE` (2026-08-23, 8,192 periods at `W(23)`) | ¼ | **31%** |
+| `SCORE` (4,096 periods at `W(29)`, `per_launch` 1024) | 4× | **2.4%** |
+| `SCORE1L` | 26× | **0.2%** |
+| `SCORE2` (2026-08-23, 2,048 periods at `W(37)`) | ½ | 23% |
 | `SCORE4W` | ⅓ | 33% |
 
-The three that still sit inside one launch are the three that still swing
-by a quarter or more. They are left alone because they under-report rather
-than over-report — the sustained `b = 2` rate measures ~1.9×10¹⁸ against
-`SCORE2`'s 1.5×10¹⁸ — and because moving a frozen anchor is not a thing an
-optimization pass does on its own. Recorded here so the next person can see
-the margin.
+**And the column moved under `SCORE` without a single number in it
+changing.** On 2026-08-27 the derived `per_launch` reached 4,096 — the
+tail queue emptied when `p2` moved, so the launch could grow — and the
+4,096-period window that had been four launches wide became exactly ONE,
+silently, with the fingerprint still reproducing. A window is not four
+launches wide; it is four launches wide *at a launch size the engine
+derives*, and the engine is allowed to re-derive it. Both shapes were
+widened 4× in the same commit and `SCORE2` was rebuilt at four launches
+rather than a half. `SCORE4W` still sits inside one launch and is left
+alone: it under-reports rather than over-reports, and it is a coarse-wheel
+shape whose job is the knob sweep, not the campaign rate.
 
 ## Ledger
+
+### 2026-08-27 — the derived wheel top, `p1` = 41 at base 2, and the launch the tail queue allows
+
+Two `score.py` runs, both reported rather than averaged, because the spread
+between them is the point of the `launches` column above:
+
+| shape | SCORE, run 1 | SCORE, run 2 | spread | note |
+|-------|--------------|--------------|--------|------|
+| `SCORE` | 624,149,247 | **687,132,432** | 10% | re-frozen: 4× the window |
+| `SCORE1L` | 112,422,035 | 110,045,599 | 2% | re-frozen with it, same window |
+| `SCORE2` | 13,533,930,740,277 | **13,217,994,876,081** | 2% | re-frozen: n = 19, `p1` = 41 |
+| `SCORE4W` | 53,489,366 | 84,955,302 | **59%** | untouched, reproduces |
+| `SCORE10` | 2,617,952 | 2,756,639 | 5% | untouched, reproduces |
+
+`SCORE2` is quiet now (2%) because it went from a half-launch window to
+four launches. `SCORE4W` is the one shape still inside a single launch and
+it swings 59% between two runs of identical code — which is what that row
+of the table above is warning about, measured.
+
+**`SCORE` and `SCORE2` are not comparable to the row below them** — three
+of the five shapes moved. What IS comparable is the paired measurement on
+the configuration each campaign actually resumes at, over a common
+absolute window with the survivor streams compared to each other:
+
+| family | before this pass | after | ratio |
+|---|---|---|---|
+| A130003, `b = 4`, `n = 21` | `5.15×10¹⁴ m/s` | **`7.92×10¹⁴`** | **1.537×** [1.437, 1.607] |
+| A110096, `b = 2`, `n = 19` | `5.63×10¹⁸ m/s` | **`1.34×10¹⁹`** | **2.380×** [2.247, 2.466] |
+
+Base 2's arms have different moduli (`p1` moved), so that row is an
+absolute-`m` comparison and the two streams agree on all 958 survivors —
+two different wheels, one answer.
 
 ### v2 — 2026-08-23, the bit-plane wheel, a compacted test loop, `p1` = 29
 
@@ -200,22 +241,34 @@ the usual, and worth knowing before pricing `a(22)`.
 From the cursors each campaign is paused at, at the **post-fix** rate, with
 the pre-fix column kept so the change is legible:
 
-| target | from | median | line to sweep | old rate | **now** |
-|--------|------|--------|---------------|----------|---------|
-| A130003 `a(21)` | `8.95×10¹⁸` | `8.45×10¹⁹` | `7.6×10¹⁹` | 6.0 d | **1.7 d** |
-| A130003 `a(22)` | " | `1.93×10²¹` | `1.9×10²¹` | 153 d | 44 d |
-| A110096 `a(19)` | `3.62×10²¹` | `5.82×10²³` | `5.8×10²³` | 3.2 d | **1.3 d** |
-| A110096 `a(20)` | " | `2.07×10²⁵` | `2.1×10²⁵` | 113 d | 47 d — and only 19% of it is under the engine's ceiling |
+| target | from | median | line to sweep | as the campaign ran | **now** |
+|--------|------|--------|---------------|---------------------|---------|
+| A130003 `a(21)` | `8.95×10¹⁸` | `8.45×10¹⁹` | `7.6×10¹⁹` | 6.0 d | **1.2 d** |
+| A130003 `a(22)` | " | `1.93×10²¹` | `1.9×10²¹` | 153 d | 29 d |
+| A110096 `a(19)` | `3.62×10²¹` | `5.82×10²³` | `5.8×10²³` | 3.2 d | **15 h** |
+| A110096 `a(20)` | " | `2.07×10²⁵` | `2.1×10²⁵` | 113 d | 23 d — and only 19% of it is under the engine's ceiling |
 
-at `5.05×10¹⁴ m/s` for `b = 4` and `5.12×10¹⁸ m/s` for `b = 2`, both
-measured on the segment loop rather than on the benchmark.
+at about `7.5×10¹⁴ m/s` for `b = 4` and `1.07×10¹⁹ m/s` for `b = 2`: the
+engine rates measured on the resume configurations, discounted by the
+device share the segment loop measured (94.7% and 89.8%).
 
 Two things this table is not. It is not a forecast: the medians are the
 model's, and this repo's ladder models run about 2× late pooled over eleven
-finds, so multiply before expecting a term (README, "The odds model"). And
-it is no longer far from what the hardware can do — the loop is 90-95%
-device now, so the next real gain would have to come out of the kernel,
-where the largest measured item left is 5%.
+finds, so multiply before expecting a term (README, "The odds model").
+
+And it is not the ceiling. The version of this paragraph written on
+2026-08-24 said the loop was 90-95% device so "the next real gain would
+have to come out of the kernel, where the largest measured item left is
+5%" — and three days later a pass found 1.54× and 2.38× without touching
+a line of kernel source. A device-bound loop bounds what the HOST can give
+back; it says nothing about whether the device is doing the right work.
+What the 5% claim was actually measuring was the phase table, and the
+phase table cannot see a wheel that stops at the wrong prime.
 
 Wall clock of the tools themselves, so they can be planned against the
-five-minute rule: `launch.py --selftest` ~60 s, `score.py` ~90 s.
+five-minute rule: `launch.py --selftest` ~105 s, `score.py` ~3 min.
+Both grew on 2026-08-27 and the growth is in ENGINE CONSTRUCTION, not
+in the work being measured: `SCORE2` now lifts a 44.5-million-residue
+flat wheel (~34 s) and the deeper bit planes take longer to pack. The
+margin under the cap is smaller than it was; a shape that pushes `p1`
+again should be priced against it before it is added.

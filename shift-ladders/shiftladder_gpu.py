@@ -100,10 +100,20 @@ from shiftladder_search import (CpuEngine, Q2_DEFAULT,          # noqa: E402
 # 29 at b = 4 (raised from 23, measured 1.198x): generation costs `ng` plane
 # reads per 32 periods PER RESIDUE, so its cost per unit of m line is R/W --
 # the flat table's density -- and halving that halves the dominant phase.
-# 29 is also the last step available: p1 = 31 would want 613 million flat
-# residues against RES_MAX's 33.5 million.  b = 2 is already at its top for
-# the same reason (41 would want 129 million).
-P1_DEFAULT = {4: 29, 2: 37}
+# 29 is the last step available there: p1 = 31 would want 613 million flat
+# residues (16 GiB of tables), because a prime buys density (q - w)/q and
+# costs (q - w) TIMES the residue count, and ord_31(4) = 5 makes 31 nearly
+# all cost.
+#
+# 41 at b = 2 (raised from 37 on 2026-08-27, measured 1.398x).  The old
+# comment here said b = 2 was at its top too, on a residue count taken at
+# n = 17 (129 million).  IT IS AN n-DEPENDENT NUMBER and the campaign has
+# moved: w(41,n,2) = min(n, 20), so at the n = 19 the hunt now runs, 41
+# keeps 22 residues rather than 24 and the wheel is 44.5 million -- and it
+# only shrinks from here, because w grows with n and every future filter is
+# larger.  R/W falls 2.72e-7 -> 1.46e-7, a 1.864x cut in the dominant
+# phase, for 1.5 GiB of device tables.
+P1_DEFAULT = {4: 29, 2: 41}
 
 # Barrett reduces the launch offset, which must stay a u64 and under 2^63
 # for ONE conditional subtraction to be exact (see TEST in the kernel).
@@ -116,7 +126,10 @@ REDUCE_MAX = 1 << 63
 # fails 183 GiB in: the b = 2 wheel reaches 1.29e9 residues at p1 = 47.  The
 # bit planes are what raise the wheel now, so this bound stops mattering to
 # throughput and stays only as a guard.
-RES_MAX = 1 << 25                # 33.5M residues = 268 MB as int64
+# 2^26 since 2026-08-27, to admit the b = 2 wheel at p1 = 41 (44.5M
+# residues at n >= 19).  It still refuses that family's n = 17 wheel
+# (129M) and p1 = 47 (36 billion), which is what the guard is for.
+RES_MAX = 1 << 26                # 67.1M residues = 537 MB as int64
 HIT_CAP = 1 << 16                # survivors buffered per launch
 
 # --------------------------- the bit-plane wheel ---------------------------
@@ -125,7 +138,14 @@ HIT_CAP = 1 << 16                # survivors buffered per launch
 # phase is paid in; the counterweight is cache.  Swept interleaved on both
 # production shapes: 2^26 beat 2^20 / 2^22 / 2^24, because at 2^26 the b = 4
 # wheel's first five primes (29..43, 5.9e7 residues) merge into ONE plane.
-PLANE_BITS_MAX = 1 << 26
+# RAISED 2^26 -> 2^28 (2026-08-27).  The old sweep stopped at its own
+# default and never looked ABOVE it.  At a FIXED p2 = 103 the budget is
+# worth 1.311x / 1.202x = 1.09x on the b = 4 resume shape -- 2^28 packs
+# (29, 103] into 4 groups where 2^26 needs 5, and the group it saves costs
+# more than the 27.6 MiB of L2 it spends.  The counterweight is real but it
+# is further out than 2^26: at 2^30 the b = 4 wheel wants 119.5 MiB and the
+# planes stop being L2-resident.
+PLANE_BITS_MAX = 1 << 28
 # All planes together.  A guard, not a tuning constant: p2 is derived and a
 # pathological argument should refuse rather than allocate.
 PLANE_TOTAL_MAX = 1 << 31        # 256 MB of planes
@@ -157,14 +177,24 @@ TAIL_BLOCKS_PER_SM = 64
 # m mod (79*83) alone, so a unit costs ONE reduction and ONE lookup instead
 # of one of each per prime.  Measured near-null here (see OPTIMIZATION_LOG),
 # and the cap is small deliberately -- the wide settings hit the L1 cliff.
-UNIT_Q_MAX = 1 << 13
+# RE-SWEPT 2026-08-27 after p2 moved (OPTIMIZATION.md 3.4): the unit list
+# starts at p2, so a deeper wheel top is a different unit list and the old
+# optimum was measured against the old one.  2^15 measures 1.115x
+# [1.051, 1.185] over 2^13 on the b = 4 resume shape and 1.04x [0.97, 1.04]
+# on b = 2 -- at 2^15 the first units become PAIRS instead of singletons.
+# 2^18 is still the L1 cliff (1.018x), so the cap moved two steps, not off.
+UNIT_Q_MAX = 1 << 15
 # j-slots (R * periods) aimed at per launch.  This is the invariant, and it
 # is what per_launch is derived FROM: R and per_launch move in opposite
 # directions as p1 changes, and it is their product that sets the work in a
 # launch, the tail queue's occupancy and the coverage step.  2^35 is where
 # the b = 4 wheel already sat before p1 moved (its old per_launch floor of
 # one block tile happened to land there); measured flat from 2^34 to 2^35.
-CAND_SLOTS = 1 << 35
+# RAISED 2^35 -> 2^37 on 2026-08-27, and demoted to a GUARD: the binding
+# constraint on launch size is the TAIL QUEUE, and _pick_launch now derives
+# against it directly (see there).  2^35 was itself a launch cap in
+# disguise -- it held b = 4 at 1024 periods when the queue could take 4096.
+CAND_SLOTS = 1 << 37
 # Global tail queue ceiling, and the one constant here that the FROZEN
 # BENCHMARK CANNOT SEE (OPTIMIZATION.md 2.13).  The queue is sized from
 # per_launch, and SCORE's window is 8,192 periods -- a QUARTER of one
@@ -183,7 +213,17 @@ Q3_MAX = 1 << 26                 # 537 MB, and see _pick_q3cap
 # configuration rather than pinned per base: the measured optimum moved from
 # 47 to 113 across the five benchmark shapes, and shipping a constant would
 # be the "carry the fraction, not the count" mistake in another spelling.
-GEN_W = 3.8                      # one plane read, per 32 periods
+# RE-MEASURED 2026-08-27: 3.8 -> 0.95, and this one constant was holding
+# the wheel top four primes short on b = 4 and six on b = 2.  GEN_W is what
+# pick_p2 trades a plane group AGAINST, so overpricing a plane read by 4x
+# stops the wheel early; the fitted value comes from 15 measured (p2, rate)
+# pairs across both production shapes (least squares in log rate), and it
+# moves the DERIVED pick from 79 -> 103 at b = 4 and 89 -> 137 at b = 2,
+# both of which land inside their own measured plateau.  Worth 1.288x and
+# ~1.33x on the resume shapes.  Checked against a third, very different
+# configuration (n = 10, p1 = 13) so the fit is not two shapes wide: p2 is
+# flat 101..167 there and the new pick costs 0.991x.
+GEN_W = 0.95                     # one plane read, per 32 periods
 EXTRACT = 1.4                    # ffs + queue push, per candidate
 ROUNDC = 1.4                     # dequeue + rebuild + push, per round
 
@@ -741,7 +781,7 @@ class GpuEngine:
 
     # --------------------------------------------------------- geometry
     def _pick_launch(self, per_launch):
-        """Periods per launch: aimed at CAND_SLOTS, bounded by Barrett.
+        """Periods per launch: as wide as the TAIL QUEUE takes.
 
         An EXPLICIT per_launch is honoured exactly -- it is how the gates
         force a launch split, and rounding it to a whole block tile would
@@ -755,7 +795,22 @@ class GpuEngine:
         else:
             # the largest power of two whose slot count fits the target, so
             # the block tile divides it exactly and no thread is masked off
-            want, target = 32, max(32, CAND_SLOTS // max(self.R, 1))
+            target = max(32, CAND_SLOTS // max(self.R, 1))
+            # ... AND which the tail queue can still take.  That is the
+            # constraint that actually binds, and it is a function of the
+            # WHEEL: q3 holds R * per_launch * d2 * S_tail entries, so a
+            # deeper p2 empties it and a wider flat table fills it.  A
+            # launch past Q3_MAX spills into the in-block fallback and
+            # costs ~19% (see _pick_q3cap), so the derivation stops one
+            # power of two short of that rather than reporting q3_short
+            # and running anyway.  Deriving against the slot count ALONE
+            # got both families wrong the moment p2 moved: b = 4 stayed at
+            # 1024 when 4096 measured 1.07x, and b = 4's old peak at 4096
+            # was unreachable for exactly this reason.
+            den = self.R * self.d2 * self._S[self.bounds[-1]] * 1.25
+            if den > 0:
+                target = min(target, max(32, int((Q3_MAX - 4096) / den)))
+            want = 32
             while want * 2 <= target:
                 want *= 2
         out = int(min(want, cap))

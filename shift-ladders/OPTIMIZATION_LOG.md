@@ -688,12 +688,177 @@ longer. **Every term this project finds makes the next one cheaper per unit
 line.** That is the opposite of the usual, and it means `a(22)`'s cost
 should be priced at its own filter and not extrapolated from `a(21)`'s.
 
+## 2026-08-27 — the wheel top was DERIVED, and the constant that derived it was 4x wrong
+
+Two campaigns were about to resume. This pass swept what the previous one
+had not, and the headline is a single mis-measured number.
+
+**`p2` had never been swept.** Four constants were re-swept after the last
+structural change (the table above); every one of them is a PINNED
+constant. `p2` — the bit-plane wheel's top, and the largest single term in
+the cost model — is DERIVED by `pick_p2` from `model_cost`, and a derived
+value hides its own error: every gate stays green and every fingerprint
+reproduces, because `p2` removes candidates and never survivors. The
+benchmark then reports, faithfully, the rate the wrong pick produces.
+
+Swept empirically at both resume configurations, arms **order-rotated**
+inside each round (the first pass showed rates climbing monotonically with
+POSITION in a round, which would have credited whatever ran last), survivor
+stream compared across arms every round:
+
+| `p2` at `b = 4`, `n = 21` | ratio | | `p2` at `b = 2`, `n = 19` | ratio |
+|---|---|---|---|---|
+| 79 (shipped, derived) | 1.000 | | 89 (shipped, derived) | 1.000 |
+| 97 | 1.220 | | 109 | 1.373 |
+| **103** | **1.313** | | 127 | 1.513 |
+| 107 | 1.162 | | **131** | **1.578** |
+| 113 | 1.220 | | 137 | 1.409 |
+| | | | 151 | 1.282 |
+
+Both plateaus are broad and both start four to six primes past where the
+model stopped. **`GEN_W` — the modelled cost of one plane read per 32
+periods, in units of one packed test — was 3.80 and measures 0.95**, fitted
+by least squares in log rate over 15 measured (p2, rate) pairs across both
+shapes. Overpricing a plane read by 4x is exactly a wheel that stops early.
+The fit tracks the measured curve to a few percent, and it was checked
+against a THIRD, very different configuration so it is not two shapes wide:
+at `n = 10, p1 = 13` (the `SCORE10` regime, survivor-dominated) `p2` is
+flat from 101 to 167 and the new pick costs 0.991x.
+
+**The plane budget had only ever been swept BELOW its own default.** The
+old sweep ran 2^17 / 2^19 / 2^21 / 2^23 / 2^26 and stopped at 2^26 because
+that was the shipped value. At a FIXED `p2 = 103` the budget is worth
+**1.311 / 1.202 = 1.09x**: 2^28 packs (29, 103] into 4 groups where 2^26
+needs 5, and the group it saves costs more than the 27.6 MiB of L2 it
+spends. The counterweight is real but further out — at 2^30 the b = 4 wheel
+wants 119.5 MiB and stops being L2-resident.
+
+**`UNIT_Q_MAX` was stale for a reason worth naming: the test-unit list
+STARTS at `p2`.** Moving the wheel top makes it a different list, so the
+old optimum was measured against an object that no longer exists. 2^15
+measures **1.115x [1.051, 1.185]** at b = 4 — at 2^15 the first units
+become PAIRS instead of singletons — and 1.04x [0.97, 1.04] at b = 2.
+2^18 is still the L1 cliff at 1.018x, so the cap moved two steps, not off.
+
+### `p1` = 41 at base 2 — and the comment that said it could not be
+
+The code said b = 2 was already at its ceiling: "41 would want 129 million
+residues" against `RES_MAX`. **That is an n-DEPENDENT number and the
+campaign had moved past it.** `w(41,n,2) = min(n, ord_41(2)) = min(n, 20)`,
+so 41 keeps `41 - w` residues: 24 of them at the `n = 17` the comment was
+written at, but **22** at the `n = 19` the hunt now runs — 44.5 million,
+not 129. And it only shrinks from here, because `w` grows with `n` and
+every future filter is larger. `RES_MAX` went 2^25 to 2^26 to admit it; it
+still refuses that family's n = 17 wheel and still refuses `p1 = 47`
+(36 billion), which is what the guard is for.
+
+`R/W` falls `2.72e-7` to `1.46e-7` — a **1.864x** cut in the phase that is
+paid per residue — for 1.5 GiB of device tables and a ~34 s wheel lift at
+startup. Measured on a common ABSOLUTE window at a common `p2 = 131`
+(a period-indexed A/B compares two different spans once `p1` moves), and
+the two streams agree on all 958 survivors:
+
+| | rate | ratio |
+|---|---|---|
+| `p1 = 37`, `per_launch` 16,384 | `8.62×10¹⁸ m/s` | 1.000 |
+| `p1 = 41`, `per_launch` 1,024 | **`1.21×10¹⁹`** | **1.398x** |
+| `p1 = 41`, `per_launch` 2,048 | `1.15×10¹⁹` | 1.336x (`q3_short`) |
+| `p1 = 41`, `per_launch` 512 | `8.49×10¹⁸` | 1.051x |
+
+Base 4 has no such step, and the arithmetic says why: a prime buys density
+`(q - w)/q` and costs `(q - w)` TIMES the residue count, so the primes
+worth adding are those with a small SURVIVING set. At b = 4, `p1 = 31`
+keeps 26 residues (`ord_31(4) = 5`) — 613 million of them, 16 GiB of
+tables, for 1.19x. Declined on the numbers, not on the ceiling.
+
+### The launch size was a constant standing in for a queue
+
+`per_launch` was derived from `CAND_SLOTS`, a target on `R × per_launch`.
+The quantity that actually binds is the **tail queue**: `q3` holds
+`R · per_launch · d2 · S_tail` entries, so it moves with the WHEEL — and
+when `p2` moved, `d2` fell 3x and the queue emptied. 4,096 periods at
+b = 4 had been measured at 1.07x **and rejected** by the previous pass
+because it reported `q3_short` at the old `d2`; the same setting is now
+comfortably inside the queue, and the derivation could not see it, because
+a slot target does not know what a queue holds.
+
+`_pick_launch` now takes the largest power of two that BOTH the slot guard
+and the tail queue allow; `CAND_SLOTS` is raised 2^35 to 2^37 and demoted
+to a guard. It derives 4,096 at b = 4 (was 1,024) and 2,048 at b = 2 (was
+16,384 at `p1 = 37`) — and the b = 2 value is the interesting one, because
+deriving against the slot count alone would have picked 2,048 at
+`p1 = 41` too, where the table above shows it is SHORT. The rule now stops
+one power of two before `q3_short` rather than reporting it and running.
+
+### End to end, and what it cost the benchmark
+
+Paired, order-rotated, streams compared, at the configuration each campaign
+actually resumes at:
+
+| family | before this pass | after | ratio |
+|---|---|---|---|
+| A130003, `b = 4`, `n = 21` | `5.15×10¹⁴ m/s` | **`7.92×10¹⁴`** | **1.537x** [1.437, 1.607] |
+| A110096, `b = 2`, `n = 19` | `5.63×10¹⁸ m/s` | **`1.34×10¹⁹`** | **2.380x** [2.247, 2.466] |
+
+Three of the five frozen shapes were re-frozen, and only one of the three
+is the `p1` reason this project already had a precedent for:
+
+- **`SCORE2`** — `p1` moved 37 to 41, so `W` moved, so the window is a
+  different window. Its filter moved 17 to 19 with it (`RES_MAX` refuses
+  the n = 17 table at `p1 = 41`), which also makes it describe the campaign
+  as it now runs rather than as it ran before two finds.
+- **`SCORE` and `SCORE1L`** — and this one is new. **The derived
+  `per_launch` reached 4,096, so the 4,096-period window that had been four
+  launches wide became exactly ONE, silently, with its fingerprint still
+  reproducing.** A window is not four launches wide; it is four launches
+  wide *at a launch size the engine derives*, and the engine is entitled to
+  re-derive it. Both were widened 4x at the same `j0`, and the cross-check
+  survived intact: `SCORE` and `SCORE1L` return the identical
+  255 / 1106501012061793 over the identical absolute window at wheels
+  215,441 periods apart.
+
+The old fingerprints are recorded in `score.py` and BENCHMARKS.md.
+`SCORE4W` and `SCORE10` use neither wheel, were not touched, and reproduce
+unchanged — which is the whole point of a `p2` change under a frozen
+benchmark.
+
+### Re-swept in the same session and NOT moved
+
+All at the new `p2`, because that is what the re-sweep rule is for.
+
+| constant | candidates | result |
+|---|---|---|
+| block tile `TPB x WPT` | 64x8, **128x8**, 128x16, 256x4, 256x8 | **unchanged.** 128x8 best or tied; 256x4 reads 0.843, 64x8 0.899, 128x16 0.982 |
+| round schedule `(ratio, tail, tail2)` | ratio 0.5 / **0.65** / 0.8, tail 0.05 / **0.10** / 0.20, tail2 0.003 / **0.01** | **unchanged.** 0.5 reads 0.942; 0.8, tail 0.05 and tail2 0.003 all sit inside noise of 1.00. tail 0.20 reads 1.056 but takes the launch PAST the tail queue (`q3_short`), the regime this log already prices at ~19% |
+
+### Rejected, with numbers
+
+- **Fewer plane groups.** `p2 = 67` at 2^28 gives `ng = 2` with 12.9 MiB of
+  planes — half the generation loads — and measures **0.729x**. Generation
+  is cheaper per load than the model believed (that is the `GEN_W`
+  finding), so trading candidates for loads runs the wrong way.
+- **Plane budget 2^30.** Picks `ng = 2` at `p2 = 71` and 119.5 MiB, which
+  crosses this card's L2. Not carried to a verdict: 2^28 dominates it in
+  the model and keeps its planes resident, so 2^28 shipped.
+- **A CRT-factored two-level residue table**, to escape `RES_MAX`
+  altogether. Both `res` and the per-residue plane shift are LINEAR in the
+  residue (`cr_g(r) = (W^-1 mod Q_g) · r mod Q_g`), so a two-level table
+  costs `R_a + R_b` instead of `R_a · R_b` and the memory wall disappears
+  entirely. It dies at the other end: `per_launch` is `~CAND_SLOTS / R`, so
+  at b = 4's `p1 = 31` (613M residues) a launch would cover 32 periods —
+  ONE plane word per residue — and the per-residue setup, which currently
+  amortises over 128 words, would dominate. The measured shape of that
+  penalty is in the `p1 = 41` table above: 512 periods reads 1.051x where
+  1,024 reads 1.398x. Priced and declined.
+
 ## Priced and not done
 
-- **A second wheel level below the plane wheel.** `p1` sets `W` and hence
-  the unit of the coverage cursor, so raising it re-denominates every
-  checkpoint (`REDENOMINATE`, not `INHERITS`) and buys only what the planes
-  already buy more cheaply. Not worth the cursor churn.
+- ~~**A second wheel level below the plane wheel.**~~ SETTLED 2026-08-27,
+  and against its own reasoning: raising `p1` does NOT buy what the planes
+  buy, because the planes leave `R/W` alone and `p1` halves it. Base 2 took
+  the step (37 -> 41, 1.398x) and paid the cursor churn, which `adopt`
+  handles. The factored two-level table that would remove `RES_MAX`
+  entirely is priced and declined above.
 - **A deeper sieve (`q2` above 65536).** The classification host cost is
   about a tenth of one core at the v2 rate, so nothing is host-bound and a
   deeper sieve would buy nothing the campaign can spend. Re-price if the
@@ -702,12 +867,10 @@ should be priced at its own filter and not extrapolated from `a(21)`'s.
   update is ~0.2 ms against a ~27 ms production launch — 0.7%, and the
   double buffer would have to be right across the interrupt path. Priced,
   declined, and the price is written down.
-- **`b = 2`'s launch size against its tail queue.** At `per_launch` 8,192
-  instead of 32,768 that family holds 457 MiB instead of 713 and measures
-  the same rate to 3%. It is not done automatically only because the
-  identical change costs `b = 4` 14%, and a per-base override would be a
-  constant where this engine derives everything else. A reader who wants
-  the 256 MiB back can pass `per_launch` and lose nothing measurable.
+- ~~**`b = 2`'s launch size against its tail queue.**~~ SETTLED 2026-08-27:
+  `_pick_launch` now derives against the tail queue itself, so neither
+  family needs a per-base override and both land on their measured
+  optimum (4,096 and 2,048).
 - **The extract stage's warp scan**, above — the one phase over 5% with no
   verdict of its own.
 

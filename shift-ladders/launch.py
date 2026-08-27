@@ -140,23 +140,29 @@ def ledger_path(b):
 #   accept  the old configuration counted periods of the SAME W and swept
 #           the same line, so the cursor carries over untouched.  v2 raised
 #           the wheel with BIT PLANES over the period index, which leave W
-#           alone -- so at base 2, where p1 never moved, a v1 cursor is
-#           inherited exactly.
-#   adopt   the old configuration counted periods of a DIFFERENT W.  At
-#           base 4 p1 moved 23 -> 29 for a measured 1.198x, so W is 29x
-#           wider and a stored period index means something else.  Only
+#           alone -- so a p2 change, however large, is always `accept`.
+#   adopt   the old configuration counted periods of a DIFFERENT W.  Only
 #           the arithmetic claim "every m below this is swept" carries
 #           over, and `load` re-denominates it by FLOORING into this
 #           engine's periods so no gap can open.
-INHERIT_B2 = (("v1", 37),)
+#
+# BOTH families are now `adopt` and NEITHER has an `accept` left: base 4
+# moved p1 23 -> 29 (1.198x) and base 2 moved 37 -> 41 (1.398x) on
+# 2026-08-27, so every key this project has ever written counts a period
+# that is no longer this period.  The b = 2 keys moved OUT of `accept` in
+# the same edit that added p1 = 41 -- leaving a stale key in `accept`
+# would inherit a cursor counted in W(37) as though it were W(41) and
+# silently claim 41x more line than was swept, which is the exact failure
+# CursorPolicy exists to prevent.
+ADOPT_B2 = (("v1", 37), ("v2", 37))
 ADOPT_B4 = (("v1", 23), ("v2", 23))
 
 _POLICIES = {b: checkpoint.CursorPolicy(
                     ckpt_path(b), config_key(b),
-                    accept=tuple(config_key(b, e, w)
-                                 for e, w in (INHERIT_B2 if b == 2 else ())),
+                    accept=(),
                     adopt=tuple(config_key(b, e, w)
-                                for e, w in (ADOPT_B4 if b == 4 else ())))
+                                for e, w in (ADOPT_B2 if b == 2
+                                             else ADOPT_B4)))
              for b in ref.FAMILIES}
 
 
