@@ -429,6 +429,95 @@ different spans now):
 | A130003, `b = 4` | 4.17×10¹² m/s | **3.54×10¹⁴ m/s** | **84.8×** [84.7, 85.5] |
 | A110096, `b = 2` | 2.90×10¹⁶ m/s | **1.29×10¹⁸ m/s** | **44.6×** [41.9, 47.4] |
 
+## The campaign, measured (2026-08-24) — and the biggest lever is not the kernel
+
+Two campaigns ran (RESULTS.md): base 4 for 17.44 h to `m = 8.95×10¹⁸`, base
+2 for 38.2 min to `m = 3.62×10²¹`, four terms between them. This section is
+what they measured about the *campaign*, which OPTIMIZATION.md 5c says to
+price separately from the engine and which this project had not done.
+
+**The campaigns ran at 29% and 41% of the kernel.** Both figures compare
+each family's own last stretch — the filter it was actually running at the
+end — against the same configuration measured here on a free GPU, over
+whole launches (the campaign's unit), interleaved between the families,
+median of four:
+
+| | campaign | device, same configuration | share |
+|---|---|---|---|
+| A130003, `n = 21` at the cursor | `1.45×10¹⁴ m/s` | `5.08×10¹⁴ m/s` | 29% |
+| A110096, `n = 19` at the cursor | `2.12×10¹⁸ m/s` | `5.21×10¹⁸ m/s` | 41% |
+
+**The phase split, per launch, before anything was concluded** (Rule 1 —
+and it is the whole of this finding):
+
+| | A130003, `n = 21` | A110096, `n = 19` |
+|---|---|---|
+| one launch is | 1,024 periods = `6.63×10¹²` of line | 16,384 periods = `1.22×10¹⁷` of line |
+| survivors per launch | 1.4 | 22.2 |
+| device (sieve + tail + readback) | 13.05 ms | 23.33 ms |
+| host classification of them | 0.11 ms | 1.30 ms |
+| checkpoint, amortised over its 16-launch segment | 0.45 ms | 0.45 ms |
+| `--gentle`'s yield, *if it was used* | 2.50 ms | 2.50 ms |
+| **the campaign actually took** | **45.59 ms** | **57.38 ms** |
+| **unaccounted** | **29.48 ms** | **29.80 ms** |
+
+Read the last row twice. Two families whose launches differ by **four
+orders of magnitude in line swept** and **16× in survivors classified** lost
+**the same 29.6 ms per launch**. That is not a cost that scales with the
+work — it is a per-launch constant, and the whole 2.4-3.5× is in it.
+
+**What it is not**, each eliminated by its own measurement rather than by
+argument:
+
+- **not the sieve** — the device row above is the kernel doing exactly what
+  the campaign asked it for, at the campaign's own filter and depth;
+- **not the host classifier** — 0.11 ms and 1.30 ms, 0.2% and 2.3% of the
+  campaign's launch. The v1-era sizing claim in `launch.py` ("this hunt
+  needs no worker pool") was made at 85× less device throughput and is
+  re-checked here at v2: still right, with two orders of magnitude of
+  margin. It is the one load claim in this project that survived the
+  engine change without re-sweeping, and now it has been re-swept;
+- **not the checkpoint** — an fsynced `checkpoint.save` with a `.bak`
+  rotation measures 7.2 ms [7.0, 7.4] over 20 writes, once per 16 launches;
+- **not `time.sleep` granularity** — the suspicion was that `--gentle`'s
+  2 ms became a Windows 15.6 ms timer quantum. Measured on this machine:
+  `sleep(0.002)` returns in 2.52 ms [2.02, 2.75]. It does not.
+
+**What fits.** The only per-launch constant in the campaign loop is
+`--gpu-yield-ms`'s `time.sleep`, and a run started with
+`--gpu-yield-ms 30` would reproduce both rows to about 1%. **The checkpoint
+does not record which flags a run used**, so this cannot be confirmed from
+the artefacts — which is itself the finding: a campaign rate that cannot be
+compared to a benchmark rate is not a measurement. Before the next
+campaign, record the throttle settings in the checkpoint alongside `engine`
+and `W`; then either this is explained in one line, or ~30 ms per launch of
+real overhead has a place to be found. **Do not touch the kernel first.**
+At base 4 this is worth 3.5× and the largest measured item left inside the
+engine is 5%.
+
+**A structural fact the campaign settled, in the engine's favour: a higher
+filter is faster.** The same 4,096-period window at the base-4 cursor:
+
+| filter | rate | |
+|---|---|---|
+| `n = 19` | `4.34×10¹⁴ m/s` | |
+| `n = 20` | `4.90×10¹⁴ m/s` | 1.13× |
+| `n = 21` | `5.32×10¹⁴ m/s` | 1.23× |
+
+`w(q,n,b) = min(n, ord_q(b))` grows with `n`, so a longer ladder kills more
+of the line per prime and the wheel gets denser rather than the test loop
+longer. **Every term this project finds makes the next one cheaper per unit
+line.** That is the opposite of the usual, and it means `a(22)`'s cost
+should be priced at its own filter and not extrapolated from `a(21)`'s.
+
+**`--gentle`'s advertised price is not reproduced.** The help text says
+"about a third of the rate"; measured, the yield is 2.5 ms against a
+13.05 ms base-4 launch — about a fifth, and less at base 2. The help text
+is left alone rather than overwritten: the two numbers may be measuring
+different things, and replacing someone's measurement with a
+differently-scoped one is how a log stops being evidence. Re-measure it
+deliberately and then change both.
+
 ## Priced and not done
 
 - **A second wheel level below the plane wheel.** `p1` sets `W` and hence

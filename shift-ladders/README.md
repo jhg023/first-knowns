@@ -2,34 +2,48 @@
 
 > Every line of code in this project was authored by Claude (Anthropic's
 > AI) at the repository owner's direction. The mathematics, the gates, the
-> engines and this document are all machine-written; results, when there
-> are any, are machine-verified and human-reviewed. That audit trail is
-> deliberate and it stays.
+> engines and this document are all machine-written; the results below are
+> machine-verified and human-reviewed. That audit trail is deliberate and
+> it stays.
 
 **A130003** asks for the least `m` such that `m + 4^k` is prime for every
 `k = 1..n`, and **A110096** asks the same question of `2^k`. They are
 *shift ladders*: one unknown, `n` conditions that differ only by an
 additive constant, and a killed set that is a **geometric orbit** rather
 than the quadratic one of this repo's square and Dickson ladders. Eighteen
-terms of A130003 are published and the last of them,
+terms of A130003 were published and the last of them,
 `a(18) = 1,158,174,141,556,287`, was found by Jens Kruse Andersen in **June
-2007**; nothing has touched that frontier in nineteen years. A110096 has
+2007**; nothing had touched that frontier in nineteen years. A110096 had
 sixteen, the last three from Bert Dobbelaere in April 2021. Neither entry
 carries an upper bound of any kind, at any open `n`.
 
-**Status: ACTIVE — engine green, no sweep run yet.** The five-file skeleton
-is complete and its full battery is green (30 gates and drills), the
-benchmark's five shapes reproduce their frozen fingerprints, and both
-families' odds models validate on ten independently-searched known terms.
-**No production sweep has been run and there are no results to report** —
-starting a campaign is the owner's command (CLAUDE.md rule 0a).
+**Four new terms, in 18.1 hours of one RTX 4090:**
 
-The next open terms are `a(19)` of A130003 and `a(17)` of A110096, at
-model medians of `5.75×10¹⁶` and `2.03×10²⁰` — **2.6 minutes** and
-**2.2 minutes** of one RTX 4090 at the v2 engine's scored rate. Read those
-as floors and budget 2-3× (see [the odds model](#the-odds-model)); even at
-3× the median, every open term either model has a prediction for — three
-apiece — lands inside a fortnight.
+    A130003  a(19) =                13,268,589,982,417,023
+             a(20) =             6,120,156,516,528,136,867
+    A110096  a(17) =       305,948,728,878,647,722,725
+             a(18) =       760,056,834,873,121,351,995
+
+`a(19)` of A130003 landed **117 seconds** into the campaign, which is what
+a nineteen-year-old frontier with no published bound below it looks like
+once the engine is right. Both A110096 terms are above `2⁶⁴`. Every
+primality decision in all four is a proof rather than a probable-prime
+call. The exact integers, all values, the certificates and the factor
+witnesses are in [`evidence/`](evidence/); the claims and the verification
+are in [RESULTS.md](RESULTS.md).
+
+**Status: PAUSED — open to others.** Both campaigns were stopped by the
+owner on 2026-08-24, A130003 at `m = 8.95×10¹⁸` with `a(21)` open and
+A110096 at `m = 3.62×10²¹` with `a(19)` open. The full battery is green
+(30 gates and drills), the benchmark's five shapes reproduce their frozen
+fingerprints, and both cursors resume in place.
+
+At the rate each campaign measured, `a(21)` of A130003 is about 6 days of
+sweeping to its median and `a(19)` of A110096 about 3 — read as floors
+(see [the odds model](#the-odds-model)). Past those, A110096 runs into the
+engine's primality-proof ceiling: the model puts `a(20)` below it with only
+19% probability, so a further term on that family means wiring huntlib's
+BLS75 certificates into the verification path. A130003 has room to `a(23)`.
 
 ## The problem
 
@@ -49,7 +63,8 @@ five separate places in A110096.
 | Found by | Jens Kruse Andersen, **Jun 08 2007** | Bert Dobbelaere, Apr 24 2021 |
 | Author | Farideh Firoozbakht, May 30 2007 | Joseph L. Pe, Sep 05 2005 |
 | Other link | Rivera, [Puzzle 403](http://www.primepuzzles.net/puzzles/puzz_403.htm) | Rivera Puzzle 379 cluster; A193109 |
-| **Open, and next** | `a(19)` | `a(17)` |
+| **Found here** | `a(19)`, `a(20)` | `a(17)`, `a(18)` |
+| **Open, and next** | `a(21)`, empty below `8.95×10¹⁸` | `a(19)`, empty below `3.62×10²¹` |
 | Upper bound | **none published, at any open n** | **none published, at any open n** |
 
 Why they are open rather than merely unfinished: the density of qualifying
@@ -64,7 +79,9 @@ A110096's entry records that argument (Charles R Greathouse IV, Oct 2011).
 years.** Rivera's Puzzle 403 — the entry's only link — was re-read when
 this project was built: Andersen's table there ends on the same
 `a(18)`, and the only bound on the page is Bernardo Boncompagni's
-long-superseded `2.84×10¹¹`. Nothing anywhere is past it.
+long-superseded `2.84×10¹¹`. Nothing anywhere was past it — and the OEIS
+export was re-pulled on 2026-08-26, after the sweep, with both entries
+still ending exactly where they did.
 
 ## The mathematics of the engine
 
@@ -218,14 +235,54 @@ for, so its `E` is identically zero and scoring it would manufacture
 agreement out of nothing. Only terms that strictly exceed their predecessor
 are used.
 
-**Read every median above as a floor.** This repo has now scored seven
-first occurrences across its two ladder projects and they land at a mean
-model quantile of **0.85** where a correct model gives 0.50; square-ladders
-measured its own optimism factor at 3.7× with a 95% interval [1.25, 17.7]
-that excludes 1, *while its census showed the modelled intensity right to
-2%*. Mean count right, first occurrence late. Budget 2-3× the medians
-above before expecting a term, and treat a term that arrives on the median
-as luck rather than as calibration.
+**How the finds scored** (out of sample, against the table above, each
+measured from the floor its own search started at):
+
+| term | found at | live median | E at the find | quantile |
+|------|----------|-------------|---------------|----------|
+| A130003 `a(19)` | `1.33×10¹⁶` | `5.75×10¹⁶` | 0.278 | 0.243 |
+| A130003 `a(20)` | `6.12×10¹⁸` | `1.64×10¹⁸` | 1.426 | 0.760 |
+| A110096 `a(17)` | `3.06×10²⁰` | `2.03×10²⁰` | 0.899 | 0.593 |
+| A110096 `a(18)` | `7.60×10²⁰` | `1.97×10²²` | 0.042 | 0.041 |
+
+Two early, one late, one on the nose: **2.64 expected hits for 4 actual**,
+an optimism factor of **0.66×** with an exact 95% interval of
+**[0.30, 2.43]**, which contains 1. And the census
+([RESULTS.md](RESULTS.md#census)) says the intensity underneath it is right
+to within 1% over 15,457 classified values on both families at once. On
+its own four draws, this model is not measurably wrong in either direction.
+
+**Read every median above as a floor anyway.** Four draws cannot separate
+0.66× from 2×, and the three ladder projects in this repository have now
+scored eleven first occurrences between them at a pooled optimism factor of
+**2.06×**, 95% interval **[1.23, 4.13]** — still excluding 1, still with
+each project's census showing the modelled *intensity* right to a percent
+or two. Mean count right, first occurrence late. Their mean model quantile
+is 0.69 against the 0.50 a correct model gives; the four finds above are
+what pulled it down from 0.85. Budget 2-3× the medians before expecting a
+term, and treat a term that arrives on the median as luck rather than as
+calibration.
+
+**The live ladder**, re-derived from the frontiers this project set. The
+table above is the pre-sweep record and stays as it was; four of its six
+rows are now settled terms, and the two that are still open — `a(21)` and
+`a(19)` — are re-derived here from the floors those finds moved
+(CONVENTIONS.md, "a rung retires with its term"):
+
+| term | Q1 | median | Q3 | P90 | P(below the engine's ceiling) |
+|------|----|--------|----|-----|-------------------------------|
+| A130003 a(21) | 2.84×10¹⁹ | **8.45×10¹⁹** | 2.41×10²⁰ | 5.51×10²⁰ | 100% |
+| A130003 a(22) | 4.17×10²⁰ | **1.93×10²¹** | 6.65×10²¹ | 1.64×10²² | 100% |
+| A130003 a(23) | 1.38×10²² | **6.89×10²²** | 2.40×10²³ | 5.92×10²³ | 99.8% |
+| A110096 a(19) | 1.52×10²³ | **5.82×10²³** | 1.68×10²⁴ | 3.64×10²⁴ | 88.5% |
+| A110096 a(20) | 5.28×10²⁴ | **2.07×10²⁵** | 5.99×10²⁵ | 1.30×10²⁶ | **19%** |
+| A110096 a(21) | 2.00×10²⁶ | **7.76×10²⁶** | 2.24×10²⁷ | 4.82×10²⁷ | **2%** |
+
+That last column is the one to read. The ceiling is
+`k_ceil(n, b) = 3.317×10²⁴ − bⁿ`, the primality-proof bound, and A110096's
+values outgrow it two terms from here while A130003's do not: the base-2
+family has about one more term in range, and going past it means proving
+larger primes rather than making the engine faster.
 
 ## Running it
 
@@ -255,11 +312,19 @@ python launch.py --base 2      # A110096 instead
 ```
 
 Each family keeps its own checkpoint under its own config key, and neither
-campaign will read the other's cursor. The hunt is indefinite by default,
-resumable, checkpointed every segment, and stops cleanly on Ctrl+C with
-exit 130. `--to` caps the depth, `--stop-on-discovery` exits once **this
-run** confirms a find, and `--gentle` trades about a third of the rate for
-a noticeably freer desktop.
+campaign will read the other's cursor. Either command above resumes where
+that family was paused — `m = 8.95×10¹⁸` at base 4, `m = 3.62×10²¹` at
+base 2 — with the filter already promoted to the term it is hunting. The
+hunt is indefinite by default, resumable, checkpointed every segment, and
+stops cleanly on Ctrl+C with exit 130. `--to` caps the depth,
+`--stop-on-discovery` exits once **this run** confirms a find, and
+`--gentle` yields 2 ms after every launch for a noticeably freer desktop.
+Its price is worth re-reading before you use it: the sleep measures ~2.5 ms
+per launch on this machine against an ~11 ms base-4 launch, so about a
+fifth of the rate rather than the third the help text claims. The
+disagreement is recorded rather than overwritten
+([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)) — the two numbers may simply
+be measuring different things.
 
 ## Trust
 

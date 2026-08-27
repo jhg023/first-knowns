@@ -578,10 +578,47 @@ wall-clock tables at the scored rate.
 measurement, kept/rejected. Failures included; they are the record that
 stops the next person from retrying them.
 
-The top-level README carries one table row per project:
-`| project | problem (one line, linked OEIS/reference) | status + headline result |`.
-Keep the row's status word identical to the project README's status line.
-
 Repo-wide hygiene: no personal or machine-specific information (names,
 paths, hardware serials, local configuration) anywhere; hardware model
 names used for performance context are fine.
+
+### The top-level README's project table (binding)
+
+The top-level README carries one table row per project:
+
+`| project | problem (one line, linked OEIS/reference) | status |`
+
+The **status cell is a summary, not a report.** It is three things, in
+this order, and nothing else:
+
+1. the **status word**, bold — identical to the project README's status
+   line (`ACTIVE` / `COMPLETE` / `PAUSED — open to others`);
+2. **what was found** — which terms, the date they were found and
+   verified, and the frontier that broke ("the first advance since
+   2014"). One sentence;
+3. **where it stands now** — the cursor the campaign is paused at and
+   the next open term. One short sentence.
+
+Shape, with the problem cell elided:
+
+`| [square-ladders](square-ladders/) | A089761: ... | **PAUSED — open to others** — a(16), a(17) and a(18) found & verified 2026-08-21/23, the first terms anyone has found since 2008 and the first break in a five-term plateau. Paused at k = 1.10×10²⁰, with a(19) open. |`
+
+A project with no results yet says exactly that in slot 2 and names its
+next open terms in slot 3. That is the same shape, not an exception to
+it.
+
+Everything else belongs in the project's own README: the exact integers,
+engine versions and their throughput, SCORE, wheel construction, model
+quantiles and optimism factors, resumption ETAs, certificate machinery,
+prior-frontier attribution, and every "why". **Nothing in the cell may
+be the only copy of a fact** — the row is a pointer to the project
+README, so a fact that lives only in the table is misfiled.
+
+The rule exists because the failure mode is incremental and invisible
+from inside one row: each publication adds its own news to its own row,
+no single edit looks unreasonable, and the column ends up holding one
+essay per project at four different lengths — at which point the table
+has stopped answering the only question it is there to answer, which is
+what this repo has and which parts of it are running. A table is read
+*across*, so **re-read the whole column whenever you edit one row**, and
+cut yours back to the three slots if it has outgrown its neighbours.

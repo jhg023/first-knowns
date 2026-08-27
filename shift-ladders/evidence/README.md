@@ -8,16 +8,27 @@ later value that reaches the frontier) is counted in the checkpoint and
 shown in each 30-second `[STATUS]` line, never written here
 (CONVENTIONS.md, "The census is counted, not narrated").
 
-**Present: nothing yet.** No production sweep has been run. The engine and
-the full gate battery are green and the campaign is the owner's to start.
+**Present: four first occurrences**, from the campaigns of 2026-08-23/24:
+
+    A130003_a19_13268589982417023.json         a(19), base 4
+    A130003_a20_6120156516528136867.json       a(20), base 4
+    A110096_a17_305948728878647722725.json     a(17), base 2
+    A110096_a18_760056834873121351995.json     a(18), base 2
+
+and the two ledgers. Nothing else: the campaigns also classified 15,457
+values at run 8 or longer and 7 of those came within one condition of an
+open term, and none of them is written here — they are counts in the
+checkpoint and lines in the log, which is the whole rule.
 
 Because the conditions of both sequences nest, one `m` can settle several
 terms at once. A find is evidenced **once**, under the first term it
 settles, with a `settles` field listing all of them — a run of 21 at
 base 4 would produce a single `A130003_a19_<m>.json` recording `a(19)`,
-`a(20)` and `a(21)`. Both sequences say how often that happens: A130003's
-`a(10) = 4503` settled five terms at once, and A110096 repeats at six of
-its sixteen indices.
+`a(20)` and `a(21)`. Both sequences say how often that happens at small
+`m`: A130003's `a(10) = 4503` settled five terms at once, and A110096
+repeats at six of its sixteen indices. At the depths these four were found
+it is far rarer — about 0.13 per find — and each `settles` exactly one
+term ([RESULTS.md](../RESULTS.md#what-a-find-looked-like)).
 
 Each file is meant to be checkable by anyone with a bignum library and no
 trust in this repository. It carries:

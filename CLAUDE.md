@@ -245,7 +245,14 @@ each README stays.
          (disclaimer first, then headline, status, problem, engine,
          model, usage, trust)
    - [ ] status word (ACTIVE / COMPLETE / PAUSED — open to others)
-         identical in the project README and the top-level table row
+         identical in the project README and the top-level table row,
+         and that row's status cell in the fixed three-slot shape —
+         status word, what was found and when, where the cursor sits and
+         what is open next — with the integers, engine, throughput and
+         model scoring left to the project README, where a reader can
+         find them (CONVENTIONS.md "The top-level README's project
+         table"). A row is read across; a status cell that has outgrown
+         its neighbours gets cut back, not extended
    - [ ] evidence/ directory with verifiable JSONs (exact integers +
          factor witnesses) for FIRST OCCURRENCES ONLY -- census is counts
          in the checkpoint and the log, never files; runtime checkpoints

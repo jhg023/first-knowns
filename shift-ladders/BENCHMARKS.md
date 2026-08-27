@@ -110,9 +110,11 @@ v1's `SCORE` did not resolve to better than about ±25%, because its 12.6 MB
 residue table was streamed once per launch and made the production shape
 bandwidth-sensitive where the coarse-wheel shapes were not.
 
-## Wall clock at the scored rate
+## What the benchmark predicted, and what the campaign did
 
-From each family's published frontier to each open term's model median:
+From each family's published frontier to each open term's model median.
+This table was written **before** the sweep and is left exactly as it was,
+so the prediction can be read against the outcome below it:
 
 | target | from | median | line to sweep | v1 | **v2** |
 |--------|------|--------|---------------|----|--------|
@@ -127,19 +129,63 @@ at 3.57×10¹⁴ m/s for `b = 4` and 1.53×10¹⁸ m/s for `b = 2` — the score
 rates, which for `b = 2` is the conservative one (its sustained rate over
 several launches measures ~1.9×10¹⁸).
 
-Two things this table is not. It is not a forecast: the medians are the
-model's, and this repo's first-occurrence models run about 3× late, so
-multiply by 2-3 before expecting a term (README, "The odds model"). And it
-is not the ceiling of what the hardware can do — see OPTIMIZATION_LOG.md
-for the phase table, and for the hypotheses that were built and measured at
-1.00.
+**What actually happened**, 2026-08-23/24 ([RESULTS.md](RESULTS.md)):
 
-What it *is* is a change in which legs are worth running. At v1, `a(21)` of
-A130003 was four months of wall clock and A110096's `a(19)` most of a year;
-at v2 every open term either model has a prediction for — three apiece —
-sits inside a week at the median, and the two published frontiers are two
-and a half minutes away. Even at 3× the median, which is what this repo's
-models have actually done, the whole table is a fortnight.
+| term | predicted at the median | found at | wall clock into the campaign |
+|------|------------------------|----------|------------------------------|
+| A130003 `a(19)` | 2.6 min | `1.33×10¹⁶` | **117 s** |
+| A130003 `a(20)` | 1.1 h | `6.12×10¹⁸` | **12.04 h** |
+| A110096 `a(17)` | 2.2 min | `3.06×10²⁰` | **9.5 min** |
+| A110096 `a(18)` | 3.1 h | `7.60×10²⁰` | **15.8 min** |
+
+Four terms for 18.1 h of one GPU. Where a row missed it missed for two
+separable reasons, and both are scored rather than averaged: the depth the
+term actually sat at is in [README.md](README.md#the-odds-model), and the
+rate the campaign actually ran at is here.
+
+### The campaign rate is not the scored rate
+
+Measured end to end from each checkpoint's own `elapsed` and swept `m`:
+
+| | line swept | wall clock | end-to-end | last stretch | same configuration, free GPU |
+|---|---|---|---|---|---|
+| A130003 (`b = 4`) | `8.95×10¹⁸` | 17.44 h | `1.42×10¹⁴ m/s` | `1.45×10¹⁴` (n = 21) | `5.08×10¹⁴ m/s` (n = 21 at the cursor) |
+| A110096 (`b = 2`) | `3.62×10²¹` | 38.2 min | `1.58×10¹⁸ m/s` | `2.12×10¹⁸` (n = 19) | `5.21×10¹⁸ m/s` (n = 19 at the cursor) |
+
+The campaigns bought **29% and 41%** of what the kernel does in the same
+configuration, and **that gap is now larger than anything left in the
+kernel.** Measured per launch — the campaign's own unit — it is a fixed
+**29.5 ms and 29.8 ms**, on two families whose launches differ by four
+orders of magnitude in line swept and 16× in survivors classified. The
+sieve, the host classifier and the checkpoint are each priced and none of
+them is it; the budget and the one candidate that fits are in
+[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md).
+
+One thing the campaign settled in the engine's favour: **a higher filter is
+faster**, monotonically. At the base-4 cursor the same 4,096-period window
+sweeps at `4.34 / 4.90 / 5.32 ×10¹⁴ m/s` at `n = 19 / 20 / 21`, because a
+longer killed set removes more of the line per prime. Every term this
+project finds makes the next one cheaper per unit line — the opposite of
+the usual, and worth knowing before pricing `a(22)`.
+
+### Where the next terms sit
+
+From the paused cursors, at each campaign's own last-stretch rate and at
+the device rate the same configuration reaches on a free GPU:
+
+| target | from | median | line to sweep | at the campaign rate | at the device rate |
+|--------|------|--------|---------------|----------------------|--------------------|
+| A130003 `a(21)` | `8.95×10¹⁸` | `8.45×10¹⁹` | `7.6×10¹⁹` | **6.0 d** | **1.7 d** |
+| A130003 `a(22)` | " | `1.93×10²¹` | `1.9×10²¹` | 153 d | 44 d |
+| A110096 `a(19)` | `3.62×10²¹` | `5.82×10²³` | `5.8×10²³` | **3.2 d** | **1.3 d** |
+| A110096 `a(20)` | " | `2.07×10²⁵` | `2.1×10²⁵` | 113 d | 46 d — and only 19% of it is under the engine's ceiling |
+
+Two things this table is not. It is not a forecast: the medians are the
+model's, and this repo's ladder models run about 2× late pooled over eleven
+finds, so multiply before expecting a term (README, "The odds model"). And
+it is not the ceiling of what the hardware can do — the last column is what
+closing the campaign-rate gap would buy, and it is a better trade than any
+kernel work now on the table.
 
 Wall clock of the tools themselves, so they can be planned against the
 five-minute rule: `launch.py --selftest` ~60 s, `score.py` ~90 s.
