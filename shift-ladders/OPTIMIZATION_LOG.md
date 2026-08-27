@@ -257,6 +257,16 @@ are 1.9x to 40x and are not in that zone at all.
 
 ## Where it stands: the termination test (OPTIMIZATION.md Part 3)
 
+> **SUPERSEDED 2026-08-27 (second pass).** The table below was measured on
+> the v2 engine at `p2 = 79`, and both its shares and its verdicts are
+> stale: re-ablated at the production configuration, generation is 38%
+> rather than ~50%, `extract & queue` is 16% rather than ~12%, the tail is
+> 5.7% rather than 23.9%, and 14.5% of a launch is block dispatch and
+> prologue, which this table has no row for at all. The current table is at
+> the end of this file, "The termination test, re-derived". Kept here
+> because the *reasoning* in its rows is still the record of what was tried
+> and why — but a share or a verdict read out of it is out of date.
+
 Phase split on the shipped engine, `SCORE`, CUDA events around each of the
 two kernels; the within-sieve shares are from the stage-truncation
 measurement at the same schedule and are quoted to one significant figure
@@ -851,6 +861,284 @@ All at the new `p2`, because that is what the re-sweep rule is for.
   penalty is in the `p1 = 41` table above: 512 periods reads 1.051x where
   1,024 reads 1.398x. Priced and declined.
 
+## 2026-08-27 (second pass) — the phase table was wrong, and the noise floor is 11%
+
+A pass aimed at four leads from a static reading of the engine. **None of
+them is a throughput win**, and the two most useful things it produced are
+a corrected phase table and a number nobody had measured: how well this
+harness can actually resolve a ratio.
+
+### The measurement that should have come first: what an identical kernel measures
+
+Three arms, **byte-identical kernels** behind different comments, paired
+and order-rotated over the production window at the live base-4 cursor:
+
+| arm | median | ratio vs the first | per-round range |
+|---|---|---|---|
+| shipped | 1035.30 ms | 1.0000 | — |
+| identical copy 1 | 1049.22 ms | 1.0214 | [0.8851, 1.1127] |
+| identical copy 2 | 1051.02 ms | 1.0120 | [0.8825, 1.1091] |
+
+**+-11% per round between two copies of the same binary**, at a window of
+32 launches (1.05 s per measurement) where a longer window did not help —
+so the noise is not launch granularity, it is the card, on a timescale
+shorter than a single arm. The median over 11 rounds is good to about
++-2.5%; over 60 balanced rounds, to about +-0.6%. Every ratio below is
+quoted against a control arm measured **in the same run**, and anything
+inside the control's band is reported as unmeasured rather than as a
+result. The log already had one instance of this (two identical binaries
+reading 1.052 and 1.295 apart under `-maxrregcount`); it is now a standing
+part of the harness instead of an anecdote.
+
+The practical consequence: **this project cannot see a 2% change**, and
+several of the small items below sit under that. Saying so is cheaper than
+shipping them and believing the number.
+
+### Round 0 — the phase split, measured, and it is not what the model says
+
+Two independent differential ablations (OPTIMIZATION.md 3.3), on the
+production configuration at the live cursor rather than on a benchmark
+shape. **Prefix arms**: the kernel truncated one phase later each time,
+registers pinned so occupancy is constant, every sink consuming only
+DEFINED values through a `__syncthreads_or` ballot every thread must reach.
+**Duplication arms**: the whole pipeline with the plane reads run two and
+three times over the same addresses — `mask &= X` is idempotent, so the
+survivor stream is unchanged and the fingerprint checks the arm, which a
+truncated kernel can never do.
+
+| phase | modelled | **measured** |
+|---|---|---|
+| block launch — an EMPTY kernel at the production grid | not modelled | **6.2%** |
+| prologue — `res` read + the per-group plane shift | not modelled | **8.3%** |
+| generation — the plane reads | 67.1% | **38.1%** |
+| extract & queue | 3.1% | **16.1%** |
+| compaction rounds | 16.6% | **25.6%** |
+| tail-queue push | — | 0.7% |
+| early-exit tail kernel | 13.2% | **5.7%** |
+| sum of phases against wall clock | | **100.7%** |
+
+The phases sum to the launch, which is Rule 1's check that the pipeline is
+understood. The model is wrong in composition, not in ranking: generation
+still dominates, but it is 38% and not 67%, `extract` is **five times**
+the modelled figure, the tail is a third of it, and **14.5% of the launch
+is block launch plus prologue, for which `model_cost` has no term at all.**
+`GEN_W`, `EXTRACT` and `ROUNDC` price only what is per-residue and
+per-candidate; a cost that scales with the BLOCK COUNT is invisible to
+them. That is not a bug in `pick_p2` — the terms it trades are the ones it
+has — but it means the phase table in this file must come from ablation
+and never from `model_cost`.
+
+The duplication arms agree and add something: one extra pass of the plane
+reads costs **20.4%** of the launch and a second **26.4%**, against the
+prefix arm's 38.1% for the first pass. Extra passes run cache-warm, so
+they are a lower bound — and the gap between 20% and 38% is the price of
+the first touch, i.e. generation is paying for MEMORY LATENCY, not for
+instructions. That reading is what the next item then confirmed the hard
+way.
+
+### THE FIRST VERSION OF THE ABLATION WAS ANTI-EVIDENCE
+
+Worth recording because it is exactly the failure OPTIMIZATION.md 3.3
+warns about and it still happened. The first prefix sink consumed shared
+arrays that nothing in the truncated kernel had written. Reads of
+never-written shared memory are undefined, so nvcc was free to call the
+whole expression undefined and **delete the loop being priced**: shared
+fell 1560 B to 532 B, registers 44 to 22, and "generation" measured 8.3%
+of the launch — it was timing an empty kernel over 2.95 million blocks.
+The same run also reported the tail-queue push as **-6.5%**, work that
+made the kernel faster, which is the tell that should stop a reading being
+believed. Two rules came out of it, both now enforced in the harness:
+
+- every value a sink consumes must be **defined**, and every buffer a
+  phase writes must be **read back**, or the stores are dead and go away;
+- the sink must be a **ballot every thread reaches**
+  (`__syncthreads_or(_s == magic)`), not an `if (arg < 0)` guard — nvcc
+  will sink the whole phase inside an untaken branch.
+
+### Rejected, with numbers
+
+**The warp shuffle for the second plane load — 0.773x [0.729, 0.813].**
+The clearest result of the pass, and the only one outside the control
+band on every one of 13 rounds. Generation loads `B[0]` and `B[1]` per
+group to funnel-shift across a non-aligned bit offset. The index
+arithmetic makes the second load redundant: with `idx = threadIdx.x +
+i*TPB`, `rl = idx >> logw` and `wrd = idx & (wact-1)`, a warp holds 32
+consecutive words of the SAME residue whenever `wact >= 32`, so `B[1]` of
+lane L is `B[0]` of lane L+1 and `__shfl_down_sync` replaces it — 2 loads
+per group becoming ~1.03, in the phase that is 38% of the launch. It is
+**23% slower.** The second load is an L1 hit on the line the neighbour
+lane is already pulling, and it is independent; a shuffle is a
+warp-synchronising instruction on the dependent path. Removing a free load
+to add a serialising one runs the wrong way.
+
+That makes **four** independent attacks on generation's load count that
+have now failed — 64-bit plane words (0.90x), the saturation guard
+(0.818x), the locality-ordered residue table (~1.00), and this (0.773x).
+Read together with the duplication arms above, the verdict is no longer
+"bound by load count" but **bound by the latency of the first touch**, and
+the corollary is that any change which trades a load for an instruction on
+the dependent chain will lose. Do not attempt a fifth.
+
+**`Q3_MAX` 2^26 -> 2^27, and the `tail_surv` x `per_launch` sweep it
+unblocks — no.** The premise was that the tail queue's ceiling was capping
+two knobs at once, and that `tail_surv = 0.20` had measured 1.056x last
+pass *while overflowing into the in-block fallback*, so it had been
+declined on the overflow rather than on its merits. Both halves turn out
+to be wrong. Swept at `p2` PINNED (raising `tail_surv` moves the model's
+`p2` pick, which is the confound this log caught once already), streams
+identical, all arms with the queue actually large enough:
+
+| `tail_surv` | q3 need | short? | ratio | | `per_launch` | ratio |
+|---|---|---|---|---|---|---|
+| 0.03 | 11.8M | no | **0.836** | | 4096 (derived) | 1.0000 |
+| 0.05 | 19.4M | no | **0.915** | | 8192 | 1.0125 |
+| **0.10** (shipped) | 31.3M | no | 1.0000 | | | |
+| 0.15 | 48.8M | no | 0.969 | | | |
+| 0.20 | 80.0M | no | 0.985 / 1.008 | | | |
+| 0.35 | 134.6M | yes | 0.969 / 0.942 | | | |
+
+Everything from 0.10 to 0.20 is inside the control band on two independent
+sweeps that disagree about the sign; 0.03 and 0.05 are genuinely worse,
+which is the schedule doing its job. **The shipped 0.10 stands**, and
+`Q3_MAX` stays at 2^26 rather than spending 512 MiB of ceiling and 371 MiB
+of queue to reach a setting that measures nothing.
+
+And the premise about `per_launch` was simply mis-read: at the production
+wheel the derived launch is capped by **`CAND_SLOTS`** (which allows 5,826
+periods, so 4,096) and not by the tail queue (which allows 8,777). Raising
+`Q3_MAX` does not move it. 8,192 was reachable all along by raising
+`CAND_SLOTS`, and it reads 1.0125 — i.e. 1.2% slower.
+
+**Hoisting the tile-edge tests (`full` flag) — 0.990, unmeasured.** A
+block whose tile lies entirely inside the launch needs neither the `nyb`
+clamp nor its select, which is every block but the last in production. It
+buys nothing measurable and costs a branch. Not shipped.
+
+### Kept — all three neutral on throughput, and kept for what they cost off the clock
+
+None of these is a speedup and none is presented as one. What they buy is
+memory, engine-construction time and one less table to be wrong about,
+which is the currency OPTIMIZATION.md Rule 7 is about.
+
+**`crv` does not exist any more — 360 MiB at base 4, 688 MiB at base 2.**
+The per-residue plane shift is exactly linear in the residue,
+
+    cr_g(r) = (W^-1 mod Q_g) * r  mod  Q_g
+
+because `W^-1 mod Q_g` reduces to `W^-1 mod q` at every q in the group,
+which is the CRT reconstruction `plane_shifts` performs. (The identity was
+already in this log, used to price a two-level residue table; it was never
+used for the table it makes redundant.) So the block prologue computes it
+from `res` — which it already reads — and one baked constant per group,
+instead of streaming `R * NG` u32 from HBM once per launch. Verified
+against `plane_shifts` on 11 groups across four wheels and both bases,
+every residue.
+
+Throughput **0.9985 [0.95, 1.12] at base 4** and **0.979 at base 2** —
+neutral, and the reason is the phase table: 360 MiB per 33 ms launch is
+10.7 GB/s against ~1000 GB/s available, so it was never bandwidth. It is
+a memory saving, not a speed one.
+
+**The prologue's `switch (g)` had to go with it.** Base 2 first measured
+a real ~2% REGRESSION, and the cause was structural: the prologue walked
+`nrl * NG` items with `g` fastest and dispatched on it, so a warp covered
+every group at once and ran all `NG` case bodies serially. That was
+survivable when a case body was one modulo; it is not when the case
+computes the plane shift. Restructured to one straight-line pass per
+group, with `Q`, `W^-1` and the plane offset as literals and `g` gone from
+the runtime entirely, base 2 moves from **0.982 to 1.020** and base 4 is
+unchanged within the control band.
+
+**`key0` is `idx << 5`.** The key packs `(rl, wrd, bit)` as
+`(rl << (logw+5)) | (wrd << 5) | bit`, and `wact = 1 << logw`, so `rl` and
+`wrd` are the disjoint high and low parts of `idx` and the first two terms
+collapse. Four ALU ops become one on a path every thread walks `WPT` times
+whether or not its word holds a candidate. Measured **1.0144 against a
+control at 1.0009** over 60 balanced rounds — the only kept item that
+reads above its control, and still only just. The DECODE is untouched, and
+G16 now pins encode against decode over every tile shape `logw = 0..10`
+rather than arguing the identity.
+
+**The wheel cache is keyed on the effective `w` vector, not on `n`.** The
+wheel depends on the filter only through `w(q,n,b) = min(n, ord_q(b))`, so
+once `n` passes every ord below `p1` the table stops changing: at
+`b = 4, p1 = 29` the largest is `ord_29(4) = 14`, and `wheel(n, 4, 29)` is
+**byte-identical for every n >= 14**. Keyed on `n`, every discovery
+rebuilt 23.6 million residues for a table already in hand. Base 2 at
+`p1 = 41` genuinely changes until `n >= 36` (`ord_37(2) = 36`), which is
+why the key is the vector and not a per-base special case. G8 pins both
+halves.
+
+Together with `crv`, what a discovery costs in GPU idle:
+
+| | device tables | engine rebuild at the next filter |
+|---|---|---|
+| base 4, `n = 21 -> 22` | 855 -> **495 MiB** | 20.0 -> **11.1 s** |
+| base 2, `n = 20 -> 21` | 1340 -> **652 MiB** | 26.6 -> **13.2 s** |
+
+`plane_shifts` over 23.6M residues x 4 groups was 8.5 s of every rebuild
+on its own. It stays in the module as the host-side reference G16 checks
+the kernel's constant and expression against.
+
+### End to end, HEAD against this pass
+
+Paired in ONE process with both engines alive, streams compared every
+round, and a byte-identical control arm in the same run:
+
+| | HEAD | new | control (== new) | reading |
+|---|---|---|---|---|
+| base 4, `n = 21`, 60 rounds | 1.0000 | 1.0033 | 0.9947 | **1.00** |
+| base 2, `n = 20`, 39 rounds | 1.0000 | 1.0113 | 1.0289 | **1.02** |
+
+The control arms differ from their own twin by 0.9% and 1.8%, which is the
+resolution. **The honest statement is that this pass is throughput-neutral
+on both families**, and what it delivers is 360/688 MiB, 9/13 seconds per
+discovery, and the four declines above with their prices.
+
+### Settled by static argument, so nobody re-opens them
+
+Three items that need no measurement and are recorded so they stay closed:
+
+- **`ng = 3` at `p2 = 103` is architecturally impossible**, not merely
+  expensive. It needs ~1.9 GB per plane, past both `PLANE_TOTAL_MAX` and
+  the **u32 bit index** the kernel uses to address `gbits`, which caps all
+  planes together at 512 MiB. `build_planes` already refuses on both.
+- **Early-exiting the 4th plane load when the mask is already zero never
+  fires.** 61% of individual words are dead after three groups, but the
+  branch is warp-wide and `P(all 32 lanes dead) ~ 8e-7`. This is the same
+  arithmetic that made the saturation guard 0.818x: per-lane redundancy is
+  not warp-level redundancy.
+- **The kill bitmap's 2x doubling (24 MiB) is free, not a cache cost.**
+  99% of all tests land in the first **101 units = 0.05 MiB**; the other
+  48 MiB is cold. The hot working set is the 27.6 MiB of planes plus
+  ~0.2 MiB of bitmap, so "the working set now exceeds L2" is **FALSE** and
+  the doubling is not a thing to undo.
+
+### The termination test, re-derived (OPTIMIZATION.md 3.1)
+
+Shares are the ablation above, on the production configuration at the live
+cursor. Every verdict here was re-derived against THIS split, not
+inherited from the one it replaces — the previous table's rows were
+written against a profile that no longer exists.
+
+| phase | share | verdict |
+|---|---|---|
+| generation — the plane reads | 38.1% | **bound by the latency of the first touch, established by four failed attacks on the load count** (64-bit words 0.90x, saturation guard 0.818x, locality-ordered residues ~1.00, warp shuffle **0.773x**) and confirmed positively by the duplication arms: a cache-warm extra pass costs 20.4% where the first costs 38.1%. The plane COUNT is minimised by the budget (2^28) and by `pick_p2`. No lever left that this log can name |
+| compaction rounds, in the block | 25.6% | **at its schedule optimum, newly re-measured.** The chain starts at 0.99 candidates per thread and falls to 0.10 by round 4, which looks like the argument for handing over earlier — and `tail_surv` 0.15/0.20 measure inside the control band while 0.03/0.05 are clearly worse. The boundary is where it should be. UNSEARCHED: whether the last two rounds, which run on 34 and 13 items against 128 threads, should exist at all as ROUNDS rather than as a shorter chain |
+| extract & queue | 16.1% | **five times the modelled figure, and now the phase with the most unexplained cost.** `key0` was four ALU ops and is now one (1.014). What remains is a five-step shuffle prefix scan per thread and an `ffs` loop over the 12% of words that are non-empty. The scan is charged per THREAD, not per candidate, so it does not shrink with the wheel. This is the row to attack next |
+| prologue — `res` + the plane shift | 8.3% | **`crv` removed (neutral, -360/-688 MiB) and the group switch removed with it** (base 2: 0.982 -> 1.020). What is left is one `res` read plus `NG` straight-line plane shifts per block |
+| block launch — an empty kernel at this grid | 6.2% | **UNSEARCHED, and it was not in the previous table at all.** A launch dispatches 2.95M blocks of 1024 work items; an empty kernel over that grid is 2.0 ms of a 32.7 ms launch. The knob is `TPB * WPT`, last swept at 1024 work items — but that sweep was reading throughput, and it could not separate this cost from occupancy. Bigger blocks need `mine[WPT]` in registers, which is why `WPT = 16` reads 0.982 |
+| tail kernel | 5.7% | **optimized**, and a third of the share the previous table gave it |
+| tail-queue push | 0.7% | negligible |
+
+Two rows carry named work: `extract & queue` at 16.1%, and the 6.2% block
+launch that nothing has ever looked at. Neither is a certification of
+completion — but both are now under the 11% the harness can resolve, which
+is itself the finding: **the next real gain on this engine will not be
+visible to this measurement setup.** A pass that wants to move it needs a
+tighter clock than paired wall time on a desktop card, or a change big
+enough not to need one.
+
 ## Priced and not done
 
 - ~~**A second wheel level below the plane wheel.**~~ SETTLED 2026-08-27,
@@ -871,10 +1159,31 @@ All at the new `p2`, because that is what the re-sweep rule is for.
   `_pick_launch` now derives against the tail queue itself, so neither
   family needs a per-base override and both land on their measured
   optimum (4,096 and 2,048).
-- **The extract stage's warp scan**, above — the one phase over 5% with no
-  verdict of its own.
+- **The extract stage's warp scan** — now re-measured at **16.1%**, five
+  times what `model_cost` prices it at, and the largest phase with no
+  verdict. `key0` took four ALU ops out of it for 1.014; the five-step
+  shuffle prefix scan is charged per THREAD rather than per candidate, so
+  it does not shrink as the wheel deepens. This is the row to attack next.
+- **Block dispatch, 6.2% of a launch** (2.95M blocks; an empty kernel over
+  that grid is 2.0 ms of 32.7 ms). Never measured before this pass and not
+  in any earlier phase table. The knob is `TPB * WPT`, and the reason it
+  cannot simply go up is `mine[WPT]` in registers — `WPT = 16` reads 0.982.
+  Unsearched.
+- **A cost-model term for what scales with the BLOCK COUNT.** `GEN_W`,
+  `EXTRACT` and `ROUNDC` price only per-residue and per-candidate work, so
+  `model_cost` cannot see 14.5% of the launch. `pick_p2` trades the terms
+  it has and lands inside its measured plateau, so this is not urgent —
+  but it is why the phase table in this file must come from ablation.
+- **A tighter clock.** The harness resolves +-11% per round and about
+  +-0.6% on a 60-round median (measured, above). Every remaining named
+  item is smaller than that. A pass that wants to move this engine needs
+  either a better measurement than paired wall time on a desktop card, or
+  a change large enough not to need one.
 
 ## Declined
 
 Everything in "Rejected, with numbers" above, each with the measurement
-that settled it. Nothing has been declined here on a projection.
+that settled it, plus the three items settled by static argument in the
+2026-08-27 second pass (`ng = 3` at `p2 = 103`, the early-exit plane load,
+and the kill bitmap's doubling). Nothing has been declined here on a
+projection.

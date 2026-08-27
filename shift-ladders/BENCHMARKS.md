@@ -75,6 +75,66 @@ shape whose job is the knob sweep, not the campaign rate.
 
 ## Ledger
 
+### 2026-08-27 (second pass) — a NEUTRAL pass, and what the SCORE column cannot see
+
+**Read the paired table, not the SCORE column.** This pass is
+throughput-neutral and the SCORE moved a long way anyway, which is the
+clearest demonstration this ledger has of why it carries a `spread`
+column at all:
+
+| shape | run 1 | run 2 | previous pass, run 2 | |
+|-------|-------|-------|----------------------|---|
+| `SCORE` | 1,067,287,313 | **650,413,529** | 687,132,432 | fingerprint unchanged |
+| `SCORE1L` | 180,860,360 | 110,658,174 | 110,045,599 | unchanged |
+| `SCORE2` | 20,293,276,242,257 | **12,860,336,845,142** | 13,217,994,876,081 | unchanged |
+| `SCORE4W` | 86,462,052 | 68,158,606 | 84,955,302 | unchanged |
+| `SCORE10` | 2,801,463 | 2,708,895 | 2,756,639 | unchanged |
+
+All five fingerprints reproduce bit-for-bit, which is the point: nothing
+in this pass removes a candidate or a survivor, so every frozen shape
+still applies and says so.
+
+**The two runs are 64% apart on `SCORE` and 58% apart on `SCORE2`, on
+identical code**, and that is the whole lesson of this row. Run 1 would
+have let this pass be written up as `1.55x`; run 2 lands within 5% of the
+previous entry. Neither is the engine. The `SCORE` column cannot resolve a
+change of this size and should not be asked to — which is why the frozen
+shapes exist to check FINGERPRINTS, and why a ratio in this project has to
+come from a paired run.
+
+The measurement that does resolve it: HEAD against this pass, both engines
+alive in ONE process, arms interleaved and order-rotated, streams compared
+every round, and a **byte-identical control arm in the same run** so the
+resolution is measured rather than assumed.
+
+| family | HEAD | new | control (identical to `new`) | reading |
+|---|---|---|---|---|
+| A130003, `b = 4`, `n = 21`, 60 rounds | 1.0000 | 1.0033 | 0.9947 | **1.00x** |
+| A110096, `b = 2`, `n = 20`, 39 rounds | 1.0000 | 1.0113 | 1.0289 | **1.02x** |
+
+Each control arm differs from its own twin by 0.9% and 1.8%; that is the
+resolution, and the pass is inside it on both families.
+
+**What the pass actually bought is not on the clock.** `crv` — the
+per-residue plane shift table — is gone, because the shift is exactly
+linear in the residue and the kernel can compute it from the residue table
+it already reads; and the wheel cache is keyed on the effective `w` vector
+rather than on `n`, so a find that advances the filter stops rebuilding a
+table that has not changed:
+
+| | device tables | engine rebuild at the next filter |
+|---|---|---|
+| A130003, `b = 4` | 855 -> **495 MiB** | 20.0 -> **11.1 s** |
+| A110096, `b = 2` | 1340 -> **652 MiB** | 26.6 -> **13.2 s** |
+
+That rebuild happens on every discovery, and it is GPU idle time in the
+middle of a hunt. The four things this pass measured and DECLINED — the
+warp shuffle for the second plane read (**0.773x**), `Q3_MAX` 2^26 -> 2^27
+with the `tail_surv` sweep it unblocks, `per_launch` 8192 (1.2% slower),
+and hoisting the tile-edge tests — are in
+[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) with their numbers, along with
+the re-ablated phase table, which does not agree with the modelled one.
+
 ### 2026-08-27 — the derived wheel top, `p1` = 41 at base 2, and the launch the tail queue allows
 
 Two `score.py` runs, both reported rather than averaged, because the spread
@@ -280,6 +340,12 @@ Wall clock of the tools themselves, so they can be planned against the
 five-minute rule: `launch.py --selftest` ~105 s, `score.py` ~3 min.
 Both grew on 2026-08-27 and the growth is in ENGINE CONSTRUCTION, not
 in the work being measured: `SCORE2` now lifts a 44.5-million-residue
-flat wheel (~34 s) and the deeper bit planes take longer to pack. The
-margin under the cap is smaller than it was; a shape that pushes `p1`
-again should be priced against it before it is added.
+flat wheel and the deeper bit planes take longer to pack. The margin
+under the cap is smaller than it was; a shape that pushes `p1` again
+should be priced against it before it is added.
+
+The second pass of 2026-08-27 gave some of that back. Dropping `crv`
+removes `plane_shifts` from construction entirely — 8.5 s of it at the
+base-4 production wheel, 23.6 million residues by 4 groups — and the
+`w`-vector wheel cache removes a second lift whenever two shapes share a
+table. A production engine now builds in ~12 s where it took ~20 s.

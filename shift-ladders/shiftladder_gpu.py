@@ -245,11 +245,21 @@ def wheel(n, b, p1):
     is refused here rather than part way through an allocation.  (It was the
     other way round for one commit, and the b = 2 wheel at p1 = 47 asked
     numpy for 183 GiB.)
+
+    CACHED ON THE EFFECTIVE `w` VECTOR, NOT ON `n`.  The wheel depends on
+    the filter only through w(q,n,b) = min(n, ord_q(b)), so once n passes
+    every ord below p1 the table stops changing: at b = 4, p1 = 29 the
+    largest is ord_29(4) = 14, and `wheel(n, 4, 29)` is byte-identical for
+    EVERY n >= 14.  A cache keyed on n rebuilds 23.6 million residues from
+    scratch every time a find advances the filter, for a table it already
+    holds.  b = 2 at p1 = 41 genuinely changes until n >= 36, because
+    ord_37(2) = 36 -- which is the reason to key on the vector rather than
+    to special-case a base.  G8 pins both halves.
     """
-    key = (n, b, p1)
+    qs = list(primerange(2, p1 + 1))
+    key = (b, p1, tuple(w(q, n, b) for q in qs))
     if key in _WHEELS:
         return _WHEELS[key]
-    qs = list(primerange(2, p1 + 1))
     W_final, R_final = 1, 1
     for q in qs:
         W_final *= q
@@ -353,6 +363,13 @@ def plane_shifts(res, planes, W):
     index is `(cbase_g + cr_g[i] + j_local) mod Q_g`, and CRT is a ring
     isomorphism, so the launch base contributes one more scalar per group
     and never a per-candidate operation.
+
+    THE ENGINE NO LONGER UPLOADS THIS.  It is the HOST-SIDE REFERENCE the
+    kernel's computed form is gated against: the CRT reconstruction below
+    is exactly `(W^-1 mod Q_g) * r mod Q_g`, because W^-1 mod Q_g reduces
+    to W^-1 mod q at every q in the group.  Kept slow and explicit for that
+    reason -- G16 compares it, residue for residue, with the constant and
+    the expression the kernel is generated with.
     """
     out = []
     for g in planes:
@@ -575,7 +592,6 @@ extern "C" __global__ void tailsweep(
 
 extern "C" __global__ void sieve(
         const unsigned long long* __restrict__ res, const int R,
-        const unsigned int* __restrict__ crv,     /* NG planes, R each */
         const unsigned int* __restrict__ gbits,
         const unsigned int* __restrict__ cbase,   /* NG per-launch shifts */
         const int nper,
@@ -641,8 +657,15 @@ extern "C" __global__ void sieve(
     for (int i = 0; i < WPT; ++i) {
         unsigned int mask = mine[i];
         const int idx = threadIdx.x + i * TPB;
-        const int key0 = ((idx >> logw) << (logw + 5))
-                       | ((idx & (wact - 1)) << 5);
+        /* key0 == idx << 5.  The key packs (rl, wrd, bit) as
+           (rl << (logw+5)) | (wrd << 5) | bit, and wact = 1 << logw, so
+           rl and wrd are the disjoint high and low parts of idx and the
+           first two terms collapse to ((rl << logw) | wrd) << 5 = idx << 5.
+           Four ALU ops become one on a path every thread walks WPT times
+           whether or not its word holds a candidate.  The DECODE below --
+           `key >> (logw + 5)` and `key & ymask` -- is unchanged and is what
+           makes the identity checkable: G16 pins encode against decode. */
+        const int key0 = idx << 5;
         while (mask) {
             const int t = __ffs(mask) - 1;
             mask &= mask - 1u;
@@ -708,10 +731,22 @@ class GpuEngine:
                                 start=self.bounds[-1])
 
         # --- device tables ---
-        crs = plane_shifts(res, self.planes, self.W)
+        # THE PER-RESIDUE PLANE SHIFT IS NOT A TABLE.  `plane_shifts` builds
+        # cr_g(r) = CRT_g(Binv_q * r mod q) one u32 per residue per group --
+        # 360 MiB at the b = 4 wheel and 688 MiB at b = 2, half that family's
+        # device footprint, streamed from HBM once per launch and costing
+        # 8.5 s of every engine rebuild.  It is also exactly LINEAR:
+        #
+        #     cr_g(r) = (W^-1 mod Q_g) * r  mod  Q_g
+        #
+        # because W^-1 mod Q_g reduces to W^-1 mod q at every q in the group,
+        # which is the CRT reconstruction `plane_shifts` performs.  So the
+        # block prologue computes it from `res` -- which it already reads --
+        # and one baked constant per group.  `plane_shifts` stays as the
+        # host-side reference and G16 pins both the constant and the
+        # expression against it, over the whole residue table.
+        self.winv = [pow(self.W, -1, g["Q"]) for g in self.planes]
         self.d_res = cp.asarray(res.astype(np.uint64))
-        self.d_cr = (cp.asarray(np.concatenate(crs)) if crs
-                     else cp.zeros(1, dtype=cp.uint32))
         # goff is a BIT offset into the concatenated planes
         self.goff, acc, tot = [], [], 0
         for g in self.planes:
@@ -915,26 +950,34 @@ class GpuEngine:
 
     def _build(self):
         cp = self.cp
-        cases, gl = [], []
+        pro, gl = [], []
         for gi, g in enumerate(self.planes):
-            cases.append(f"""        case {gi}: {{
-            if (z >= {g['Q']}ULL) z -= {g['Q']}ULL;
-            z = (z + (unsigned long long)ybase) % {g['Q']}ULL;
-            zc[u] = (unsigned int)z + {self.goff[gi]}u; break; }}""")
+            # cr_g(r) = (W^-1 mod Q_g) * r mod Q_g -- see plane_shifts, which
+            # stays as the host-side reference and is what G16 pins this
+            # constant and this expression against.
+            pro.append(f"""    for (int rl = threadIdx.x; rl < nrl; rl += TPB) {{
+        unsigned long long z = (unsigned long long)cbase[{gi}]
+            + (res[r1base + rl] % {g['Q']}ULL)
+              * {self.winv[gi]}ULL % {g['Q']}ULL;
+        if (z >= {g['Q']}ULL) z -= {g['Q']}ULL;
+        z = (z + (unsigned long long)ybase) % {g['Q']}ULL;
+        zc[rl * NG + {gi}] = (unsigned int)z + {self.goff[gi]}u;
+    }}""")
             gl.append(f"""            {{ const unsigned int c = zc[zb + {gi}];
               const unsigned int* B = gbits + (c >> 5) + wrd;
               mask &= __funnelshift_r(B[0], B[1], c & 31); }}""")
         zbcalc = ""
         if self.ng:
-            zbcalc = ("""    for (int u = threadIdx.x; u < nrl * NG; u += TPB) {
-        const int rl = u / NG;
-        const int g  = u - rl * NG;
-        unsigned long long z = (unsigned long long)cbase[g]
-                    + (unsigned long long)crv[g * R + r1base + rl];
-        switch (g) {
-""" + chr(10).join(cases) + """
-        }
-    }""")
+            # ONE STRAIGHT-LINE PASS PER GROUP, NOT A SWITCH OVER GROUPS.
+            # The prologue used to walk `nrl * NG` items with `g` fastest
+            # and dispatch on it, so a warp covered every group at once and
+            # ran all NG case bodies serially -- five times the cost of the
+            # one body each lane needed.  That was survivable when a case
+            # was a single modulo; it is not now that the case computes the
+            # plane shift.  Per group the body is straight-line with its Q,
+            # its W^-1 and its plane offset as literals, and `g` is gone
+            # from the runtime entirely.
+            zbcalc = chr(10).join(pro)
             gl.insert(0, "            const int zb = rl * NG;")
         src = _SRC % {
             "tpb": self.tpb, "wpt": self.wpt, "ng": self.ng,
@@ -963,7 +1006,7 @@ class GpuEngine:
                 "q3_short": self.q3_short}
 
     def nbytes(self):
-        return int(self.d_res.nbytes + self.d_cr.nbytes + self.d_gbits.nbytes
+        return int(self.d_res.nbytes + self.d_gbits.nbytes
                    + self.d_bits.nbytes + self.d_pk.nbytes
                    + self.d_q3.nbytes + self.d_out.nbytes)
 
@@ -1036,7 +1079,7 @@ class GpuEngine:
             grid = ((self.R + rpb - 1) // rpb,
                     (nper + (wact << 5) - 1) // (wact << 5))
             self.k_sieve(grid, (self.tpb,),
-                         (self.d_res, np.int32(self.R), self.d_cr,
+                         (self.d_res, np.int32(self.R),
                           self.d_gbits, self.d_cbase, np.int32(nper),
                           np.int32(rpb), np.int32(logw), np.int32(self.npr),
                           self.d_pk, self.d_bits, self.d_q3, self.d_n3,
@@ -1111,9 +1154,30 @@ def g8_wheel_is_exactly_the_product():
                 if r % q in killed:
                     return False, (f"G8 FAIL: b={b} n={n} p1={p1}: residue "
                                    f"{r} is killed by {q}")
+
+    # THE CACHE IS KEYED ON THE EFFECTIVE `w` VECTOR, NOT ON n.  Both
+    # directions, because the cheap half (reuse) is the one that can go
+    # wrong silently: a wheel served for a filter whose w vector differs
+    # would sieve for the wrong sequence and every downstream gate would
+    # still be comparing it against itself.
+    same = []
+    for b, p1, n1, n2 in ((4, 29, 14, 21), (4, 29, 21, 40), (2, 41, 36, 41)):
+        (W1, r1), (W2, r2) = wheel(n1, b, p1), wheel(n2, b, p1)
+        if W1 != W2 or r1 is not r2:
+            return False, (f"G8 FAIL: b={b} p1={p1}: n={n1} and n={n2} have "
+                           f"the same w vector but were built twice")
+        same.append(f"b={b} n={n1}=={n2}")
+    for b, p1, n1, n2 in ((4, 13, 5, 6), (2, 13, 11, 12)):
+        (_W1, r1), (_W2, r2) = wheel(n1, b, p1), wheel(n2, b, p1)
+        if r1 is r2 or r1.size == r2.size:
+            return False, (f"G8 FAIL: b={b} p1={p1}: n={n1} and n={n2} have "
+                           f"DIFFERENT w vectors and must not share a wheel")
     return True, ("G8 ok: the wheel is exactly prod(q - w(q,n,b)) residues, "
                   "duplicate-free and unkilled, at (b,n,p1) = (4,19,23), "
-                  "(4,12,19), (2,17,37), (2,21,23)")
+                  "(4,12,19), (2,17,37), (2,21,23); and the cache is keyed "
+                  f"on the w VECTOR -- {', '.join(same)} share one table "
+                  "while n=5/6 at (b=4,p1=13) and n=11/12 at (b=2,p1=13) "
+                  "do not")
 
 
 def g9_gpu_matches_cpu():
@@ -1212,6 +1276,19 @@ def g16_v2_mechanisms():
     4. THE ADAPTIVE TILE.  A launch too short to fill a block's word tile
        must spread the block over residues instead, and give the same
        stream as a launch wide enough not to.
+    5. THE PLANE SHIFT IS COMPUTED, NOT STORED.  The kernel derives
+       cr_g(r) = (W^-1 mod Q_g) * r mod Q_g in the block prologue instead
+       of reading a table of R * NG u32.  `plane_shifts` -- the slow CRT
+       reconstruction -- stays as the reference, and BOTH halves of what
+       replaced it are checked against it: the identity, over every residue
+       of several wheels on both bases, and the CONSTANT the generated
+       kernel actually carries.  A right formula with a wrong literal is
+       the failure this second half exists to catch.
+    6. THE KEY ENCODE MATCHES THE KEY DECODE.  Generation packs
+       (rl, wrd, bit) as `idx << 5`; the rounds unpack it with
+       `key >> (logw + 5)` and `key & ymask`.  The collapse is only valid
+       because wact = 1 << logw, so it is checked over every tile shape the
+       engine can pick rather than argued.
     """
     # 1 -- planes against divisibility, both directions
     n, b, p1, p2 = 12, 4, 13, 47
@@ -1269,13 +1346,60 @@ def g16_v2_mechanisms():
                        "block over residues -- rpb stayed 1")
     if narrow.survivors_m(lo, lo + span) != ref:
         return False, "G16 FAIL: the narrow-launch tile changed the stream"
+
+    # 5 -- the computed plane shift == plane_shifts, and the baked constant
+    shifts = 0
+    for nn, bb, pp1, pp2 in ((12, 4, 13, 47), (19, 4, 17, 79),
+                             (9, 2, 11, 53), (17, 2, 13, 71)):
+        WW, rr = wheel(nn, bb, pp1)
+        pls = build_planes(nn, bb, pp1, pp2, 1024)
+        for g, cr in zip(pls, plane_shifts(rr, pls, WW)):
+            Q, binv = g["Q"], pow(WW, -1, g["Q"])
+            got = (binv * rr.astype(object)) % Q
+            if not all(int(x) == int(y) for x, y in zip(got, cr)):
+                return False, (f"G16 FAIL: b={bb} n={nn} Q={Q}: "
+                               f"(W^-1 mod Q)*r mod Q != plane_shifts")
+            shifts += int(rr.size)
+    baked = 0
+    for nn, bb in ((12, 4), (9, 2)):
+        e = GpuEngine(nn, bb, p1=13, q2=128)
+        for gi, g in enumerate(e.planes):
+            want = pow(e.W, -1, g["Q"])
+            if e.winv[gi] != want:
+                return False, (f"G16 FAIL: baked W^-1 mod {g['Q']} is "
+                               f"{e.winv[gi]}, should be {want}")
+            if (f"* {want}ULL % {g['Q']}ULL" not in e.src
+                    or "crv" in e.src):
+                return False, (f"G16 FAIL: the generated kernel does not "
+                               f"carry W^-1 mod {g['Q']} = {want}, or still "
+                               f"reads a crv table")
+            baked += 1
+
+    # 6 -- key encode == key decode, at every tile shape the engine picks
+    keys = 0
+    for logw in range(0, 11):
+        wact, ymask = 1 << logw, (1 << logw << 5) - 1
+        for idx in (0, 1, wact - 1, wact, 2 * wact + 3, 1023):
+            for bit in (0, 5, 31):
+                key = (idx << 5) + bit
+                if (key >> (logw + 5) != idx >> logw
+                        or key & ymask != ((idx & (wact - 1)) << 5) + bit):
+                    return False, (f"G16 FAIL: key encode/decode disagree "
+                                   f"at logw={logw} idx={idx} bit={bit}")
+                keys += 1
     return True, (f"G16 ok: bit planes == divisibility BOTH ways on "
                   f"{sum(seen)} (residue, period) pairs ({seen[0]} killed, "
                   f"{seen[1]} kept); the round schedule is a survival "
                   f"FRACTION (depths {sa} at n=19 vs {sb} at n=10); all four "
                   f"queues forced to token size leave the stream identical "
-                  f"({len(ref)} survivors); and a launch shorter than one "
-                  f"block tile spreads over residues with the same stream")
+                  f"({len(ref)} survivors); a launch shorter than one "
+                  f"block tile spreads over residues with the same stream; "
+                  f"the COMPUTED plane shift (W^-1 mod Q)*r mod Q equals "
+                  f"plane_shifts on {shifts} residues across 4 wheels and "
+                  f"both bases, with all {baked} baked constants present in "
+                  f"the generated kernel and no crv table left in it; and "
+                  f"key encode == key decode on {keys} cases over every "
+                  f"tile shape logw = 0..10")
 
 
 GATES = [g7_wheel_matches_oracle, g8_wheel_is_exactly_the_product,

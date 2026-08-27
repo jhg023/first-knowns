@@ -34,7 +34,7 @@ in all five is a proof rather than a probable-prime call. The exact integers, al
 witnesses are in [`evidence/`](evidence/); the claims and the verification
 are in [RESULTS.md](RESULTS.md).
 
-**Status: ACTIVE — A130003 `a(21)` is being hunted right now**, at a
+**Status: ACTIVE — A130003 `a(21)` is the live hunt**, at a
 measured `8.20×10¹⁴ m/s`, which is `5.77×` the campaign that found this
 project's first two terms. Two optimization passes got it there. The first
 found that `check_rungs` rebuilt the progress ladder from the odds model
@@ -48,13 +48,20 @@ base 2. Fixing it, raising the plane budget, re-sweeping the test units
 against the new wheel, taking base 2's flat table to `p1 = 41`, and
 deriving the launch size from the tail queue instead of a slot count
 measured **1.537× (base 4) and 2.380× (base 2)** on the resume
-configurations. The full battery is green (32 gates and drills) and all
-five benchmark shapes reproduce a fingerprint.
+configurations. A third pass found **no further throughput** — its four
+candidates all measured inside the noise or worse, the largest being a
+warp shuffle that would halve the plane loads and runs at `0.773×` — but it
+removed the `crv` table (the per-residue plane shift is linear in the
+residue, so the kernel computes it), which takes the device tables from
+855 to 495 MiB at base 4 and 1340 to 652 MiB at base 2, and cut an engine
+rebuild from 20 s to 11 s. The full battery is green (32 gates and drills)
+and all five benchmark shapes reproduce a fingerprint.
 
 **The first campaign on that engine found A110096 `a(19)` in 10.2 hours**,
 sweeping `5.6×10²³` of line at `1.53×10¹⁹ m/s` — 9.7× the campaign that
 found `a(17)` and `a(18)` three days before, and 1.43× what was projected
-for it. A130003 resumed from `m = 8.95×10¹⁸` and is running now.
+for it. A130003 resumed from `m = 8.95×10¹⁸` and has since swept to
+`m = 1.10×10¹⁹` over 18.0 hours without a find.
 
 At the measured rates — `8.20×10¹⁴ m/s` at base 4 and `1.53×10¹⁹` at
 base 2 — `a(21)` of A130003 is **25.6 hours** of sweeping to its median,
@@ -85,7 +92,7 @@ five separate places in A110096.
 | Author | Farideh Firoozbakht, May 30 2007 | Joseph L. Pe, Sep 05 2005 |
 | Other link | Rivera, [Puzzle 403](http://www.primepuzzles.net/puzzles/puzz_403.htm) | Rivera Puzzle 379 cluster; A193109 |
 | **Found here** | `a(19)`, `a(20)` | `a(17)`, `a(18)`, `a(19)` |
-| **Open, and next** | `a(21)`, empty below `8.95×10¹⁸` — **running now** | `a(20)`, empty below `5.64×10²³`; only 13.4% of it is under the proof ceiling |
+| **Open, and next** | `a(21)`, empty below `1.10×10¹⁹` | `a(20)`, empty below `5.64×10²³`; only 13.4% of it is under the proof ceiling |
 | Upper bound | **none published, at any open n** | **none published, at any open n** |
 
 Why they are open rather than merely unfinished: the density of qualifying
@@ -215,8 +222,12 @@ at `b = 4` and 137 at `b = 2` — where a flat table at 47 would already have
 asked numpy for 183 GiB.
 
 Two properties make it fit *this* problem. The shift is **additive**, so
-every residue's killed set is a translate of one fixed set and one `u32`
-per residue per plane is the whole per-residue state. And **`W` does not
+every residue's killed set is a translate of one fixed set, and the whole
+per-residue state is a single number `cr_g(r)` per plane — which is
+**linear in the residue**, `cr_g(r) = (W⁻¹ mod Q_g)·r mod Q_g`, so the
+kernel computes it in the block prologue from the residue table it already
+reads instead of holding a second table of `R × NG` u32 (360 MiB at
+`b = 4`, 688 MiB at `b = 2`). And **`W` does not
 change**: the plane primes never enter the modulus, so a period still means
 what it meant, coverage still advances every launch, a v1 cursor is
 inherited rather than re-denominated, and every frozen benchmark window is
@@ -348,7 +359,7 @@ python launch.py --base 2      # A110096 instead
 
 Each family keeps its own checkpoint under its own config key, and neither
 campaign will read the other's cursor. Either command above resumes where
-that family was paused — `m = 8.95×10¹⁸` at base 4, `m = 3.62×10²¹` at
+that family was paused — `m = 1.10×10¹⁹` at base 4, `m = 5.64×10²³` at
 base 2 — with the filter already promoted to the term it is hunting. The
 hunt is indefinite by default, resumable, checkpointed every segment, and
 stops cleanly on Ctrl+C with exit 130. `--to` caps the depth,
