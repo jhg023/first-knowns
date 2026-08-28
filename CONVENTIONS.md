@@ -297,6 +297,66 @@ end one early, and all three are opt-in: Ctrl+C, `--to`, and
 `--stop-on-discovery`. The first is below; the third has a subtlety that
 cost a run, so it is specified here rather than left to each project.
 
+### Writing a cursor: a save may not end a run (binding for every project)
+
+**A checkpoint save that cannot land right now is not an error to die of.**
+The cursor is rewritten every segment, so the next attempt is seconds away
+and the cost of skipping one is exactly the cost the resume path already
+absorbs — one segment. A launcher that lets a failed save reach the top of
+the stack has converted a one-segment cost into the whole campaign, which
+is what CLAUDE.md rule 5d forbids.
+
+The concrete way this happens on Windows, twice in two days to a live
+20-hour run:
+
+```
+PermissionError: [WinError 5] Access is denied:
+  'campaign_checkpoint_b4.json.tmp' -> 'campaign_checkpoint_b4.json'
+```
+
+`os.replace` is `MoveFileExW(MOVEFILE_REPLACE_EXISTING)`, and it needs
+DELETE access on **both** the file it renames and the file it overwrites.
+Every ordinary reader takes a handle that withholds exactly that — a
+real-time scanner, a search indexer, an editor, Python's own `open()`. So
+any process merely *looking* at the checkpoint makes the save fail, for as
+long as it looks. Nothing is corrupt when this happens; the cursor on disk
+is intact and one segment old. POSIX `rename(2)` has no equivalent
+failure, which is why code that looks obviously correct is not.
+
+`huntlib.checkpoint` handles all of it, so a launcher gets this by calling
+`save` and needs no code of its own:
+
+- **`_replace` retries** to a bounded deadline (5 s, 4 ms backoff doubling
+  to 250 ms). A scanner's handle lasts milliseconds, so the overwhelming
+  majority of locks become invisible.
+- **`save` DEFERS** rather than raising when the deadline is exhausted:
+  it returns `False`, the campaign keeps sweeping, and the cursor on disk
+  stays valid while going stale. **It returns a bool, so an exit line must
+  say what LANDED, not what was attempted.**
+- **`save_json` still RAISES**, because it also writes evidence, and a
+  discovery artefact that is quietly skipped is the exact failure the
+  evidence discipline exists to prevent. Only the cursor may be deferred.
+- **The `.bak` rotation is best-effort but never silent.** It is the
+  leading indicator — of the two renames it is the first to meet the lock
+  — and swallowing it wordlessly is why two campaign deaths looked like
+  they came out of nowhere.
+- **Past `SAVE_GRACE_S` (10 min) it escalates** with `SaveBlocked`. That
+  long is not a scanner; it is a full disk, a changed ACL, a file left
+  open in an editor, or a second launcher on the same checkpoint, and the
+  stale cursor now costs more to redo than the run costs to stop.
+
+`drills.lock_drill` (in `drills.standard`) proves it with a **real** held
+handle rather than a synthetic errno, and fails against the old behaviour
+in both directions: strip the retry and the ridden-out lock is no longer
+invisible; strip the deferral and it reproduces the production traceback
+verbatim.
+
+Cadence is the other half. A save is a write, an fsync and two renames, so
+a segment short enough to save twice a second offers a scanner ~150,000
+chances per campaign to land in the window. Size the checkpoint segment so
+resume cost and lock exposure are both small — seconds of re-sweep, not
+milliseconds.
+
 ### Reading an existing cursor (binding for every project)
 
 **A checkpoint has THREE readers, and every one of them must agree about

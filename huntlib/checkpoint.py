@@ -22,18 +22,89 @@ Rules (repo-wide):
   match the running configuration is IGNORED (never reinterpreted).
 - Resume must be idempotent: segment-aligned cursors, so a kill redoes at
   most one segment.
+- ON WINDOWS A RENAME CAN FAIL BECAUSE SOMEBODY ELSE HAS THE FILE OPEN, and
+  that is a TRANSIENT condition, not an error. `os.replace` is
+  `MoveFileExW(MOVEFILE_REPLACE_EXISTING)`, which needs DELETE access on
+  both the source it renames and the destination it overwrites; the CRT's
+  default share mode -- Python's own `open()`, every scanner's, every
+  indexer's -- withholds exactly that. So a replace is RETRIED to a bounded
+  deadline, and a campaign cursor that still cannot land is DEFERRED to the
+  next segment rather than being allowed to end the run.
 """
 
 import contextlib
 import json
 import os
+import time
+
+from .hlog import log
 
 
 class CheckpointCorrupt(RuntimeError):
     """The file exists and cannot be read as a checkpoint."""
 
 
-def save_json(path, obj):
+class SaveBlocked(OSError):
+    """Saves have been blocked by another process for longer than the grace.
+
+    Not the transient case -- that one is retried and then deferred. This
+    is "something has held this file open for ten minutes", which is a
+    condition an operator has to clear.
+    """
+
+
+# The two faces of ONE Windows condition, both transient:
+#   5  ERROR_ACCESS_DENIED      -- the DESTINATION of a replace is open
+#   32 ERROR_SHARING_VIOLATION  -- the SOURCE of a rename is open
+# Checked by winerror, so this stays inert on POSIX, where `rename(2)` has
+# no such failure and a PermissionError means what it says.
+_LOCK_WINERRORS = (5, 32)
+
+REPLACE_DEADLINE_S = 5.0      # how long one replace may wait a lock out
+ROTATE_DEADLINE_S = 1.0       # the .bak is best-effort: wait less for it
+SAVE_GRACE_S = 600.0          # how long a campaign may run unable to save
+
+
+def _is_lock(e):
+    """True if `e` is Windows saying the file is open somewhere else."""
+    return getattr(e, "winerror", None) in _LOCK_WINERRORS
+
+
+def _replace(src, dst, deadline):
+    """`os.replace`, retried while Windows says the file is held open.
+
+    THE INCIDENT THIS EXISTS FOR, which happened twice in two days and both
+    times to a live campaign:
+
+        A 20-hour shift-ladders run died at `os.replace(tmp, path)` with
+        [WinError 5] Access is denied. Nothing was corrupt -- the cursor on
+        disk was intact and one segment behind -- but the process was gone,
+        and with it three hours of GPU before anyone noticed. The
+        checkpoint had been written, fsynced and closed 0.5 s earlier;
+        something (a real-time scanner and a search indexer both watch this
+        tree) opened it to look at it, and a handle without
+        FILE_SHARE_DELETE makes BOTH the rotation and the replace fail. It
+        clears in milliseconds. It killed the campaign because nothing
+        retried it.
+
+    The deadline is bounded because nothing in this repo may wait forever;
+    the backoff starts at 4 ms because that is the scale of the window.
+    Returns the seconds waited, so a caller can say a lock was ridden out.
+    """
+    delay, waited = 0.004, 0.0
+    while True:
+        try:
+            os.replace(src, dst)
+            return waited
+        except OSError as e:
+            if not _is_lock(e) or waited >= deadline:
+                raise
+            time.sleep(delay)
+            waited += delay
+            delay = min(delay * 2, 0.25)
+
+
+def save_json(path, obj, warn=None):
     """Write any JSON-able object durably: temp -> fsync -> replace, .bak kept.
 
     The rotation order matters. The backup is taken from the file that is
@@ -42,8 +113,13 @@ def save_json(path, obj):
 
     Separate from `save` because a checkpoint is not the only file a
     campaign cannot afford half of: an evidence JSON is the entire artefact
-    of a discovery, and a torn ledger is worse than a stale one.
+    of a discovery, and a torn ledger is worse than a stale one. That is
+    also why THIS function still raises when a replace cannot land: an
+    evidence file that quietly did not get written is the failure mode the
+    whole evidence discipline exists to prevent. Only `save`, which writes
+    the campaign cursor, is allowed to defer.
     """
+    say = warn or (lambda m: log("WARN", m))
     tmp = path + ".tmp"
     # newline="\n" so the repo's LF rule holds for the JSONs that get
     # committed (evidence files and ledgers); the default translates on
@@ -55,15 +131,75 @@ def save_json(path, obj):
     if os.path.exists(path):
         bak = path + ".bak"
         try:
-            os.replace(path, bak)
-        except OSError:               # a backup is best-effort; never fatal
-            pass
-    os.replace(tmp, path)
+            _replace(path, bak, ROTATE_DEADLINE_S)
+        except OSError as e:
+            # A backup is best-effort and never fatal -- but it is not
+            # SILENT either. This is the leading indicator: when the live
+            # file is locked, the rotation is the first of the two renames
+            # to hit it, and swallowing it wordlessly is why two campaign
+            # deaths looked like they came out of nowhere.
+            say(f"{bak} was not rotated ({type(e).__name__}: {e}); the "
+                f"backup is one save older than it should be")
+    _replace(tmp, path, REPLACE_DEADLINE_S)
 
 
-def save(path, state):
-    """Write a checkpoint durably.  See save_json."""
-    save_json(path, state)
+_blocked = {}                         # path -> [first failure, last warned]
+
+
+def save(path, state, warn=None, grace_s=SAVE_GRACE_S):
+    """Write a campaign cursor durably.  True if it landed, False if deferred.
+
+    A CHECKPOINT SAVE MAY NOT END A CAMPAIGN (CLAUDE.md 5d: a crash costs
+    one segment, not the run). A cursor is written every segment, so a save
+    that cannot land right now is not an error to die of -- the next one is
+    seconds away, and the cost of skipping this one is exactly the cost the
+    resume path is built to absorb. So a transient lock is ridden out by
+    `_replace`, and one that outlives even that deadline is DEFERRED: the
+    campaign keeps sweeping, the cursor on disk stays valid but goes stale,
+    and the operator is told.
+
+    `grace_s` is where deferring stops being reasonable. Ten minutes of
+    unbroken failure is not a scanner holding a handle; it is a full disk,
+    a changed ACL, a file left open in an editor, or a second launcher on
+    the same checkpoint -- and the stale cursor now costs more to redo than
+    the run costs to stop. So it escalates, with a message that says which
+    of those to go and look for.
+    """
+    say = warn or (lambda m: log("WARN", m))
+    try:
+        save_json(path, state, warn=warn)
+    except OSError as e:
+        if not _is_lock(e):
+            raise
+        now = time.time()
+        st = _blocked.get(path)
+        if st is None:
+            st = _blocked[path] = [now, now]
+            say(f"could not write {path}: {type(e).__name__}: {e} -- another "
+                f"process is holding it open. The campaign is CONTINUING on "
+                f"a cursor that is now one segment stale; it will be written "
+                f"at the next segment that finds the file free.")
+        elif now - st[1] >= 60.0:
+            st[1] = now
+            say(f"still cannot write {path} after {now - st[0]:.0f} s; the "
+                f"campaign is running unsaved and will stop at "
+                f"{grace_s:.0f} s")
+        if now - st[0] > grace_s:
+            _blocked.pop(path, None)
+            raise SaveBlocked(
+                f"{path} has been locked by another process for "
+                f"{now - st[0]:.0f} s, so the cursor on disk is that far "
+                f"behind the sweep. Look for: a real-time virus scanner or "
+                f"search indexer with no exclusion for this directory, the "
+                f"file open in an editor, or a SECOND launcher running on "
+                f"the same checkpoint. The run resumes from the last save "
+                f"that landed -- no line is lost, only re-swept.") from e
+        return False
+    st = _blocked.pop(path, None)
+    if st is not None:
+        say(f"{path} is writable again after {time.time() - st[0]:.0f} s; "
+            f"the cursor is current")
+    return True
 
 
 def _read(path):

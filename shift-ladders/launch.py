@@ -348,7 +348,7 @@ class Campaign:
         return st
 
     def save_boundary(self):
-        checkpoint.save(self.ckpt, self._snapshot or self.state())
+        return checkpoint.save(self.ckpt, self._snapshot or self.state())
 
     def load(self):
         st, kind = self.cursor.load(warn=lambda m: log("STAGE", m))
@@ -554,9 +554,16 @@ class Campaign:
     run_length = None                  # bound below, after CpuEngine exists
 
     def _on_interrupt(self):
-        self.save_boundary()
-        return (f"checkpoint written at the last segment boundary: "
-                f"m = {int(self._snapshot['m']):,} ({self.ckpt})")
+        # The message says what LANDED, not what was attempted: a save can
+        # be deferred by another process's handle on the checkpoint, and an
+        # exit line claiming a cursor that is not on disk is how an
+        # operator comes back to the wrong resume point.
+        if self.save_boundary():
+            return (f"checkpoint written at the last segment boundary: "
+                    f"m = {int(self._snapshot['m']):,} ({self.ckpt})")
+        return (f"{self.ckpt} is held open by another process, so THIS "
+                f"boundary (m = {int(self._snapshot['m']):,}) was not "
+                f"written; the run resumes from the last save that landed")
 
 
 def _run_length(self, m, cap=64):

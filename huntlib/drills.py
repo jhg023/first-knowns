@@ -21,6 +21,8 @@ them in the middle of a battery and carry on.
 import os
 import signal
 import tempfile
+import threading
+import time
 
 from . import checkpoint as _ckpt
 from . import evidence as _ev
@@ -169,6 +171,146 @@ def durability_drill(tmpdir=None):
                 except OSError:
                     pass
             os.rmdir(tmp)
+
+
+def lock_drill(tmpdir=None):
+    """(ok, msg): a file lock costs a segment, never the campaign.
+
+    The failure drilled here is the one that actually happened, twice in
+    two days, to a live 20-hour shift-ladders run:
+
+        PermissionError: [WinError 5] Access is denied:
+          'campaign_checkpoint_b4.json.tmp' -> 'campaign_checkpoint_b4.json'
+
+    `os.replace` is MoveFileExW, which needs DELETE access on the file it
+    renames AND on the file it overwrites; every ordinary reader on Windows
+    -- a scanner, an indexer, Python's own `open()` -- takes a handle that
+    withholds it.  Nothing was corrupt either time; the cursor on disk was
+    intact and one segment old.  The campaign died anyway, because one
+    unretried rename was allowed to reach the top of the stack.
+
+    So the lock is REAL here, not a synthetic errno: the drill opens the
+    checkpoint the same way a scanner does and checks four things --
+    a lock that clears inside the deadline is invisible; one that outlives
+    it DEFERS the save and leaves a loadable cursor behind; the deferral is
+    announced and so is the recovery; and one that outlives the grace
+    escalates instead of running unsaved forever.  Plus the boundary that
+    makes deferring safe at all: `save_json`, which writes EVIDENCE, still
+    raises -- only the campaign cursor may be skipped.
+    """
+    if os.name != "nt":
+        return True, ("lock drill: skipped -- POSIX rename() cannot fail "
+                      "because another process holds the file open, so this "
+                      "drill has nothing to reproduce off Windows")
+    own = tmpdir is None
+    tmp = tempfile.mkdtemp(prefix="huntlib-drill-") if own else tmpdir
+    keep = (_ckpt.REPLACE_DEADLINE_S, _ckpt.ROTATE_DEADLINE_S)
+    held = None
+    try:
+        path = os.path.join(tmp, "locked.json")
+        key = "drill/lock"
+        _ckpt._blocked.clear()
+        _ckpt.save(path, {"key": key, "cursor": 1})
+
+        # the premise: a plain reader really does block a replace
+        probe = path + ".probe"
+        with open(probe, "w") as fh:
+            fh.write("{}")
+        held = open(path)
+        try:
+            os.replace(probe, path)
+        except OSError as e:
+            if not _ckpt._is_lock(e):
+                return False, (f"lock drill: a held handle gave "
+                               f"{type(e).__name__} winerror="
+                               f"{getattr(e, 'winerror', None)}, not a lock")
+        else:
+            return False, ("lock drill: a replace SUCCEEDED over a file this "
+                           "process holds open -- the premise is gone and "
+                           "the retry is untested")
+        held.close()
+        held = None
+
+        # (1) a lock that clears inside the deadline is invisible
+        _ckpt.REPLACE_DEADLINE_S = _ckpt.ROTATE_DEADLINE_S = 2.0
+        held = open(path)
+        threading.Timer(0.06, held.close).start()
+        said = []
+        if not _ckpt.save(path, {"key": key, "cursor": 2}, warn=said.append):
+            return False, "lock drill: a 60 ms lock was not ridden out"
+        held = None
+        if said:
+            return False, (f"lock drill: riding out a 60 ms lock was not "
+                           f"silent: {said[0]}")
+        if _ckpt.load(path, key)["cursor"] != 2:
+            return False, "lock drill: the save that rode out a lock is not on disk"
+
+        # (2) a lock that outlives the deadline DEFERS, and says so
+        _ckpt.REPLACE_DEADLINE_S = _ckpt.ROTATE_DEADLINE_S = 0.05
+        held = open(path)
+        said = []
+        if _ckpt.save(path, {"key": key, "cursor": 3}, warn=said.append):
+            return False, "lock drill: a save reported success while locked"
+        if not any("CONTINUING" in s for s in said):
+            return False, f"lock drill: the deferral was not announced: {said}"
+        if _ckpt.load(path, key)["cursor"] != 2:
+            return False, ("lock drill: a deferred save did not leave the "
+                           "previous cursor loadable on disk")
+
+        # (3) evidence is NOT deferrable: save_json still raises
+        try:
+            _ckpt.save_json(path, {"key": key, "cursor": 3}, warn=lambda m: None)
+            return False, ("lock drill: save_json swallowed a lock -- an "
+                           "evidence file may never be quietly skipped")
+        except OSError as e:
+            if not _ckpt._is_lock(e):
+                raise
+
+        # (4) the recovery is announced too
+        held.close()
+        held = None
+        said = []
+        if not _ckpt.save(path, {"key": key, "cursor": 4}, warn=said.append):
+            return False, "lock drill: the save did not resume after release"
+        if not any("writable again" in s for s in said):
+            return False, f"lock drill: the recovery was silent: {said}"
+
+        # (5) past the grace it escalates rather than sweeping unsaved
+        held = open(path)
+        _ckpt.save(path, {"key": key, "cursor": 5}, warn=lambda m: None,
+                   grace_s=0.0)
+        time.sleep(0.02)
+        try:
+            _ckpt.save(path, {"key": key, "cursor": 5}, warn=lambda m: None,
+                       grace_s=0.0)
+            return False, ("lock drill: a save blocked past the grace kept "
+                           "deferring instead of stopping the run")
+        except _ckpt.SaveBlocked:
+            pass
+        return True, ("lock drill: a replace blocked by another process's "
+                      "handle is retried (a 60 ms lock is invisible), then "
+                      "DEFERRED with the previous cursor still loadable, "
+                      "announced on the way down and on the way back up, "
+                      "and escalated past the grace; save_json (evidence) "
+                      "still raises")
+    finally:
+        _ckpt.REPLACE_DEADLINE_S, _ckpt.ROTATE_DEADLINE_S = keep
+        _ckpt._blocked.clear()
+        if held is not None:
+            try:
+                held.close()
+            except OSError:
+                pass
+        if own:
+            for f in os.listdir(tmp):
+                try:
+                    os.remove(os.path.join(tmp, f))
+                except OSError:
+                    pass
+            try:
+                os.rmdir(tmp)
+            except OSError:
+                pass
 
 
 def evidence_drill(tmpdir=None):
@@ -320,7 +462,8 @@ def standard(pool_factory=None, tmpdir=None, cursor=None):
     own = tmpdir is None
     tmp = tempfile.mkdtemp(prefix="huntlib-drill-") if own else tmpdir
     try:
-        out = [shutdown_drill(), durability_drill(tmp), evidence_drill(tmp)]
+        out = [shutdown_drill(), durability_drill(tmp), lock_drill(tmp),
+               evidence_drill(tmp)]
         out.extend(g() for g in _rungs.GATES)
         if cursor is not None:
             out.append(cursor_policy_drill(cursor, tmp))

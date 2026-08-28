@@ -186,6 +186,23 @@ each README stays.
    and once did); a present-but-unreadable checkpoint raises rather than
    reading as absent.
 
+   **A SAVE THAT CANNOT LAND IS NOT AN ERROR TO DIE OF, EITHER.** The
+   cursor is rewritten every segment, so a save that fails right now costs
+   one segment -- unless it is allowed to reach the top of the stack, which
+   costs the campaign. On Windows `os.replace` needs DELETE access on both
+   the file it renames and the file it overwrites, and any ordinary reader
+   (scanner, indexer, editor, Python's own `open()`) withholds it, so a
+   process merely LOOKING at the checkpoint fails the save while it looks.
+   That killed a live 20-hour run twice in two days, with nothing corrupt
+   and the cursor intact one segment behind. `checkpoint._replace` now
+   retries to a bounded deadline, `checkpoint.save` DEFERS (returns False;
+   an exit line must report what LANDED) and escalates only after ten
+   minutes, `save_json` still RAISES because it also writes evidence, and
+   the `.bak` rotation warns instead of swallowing -- it is the leading
+   indicator, and swallowing it is why both deaths looked motiveless.
+   Drilled by `drills.lock_drill` with a real held handle.
+   See CONVENTIONS.md "Writing a cursor".
+
    **And a cursor has THREE readers, so the keys it may start from live in
    ONE `checkpoint.CursorPolicy` and never in a list passed per call.**
    `load` ignoring a foreign checkpoint is right for a stale file and
@@ -260,7 +277,9 @@ each README stays.
    - [ ] campaign configuration priced the way 5c says (device s and
          host core-s per unit k-line, per candidate setting), not just a
          fast kernel
-   - [ ] checkpoints fsynced + `.bak` rotated, corrupt-file path drilled
+   - [ ] checkpoints fsynced + `.bak` rotated, corrupt-file path drilled,
+         and a save that a file lock defeats DEFERS instead of ending the
+         run (`drills.lock_drill`; CONVENTIONS.md "Writing a cursor")
    - [ ] EVERY reader of the cursor goes through one
          `checkpoint.CursorPolicy` -- there are three of them (the
          campaign's load, `--status`, the refusal in `main`) and a list of
