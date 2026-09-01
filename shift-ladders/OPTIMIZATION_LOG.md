@@ -1139,6 +1139,65 @@ visible to this measurement setup.** A pass that wants to move it needs a
 tighter clock than paired wall time on a desktop card, or a change big
 enough not to need one.
 
+## 2026-09-01 — the fourth campaign: 92% device, and the A/B's absolute column is 1.5x low
+
+No engine work in this entry. It records what the campaign that found
+A130003 `a(21)` measured, because two of the numbers above are predictions
+it tested.
+
+**The two passes' combined claim held, and then some.** The base-4 campaign
+that found `a(21)` swept `2.77×10²⁰` of line in 67.93 h of sweep clock for
+an end-to-end **`1.13×10¹⁵ m/s`** — **7.97×** the 17-hour campaign that
+found `a(19)` and `a(20)` at `1.42×10¹⁴`. The two passes predicted
+`3.47 × 1.537 = 5.33×` between them; the balance is the filter, which rose
+from 19/20 to 21 over the same stretch, and a higher filter is faster here
+(`4.34 / 4.90 / 5.32 ×10¹⁴` at `n = 19 / 20 / 21`, BENCHMARKS.md). Those
+two together price at `6.5×` against `7.97×` measured, so a residual of
+about 1.2× is unattributed and is left that way rather than assigned to the
+nearest available cause.
+
+**The campaign is 92% device, measured rather than modelled.** The
+end-to-end rate above comes from the checkpoint (`elapsed` against swept
+`m`), so it was checked against the engine directly: a bare device loop at
+the production configuration, eight launches timed at each end of the
+window the campaign actually swept, measures
+
+| height | line rate | per launch |
+|---|---|---|
+| `m ≈ 8.95×10¹⁸` (the resume cursor) | `1.203×10¹⁵ m/s` | 22.0 ms |
+| `m ≈ 2.85×10²⁰` (at the find) | `1.243×10¹⁵ m/s` | 21.3 ms |
+
+The campaign ran at **92%** of that, flat across a 32× range of height. The
+missing 8% is the whole host side — the classification pool, the checkpoint
+writes, the verifications — which settles the question rule 5c asks: on
+this family, at this configuration, **there is no campaign-level lever
+left**. The 3.47× that the ladder cache bought was the last one, and what
+remains is the kernel, where the termination test above says the next gain
+is below what this measurement setup can resolve.
+
+**And the A/B harness's absolute column is 1.5x low.** `7.92×10¹⁴ m/s` is
+what the paired arm reports for this exact configuration, against
+`1.20×10¹⁵` measured on a bare loop. That is the harness: it runs both
+engines alive in one process and alternates arms, which is precisely what
+OPTIMIZATION.md Rule 3 asks for — a stable **ratio** under an ambient load
+that moves absolutes by tens of percent — and its ratios have now predicted
+two campaigns correctly. The error is only in reading a throughput off it.
+Two things follow, and they are the reason this is written down: a campaign
+that beats the A/B is not an anomaly needing an explanation, and any
+projection built by discounting the A/B's absolute by a device share is
+conservative twice over. Both of the last two campaigns beat such a
+projection (1.43× at base 2, 1.38× at base 4); one cause explains both.
+
+**`score.py` demonstrated the same thing on itself in the same session, and
+it is in this repository's git history where anyone can check it.** The
+engine is byte-identical between the 2026-08-28 commit and this one — no
+`.py` file changed — and `SCORE` reads **1,045,694,664** there against
+**693,874,911** here, a **1.51×** swing, with all five frozen fingerprints
+reproducing on both runs. That is the whole argument for fingerprints: the
+invariant is the survivor stream, the number beside it is a measurement of
+a busy desktop card on a particular afternoon. A SCORE that moves without a
+fingerprint moving is not a regression, and neither is one that improves.
+
 ## Priced and not done
 
 - ~~**A second wheel level below the plane wheel.**~~ SETTLED 2026-08-27,

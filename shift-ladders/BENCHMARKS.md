@@ -230,19 +230,29 @@ at 3.57×10¹⁴ m/s for `b = 4` and 1.53×10¹⁸ m/s for `b = 2` — the score
 rates, which for `b = 2` is the conservative one (its sustained rate over
 several launches measures ~1.9×10¹⁸).
 
-**What actually happened**, 2026-08-23/24 ([RESULTS.md](RESULTS.md)):
+**What actually happened**, 2026-08-23 to 2026-09-01
+([RESULTS.md](RESULTS.md)). The last column is the sweep clock the family
+had accumulated when the term landed, since each row's prediction runs from
+the *published* frontier and so covers every campaign on that family:
 
-| term | predicted at the median | found at | wall clock into the campaign |
-|------|------------------------|----------|------------------------------|
+| term | predicted at the median | found at | family sweep clock at the find |
+|------|------------------------|----------|--------------------------------|
 | A130003 `a(19)` | 2.6 min | `1.33×10¹⁶` | **117 s** |
 | A130003 `a(20)` | 1.1 h | `6.12×10¹⁸` | **12.04 h** |
+| A130003 `a(21)` | 1.5 d | `2.86×10²⁰` | **3.56 d** |
 | A110096 `a(17)` | 2.2 min | `3.06×10²⁰` | **9.5 min** |
 | A110096 `a(18)` | 3.1 h | `7.60×10²⁰` | **15.8 min** |
+| A110096 `a(19)` | 4.3 d | `5.64×10²³` | **10.8 h** |
 
-Four terms for 18.1 h of one GPU. Where a row missed it missed for two
+Six terms for 96.2 h of one GPU. Where a row missed it missed for two
 separable reasons, and both are scored rather than averaged: the depth the
 term actually sat at is in [README.md](README.md#the-odds-model), and the
-rate the campaign actually ran at is here.
+rate the campaign actually ran at is here. The two newest rows miss in
+opposite directions and each for one dominant reason: `a(19)` of A110096
+came in at a *ninth* of its predicted time, because the base-2 engine ended
+up far faster than the one that priced the row and the term sat on its
+median; `a(21)` took 2.4× its predicted time despite the same being true at
+base 4, because the term sat at 3.4× its median.
 
 ### The campaign rate is not the scored rate
 
@@ -303,14 +313,18 @@ the pre-fix column kept so the change is legible:
 
 | target | from | median | line to sweep | as the campaign ran | **now** |
 |--------|------|--------|---------------|---------------------|---------|
-| A130003 `a(21)` | `8.95×10¹⁸` | `8.45×10¹⁹` | `7.6×10¹⁹` | 6.0 d | **25.7 h** — running |
-| A130003 `a(22)` | " | `1.93×10²¹` | `1.9×10²¹` | 153 d | 26.8 d |
-| A110096 `a(19)` | `3.62×10²¹` | `5.82×10²³` | `5.6×10²³` | 3.2 d | **FOUND in 10.2 h** |
+| A130003 `a(21)` | `8.95×10¹⁸` | `8.45×10¹⁹` | `7.6×10¹⁹` | 6.0 d | **FOUND in 67.9 h**, at `2.86×10²⁰` |
+| A130003 `a(22)` | `2.86×10²⁰` | `3.22×10²¹` | `2.9×10²¹` | 239 d | 30.0 d |
+| A130003 `a(23)` | " | `7.52×10²²` | `7.5×10²²` | 6,100 d | 767 d |
+| A110096 `a(19)` | `3.62×10²¹` | `5.82×10²³` | `5.6×10²³` | 3.2 d | **FOUND in 10.2 h**, at `5.64×10²³` |
 | A110096 `a(20)` | `5.64×10²³` | `2.39×10²⁵` | `2.3×10²⁵` | — | 17.6 d — but only **13.4%** of it is under the engine's ceiling |
 
-at the rates the campaigns themselves measured: `8.20×10¹⁴ m/s` for
-`b = 4` (from the running campaign's own first minutes) and `1.53×10¹⁹`
-for `b = 2` (from the 10.2-hour campaign that found `a(19)`).
+at the rates the campaigns themselves measured end to end:
+`1.13×10¹⁵ m/s` for `b = 4` (from the 67.9-hour campaign that found
+`a(21)`) and `1.53×10¹⁹` for `b = 2` (from the 10.2-hour campaign that
+found `a(19)`). The two `a(21)` and `a(22)` rows are also the clearest
+statement of what this family costs now: the term that took 2.8 days
+raised the next one's median wait to 30.
 
 **The `a(19)` row is this table's own check, and it passed.** The version
 written on 2026-08-27 projected `15 h` at `1.07×10¹⁹ m/s`; the campaign
@@ -323,9 +337,28 @@ launch. Under-projecting is the right direction for this column to err in,
 but the reason is worth keeping: a device share is a property of a
 configuration, not of an engine.
 
+The `a(21)` row's rate column erred in the same direction: it was priced at
+`8.20×10¹⁴ m/s` from the campaign's own first minutes and the campaign
+sustained `1.13×10¹⁵` over 67.9 h. What the row got wrong was the depth,
+not the rate — the term sat at 3.4× its median, which is the column below.
+
+**And that campaign rate is above the A/B number in this file, which is the
+harness and not the engine.** The `7.92×10¹⁴ m/s` in the base-4 row of "End
+to end" above is a paired figure: two engines alive in one process,
+arms alternating. A bare device loop at the same configuration, timed over
+eight launches at each end of the window the campaign actually swept,
+measures `1.20×10¹⁵ m/s` at `m ≈ 8.95×10¹⁸` and `1.24×10¹⁵` at
+`m ≈ 2.85×10²⁰` — `1.5×` the paired arm, and the campaign then ran at 92%
+of *that*. Nothing is wrong with the A/B: it is built to hold a **ratio**
+steady while ambient load moves absolutes by tens of percent
+(OPTIMIZATION.md Rule 3), and its ratios have twice predicted a campaign
+correctly. But its absolute column is not a throughput anyone should quote,
+and a campaign beating it is not an anomaly to explain.
+
 Two things this table is not. It is not a forecast: the medians are the
-model's, and this repo's ladder models run about 2× late pooled over twelve
-finds, so multiply before expecting a term (README, "The odds model").
+model's, and this repo's ladder models run about 2× late pooled over
+thirteen finds, so multiply before expecting a term (README, "The odds
+model").
 
 And it is not the ceiling. The version of this paragraph written on
 2026-08-24 said the loop was 90-95% device so "the next real gain would

@@ -17,26 +17,32 @@ terms of A130003 were published and the last of them,
 sixteen, the last three from Bert Dobbelaere in April 2021. Neither entry
 carries an upper bound of any kind, at any open `n`.
 
-**Five new terms, in 28.3 hours of one RTX 4090:**
+**Six new terms, in 96.2 hours of one RTX 4090:**
 
     A130003  a(19) =                13,268,589,982,417,023
              a(20) =             6,120,156,516,528,136,867
+             a(21) =           285,661,075,490,357,310,517
     A110096  a(17) =       305,948,728,878,647,722,725
              a(18) =       760,056,834,873,121,351,995
              a(19) = 564,052,872,977,379,795,315,735
 
 `a(19)` of A130003 landed **117 seconds** into the first campaign, which is
 what a nineteen-year-old frontier with no published bound below it looks
-like once the engine is right. `a(19)` of A110096 is the newest, found
-2026-08-27 on the re-optimised engine, and at 24 digits it is `30,577×`
-above `2⁶⁴`; all three A110096 terms are above it. Every primality decision
-in all five is a proof rather than a probable-prime call. The exact integers, all values, the certificates and the factor
-witnesses are in [`evidence/`](evidence/); the claims and the verification
-are in [RESULTS.md](RESULTS.md).
+like once the engine is right; `a(21)` is the newest, found 2026-09-01
+after 67.9 hours of sweeping, and it is the third term this project has put
+on a sequence whose published frontier had not moved since 2007. `a(19)` of
+A110096 is the deepest, at 24 digits and `30,577×` above `2⁶⁴`; all three
+A110096 terms are above it, and so is `a(21)` of A130003. Every primality
+decision in all six is a proof rather than a probable-prime call. The exact
+integers, all values, the certificates and the factor witnesses are in
+[`evidence/`](evidence/); the claims and the verification are in
+[RESULTS.md](RESULTS.md).
 
-**Status: ACTIVE — A130003 `a(21)` is the live hunt**, at a
-measured `8.20×10¹⁴ m/s`, which is `5.77×` the campaign that found this
-project's first two terms. Two optimization passes got it there. The first
+**Status: PAUSED — open to others.** A130003 is paused at
+`m = 2.86×10²⁰` with `a(22)` open, A110096 at `m = 5.64×10²³` with `a(20)`
+open. The campaign that found `a(21)` sustained **`1.13×10¹⁵ m/s`** over
+67.9 hours, which is `7.97×` the campaign that found this project's first
+two terms. Two optimization passes got it there. The first
 found that `check_rungs` rebuilt the progress ladder from the odds model
 once per segment — 1,080 numerical integrals for an answer that changes
 only when a term is found, about four fifths of a 17-hour run — and cached
@@ -54,24 +60,32 @@ warp shuffle that would halve the plane loads and runs at `0.773×` — but it
 removed the `crv` table (the per-residue plane shift is linear in the
 residue, so the kernel computes it), which takes the device tables from
 855 to 495 MiB at base 4 and 1340 to 652 MiB at base 2, and cut an engine
-rebuild from 20 s to 11 s. The full battery is green (32 gates and drills)
+rebuild from 20 s to 11 s. The full battery is green (33 gates and drills)
 and all five benchmark shapes reproduce a fingerprint.
 
-**The first campaign on that engine found A110096 `a(19)` in 10.2 hours**,
-sweeping `5.6×10²³` of line at `1.53×10¹⁹ m/s` — 9.7× the campaign that
-found `a(17)` and `a(18)` three days before, and 1.43× what was projected
-for it. A130003 resumed from `m = 8.95×10¹⁸` and has since swept to
-`m = 1.10×10¹⁹` over 18.0 hours without a find.
+**Both campaigns on that engine landed a term.** A110096's found `a(19)` in
+10.2 hours, sweeping `5.6×10²³` of line at `1.53×10¹⁹ m/s` — 9.7× the
+campaign that found `a(17)` and `a(18)` three days before, and 1.43× what
+was projected for it. A130003's resumed from `m = 8.95×10¹⁸` and found
+`a(21)` at `2.86×10²⁰`, sweeping `2.77×10²⁰` of line in 67.9 hours at
+`1.13×10¹⁵ m/s` — 7.97× the campaign that found `a(19)` and `a(20)`, and
+1.38× its own opening measurement. Both came in above their projections,
+and the base-4 figure was checked against a bare device loop at the same
+configuration (`1.20–1.24×10¹⁵ m/s` across the swept window), which puts
+the campaign at **92% of its own engine** and the remaining 8% in the host
+([RESULTS.md](RESULTS.md#what-the-campaign-cost)).
 
-At the measured rates — `8.20×10¹⁴ m/s` at base 4 and `1.53×10¹⁹` at
-base 2 — `a(21)` of A130003 is **25.6 hours** of sweeping to its median,
-read as a floor (see [the odds model](#the-odds-model)). **A110096 is now
-out of ceiling rather than out of engine:** with `a(19)` found at
-`5.64×10²³`, the proof bound `3.317×10²⁴` sits only `5.9×` above the
-largest value already proved, and the model puts `a(20)` below it with just
-**13.4%** probability. A further term on that family means wiring huntlib's
-BLS75 certificates into the verification path — the machinery is built and
-gated, it is simply not on this path. A130003 has room to `a(23)`.
+**Both families are now short of ceiling rather than short of engine.**
+A110096 is the acute case: with `a(19)` found at `5.64×10²³`, the proof
+bound `3.317×10²⁴` sits only `5.9×` above the largest value already proved,
+and the model puts `a(20)` below it with just **13.4%** probability.
+A130003 has more room but no longer a lot — `a(22)` and `a(23)` are under
+the bound with probability 100% and 99.8%, and `a(24)` with **54.6%**. A
+further term past those means wiring huntlib's BLS75 certificates into the
+verification path — the machinery is built and gated, it is simply not on
+this path. The nearer constraint on base 4 is simply depth: at the measured
+`1.13×10¹⁵ m/s`, `a(22)` is **30 days** of sweeping to its median, read as
+a floor (see [the odds model](#the-odds-model)).
 
 ## The problem
 
@@ -91,8 +105,8 @@ five separate places in A110096.
 | Found by | Jens Kruse Andersen, **Jun 08 2007** | Bert Dobbelaere, Apr 24 2021 |
 | Author | Farideh Firoozbakht, May 30 2007 | Joseph L. Pe, Sep 05 2005 |
 | Other link | Rivera, [Puzzle 403](http://www.primepuzzles.net/puzzles/puzz_403.htm) | Rivera Puzzle 379 cluster; A193109 |
-| **Found here** | `a(19)`, `a(20)` | `a(17)`, `a(18)`, `a(19)` |
-| **Open, and next** | `a(21)`, empty below `1.10×10¹⁹` | `a(20)`, empty below `5.64×10²³`; only 13.4% of it is under the proof ceiling |
+| **Found here** | `a(19)`, `a(20)`, `a(21)` | `a(17)`, `a(18)`, `a(19)` |
+| **Open, and next** | `a(22)`, empty below `2.86×10²⁰` | `a(20)`, empty below `5.64×10²³`; only 13.4% of it is under the proof ceiling |
 | Upper bound | **none published, at any open n** | **none published, at any open n** |
 
 Why they are open rather than merely unfinished: the density of qualifying
@@ -281,61 +295,74 @@ measured from the floor its own search started at):
 | A110096 `a(17)` | `3.06×10²⁰` | `2.03×10²⁰` | 0.899 | 0.593 |
 | A110096 `a(18)` | `7.60×10²⁰` | `1.97×10²²` | 0.042 | 0.041 |
 | A110096 `a(19)` | `5.64×10²³` | `5.82×10²³` | 0.679 | **0.493** |
+| A130003 `a(21)` | `2.86×10²⁰` | `8.45×10¹⁹` | 1.543 | **0.786** |
 
-Two early, one late, two on the nose — and the newest landed at quantile
+Two early, two late, two on the nose. `a(19)` of A110096 landed at quantile
 **0.493** against the 0.500 a correct model gives, 3% below its own
-predicted depth, the closest call this repository has scored. Pooled:
-**3.32 expected hits for 5 actual**, an optimism factor of **0.66×** with
-an exact (Garwood) 95% interval of **[0.28, 2.05]**, which contains 1. The
-fifth draw moved the point estimate by 0.004 and cut the interval's width
-by a fifth. And the census ([RESULTS.md](RESULTS.md#census)) says the
-intensity underneath it is right to within 1% over 15,457 classified values
-on both families at once. On its own five draws, this model is not
-measurably wrong in either direction.
+predicted depth, the closest call this repository has scored; `a(21)` then
+landed at **0.786**, 3.4× its own median, which is the first draw here that
+looks like the ones the sibling projects keep producing. Pooled: **4.87
+expected hits for 6 actual**, an optimism factor of **0.81×** with an exact
+(Garwood) 95% interval of **[0.37, 2.21]**, which contains 1. The sixth
+draw moved the point estimate from 0.66× to 0.81× — a fifth of the way to
+the siblings on one term, which is what a six-draw sample does. And the
+census ([RESULTS.md](RESULTS.md#census)) says the intensity underneath it
+is right to within 1% over 15,457 classified values on both families at
+once. On its own six draws, this model is still not measurably wrong in
+either direction.
 
-**Read every median above as a floor anyway.** Five draws cannot separate
-0.66× from 2×, and the three ladder projects in this repository have now
-scored **twelve** first occurrences between them at a pooled optimism
-factor of **1.95×**, 95% interval **[1.11, 3.76]** — still excluding 1,
-though by less than it did, and still with each project's census showing
-the modelled *intensity* right to a percent or two. Mean count right, first
-occurrence late. Their mean model quantile is 0.67 against the 0.50 a
-correct model gives; the five finds above are what pulled it down from
-0.85. Budget 2-3× the medians before expecting a
+**Read every median above as a floor anyway.** Six draws cannot separate
+0.81× from 2×, and the three ladder projects in this repository have now
+scored **thirteen** first occurrences between them at a pooled optimism
+factor of **1.92×**, 95% interval **[1.12, 3.60]** — still excluding 1, and
+now tightening rather than merely moving, and still with each project's
+census showing the modelled *intensity* right to a percent or two. Mean
+count right, first occurrence late. Their mean model quantile is 0.68
+against the 0.50 a correct model gives; the six finds above are what pulled
+it down from 0.85. Budget 2-3× the medians before expecting a
 term, and treat a term that arrives on the median as luck rather than as
 calibration.
 
 **The live ladder**, re-derived from the frontiers this project set. The
-table above is the pre-sweep record and stays as it was; **five of its six
-rows are now settled terms**, and every row here is re-derived from the
+table above is the pre-sweep record and stays as it was; **every one of its
+six rows is now a settled term**, and every row here is re-derived from the
 floors those finds moved (CONVENTIONS.md, "a rung retires with its term").
-`a(21)` of A130003 is the only open term this project is hunting:
+Both families are paused, so these are the depths a resumed campaign would
+aim at:
 
 | term | Q1 | median | Q3 | P90 | P(below the engine's ceiling) |
 |------|----|--------|----|-----|-------------------------------|
-| A130003 a(21) | 2.84×10¹⁹ | **8.45×10¹⁹** | 2.41×10²⁰ | 5.51×10²⁰ | 100% |
-| A130003 a(22) | 4.17×10²⁰ | **1.93×10²¹** | 6.65×10²¹ | 1.64×10²² | 100% |
-| A130003 a(23) | 1.38×10²² | **6.89×10²²** | 2.40×10²³ | 5.92×10²³ | 99.8% |
+| A130003 a(22) | 1.15×10²¹ | **3.22×10²¹** | 8.74×10²¹ | 1.94×10²² | 100% |
+| A130003 a(23) | 1.69×10²² | **7.52×10²²** | 2.51×10²³ | 6.07×10²³ | 99.8% |
+| A130003 a(24) | 5.47×10²³ | **2.63×10²⁴** | — | — | **54.6%** |
 | A110096 a(20) | 7.39×10²⁴ | **2.39×10²⁵** | 6.45×10²⁵ | 1.36×10²⁶ | **13.4%** |
 | A110096 a(21) | 2.08×10²⁶ | **7.89×10²⁶** | 2.25×10²⁷ | 4.85×10²⁷ | **1.4%** |
 
-That last column is the one to read, and `a(19)` moved it. The ceiling is
-`k_ceil(n, b) = 3.317×10²⁴ − bⁿ`, the primality-proof bound; before the
-find it sat `88.5%` above A110096's next term, and now the next term is
-`a(20)` at **13.4%**. The base-2 family has effectively run out of range
-one term sooner than the pre-sweep table expected, because `a(19)` landed
-at `5.64×10²³` — within a factor of six of the bound itself. A130003 is
-untouched by this and has room to `a(23)`. Going further on base 2 means
-proving larger primes, not making the engine faster: huntlib's BLS75
-certificates are built and gated, they are simply not wired into this
-project's verification path.
+That last column is the one to read, and both of the newest finds moved it.
+The ceiling is `k_ceil(n, b) = 3.317×10²⁴ − bⁿ`, the primality-proof bound.
+`a(19)` took A110096's next term from `88.5%` under it to **13.4%**, one
+term sooner than the pre-sweep table expected, because it landed at
+`5.64×10²³` — within a factor of six of the bound itself. `a(21)` has now
+done a smaller version of the same thing to A130003: that family had room
+to `a(23)` before, and it still does, but `a(24)` is now a coin flip at
+**54.6%** and the dashes in its row are quantiles the engine may not reach.
+Going past those means proving larger primes, not making the engine faster:
+huntlib's BLS75 certificates are built and gated, they are simply not wired
+into this project's verification path.
+
+`a(21)` also re-priced the base-4 ladder in *time*, and that is the more
+immediate constraint. It landed at 3.4× its median, which lifted the floors
+under everything above it: at the measured `1.13×10¹⁵ m/s`, `a(22)`'s Q1 is
+8.9 days of sweeping, its median 30 days and its Q3 87 days, where `a(21)`
+took 2.8. A130003 stops being a hunt that fits in a weekend at exactly this
+term.
 
 ## Running it
 
 Requires an NVIDIA GPU with CuPy, plus numpy and sympy.
 
 ```bash
-python launch.py --selftest    # 32 gates and drills; must end ALL GREEN (~60 s)
+python launch.py --selftest    # 33 gates and drills; must end ALL GREEN (~100 s)
 ```
 
 ```bash
@@ -359,8 +386,9 @@ python launch.py --base 2      # A110096 instead
 
 Each family keeps its own checkpoint under its own config key, and neither
 campaign will read the other's cursor. Either command above resumes where
-that family was paused — `m = 1.10×10¹⁹` at base 4, `m = 5.64×10²³` at
-base 2 — with the filter already promoted to the term it is hunting. The
+that family was paused — `m = 2.86×10²⁰` at base 4, `m = 5.64×10²³` at
+base 2 — with the filter already promoted to the term it is hunting
+(`a(22)` and `a(20)` respectively). The
 hunt is indefinite by default, resumable, checkpointed every segment, and
 stops cleanly on Ctrl+C with exit 130. `--to` caps the depth,
 `--stop-on-discovery` exits once **this run** confirms a find, and

@@ -8,26 +8,28 @@ later value that reaches the frontier) is counted in the checkpoint and
 shown in each 30-second `[STATUS]` line, never written here
 (CONVENTIONS.md, "The census is counted, not narrated").
 
-**Present: five first occurrences**, from the campaigns of 2026-08-23/27:
+**Present: six first occurrences**, from the campaigns of 2026-08-23 to
+2026-09-01:
 
     A130003_a19_13268589982417023.json         a(19), base 4
     A130003_a20_6120156516528136867.json       a(20), base 4
+    A130003_a21_285661075490357310517.json     a(21), base 4
     A110096_a17_305948728878647722725.json     a(17), base 2
     A110096_a18_760056834873121351995.json     a(18), base 2
     A110096_a19_564052872977379795315735.json  a(19), base 2
 
 and the two ledgers. Nothing else: the campaigns have also classified more
-than 53,000 values at run 8 or longer and 9 of those came within one
+than 140,000 values at run 8 or longer and 10 of those came within one
 condition of an open term, and none of them is written here — they are
 counts in the checkpoint and lines in the log, which is the whole rule.
 
 Because the conditions of both sequences nest, one `m` can settle several
 terms at once. A find is evidenced **once**, under the first term it
-settles, with a `settles` field listing all of them — a run of 21 at
-base 4 would produce a single `A130003_a19_<m>.json` recording `a(19)`,
-`a(20)` and `a(21)`. Both sequences say how often that happens at small
+settles, with a `settles` field listing all of them — a run of 24 at
+base 4 would produce a single `A130003_a22_<m>.json` recording `a(22)`,
+`a(23)` and `a(24)`. Both sequences say how often that happens at small
 `m`: A130003's `a(10) = 4503` settled five terms at once, and A110096
-repeats at six of its sixteen indices. At the depths these five were found
+repeats at six of its sixteen indices. At the depths these six were found
 it is far rarer — about 0.13 per find — and each `settles` exactly one
 term ([RESULTS.md](../RESULTS.md#what-a-find-looked-like)).
 
