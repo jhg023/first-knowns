@@ -330,6 +330,14 @@ each README stays.
    endings in the repo; no references to unpublished work and no
    personal or machine-specific information anywhere in the repo.
 
+8. **Do not feed multi-line Python (or any quoted source) to the shell
+   through a heredoc.** On the Windows / Git-Bash setup this repo is
+   worked on, a `python - <<'EOF'` block containing quotes reliably dies
+   with "unexpected EOF while looking for matching `'`" -- it has happened
+   in every session that tried it. Write the script to a file in the
+   scratchpad with the Write tool and run `python that_file.py`. A
+   one-line `python -c` with simple quoting is fine.
+
 ## Quick commands (run them in the ACTIVE project only -- Rule 2)
 
 ```
