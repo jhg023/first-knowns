@@ -264,6 +264,63 @@ constraint that is not throughput.** A default that leaves the machine
 usable, plus a documented knob and a measured statement of what the knob
 is worth, beats a default tuned to the last drop of rate.
 
+**The default is the fastest correct configuration at every opening
+(repo-wide, binding; CLAUDE.md 5g).** The two rules above say how to
+measure and how to keep the machine usable; this one says *where* the
+measurement has to be taken, because a launcher is not one program but
+several. It has an opening per family, a fresh start and a resume, the
+filter it opens at and every filter it promotes itself to on a find, and
+each of those is a configuration with its own device rate, survivor
+density and host need. The owner runs `python launch.py` with no flags and
+must get the fastest correct campaign the engine can run at that opening;
+**a flag that makes it faster is a bug in the default.** In order:
+
+1. **Enumerate the openings.** Every (family, filter) the campaign can
+   start at or promote itself into, up to the ceiling. Write the list
+   in the launcher's docstring; it is the test plan for everything
+   below.
+2. **Price each one, paired.** A frozen benchmark shape at each family's
+   opening filter and at the live filter; and for every filter in
+   between, a paired, interleaved measurement of the campaign's own
+   constants against the alternatives (OPTIMIZATION.md rules). A
+   constant swept at one filter is re-swept one filter later, because
+   the campaign promotes itself there on the next find, and the cliff
+   that costs 5x is always at n + 1. Store the per-filter table and
+   write the numbers in the log.
+3. **Size at runtime what depends on the work.** The pool is sized from
+   a measurement at the campaign's own configuration -- sweep the next
+   launches, count their survivors, time the classification of a sample,
+   take ceil(core-seconds per second x margin), ramp -- at start and
+   again at every promotion, where the need falls and a pool that ties
+   on throughput should ask for less machine. A constant priced at
+   another filter is not a default; it is the fallback for a drill
+   without a device.
+4. **Bind on the right side, visibly.** Bound how far the device may run
+   ahead of the host (back-pressure). A pool that cannot keep up then
+   throttles the device where the heartbeat can see it: print the
+   fraction of wall clock spent waiting in every `[STATUS]`, and make the
+   rate printed the pipeline's rate. An unbounded backlog is not faster;
+   it is the same host rate with a memory leak and a lying heartbeat.
+5. **The heartbeat reads off the coverage cursor.** `next` and
+   `P(a(n) ...)` come from the claim, never from progress through a
+   period; at an opening filter every rung can sit inside the first
+   period, and a line that reads them off progress reports the ceiling
+   as the next rung and the open term as found.
+6. **Run the acceptance test before the campaign is offered.** Start each
+   family fresh, no flags, and confirm from the first `[STATUS]` lines
+   that the pool is not binding, the rate is the benchmark's for that
+   filter, and `next` names the right rung. Then Ctrl+C and confirm the
+   resume does the same.
+
+The case that wrote this rule: prime-ladders' launcher opened its second
+family with a pool priced at the first family's opening filter (2x
+short, the device running 300,000 survivors a second ahead of it into
+memory, the heartbeat reporting the host's rate as the hunt's), constants
+swept at the live filter of the first family (1.2-1.3x slow at the
+second family's opening, 0.2x at the filter after the first family's next
+find), and a status line reading its rungs off progress. Every gate was
+green. The owner found all of it from two `[STATUS]` lines.
+
 **Checkpoints must survive the machine, not just the process
 (repo-wide).** `huntlib.checkpoint.save` is the only way a campaign
 persists its cursor, and temp-file-plus-`os.replace` is not by itself

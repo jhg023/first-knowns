@@ -216,11 +216,32 @@ K2_SURV = 0.015
 # On the unit wheel at n = 18 the prefix stops one group earlier (0.28:
 # 1.05x; 0.40 is a 0.23x cliff -- queue 0 outgrows shared memory) and
 # round 2 runs six primes deeper (0.008: 1.03x alone, 1.07x with the
-# prefix; 0.004 ties it and asks for more table).  At the A084701 opening
-# filter (n = 12) 0.28 costs 15%: LIT is filter-sensitive, and a per-filter
-# value is the priced follow-up in the log.
-LIT_SURV_UNIT = 0.28
+# prefix; 0.004 ties it and asks for more table).
+#
+# AND LIT IS FILTER-SENSITIVE, not monotonically (OPTIMIZATION_LOG.md v3.1,
+# swept interleaved at n = 12..21 with the fingerprint held at every
+# filter): 0.12 wins at n = 12-15 by 1.19-1.33x, 0.28 at n = 16-18 (where
+# 0.12 costs 9%), 0.12 again at n = 19 -- where 0.28 sits on the
+# shared-memory cliff at 0.19x of the rate the same wheel has with 0.12 --
+# and 0.19 at n = 20-21 by 7%.  The variable is where the prefix's
+# compaction lands against the queue budget for that filter's survival
+# curve, not n; until a rule derives it, this table is what was measured,
+# and a filter past its end takes the last entry (CLAUDE.md 5g: a constant
+# swept at one filter is re-swept one filter later, because the campaign
+# promotes itself there).  K2 stays 0.008 (0.015 was 0.77x at n = 19).
+LIT_SURV_UNIT_BY_N = {12: 0.12, 13: 0.12, 14: 0.12, 15: 0.12,
+                      16: 0.28, 17: 0.28, 18: 0.28,
+                      19: 0.12, 20: 0.19, 21: 0.19}
 K2_SURV_UNIT = 0.008
+
+
+def lit_surv_unit(n):
+    """The unit wheel's prefix compaction point at filter n (measured)."""
+    n = int(n)
+    if n in LIT_SURV_UNIT_BY_N:
+        return LIT_SURV_UNIT_BY_N[n]
+    keys = sorted(LIT_SURV_UNIT_BY_N)
+    return LIT_SURV_UNIT_BY_N[keys[-1] if n > keys[-1] else keys[0]]
 # INTERMEDIATE COMPACTION POINTS between the prefix and the global push, as
 # survival fractions.  v1 ran every group from LIT to K2 branchless on the
 # whole of queue 0 -- 27 group tests on every prefix survivor, most of them
@@ -908,7 +929,8 @@ class GpuEngine:
             cpt = CPT_UNIT if self.unit > 1 else CPT_DEFAULT
         if spb is None:
             spb = SPB_UNIT if self.unit > 1 else SPB_DEFAULT
-        self.lit_target = LIT_SURV_UNIT if self.unit > 1 else LIT_SURV
+        self.lit_target = (lit_surv_unit(self.n) if self.unit > 1
+                           else LIT_SURV)
         self.k2_target = K2_SURV_UNIT if self.unit > 1 else K2_SURV
         if self.n > NRES_MAX:
             raise ValueError(

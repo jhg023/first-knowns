@@ -72,7 +72,7 @@ are the PRIMES, and the primes are not a polynomial.
 
 Gates in this file: G1 (the frozen knowns reproduce, are monotone, and sit
 on the wheel above the floor; each frontier's wall is composite), G1b
-(this project's own finds, a(14)-a(17) of A084700, reach exactly their
+(this project's own finds, a(14)-a(18) of A084700, reach exactly their
 run from the bare definition, continue the ladder monotonically above the
 published frontier, sit on the wheel, and each stops at a composite), G2
 (the small terms are re-derived exhaustively from the bare definition),
@@ -121,18 +121,30 @@ KNOWN_MINUS = {1: 2, 2: 2, 3: 4, 4: 6, 5: 120, 6: 120, 7: 120,
 
 KNOWN = {+1: KNOWN_PLUS, -1: KNOWN_MINUS}
 
-# FOUND BY THIS PROJECT (2026-09-02, first campaign, RESULTS.md) and not yet
-# in the OEIS: verified four ways at discovery time, evidenced under
-# evidence/, and re-checked from the bare definition by G1b below.  Kept
-# APART from KNOWN on purpose: KNOWN is the literature, which the model is
-# validated against and a fresh campaign starts from; these are the
-# project's own claim, which the campaign carries in its checkpoint
-# (`found`) and promotes its frontier from at runtime.
+# FOUND BY THIS PROJECT (A084700: a(14)-a(17) on 2026-09-02 by the first
+# campaign, a(18) on 2026-09-03 by the second; A084701: a(12)-a(18) on
+# 2026-09-03 by its one campaign, which ran from k = 1e6 to the family's
+# proof ceiling in 2.5 hours -- RESULTS.md) and not yet in the OEIS:
+# verified four ways at discovery time, evidenced under evidence/, and
+# re-checked from the bare definition by G1b below.  Kept APART from KNOWN
+# on purpose: KNOWN is the literature, which the model is validated against
+# and a fresh campaign starts from; these are the project's own claim,
+# which the campaign carries in its checkpoint (`found`) and promotes its
+# frontier from at runtime.  A084701's a(14) = a(15): one k settled both
+# (a run of 15 arrived while a(14) was open), the third such rider pair in
+# that family after a(2) on a(1) and a(6), a(7) on a(5).
 FOUND = {+1: {14: 24581646307811670,
               15: 1183192161007235610,
               16: 161515890673488267840,
-              17: 2446970377116913184460},
-         -1: {}}
+              17: 2446970377116913184460,
+              18: 416266897501398851227320},
+         -1: {12: 43708752888360,
+              13: 2276961234558570,
+              14: 165784683394437030,
+              15: 165784683394437030,
+              16: 16739777598441148020,
+              17: 9050934616476845605590,
+              18: 23562434281685500120920}}
 
 # NEITHER family carries a published bound of any kind -- no upper bound at
 # any open n, and no searched-empty lower bound beyond the last term.  The
@@ -140,9 +152,11 @@ FOUND = {+1: {14: 24581646307811670,
 # the conditions nest, so a(n+1) >= a(n).
 PUBLISHED_BOUNDS = {+1: {}, -1: {}}
 
-# The open terms, counting this project's finds: a(18) of A084700 is the
-# one the campaign is sweeping for.
-OPEN_N = {+1: [18, 19, 20, 21], -1: [12, 13, 14, 15]}
+# The open terms, counting this project's finds: a(19) of both families.
+# A084700's campaign sweeps for its a(19) under a ceiling of 3.317e24;
+# A084701's swept to ITS ceiling, 4.95e22 at n = 19, on 2026-09-03 and
+# stopped there, with a(19) 99% likely to lie above it (RESULTS.md).
+OPEN_N = {+1: [19, 20, 21, 22], -1: [19, 20, 21, 22]}
 
 # The wheel argument has an exception zone below this k (a value can BE the
 # small prime that would otherwise divide it), so the engines refuse to run
@@ -288,6 +302,11 @@ def g1b_finds_reproduce():
     at n >= 14 that means a multiple of 2310, the forcing lemma.  "Least"
     is not checkable here (that is the campaign's coverage claim,
     RESULTS.md); "is a term of the sequence with this index" is.
+
+    One k may settle several consecutive terms (A084701's a(14) = a(15)):
+    the run must then reach every term the k carries and be EXACTLY the
+    last of them, and the stopper is checked once, on that last term -- the
+    value at i = n + 1 on a rider is the next term's own value, and prime.
     """
     parts = []
     for s in sorted(FAMILIES, reverse=True):
@@ -296,15 +315,18 @@ def g1b_finds_reproduce():
             continue
         top = max(KNOWN[s])
         prev = KNOWN[s][top]
+        riders = []
         for n in sorted(found):
             k = found[n]
             if n != top + 1:
                 return False, (f"G1b FAIL: {FAMILIES[s]['oeis']} a({n}) does "
                                f"not continue the ladder from a({top})")
+            rider = found.get(n + 1) == k        # a(n+1) rides on this k
             r = run_length(k, s, cap=n + 3)
-            if r != n:
+            if (r < n) if rider else (r != n):
                 return False, (f"G1b FAIL: {FAMILIES[s]['oeis']} a({n}) = {k} "
-                               f"has run {r}, not exactly {n}")
+                               f"has run {r}, not "
+                               f"{'at least' if rider else 'exactly'} {n}")
             if k < prev:
                 return False, (f"G1b FAIL: {FAMILIES[s]['oeis']} a({n}) = {k} "
                                f"< a({n-1}) = {prev}")
@@ -315,13 +337,17 @@ def g1b_finds_reproduce():
             if n >= 14 and k % 2310:
                 return False, (f"G1b FAIL: {FAMILIES[s]['oeis']} a({n}) = {k} "
                                f"is not a multiple of 2310 (forcing lemma)")
-            if isprime(value(k, n + 1, s)):
+            if rider:
+                riders.append(f"a({n + 1}) = a({n})")
+            elif isprime(value(k, n + 1, s)):
                 return False, (f"G1b FAIL: {rung(n + 1)}*{k}{s:+d} is prime, "
                                f"so {FAMILIES[s]['oeis']} a({n}) would be "
                                f"a({n + 1}) or more")
             prev, top = k, n
         parts.append(f"{FAMILIES[s]['oeis']} a({min(found)})-a({max(found)}) "
-                     f"(stops at {rung(top + 1)}*k{s:+d}, composite)")
+                     f"(stops at {rung(top + 1)}*k{s:+d}, composite"
+                     + (f"; {', '.join(riders)} on one k" if riders else "")
+                     + ")")
     return True, ("G1b ok: this project's finds " + "; ".join(parts) +
                   " -- each reaches exactly its run from the bare definition, "
                   "continues the ladder monotonically from the published "

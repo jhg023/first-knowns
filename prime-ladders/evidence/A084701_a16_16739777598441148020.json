@@ -1,0 +1,150 @@
+{
+ "sequence": "A084701",
+ "sign": -1,
+ "k": 16739777598441148020,
+ "run": 16,
+ "settles": [
+  16
+ ],
+ "values": {
+  "1": 33479555196882296039,
+  "2": 50219332795323444059,
+  "3": 83698887992205740099,
+  "4": 117178443189088036139,
+  "5": 184137553582852628219,
+  "6": 217617108779734924259,
+  "7": 284576219173499516339,
+  "8": 318055774370381812379,
+  "9": 385014884764146404459,
+  "10": 485453550354793292579,
+  "11": 518933105551675588619,
+  "12": 619371771142322476739,
+  "13": 686330881536087068819,
+  "14": 719810436732969364859,
+  "15": 786769547126733956939,
+  "16": 887208212717380845059
+ },
+ "verification": {
+  "mr_chain": true,
+  "sympy_bpsw": true,
+  "resieve_other_wheel": true,
+  "stopper_composite": true
+ },
+ "stopper": {
+  "i": 17,
+  "prime": 59,
+  "value": 987646878308027733179,
+  "factor": 839
+ },
+ "certificates": {
+  "1": {
+   "proof": "deterministic-mr",
+   "N": 33479555196882296039,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "2": {
+   "proof": "deterministic-mr",
+   "N": 50219332795323444059,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "3": {
+   "proof": "deterministic-mr",
+   "N": 83698887992205740099,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "4": {
+   "proof": "deterministic-mr",
+   "N": 117178443189088036139,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "5": {
+   "proof": "deterministic-mr",
+   "N": 184137553582852628219,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "6": {
+   "proof": "deterministic-mr",
+   "N": 217617108779734924259,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "7": {
+   "proof": "deterministic-mr",
+   "N": 284576219173499516339,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "8": {
+   "proof": "deterministic-mr",
+   "N": 318055774370381812379,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "9": {
+   "proof": "deterministic-mr",
+   "N": 385014884764146404459,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "10": {
+   "proof": "deterministic-mr",
+   "N": 485453550354793292579,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "11": {
+   "proof": "deterministic-mr",
+   "N": 518933105551675588619,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "12": {
+   "proof": "deterministic-mr",
+   "N": 619371771142322476739,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "13": {
+   "proof": "deterministic-mr",
+   "N": 686330881536087068819,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "14": {
+   "proof": "deterministic-mr",
+   "N": 719810436732969364859,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "15": {
+   "proof": "deterministic-mr",
+   "N": 786769547126733956939,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "16": {
+   "proof": "deterministic-mr",
+   "N": 887208212717380845059,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  }
+ },
+ "certificates_verified": true,
+ "unproved": [],
+ "proof_routes": {
+  "deterministic-mr": 16
+ },
+ "least_claim": {
+  "swept_from": 1000000,
+  "swept_to": 16739777598441148020,
+  "wheel": 32589158477190044730,
+  "sieve_depth": 65536,
+  "monotone_floor": 3894254360010
+ },
+ "engine": "a084701-v3-u210-p131-p241-p353-q265536-seg128"
+}

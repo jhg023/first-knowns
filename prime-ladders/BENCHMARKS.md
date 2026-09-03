@@ -53,6 +53,7 @@ which is what the cursor re-denomination rests on.
 | 2026-09-02 | v1 | **111,143,013,071** | — | 65,153,518,777 | 9,468,319,388 | 16,966,560,612 | 5,358,083 | 37/37 green, 31 s; score.py 59 s |
 | 2026-09-02 | v2 | **202,524,485,715** | — | 93,320,802,420 | 18,817,108,326 | 34,017,742,869 | 8,526,813 | 37/37 green; every fingerprint identical to v1's |
 | 2026-09-02 | v3 | 182,950,418,030 | **6,156,431,019,029** | 83,278,142,757 | 16,172,004,625 | 28,233,290,316 | 7,557,055 | 41/41 green, 42 s; score.py 2.5 min; SCORE/SCOREM re-frozen on the unit wheel, SCORE18 added, the three k-space fingerprints identical to v1's |
+| 2026-09-03 | v3.1 | **247,175,538,205** | **6,173,131,954,944** | 85,373,360,028 | 16,668,608,719 | 33,965,957,033 | 7,254,701 | 41/41 green, 51 s; score.py 2.5 min; every fingerprint identical to v3's; `LIT_SURV` per filter (SCORE 1.35× and SCOREM 1.20× over the v3 row; SCORE18's filter keeps 0.28), the pool sized at runtime, back-pressure |
 
 The v3 row is read against two different things. **At the live filter**
 the paired number is what matters: on one period of the v2 wheel at
@@ -60,28 +61,29 @@ n = 18, interleaved in one process the same morning, the v2 engine ran
 `3.58×10¹⁸ k/s` and v3 runs `6.16×10¹⁸` — **1.72×** (1.29× from the
 wheel's 1.47× density, the rest from the constants re-swept on it;
 [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v3). **At the opening
-filters** the unit wheel is slower: `SCORE` (n = 14) is 0.90× v2's row
-and `SCOREM` (n = 12) 0.83× — the first-level table is 300× larger there
-(856,800 residues against 2,800), a launch is half the size, and
-`LIT_SURV` tuned for n = 18 costs 15% at n = 12. Those filters are passed
-in the first period of a campaign (`a(14)` lies in period 0 of either
-wheel), and the price is recorded rather than hidden. The three k-space
-shapes run v2's own constants and read 0.86–0.89× of v2's row — unpaired,
-an hour of sweeps into the GPU's day, inside the 10%-plus run-to-run band
-that row already warns about.
+filters** the v3 row was slower than v2's — `SCORE` (n = 14) 0.90×,
+`SCOREM` (n = 12) 0.83× — because `LIT_SURV` had been swept at n = 18
+only. v3.1's per-filter table ([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)
+v3.1) puts `SCORE` at 1.22× v2's row and `SCOREM` level with it; what the
+k-space wheel still has over the unit wheel at n = 12 is a 53× shorter
+period, not rate. The three k-space shapes run v2's own constants and
+read 0.82–0.92× of v2's row across the v3 and v3.1 runs — unpaired, hours
+of sweeps into the GPU's day, inside the 10%-plus run-to-run band that
+row already warns about.
 
 In physical units:
 
 | shape | line rate | candidate rate |
 |-------|-----------|----------------|
-| `SCORE` | `1.83×10¹⁷ k/s` | `1.29×10¹¹ /s` |
-| `SCORE18` | `6.16×10¹⁸ k/s` | `2.50×10¹¹ /s` |
-| `SCORE2L` | `8.33×10¹⁶ k/s` | `2.31×10¹¹ /s` |
-| `SCORE1L` | `1.62×10¹⁶ k/s` | `2.03×10¹¹ /s` |
-| `SCOREM` | `2.82×10¹⁶ k/s` | `8.48×10¹⁰ /s` |
-| `SCORE10` | `7.56×10¹² k/s` | `5.03×10⁹ /s` |
+| `SCORE` | `2.47×10¹⁷ k/s` | `1.75×10¹¹ /s` |
+| `SCORE18` | `6.17×10¹⁸ k/s` | `2.50×10¹¹ /s` |
+| `SCORE2L` | `8.54×10¹⁶ k/s` | `2.37×10¹¹ /s` |
+| `SCORE1L` | `1.67×10¹⁶ k/s` | `2.09×10¹¹ /s` |
+| `SCOREM` | `3.40×10¹⁶ k/s` | `1.02×10¹¹ /s` |
+| `SCORE10` | `7.26×10¹² k/s` | `4.83×10⁹ /s` |
 
-(v3; the v2 row read 2.025 / — / 0.933 / 0.188 / 0.340 / 0.0000853 ×10¹⁷.)
+(v3.1; the v3 row read 1.83 / 61.6 / 0.833 / 0.162 / 0.282 / 0.0000756
+×10¹⁷, the v2 row 2.025 / — / 0.933 / 0.188 / 0.340 / 0.0000853.)
 
 Read the candidate column against the line column. `SCORE18` and `SCORE`
 run the same wheel and the same kernel and differ 34× in line for 2× in
@@ -96,29 +98,67 @@ same kernel.
 
 ## Wall clock at the scored rate
 
-At the v3 `6.16×10¹⁸ k/s` of `SCORE18`, from the A084700 cursor at
-`5.44×10²²`, the model's depths for the open term ([RESULTS.md](RESULTS.md))
-convert to:
+At the v3 `6.16×10¹⁸ k/s` of `SCORE18`, the second campaign's `3.62×10²³`
+of line from `5.44×10²²` to `a(18)` was 16.3 hours of sweeping; it took
+15.2 (the campaign averaged `6.6×10¹⁸ k/s`, the benchmark being a paired
+number taken under ambient load). The model had put `a(18)` at a median
+of `1.9×10²³` (6.0 h) and a P90 of `1.0×10²⁴` (1.9 days); it landed at
+2.2× the median, inside the P90.
+
+From each family's cursor — A084700 at `4.16×10²³`, A084701 at its
+ceiling `4.95×10²²`, both at filter n = 19 — the model's depths for the
+open terms ([RESULTS.md](RESULTS.md)) convert to:
 
 | term | Q1 | median | Q3 | P90 | to the ceiling |
 |------|----|--------|----|-----|----------------|
-| A084700 a(18) | `5.7×10²²`, 7 min | **`1.9×10²³`, 6.0 h** | `5.0×10²³`, 20 h | `1.0×10²⁴`, 1.9 days | `3.317×10²⁴`, **6.1 days** (99.4%) |
-| A084700 a(19) | `2.8×10²⁴`, 5.2 days | `1.0×10²⁵`, past the ceiling | — | — | — |
+| A084700 a(19) | `4.0×10²⁴`, past the ceiling | `1.2×10²⁵` | `3.1×10²⁵` | `6.2×10²⁵` | `3.317×10²⁴`, `2.9×10²⁴` of line — **2.7 days at the n = 19 rate** (22%) |
+| A084700 a(20) | `1.4×10²⁶` | `5.1×10²⁶` | — | — | 2% under it |
+| A084701 a(19) | `2.9×10²⁴` | `1.0×10²⁵` | `2.8×10²⁵` | `5.9×10²⁵` | `4.95×10²²`, **reached on 2026-09-03** — 0.8% of the term was under it, and it was not there |
 
-For a fresh campaign at the opening filters, at the v3 `SCORE`
-`1.83×10¹⁷ k/s`: `a(14)` through `a(16)` of A084700 lie inside period 0 of
-the unit wheel (`3.26×10¹⁹`, about three minutes), and `a(17)`'s median
-`2.0×10²¹` is three hours — the first campaign found it in 33 minutes. The
-A084701 family's first four open terms all sit inside period 0 as well.
+`SCORE18` is not the n = 19 rate. The wheel is 1.87× thinner there
+(`2.2×10⁻⁸` candidates per unit of line against `4.1×10⁻⁸` at n = 18),
+and with its own constant (v3.1's per-filter table: `LIT_SURV` 0.12 at
+n = 19) the same 64-launch shape from period 12774 runs at
+**`1.23×10¹⁹ k/s`, 1.95× the n = 18 rate**, interleaved against the frozen
+`SCORE18` window. With the n = 18 constant it ran at 0.37× of that rate
+-- the shared-memory cliff the v3 sweep mapped, one filter past where it
+swept -- which is what the A084700 campaign would have resumed at
+([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v3.1).
+
+For a fresh campaign at the opening filters, at the v3.1 `SCORE`
+`2.47×10¹⁷ k/s`: `a(14)` through `a(16)` of A084700 lie inside period 0 of
+the unit wheel (`3.26×10¹⁹`, about two minutes), and `a(17)`'s median
+`2.0×10²¹` is two and a quarter hours — the first campaign found it in 33
+minutes. The A084701 family's first four open terms all sat inside
+period 0 as well: at `SCOREM`'s `3.40×10¹⁶ k/s` that period is about
+sixteen minutes, and nothing is narrated until it closes. **That is how
+the A084701 campaign of 2026-09-03 went** — the rule 5g acceptance test
+run for real, with no flags. Period 0 closed seventeen minutes in (pool
+sizing and ramp included) carrying `a(12)`, `a(13)`, `a(14) = a(15)` and
+`a(16)`; the filter promoted to n = 17 and the campaign found `a(17)`
+82 minutes in, having swept the line between at `2.3×10¹⁸ k/s` (the
+v3.1 table's n = 17 rate, at unit 210), `a(18)` at 118 minutes
+(`6.6×10¹⁸ k/s` at n = 18), and reached the ceiling at 152 minutes,
+at `1.27×10¹⁹ k/s` over the n = 19 stretch — the rate the unit-2310
+wheel gives A084700 at that filter, within noise. Every phase ran at its
+benchmark's rate, which is what the defaults are for
+([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v3.1).
 
 The enforced ceiling is now the family's primality-proof validity bound:
 `3.317×10²⁴` for A084700 (the deterministic Miller–Rabin bound on `k`
 itself; past the proof crossing at `5.4×10²²` a discovery is proved by
-certificate) and `9.0×10²²` at n = 12 for A084701 (its proof crossing;
-see the README for why). The first campaign stopped at the old A084700
-ceiling in 4.4 hours; the new one is six days of sweeping at n = 18.
+certificate) and for A084701 its proof crossing — `9.0×10²²` at n = 12,
+`4.95×10²²` at n = 19 — because its structure is on `N + 1` and huntlib
+has no N+1 test (see the README for why). The first A084700 campaign
+stopped at the old ceiling in 4.4 hours; the second found `a(18)` 15.2
+hours in; what is left to the ceiling at n = 19 is `2.9×10²⁴` of line,
+and `a(19)` is only 22% likely to be in it. The A084701 campaign reached
+its ceiling in 2.5 hours with `a(19)` 99% likely above it; an N+1 route
+would lift that ceiling to `3.317×10²⁴`, under which 27% of the term
+lies — `3.3×10²⁴` of line, about three days at the n = 19 rate.
 
 The three ladder projects before this one landed their finds at a pooled
-optimism factor of 1.92× over their models' medians; this one's four
-finds came in at 0.9–2.8× theirs, mean 1.27×. Budget two to three times
-the medians above before expecting a term.
+optimism factor of 1.92× over their models' medians; this one's eleven
+scored finds came in at 0.11–6.4× theirs, mean 2.5× and median 2.2×,
+with the mean `E` at 1.27 ([README.md](README.md#the-odds-model)).
+Budget two to three times the medians above before expecting a term.

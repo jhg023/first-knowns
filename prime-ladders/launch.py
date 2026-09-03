@@ -41,7 +41,11 @@ Theorem 1 certificate on N - 1 = prime(i)*k, k factored once per find
 bound and need a subproof.  The first campaign stopped at the crossing on
 2026-09-02 with a(18) open, which is why v3 raised it.  A084701's structure
 is on N + 1 and huntlib has no N+1 test, so its ceiling is the crossing,
-9.0e22 at n = 12.  `--to` and `--stop-on-discovery` are the only stops and
+9.0e22 at n = 12 and 4.95e22 at n = 19 -- which its campaign reached on
+2026-09-03 after finding a(12) through a(18) in 2.5 hours; a resumed
+A084701 campaign has no period left under its ceiling and stops at once,
+and its a(19) waits on an N+1 route (a new engine version) or on somebody
+else.  `--to` and `--stop-on-discovery` are the only stops and
 both are opt-in.  Progress is read off RUNGS taken from the odds model's quantiles,
 logged as they are passed and shown with an ETA in every [STATUS].  A rung
 retires with its term: the ladder is derived from the LIVE frontier and
@@ -88,12 +92,22 @@ Measured at the OPENING configuration (n = 14, three-level wheel, sieve
 
 and the v3 unit wheel at n = 14 runs 1.8e17 k/s, so the host there needs
 about 1.1 core-seconds per second: NOT nothing and NOT a pool's worth
-either.  WORKERS_DEFAULT = 3 is 2.8x that requirement at about 36% duty
-each, ramped one at a time at below-normal priority (huntlib.pool).  At
+either -- and at A084701's opening filter (n = 12, unit 210) it is 6.3,
+because the sieve passes 34x more survivors per unit of line there.  So
+the pool is SIZED FROM A MEASUREMENT AT THE CAMPAIGN'S OWN FILTER, again
+every time the filter moves (Campaign.size_pool: the next launches are
+swept and timed, their survivors counted, a sample of them classified,
+and ceil(need x POOL_MARGIN) workers ramped one at a time at below-normal
+priority, huntlib.pool).  A fixed default of 3, priced at n = 14, was 2x
+short at n = 12 on 2026-09-03: the pool saturated, the device ran ahead
+into an unbounded backlog, and the heartbeat reported the host's rate as
+the hunt's.  Now the device may run at most BACKLOG_LAUNCHES ahead of the
+pool, so a pool that binds throttles the device VISIBLY -- the [STATUS]
+line says host-bound and by how much -- instead of silently.  At
 the LIVE filter (n = 18, 6.1e18 k/s) survivors are 4.5e-16 per unit of
-line -- 2.7e3 per second, 0.035 core-seconds per second -- and the same
-three workers sit at about 1% duty; `--workers 1` is enough there and
-costs the device about 4% of idle.  The alternatives were priced: a sieve
+line -- 2.7e3 per second, 0.035 core-seconds per second -- so the
+measurement gives one worker there (classifying inline in the main thread
+instead would idle the device about 4%).  The alternatives were priced: a sieve
 to 2^17 halves the survivors for 7% of the device rate
 (OPTIMIZATION_LOG.md), and inline classification in the main thread at
 the opening filter would leave the device idle a third of the time.
@@ -108,6 +122,8 @@ the owner's behalf.
 import argparse
 import collections
 import concurrent.futures as _cf
+import math
+import os
 import pathlib
 import sys
 import time
@@ -164,11 +180,43 @@ CENSUS_FLOOR = 8                  # runs shorter than this are not even counted
 # unchanged (G17), but the period is not, so a v1/v2 cursor is ADOPTED --
 # re-denominated, floored -- never accepted.
 ENGINE_VERSION = "v3"
-# The host pool, sized from the measurement in the module docstring: the
-# v2 engine delivers 4.79e-13 survivors per unit line at ~1.7e17 k/s, i.e.
-# 8.1e4 survivors/s x 13.1 us = 1.07 core-seconds per second of device, so
-# three workers are 2.8x the need (two would be 1.9x, at 53% duty each).
+# THE HOST POOL IS SIZED FROM A MEASUREMENT AT THE CAMPAIGN'S OWN FILTER
+# (CLAUDE.md 5f and 5g; CONVENTIONS.md "Sizing a hunt"), not from a
+# constant: `Campaign.size_pool` sweeps the launches the loop is about to
+# run, times them, counts their survivors, times sprp_run on a sample, and
+# takes ceil(core-seconds per second x POOL_MARGIN) workers -- at start,
+# and again at every filter promotion (the need falls ~5x per condition,
+# and a pool that ties on throughput asks for less machine).  The old
+# constant, 3, was that measurement taken once at A084700's n = 14 (1.07
+# core-s/s); at A084701's n = 12 the need is 6.3 and it was 2x short
+# (2026-09-03).  It survives only as the fallback for a drill with no
+# device, and `--workers` still overrides.
 WORKERS_DEFAULT = 3
+POOL_MARGIN = 2.0                 # workers = ceil(core-s per s x this):
+#                                   CONVENTIONS.md step 2 says two to three
+#                                   times the need; the pool's own overhead
+#                                   (pickling, IPC) made 13.1 us/survivor
+#                                   into 16.7 in the pool at n = 12
+CAL_MIN_SURVIVORS = 500           # the sample the sizing is measured on ...
+CAL_MIN_S = 1.0                   # ... over at least this much device time
+CAL_MAX_S = 4.0                   # and at most this much
+# Two one-second measurements of the same launches differed 1.6x in the
+# battery (ambient load; OPTIMIZATION.md's +-30%), so a re-size grows on
+# any increase but shrinks only when the need has at least halved --
+# which a filter promotion always does (~5x per condition).
+CAL_SAMPLE = 2000                 # survivors timed through sprp_run
+# BACK-PRESSURE: the device may run at most this many launches ahead of
+# the pool.  Past it the loop waits for the oldest launch, so a pool that
+# binds throttles the device VISIBLY (the wait is timed into the [STATUS]
+# line and the rate printed is the pipeline's) instead of growing a
+# backlog in memory -- which at n = 12 grew at 300,000 survivors a second.
+BACKLOG_LAUNCHES = 64
+# A checkpoint is rewritten every CKPT_LAUNCHES launches, but not so often
+# that the writing is a cost: `pending` grows through a period (640k values,
+# 25 MB of JSON, at the end of an n = 12 period), so the interval stretches
+# to keep each save under CKPT_COST_FRACTION of wall clock.
+CKPT_MIN_S = 2.0
+CKPT_COST_FRACTION = 0.02
 WORKER_RAMP_S = _pool.RAMP_S
 CHUNK = 256                       # survivors per pool task
 
@@ -424,6 +472,13 @@ class Campaign:
         self.hb = Heartbeat(interval=args.heartbeat)
         self._lad = LiveLadder(self._build_ladder)
         self._t0 = time.time()
+        self.workers = None            # the pool's size once size_pool ran
+        self._sizing = None            # the measurement it was sized from
+        self._hostwait = 0.0           # seconds the device waited on the pool
+        self._hw_ref = (0.0, time.time())
+        self._hostbound_logged = False
+        self._ckpt_t = 0.0             # when the last mid-period save landed
+        self._ckpt_every_s = CKPT_MIN_S
         self._snapshot = None
         self._proof_logged = None      # the filter whose crossing was logged
         self.loaded = self.load()
@@ -492,7 +547,7 @@ class Campaign:
         preds = model.predictions(self.s, frontier, frontier_k,
                                   n_ahead=3, ceiling=ceil)
         return Ladder.from_predictions(preds, ceiling=ceil,
-                                       ceiling_label=f"engine ceiling {ceil:.3g}")
+                                       ceiling_label="engine ceiling")
 
     def ladder(self):
         """Derived from the LIVE frontier (a rung retires with its term) and
@@ -625,7 +680,14 @@ class Campaign:
 
     # ------------------------------------------------------------- status
     def status_line(self):
+        # TWO cursors (CONVENTIONS.md "Two cursors"): `pos` is PROGRESS
+        # through the period being worked and prices an ETA; `cov` is the
+        # COVERAGE claim, and it alone says which rungs are passed and how
+        # much of the open term's mass is behind us.  Reading the rungs off
+        # `pos` said "next engine ceiling" and "P(a(12)) = 100%" at swept-to
+        # 0 on 2026-09-03, because at n = 12 every rung sits inside period 0.
         k = (self.hb.pos() or self.swept_k())
+        cov = self.swept_k()
         rate = self.hb.rate()
         lo = self.boundary * self.eng.W
         pct = min(100.0, max(0.0, 100.0 * (k - lo) / self.eng.W))
@@ -644,15 +706,27 @@ class Campaign:
         parts.append(census_str(self.census, CENSUS_FLOOR, self.frontier()))
         parts.append(f"finds {self.discoveries}")
         parts.append(f"survivors {self.survivors:,}")
-        nr = self.next_rung(k)
+        if self.workers:
+            hw, t_ref = self._hw_ref
+            now = time.time()
+            frac = (self._hostwait - hw) / max(now - t_ref, 1e-9)
+            self._hw_ref = (self._hostwait, now)
+            parts.append(f"pool {self.workers}" +
+                         (f" HOST-BOUND {100 * frac:.0f}% of the interval"
+                          if frac >= 0.005 else ""))
+        nr = self.next_rung(cov)
         if nr:
             lab, d = nr
-            parts.append(f"next {lab} {d:.3g} "
-                         f"(ETA {eta_str(d - k, rate) if rate else '?'})")
+            if d > k:
+                eta = eta_str(d - k, rate) if rate else "?"
+            else:
+                eta = "inside the period being worked"
+            parts.append(f"next {lab} {d:.3g} (ETA {eta})")
             p = model.p_by(self.filter_n(), self.s,
                            model.floor_for(self.filter_n(), self.s,
-                                           self.frontier_k()), k)
-            parts.append(f"P(a({self.filter_n()}) by now) = {100 * p:.0f}%")
+                                           self.frontier_k()), cov)
+            parts.append(f"P(a({self.filter_n()}) under the claim) = "
+                         f"{100 * p:.0f}%")
         stall = self.hb.stalled()
         if stall:
             parts.append(f"-- no segment closed since the last status: "
@@ -779,6 +853,115 @@ class Campaign:
         # the crossing moves with the filter (prime(n) grew), and may
         # already be behind the sweep
         self.check_proof_crossing(self.swept_k())
+        # and the host's need moved with it: re-measure, re-size
+        self.size_pool()
+
+    # ----------------------------------------------------------- the pool
+    def line_per_launch(self):
+        cfg = self.eng.config()
+        return self.eng.R1 * self.eng.R2 * cfg["nu"] / self.eng.density()
+
+    def calibrate(self):
+        """MEASURE this configuration on the launches the loop is about to
+        run: device k/s, survivors per second, host cost per survivor.
+        Nothing is recorded -- the loop sweeps the same launches again."""
+        sync = self.eng.cp.cuda.Stream.null.synchronize
+        it = self.eng.sweep(self.j, self.j + 1, u_from=self.u,
+                            k_min=self.k_min())
+        surv, launches = [], 0
+        sync()
+        t0 = time.perf_counter()
+        try:
+            for _jn, un, sv in it:
+                launches += 1
+                surv.extend(int(k) for k in sv)
+                sync()
+                el = time.perf_counter() - t0
+                if (un == 0 or el >= CAL_MAX_S
+                        or (len(surv) >= CAL_MIN_SURVIVORS and el >= CAL_MIN_S)):
+                    break
+        finally:
+            it.close()
+        dt = max(time.perf_counter() - t0, 1e-9)
+        cap = self.filter_n() + 8
+        sample = surv[:CAL_SAMPLE]
+        t1 = time.perf_counter()
+        for k in sample:
+            sprp_run(k, self.s, cap)
+        cost = (time.perf_counter() - t1) / max(len(sample), 1)
+        per_s = len(surv) / dt
+        return {"launches": launches, "seconds": dt,
+                "rate": launches * self.line_per_launch() / dt,
+                "survivors": len(surv), "per_s": per_s, "cost": cost,
+                "need": per_s * cost}
+
+    def size_pool(self):
+        """Size the classification pool FROM THE MEASUREMENT at this filter
+        (CLAUDE.md 5f/5g), unless --workers was given; ramp it; and do it
+        again whenever the filter moves.  Returns the size."""
+        if self.args.workers is not None:
+            want = max(1, int(self.args.workers))
+            inline = want == 1
+            how = f"--workers {want}"
+        else:
+            m = self.calibrate()
+            self._sizing = m
+            want = max(1, math.ceil(m["need"] * POOL_MARGIN))
+            inline = False
+            how = (f"measured on {m['launches']} launches, {m['seconds']:.2f} "
+                   f"s of device at {m['rate']:.3g} k/s: {m['per_s']:,.0f} "
+                   f"survivors/s x {1e6 * m['cost']:.1f} us = {m['need']:.2f} "
+                   f"core-s per s, x{POOL_MARGIN:g} margin")
+            cap = max(1, (os.cpu_count() or 2) - 1)
+            if want > cap:
+                log("WARN", f"the host binds: this filter needs {want} "
+                            f"workers and the machine offers {cap}; the "
+                            f"device will wait on the pool (back-pressure) "
+                            f"and every [STATUS] line will say so")
+                want = cap
+        have = self.workers is not None and (self.pool is not None
+                                             or self.workers == 1)
+        if have and (want == self.workers
+                     or (want < self.workers and 2 * want > self.workers)):
+            return self.workers        # the same, or within the noise
+        if self.pool is not None:      # idle: a period has closed and drained
+            self.pool.shutdown(wait=True, cancel_futures=True)
+            self.pool = None
+        self.workers = want
+        if inline:
+            log("STAGE", f"classification inline in the main thread ({how})")
+            return want
+        self.pool = _pool_factory(want)
+        t_ramp = time.time()
+        up = _pool.ramp(self.pool, want, ramp_s=self.args.worker_ramp)
+        log("STAGE", f"classification pool: {up} workers ({how}), ramped "
+                     f"one at a time at {self.args.worker_ramp:.2f} s in "
+                     f"{time.time() - t_ramp:.1f} s, below-normal priority")
+        return want
+
+    def _backpressure(self, inflight):
+        """The device may run at most BACKLOG_LAUNCHES ahead of the pool.
+        Past that, wait for the oldest launch: the host binds, and it binds
+        VISIBLY -- the wait is timed into the heartbeat."""
+        if len(inflight) <= BACKLOG_LAUNCHES:
+            return
+        t0 = time.perf_counter()
+        while len(inflight) > BACKLOG_LAUNCHES:
+            _cur, parts = inflight[0]
+            for _ks, f in parts:
+                f.result()                          # blocks
+            self._drain(inflight, block=False)      # pops the done head
+        self._hostwait += time.perf_counter() - t0
+        if not self._hostbound_logged:
+            self._hostbound_logged = True
+            log("WARN", f"host-bound: the classification pool ({self.workers} "
+                        f"workers) is not keeping up with the device, which "
+                        f"now waits on it ({BACKLOG_LAUNCHES} launches of "
+                        f"back-pressure). The pool was sized from a "
+                        f"measurement at this filter, so either the machine "
+                        f"is busy or the measurement was wrong; the "
+                        f"[STATUS] line carries the fraction of wall clock "
+                        f"spent waiting")
 
     # ---------------------------------------------------------- draining
     def _drain(self, inflight, block):
@@ -844,15 +1027,7 @@ class Campaign:
                      f"engine ceiling {target:.4g} is the family's "
                      f"primality-proof validity bound")
         self.check_proof_crossing(self.swept_k())
-        workers = max(1, int(self.args.workers))
-        if workers > 1 and self.pool is None:
-            self.pool = _pool_factory(workers)
-            t_ramp = time.time()
-            up = _pool.ramp(self.pool, workers, ramp_s=self.args.worker_ramp)
-            log("STAGE", f"classification pool: {up} workers up in "
-                         f"{time.time() - t_ramp:.1f}s (ramped one at a "
-                         f"time at {self.args.worker_ramp:.2f} s, "
-                         f"below-normal priority)")
+        self.size_pool()
         self.hb.mark(self.u_progress(self.j, self.u))
         self.hb.start(self.status_line)
         shutdown.on_interrupt(self._on_interrupt)
@@ -874,11 +1049,18 @@ class Campaign:
                     inflight.append(((jn, un),
                                      _submit(self.pool, self.s, cap, surv)))
                     self._drain(inflight, block=False)
+                    self._backpressure(inflight)
                     since += 1
-                    if since >= CKPT_LAUNCHES and un:
+                    if (since >= CKPT_LAUNCHES and un
+                            and time.time() - self._ckpt_t >= self._ckpt_every_s):
                         since = 0
                         self.hb.mark(self.u_progress(self.j, self.u))
+                        t_save = time.perf_counter()
                         self.save()
+                        cost = time.perf_counter() - t_save
+                        self._ckpt_t = time.time()
+                        self._ckpt_every_s = max(CKPT_MIN_S,
+                                                 cost / CKPT_COST_FRACTION)
                     if self.args.gpu_yield_ms:
                         time.sleep(self.args.gpu_yield_ms / 1000.0)
                     if un == 0:
@@ -1515,6 +1697,69 @@ def _campaign_wiring_drill():
             return False, (f"WIRING FAIL: 75 ladder reads at a standing "
                            f"frontier caused {c._lad.builds - builds} "
                            f"rebuild(s)")
+        # THE POOL IS SIZED FROM A MEASUREMENT AT THIS FILTER: the
+        # calibration sweeps real launches of period 0 at n = 14, counts
+        # survivors, times a classified sample, and the pool that comes up
+        # is ceil(need x margin) real interpreters, ramped
+        c.args.workers = None
+        before = (c.j, c.u, c.survivors, list(c.pending), dict(c.census))
+        m = c.calibrate()
+        if (m["launches"] < 1 or m["survivors"] < 1 or m["rate"] <= 0
+                or not 1e-6 < m["cost"] < 1e-3 or m["need"] <= 0):
+            return False, f"WIRING FAIL: the sizing measurement is {m}"
+        if (c.j, c.u, c.survivors, list(c.pending), dict(c.census)) != before:
+            return False, ("WIRING FAIL: the calibration moved the campaign "
+                           f"from {before} to ({c.j}, {c.u}, {c.survivors}, "
+                           f"{c.pending}, {c.census})")
+        w = c.size_pool()
+        ms = c._sizing                      # the measurement IT took
+        if (ms is None or w != max(1, math.ceil(ms["need"] * POOL_MARGIN))
+                or c.workers != w or c.pool is None
+                or abs(ms["need"] - m["need"]) > 0.5 * max(m["need"], 1e-9)):
+            return False, (f"WIRING FAIL: size_pool gave {w} workers from "
+                           f"{ms} against the drill's own {m['need']:.3f} "
+                           f"core-s/s, pool {c.pool}")
+        pool_obj = c.pool
+        w2 = c.size_pool()
+        if not (c.pool is pool_obj or w2 > w or 2 * w2 <= w):
+            return False, (f"WIRING FAIL: re-sizing from {w} to {w2} workers "
+                           f"rebuilt the pool inside the noise band")
+        w = c.workers
+        # BACK-PRESSURE: launches whose futures are not done stay in flight,
+        # and past BACKLOG_LAUNCHES the loop waits on the oldest, timing it
+
+        class _Slow:
+            def __init__(self, v):
+                self._v, self._d = v, False
+
+            def done(self):
+                return self._d
+
+            def result(self):
+                self._d = True
+                return self._v
+        inflight = collections.deque()
+        for i in range(BACKLOG_LAUNCHES + 5):
+            inflight.append(((0, 200 + i), [([11 + i], _Slow([3]))]))
+        c._drain(inflight, block=False)
+        if len(inflight) != BACKLOG_LAUNCHES + 5:
+            return False, "WIRING FAIL: the drain took launches not yet classified"
+        c._backpressure(inflight)
+        if (len(inflight) != BACKLOG_LAUNCHES or c._hostwait <= 0
+                or not c._hostbound_logged or c.survivors != 9
+                or (c.j, c.u) != (0, 204)):
+            return False, (f"WIRING FAIL: back-pressure left {len(inflight)} "
+                           f"in flight, waited {c._hostwait:.3g} s, cursor "
+                           f"({c.j}, {c.u})")
+        c._hostwait, c._hostbound_logged = 0.0, False
+        line = c.status_line()
+        if f"pool {w}" not in line or "HOST-BOUND" in line:
+            return False, f"WIRING FAIL: status line pool fragment: {line}"
+        if "P(a(14) under the claim) = 0%" not in line or "next a(14)" not in line:
+            return False, (f"WIRING FAIL: the status line reads the rungs "
+                           f"off progress, not coverage: {line}")
+        c.pool.shutdown(wait=True, cancel_futures=True)
+        c.pool, c.workers, c.args.workers = None, None, 1
         c.found["14"] = int(ref.KNOWN[+1][13]) + 2310      # a find, unverified
         if c.frontier() != 14 or c.filter_n() != 15:
             return False, "WIRING FAIL: a find did not move the frontier"
@@ -1648,12 +1893,15 @@ def main(argv=None):
                          "(finds already in the checkpoint do not count)")
     ap.add_argument("--heartbeat", type=float, default=30.0,
                     help="seconds between [STATUS] lines (default 30)")
-    ap.add_argument("--workers", type=int, default=WORKERS_DEFAULT,
-                    help=f"classification pool size (default "
-                         f"{WORKERS_DEFAULT}, 2.9x the measured need of 0.68 "
-                         f"core-seconds per second; 1 classifies in the main "
-                         f"thread and leaves the device idle about a third "
-                         f"of the time)")
+    ap.add_argument("--workers", type=int, default=None,
+                    help="classification pool size. By default it is "
+                         "MEASURED at the campaign's own filter (the next "
+                         "launches are swept and timed, their survivors "
+                         "counted, a sample classified) and re-measured at "
+                         "every filter promotion: ceil(core-seconds per "
+                         "second x 2). Give a number to override it; 1 "
+                         "classifies in the main thread and idles the device "
+                         "while it does (a throttle, not a speed)")
     ap.add_argument("--worker-ramp", type=float, default=WORKER_RAMP_S,
                     help="seconds between worker starts (default "
                          f"{WORKER_RAMP_S})")

@@ -249,6 +249,50 @@ each README stays.
    the work, and a tuning pass that raises the load while optimizing the
    rate.
 
+5g. **THE DEFAULT CONFIGURATION IS THE FASTEST CORRECT ONE FOR EVERY
+   CAMPAIGN THE LAUNCHER CAN OPEN, AND IT IS MEASURED, NOT ASSUMED.** The
+   owner starts a hunt with no flags and gets the speed the engine has;
+   a flag that makes a campaign faster is a bug in the default, not a
+   feature of the flag. A launcher has more than one opening -- two
+   families, a fresh start and a resume, the filter it opens at and every
+   filter it promotes itself to on a find -- and each is a different
+   configuration with its own device rate, survivor density and host
+   need. A constant priced at one of them is a guess at the others.
+   prime-ladders shipped a pool of 3 priced at A084700's n = 14 and opened
+   A084701 at n = 12 with the pool 2x short, the device running ahead into
+   an unbounded backlog, and a heartbeat reporting the host's rate as the
+   hunt's; its `LIT_SURV`, swept at n = 18, ran the opening filters 1.2-1.3x
+   slow and the filter after the next find at 0.2x (2026-09-03). The owner
+   found both, from the first two `[STATUS]` lines. What this rule
+   requires, in addition to 5c and 5f:
+   - **Price every opening before the campaign is offered.** A frozen
+     benchmark shape at each family's OPENING filter and at the LIVE
+     filter, with the campaign's own constants; and a paired measurement
+     at every filter the campaign will promote itself through.
+   - **Anything that depends on the work is sized from a measurement at
+     the campaign's own configuration, at start and at every promotion.**
+     The pool: sweep the next launches, count survivors, time a sample,
+     take ceil(need x margin). Never a constant priced elsewhere.
+     `--workers` and its kin are throttles the owner may reach for, never
+     corrections the owner must reach for.
+   - **A constant swept at one filter is re-swept one filter later**,
+     because the campaign promotes itself there on the next find, and the
+     cliff that costs 5x is always at n + 1. Sweep across every filter the
+     campaign will pass through, store the table, and write the
+     measurements in the log.
+   - **A pipeline that binds on the wrong side must say so.** Bound the
+     device's lead over the host (back-pressure), so a starved pool
+     throttles the device visibly; print the fraction of wall clock spent
+     waiting in every `[STATUS]`; make the rate printed the pipeline's, not
+     one side's.
+   - **The heartbeat reads rungs and odds off the COVERAGE cursor**, never
+     the progress cursor: `next` and `P(a(n))` must be true at the moment
+     they are printed, or the line says nothing.
+   The acceptance test, run before a campaign is handed to the owner:
+   start each family fresh with no flags and confirm from the first
+   `[STATUS]` lines that the pool is not binding, the rate is the
+   benchmark's for that filter, and `next` names the right rung.
+
 6. **New projects** copy the skeleton, import huntlib for
    infrastructure, keep all mathematics in-project, and add a row to the
    top-level README's project table. Only projects with verified
@@ -301,6 +345,14 @@ each README stays.
          budget followed end to end (CONVENTIONS.md "Sizing a hunt so it
          leaves the machine usable"), with priced throttles and no
          machine setting changed on the owner's behalf
+   - [ ] **the DEFAULT is the fastest correct configuration at EVERY
+         opening the launcher has** (rule 5g): a benchmark shape at each
+         family's opening filter and at the live one, the constants
+         swept across every filter the campaign promotes through, the
+         pool sized at runtime from a measurement at the campaign's own
+         filter and re-sized at every promotion, back-pressure with the
+         waited fraction in `[STATUS]`, and the no-flags acceptance test
+         run for each family before the campaign is offered
    - [ ] **THE SEGMENT LOOP NEVER CALLS THE ODDS MODEL**, and the loop's
          WALL CLOCK per unit of line is measured against its device time
          before the first campaign. A `predictions()` is ~1,080 numerical

@@ -509,8 +509,148 @@ to their v2 numbers.
 
 | candidate | estimate | note |
 |---|---|---|
-| **`LIT_SURV` per filter** | +15% at the A084701 opening filter (n = 12), where 0.19 beats 0.28 | a survival fraction is not yet a per-configuration optimum; sweep it at n = 12, 14, 16, 18 and store a small table |
+| **A wheel change at a filter, inside a running campaign** | A084701: 1.1× for the rest of the campaign once 11 is forced at n = 14 (unit 210 → 2310); and an opening that narrates `a(12)`–`a(15)` in a minute or two on the v2 k-space wheel (period `6.15×10¹⁷`, 18 s) instead of after one unit-wheel period of `3.26×10¹⁹` swept whole at the n = 12 rate (14.6 min) -- see v3.1 §3 | the adopt machinery (re-denominate, floor, re-sweep the overlap as a cross-check) exists at load time; doing it at `follow_frontier` needs a config key that changes with the filter and a `CursorPolicy` that reads the key the checkpoint carries rather than one per sign. Worth 1.1× of every A084701 day past n = 14, plus a quarter of an hour once |
 | A084701 at unit 2310 from n = 14 | ~1.1× on its line rate once 11 is forced | a mid-campaign re-denomination (`adopt`) — the machinery exists |
 | The 1.84×10¹⁹ adopted overlap | 3 s of device | re-swept once as a cross-check; not worth avoiding |
 | CRT-combining the tail's first rounds; a second stream for the tail | bounded by the tail's share | unchanged from v2's list |
 | `TAIL_ROUND_DROP` 0.35 | a tie at n = 18 with a third fewer tail launches | take it if the tail ever binds; ties go to less machine, but it was not re-measured at n = 14 |
+
+## v3.1 — the defaults made the fastest configuration at every opening: the pool sized at runtime, back-pressure, `LIT_SURV` per filter. KEPT: 1.19–1.33× at n = 12–15, 5.2× at n = 19, and A084701 opens at the device rate (2026-09-03)
+
+**Why.** The owner opened the A084701 campaign with no flags and read,
+from its first two `[STATUS]` lines, a rate half the benchmark's, `next
+engine ceiling` at swept-to 0 and `P(a(12) by now) = 100%`. None of it
+was a gate failure; all of it was a default priced somewhere else. CLAUDE.md
+rule 5g and the CONVENTIONS.md section "The default is the fastest correct
+configuration at every opening" were written from this pass.
+
+### 1. The pool was 2× short at the opening filter, and nothing said so
+
+Measured with the campaign's own plumbing (engine → `_submit` → pool) on
+period 0 at n = 12, s = −1, unit 210, 25 s per run:
+
+| pool | device | survivors produced | classified | backlog growth |
+|---|---|---|---|---|
+| 3 workers (the default, priced at A084700's n = 14) | `2.94×10¹⁶ k/s` | 480k/s | 181–225k/s, falling as the backlog grew | 300k/s |
+| 8 workers | `2.95×10¹⁶ k/s` | 481k/s | 480k/s | 0 (two launches in flight) |
+
+The need at n = 12 is 480k/s × 13.1 µs = 6.3 core-seconds per second
+against 1.07 at n = 14, because the sieve passes 34× more survivors per
+unit of line there (`1.63×10⁻¹¹` against `4.8×10⁻¹³`). The device never
+slowed -- `submit` does not block -- so the backlog grew at 300k survivors
+a second (about 14 GB by the end of period 0) while the heartbeat, whose
+rate is the work cursor's, printed the host's `1.3×10¹⁶` as the hunt's.
+
+**Fix, kept.** `Campaign.size_pool` measures at the campaign's own
+configuration -- the next launches are swept and timed, their survivors
+counted, `sprp_run` timed on a sample of 2,000 -- and takes ceil(need ×
+2) workers, at start and again at every filter promotion (the need falls
+about 5× per condition, and the pool is rebuilt smaller). The margin is
+CONVENTIONS.md's "two to three times", and it is needed: in the pool a
+survivor cost 16.7 µs against 13.1 inline (pickling and IPC), so 8 workers
+kept up at n = 12 at 100% of the 6.3 core-seconds the inline number
+predicts. `--workers` overrides. `_backpressure` bounds the device's lead over the pool at 64
+launches, so a pool that binds throttles the device where the heartbeat
+can see it (`pool 8 HOST-BOUND 37% of the interval`) instead of into
+memory; a one-time `[WARN]` names it. And the mid-period checkpoint
+interval stretches with the save's own cost (`pending` is 25 MB of JSON
+at the end of an n = 12 period): each save stays under 2% of wall clock,
+never more often than every 2 s.
+
+### 2. `LIT_SURV` per filter -- the item v3 left for "the next pass"
+
+Interleaved on the unit wheel, 64 launches per run, 3 rounds, the
+fingerprint identical across every variant of every filter; `CPT` 32 was
+also run at n ≥ 17 and never won (0.65–0.85×). Ratios are to the shipped
+0.28 at the same filter:
+
+| n | s, unit | 0.28 (shipped) | 0.19 | 0.12 | kept |
+|---|---|---|---|---|---|
+| 12 | −1, 210 | `3.12×10¹⁶ k/s` | 1.185 | **1.192** | 0.12 |
+| 13 | −1, 210 | `5.68×10¹⁶` | 1.132 | **1.258** | 0.12 |
+| 14 | +1, 2310 | `1.85×10¹⁷` | 1.045 | **1.333** | 0.12 |
+| 15 | +1, 2310 | `4.84×10¹⁷` | 0.944 | **1.217** | 0.12 |
+| 16 | +1, 2310 | `1.10×10¹⁸` | 0.864 | 0.909 | **0.28** |
+| 17 | +1, 2310 | `2.37×10¹⁸` | 0.906 | 0.908 | **0.28** |
+| 18 | +1, 2310 | `6.31×10¹⁸` | 0.959 | 0.913 | **0.28** |
+| 19 | +1, 2310 | `2.36×10¹⁸` | 5.042 | **5.218** | 0.12 |
+| 20 | +1, 2310 | `1.88×10¹⁹` | **1.074** | 1.032 | 0.19 |
+| 21 | +1, 2310 | `3.96×10¹⁹` | **1.068** | 1.019 | 0.19 |
+
+The optimum is not monotone in n -- 0.12 below 16, 0.28 at 16–18, 0.12 at
+19, 0.19 above -- which says the variable is not n but where the prefix's
+compaction lands against the queue budget for that filter's survival
+curve: the same shared-memory cliff as v3's `CPT` ≥ 96. A rule that
+derives it would beat a table; the table is what was measured
+(`LIT_SURV_UNIT_BY_N` in pladder_gpu, a filter past 21 taking the last
+entry until it is measured). At n = 19, the filter the A084700 campaign
+now sits at, the shipped constant was on the cliff: **0.19× of what the
+same wheel does with 0.12**, 20 ms a launch against 3.7.
+
+### 3. The opening wheel, priced and declined
+
+The unit wheel at n = 12 with 0.12 runs `3.71×10¹⁶ k/s`; the v2 k-space
+wheel (23],(37],(47] ran `3.44×10¹⁶` in the same rounds. With its constant
+right the unit wheel is 1.08× faster, so the opening does not want a
+different wheel for rate. It would want one for **narration**: the unit
+period is `3.26×10¹⁹`, 14.6 minutes of device at n = 12, and all four open
+A084701 terms sit inside it (P ≥ 99.9%), so nothing is narrated for a
+quarter of an hour and the whole period is swept at the n = 12 rate,
+where the k-space period is `6.15×10¹⁷`, 18 s, after which the filter
+promotes and the rest runs 2–20× faster. The machinery that would do it
+-- a wheel change at a filter with the cursor re-denominated -- is the
+same one A084701 needs to move from unit 210 to 2310 at n = 14. Priced in
+the table above, not done here.
+
+### 4. The status line read its rungs off progress
+
+`status_line` fed the heartbeat's progress position -- the work cursor
+inside the period -- to `next_rung` and `p_by`. At n = 12 every rung sits
+inside period 0, so one second in it reported the ceiling as the next
+rung and the open term as 100% found while `swept to` said 0. Both now
+read the coverage cursor; the ETA still prices from progress, and a rung
+inside the period being worked says so. The wiring drill now asserts on
+the live line rather than only on `next_rung(swept_k())`, which is why
+the battery was green with the bug in it. The ceiling rung's label also
+carried its own depth, so the line printed it twice.
+
+### What the gates caught
+
+- The wiring drill's first version asserted that `size_pool` used the
+  drill's own measurement; it takes its own, and the two differ. The
+  assertion now compares the pool against the measurement `size_pool`
+  stored and the two measurements against each other, within 50%.
+- **Two one-second measurements of the same launches, seconds apart,
+  differed 1.6× in device rate** (`2.48×10¹⁷` and `1.53×10¹⁷ k/s` at
+  n = 14 -- the ±30% ambient band OPTIMIZATION.md warns about, on a short
+  window), and the second `size_pool` rebuilt a 4-worker pool as 3. A
+  re-size that flip-flops on noise is worse than no re-size, so it now
+  grows on any increase and shrinks only when the need has at least
+  halved -- which a promotion always does -- and the drill asserts the
+  pool object survives a second sizing inside that band. The calibration
+  window went from 0.5 s to 1 s.
+- The margin: in the pool a survivor costs 16.7 µs against 13.1 inline
+  (pickling and IPC), so a margin of 1.5 on the inline number would have
+  been 1.25× the real need at n = 12. It is 2, as CONVENTIONS.md step 2
+  says.
+
+### What the A084701 campaign measured (2026-09-03: the acceptance test, run for real)
+
+Started with no flags at 10:44 and stopped at the family's ceiling at
+13:16 with `a(12)` through `a(18)` found ([RESULTS.md](RESULTS.md)). Per
+filter, from the period closes in the log, against the table in item 2
+(all at unit 210):
+
+| filter | line swept | wall clock | campaign rate | table / benchmark |
+|---|---|---|---|---|
+| n = 12 (period 0) | `3.26×10¹⁹` | 16.9 min, pool sizing and ramp included | `3.2×10¹⁶ k/s` | `SCOREM` `3.40×10¹⁶` |
+| n = 17 | `9.03×10²¹` | 65.1 min | `2.31×10¹⁸` | `2.37×10¹⁸` (0.28) |
+| n = 18 | `1.45×10²²` | 36.4 min | `6.64×10¹⁸` | `6.31×10¹⁸` (0.28) |
+| n = 19 | `2.59×10²²` | 34.0 min | `1.27×10¹⁹` | `1.23×10¹⁹` (0.12, measured at unit 2310) |
+
+Every phase ran at its benchmark's rate; the closing `[STATUS]` lines
+read `pool 1` with no `HOST-BOUND`; and the seventeen silent minutes of
+period 0 are the ones item 3 priced. Unit 210 against 2310 cost nothing
+measurable at n = 19, so the 1.1× that item priced for a runtime wheel
+change stays declined — and with the family at its ceiling there is no
+A084701 campaign left for it to serve.
