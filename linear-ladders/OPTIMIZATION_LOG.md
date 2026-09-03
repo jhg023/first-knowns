@@ -551,3 +551,18 @@ opening and 1 after, and `a(15)` was narrated at the close of period 0 as
 the README's first-lines paragraph said it would be. The loop's wall
 clock per unit of line matched the device's at every filter, which is the
 measurement OPTIMIZATION.md 2.14 says only a campaign can take.
+
+**The A125838 campaign** (19:28–19:46 the same day, 17.2 min to its
+ceiling, `a(15)`–`a(18)` found) read, from its timestamps: n = 15
+(period 0) `9.2×10¹⁸` against the `SCOREM` `8.4×10¹⁸`; n = 18
+`4.0×10²⁰` against `3.99×10²⁰`; but n = 17 `7.2×10¹⁹` against
+`1.38×10²⁰` and n = 19 `7.2×10²⁰` against `1.45×10²¹` — two phases at
+half. The kernels at those filters are byte-identical to A088250's at
+n = 16 and n = 18 (same form count, same tables), which ran at their
+benchmarks 40 minutes earlier, and the log of the A125838 run was not
+kept, so the timestamps cannot separate a loaded machine from a defaults
+fault. **Open until the next −1 campaign's `[STATUS]` lines at n = 17 and
+n = 19 are read** (the rate and any `HOST-BOUND` fragment are on them);
+if they read under 90% of the benchmark with the machine idle, the place
+to look is what a −1 family's launcher does differently from a +1's at a
+promotion, since the engine does nothing different.

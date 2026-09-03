@@ -121,7 +121,7 @@ terms under each ceiling:
 
 | family | opening rate | to the ceiling at the opening rate | terms expected under the ceiling |
 |---|---|---|---|
-| A125838 (n = 15) | `8.4×10¹⁸ k/s` | `2.2×10²³`: 7.3 h at the opening rate, far less after the promotions (each ~3–4×) | a(15), a(16), a(17); a(18) 13% |
+| A125838 (n = 15) | `8.4×10¹⁸ k/s` | `2.2×10²³`: 7.3 h at the opening rate, far less after the promotions (each ~3–4×). **Ran 2026-09-03 in 17 min**: a(15), a(16), a(17) and a(18) found, a(19) > `1.73×10²³` ([RESULTS.md](RESULTS.md)) | a(15), a(16), a(17); a(18) 13% |
 | A125839 (n = 16) | `8.4×10¹⁸ k/s` | `2.1×10²³`: 7 h at the opening rate | a(16), a(17), a(18); a(19) 18% |
 | A173750 (n = 16) | `3.0×10¹⁹ k/s` | `3.3×10²⁴`: hours, mostly at n = 18 (`1.4×10²¹`) | a(16), a(17); a(18) 66% |
 | A164326 (n = 15) | `1.25×10¹⁹ k/s` | `1.1×10²³`: 2.4 h at the opening rate | a(15), a(16); a(17) 16% |

@@ -210,6 +210,13 @@ FOUND = {fam: {} for fam in FAMILIES}
 FOUND["A088250"] = {15: 1555360041314493173760,
                     16: 87117680854368555070680,
                     17: 1048124771278912649231910}
+# A125838's four, the same day, 17 minutes from k = 1e6 to its ceiling;
+# a(15) is the integer the literature holds as A125839's a(15), and every
+# term is an upper bound on A125839's at the same index (fewer conditions).
+FOUND["A125838"] = {15: 45187548280664790,
+                    16: 436409209028729276340,
+                    17: 44387933133290055609300,
+                    18: 74882388347598051560340}
 
 # No family carries a published bound of any kind -- no upper bound at any
 # open n, and no searched-empty lower bound beyond the last term.  The floor

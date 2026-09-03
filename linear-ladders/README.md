@@ -38,13 +38,26 @@ went on at `n = 18` to the ceiling and found nothing: **`a(18) >
 3.3168×10²⁴`**, the first bound of any kind on this sequence at an open
 index.
 
-**Status: ACTIVE.** A088250 is at its ceiling with `a(18)` open above it
-(the model's median for it is 66× the ceiling). The six siblings are next,
-one campaign each, in the order of their expected terms per hour:
-A125838, A125839, A173750, A164326, A164325, A088651. The v2 engine
-(2026-09-03) is 1.2–1.5× v1 at every filter, 42 gates and drills green,
-six benchmark shapes frozen, every opening priced. The hunt is the
-owner's command.
+**Four new terms of A125838, and a bound.** The second campaign, 17
+minutes to that family's ceiling the same evening, found
+
+    a(15) = 45,187,548,280,664,790
+    a(16) = 436,409,209,028,729,276,340
+    a(17) = 44,387,933,133,290,055,609,300
+    a(18) = 74,882,388,347,598,051,560,340
+
+every value under the deterministic bound, every certificate the
+seven-base test itself, each re-verified from disk; then **`a(19) >
+1.7305×10²³`** by the sweep to the ceiling. `a(15)` is the integer the
+literature already holds as A125839's `a(15)`, and each term is an upper
+bound on A125839 at its index.
+
+**Status: ACTIVE.** A088250 and A125838 are at their ceilings with `a(18)`
+and `a(19)` open above them. The five remaining siblings are next, one
+campaign each, in the order of their expected terms per hour: A125839,
+A173750, A164326, A164325, A088651. The v2 engine (2026-09-03) is
+1.2–1.5× v1 at every filter, 42 gates and drills green, six benchmark
+shapes frozen, every opening priced. The hunt is the owner's command.
 
 ## The problem
 
