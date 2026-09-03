@@ -308,18 +308,26 @@ does), `--gpu-yield-ms` idles the device after every launch (1 ms
 against a 5 ms launch is about 17% of the rate), and `--gentle` is the
 preset of one worker and a 2 ms yield, about a third of the rate.
 
-**What the first `[STATUS]` lines should say** (the rule 5g acceptance
-test, which only the owner can run because it is a hunt). For A088250
-with no flags: the pool line `classification pool: 2 workers (measured on
-… launches … 44,000 survivors/s x 14.5 us = 0.6 core-s per s, x2 margin)`,
-then within the first minute a `[STATUS]` reading `A088250 filter n = 15`,
-a rate near `2.1e+19 k/s`, `pool 2` with no `HOST-BOUND`, `next a(15) Q1
-7.13e+19 (ETA inside the period being worked)` while period 0 is open and
-`P(a(15) under the claim) = 0%` until it closes; `a(15)` is 96% likely to
-be narrated at the close of period 0, about 90 seconds in (pool sizing
-and ramp included), and `a(16)` a few minutes later with the rate at
-`8e+19`. A rate under `1.9e+19` at `n = 15`, a `HOST-BOUND` fragment, or a
-`next` naming anything but an `a(15)` rung is a defaults bug, not a flag
+**What the first lines should say** (the rule 5g acceptance test, which
+only the owner can run because it is a hunt). For A088250 with no flags:
+the pool line `classification pool: 2 workers (measured on … launches …
+44,000 survivors/s x 14.5 us = 0.6 core-s per s, x2 margin)`, then a
+`period 0 complete: swept to 32,589,158,477,190,044,730` about 1.5 s after
+the sweep starts — a period is 1.5 s at this rate, so the first `[STATUS]`
+line at 30 s finds the campaign some 15 periods (`4×10²⁰`) in, and `a(15)`
+(median `2.0×10²⁰`, 96% inside period 0 or the next) has most likely
+already been narrated as a `[DISCOVERY]` banner with its `also settles`
+lines, followed by `filter follows the frontier: n = 15 -> 16` and a
+re-sized pool of 1. So the first `[STATUS]` reads either `A088250 filter
+n = 16`, a rate near `8e+19 k/s`, `finds 1`, `pool 1`, `next a(16) Q1
+6.5e+21 (ETA …)` and a small `P(a(16) under the claim)`; or, if `a(15)`
+has not yet landed, `filter n = 15`, a rate near `2.1e+19 k/s`, `finds 0`,
+`pool 2`, `next a(15) median 1.98e+20 (ETA …s)` (a rung above the period
+being worked carries a time; one inside it says so) and `P(a(15) under
+the claim)` climbing through 50–70%. Either way: no `HOST-BOUND` fragment,
+the rate at the benchmark's for the filter shown, and `next` naming the
+open term's rung. A rate under 90% of the benchmark's, a `HOST-BOUND`
+fragment, or a `next` naming a settled term is a defaults bug, not a flag
 to reach for.
 
 ## Trust
