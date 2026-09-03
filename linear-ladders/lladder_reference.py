@@ -197,13 +197,19 @@ KNOWN_ALSO = {
                 15: 53792264108455702830},
 }
 
-# FOUND BY THIS PROJECT and not yet in the OEIS: none yet.  Kept APART from
-# KNOWN on purpose: KNOWN is the literature, which the model is validated
-# against and a fresh campaign starts from; these are the project's own
-# claim, which the campaign carries in its checkpoint (`found`) and promotes
-# its frontier from at runtime.  G1b re-checks whatever lands here from the
-# bare definition.
+# FOUND BY THIS PROJECT and not yet in the OEIS.  Kept APART from KNOWN on
+# purpose: KNOWN is the literature, which the model is validated against
+# and a fresh campaign starts from; these are the project's own claim,
+# which the campaign carries in its checkpoint (`found`) and promotes its
+# frontier from at runtime.  G1b re-checks whatever lands here from the
+# bare definition.  A088250's three were found 2026-09-03 by the one
+# campaign that ran from k = 1e6 to the family's ceiling (RESULTS.md); each
+# also settles A202778 at its index (the runs are exact) and A071576 at
+# half its value.
 FOUND = {fam: {} for fam in FAMILIES}
+FOUND["A088250"] = {15: 1555360041314493173760,
+                    16: 87117680854368555070680,
+                    17: 1048124771278912649231910}
 
 # No family carries a published bound of any kind -- no upper bound at any
 # open n, and no searched-empty lower bound beyond the last term.  The floor

@@ -19,7 +19,7 @@ THE OPENINGS (CLAUDE.md 5g, step 1 -- the test plan for every default
 below).  Each family opens at the filter after its published frontier and
 promotes itself one filter per find; the unit is fixed per family at its
 opening and stays (a forced prime stays forced as n grows), so the wheel
-period W = 3.26e19 never moves inside a campaign.  Up to each family's
+period W = 1.92e21 never moves inside a campaign.  Up to each family's
 ceiling the campaign can be at:
 
     A088250  n = 15 (unit 30030) -> 16 -> 17 -> 18      ceiling 3.3e24 (+1)
@@ -37,10 +37,14 @@ constant re-swept at each.  The pool is not one of the priced constants:
 it is MEASURED at the campaign's own configuration at start and at every
 promotion (size_pool).
 
-WHAT IS OPEN, AND WHY IT IS WORTH A SWEEP.  None of the seven frontiers
-has moved since Giovanni Resta's 2017 extensions (A088651's a(15) is Jens
-Kruse Andersen's, 2008), and none carries a bound of any kind at any open
-n.  Every frontier sits inside the FIRST PERIOD of this engine's wheel.
+WHAT IS OPEN, AND WHY IT IS WORTH A SWEEP.  None of the seven published
+frontiers had moved since Giovanni Resta's 2017 extensions (A088651's
+a(15) is Jens Kruse Andersen's, 2008), and none carries a bound of any
+kind at any open n.  Every published frontier sits inside the FIRST
+PERIOD of this engine's wheel.  A088250's campaign has run (2026-09-03,
+RESULTS.md): a(15), a(16), a(17) found and the line swept empty to the
+ceiling at n = 18, so its checkpoint sits at the ceiling and a resume
+stops at once; `--fresh` would re-sweep the whole line.
 
 THE CLAIM'S FLOOR IS FREE.  a() is non-decreasing (the conditions nest), so
 the next term is at least the last one and nothing below it has to be swept
@@ -90,28 +94,29 @@ protocol").  A survivor is a k with a run length r:
 
 TWO CURSORS, BECAUSE COVERAGE IS COARSER THAN WORK (CONVENTIONS.md).  The
 three-level wheel emits a period's candidates in (t, s, u) order, so the k
-line is contiguous only at the end of a whole period -- 3.26e19 of k, 1.5 s
-of device at A088250's opening filter and a tenth of a second at n = 17.
+line is contiguous only at the end of a whole period -- 1.92e21 of k, a
+minute of device at A088250's opening filter and five seconds at n = 17.
 COVERAGE (`boundary`, the k below which every value is swept) advances one
 period at a time and is the only thing a least-claim rests on; WORK
 (`j`, `u`) advances every launch.  Values classified mid-period are held IN
 THE CHECKPOINT (`pending`) and narrated in k order when the period closes,
 so a discovery is only announced once it is known to be the least.  A find
-costs at most one period of over-sweep.  Because periods close many times a
-second at the deeper filters, the period-close save and the period-close
-log line are RATE-LIMITED (CKPT_MIN_S, PERIOD_LOG_S): a save every 0.1 s
-is 150,000 chances per campaign for a scanner's handle to land in the
-rename window (CONVENTIONS.md "Writing a cursor"), and a line every 0.1 s
-is a log nobody can read.  The boundary snapshot is still taken at every
-period close, so an interrupt writes the latest one.
+costs at most one period of over-sweep (a minute at the opening filters,
+seconds from n = 17).  Because periods can close every few seconds at the
+deeper filters, the period-close save and the period-close log line are
+RATE-LIMITED (CKPT_MIN_S, PERIOD_LOG_S): a save every few seconds is tens
+of thousands of chances per campaign for a scanner's handle to land in
+the rename window (CONVENTIONS.md "Writing a cursor"), and a line every
+few seconds is a log nobody can read.  The boundary snapshot is still
+taken at every period close, so an interrupt writes the latest one.
 
 LOAD (CONVENTIONS.md "Sizing a hunt so it leaves the machine usable").
-Measured at every opening configuration (OPTIMIZATION_LOG.md), paired and
-interleaved:
+Measured at every opening configuration (OPTIMIZATION_LOG.md v2), paired
+and interleaved:
 
-    A088250 n = 15   2.2e19 k/s   2.1e-15 survivors per unit line  4.6e4/s  0.6 core-s/s
-    A125838 n = 15   7.1e18 k/s   1.7e-14                          1.2e5/s  1.5 core-s/s
-    A088250 n = 17   2.8e20 k/s   2.5e-17                          6.9e3/s  0.09 core-s/s
+    A088250 n = 15   2.8e19 k/s   2.1e-15 survivors per unit line  5.9e4/s  0.85 core-s/s
+    A125838 n = 15   7.6e18 k/s   1.7e-14                          1.3e5/s  1.9 core-s/s
+    A088250 n = 17   3.7e20 k/s   2.5e-17                          9.2e3/s  0.13 core-s/s
 
 so the host need runs from about two cores at the -1 openings to a
 fraction of one at the live filters, and no constant serves them all: the
@@ -161,20 +166,23 @@ EVID = str(HERE / "evidence")
 # THE WHEEL, IN UNIT SPACE (OPTIMIZATION_LOG.md).  The forcing lemma makes
 # every candidate a multiple of 30030 at every family's opening filter
 # (510510 for A088651), so the device sweeps k' = k / unit: 2..13 leave the
-# wheel and 29, 31 and 53 come in under the same u32 / 2^63 bounds that
-# stop a k-space wheel at 47.  Levels (..31], (31, 41], (41, 53]: a period
-# of 3.26e19 of k for every family.  The wheel to 59 -- (..37], (37, 47],
-# (47, 59], a period of 1.92e21 -- was measured paired against this one at
-# five openings: 1.23x and 1.66x at A088250's n = 15 and 16, 1.00x at
-# n = 17 (where that campaign spends its hours), 0.83x at A125838's
-# opening; declined (OPTIMIZATION_LOG.md).  The unit is fixed PER FAMILY at
-# the filter its campaign opens in and stays: at a higher filter it is still
+# wheel and 29, 31, 37, 53 and 59 come in under the same u32 / 2^63 bounds
+# that stop a k-space wheel at 47.  Levels (..37], (37, 47], (47, 59]: a
+# period of 1.92e21 of k for every family.  v1 ran (..31], (31, 41],
+# (41, 53] (a period of 3.26e19) and had declined this wheel on a paired
+# measurement that read 1.00x at n = 17 and 0.83x at A125838's opening;
+# v2 found both numbers were the configuration and not the wheel -- a
+# group budget that stopped its first triple forming, and a tail-queue cap
+# that sent 60% of a launch through the in-block fallback -- and re-measured
+# it at 1.27x / 1.50x / 1.20x / 1.32x at c = 15 / 16 / 17 / 18 and within 5%
+# at c = 14 (OPTIMIZATION_LOG.md v2).  The unit is fixed PER FAMILY at the
+# filter its campaign opens in and stays: at a higher filter it is still
 # admissible (lladder_search.assert_unit), merely not maximal, and a fixed
 # unit is what keeps W -- the cursor's denomination -- constant across
 # follow_frontier.
-P1 = 31                           # first-level wheel: primes to 31 not in the unit
-P2 = 41                           # second-level wheel: primes (31, 41]
-P3 = 53                           # third-level wheel:  primes (41, 53]
+P1 = 37                           # first-level wheel: primes to 37 not in the unit
+P2 = 47                           # second-level wheel: primes (37, 47]
+P3 = 59                           # third-level wheel:  primes (47, 59]
 Q2 = cpu.Q2_DEFAULT               # sieve depth
 
 
@@ -186,16 +194,18 @@ def open_n(fam):
 
 UNIT = {fam: cpu.forced_unit(open_n(fam), fam) for fam in ref.FAMILIES}
 
-# HOW OFTEN THE CHECKPOINT MOVES, in kernel launches, inside a period.  A
-# launch at n = 15 is 1.07e9 candidates and about 5.5 ms, so 128 launches
-# is about 0.7 s: what an interrupt costs to redo, and the denominator that
-# prices --gpu-yield-ms.  A period is 262 launches there (26 at n = 17, 8 at
-# n = 18), so from n = 17 on the mid-period save never fires and the
-# rate-limited period-close save is the cadence.
-CKPT_LAUNCHES = 128
+# HOW OFTEN THE CHECKPOINT MOVES, in kernel launches, inside a period.  On
+# the v2 wheel a launch is ONE third-level residue below c = 17 -- 7.3e9
+# candidates and 40 ms at A088250's n = 15, 2.05e10 and 170 ms at A125838's
+# opening -- and two from c = 17 (1.5e9, 4 ms), so 32 launches is 1.3 s at
+# n = 15, 5.5 s at the -1 openings and 0.13 s at n = 17: what an interrupt
+# costs to redo, and the denominator that prices --gpu-yield-ms.  A period
+# is 1,672 launches at n = 15 and 756 at n = 17, so the mid-period save
+# fires throughout, rate-limited by CKPT_MIN_S.
+CKPT_LAUNCHES = 32
 K_START = 10 ** 6                 # the clip inside period 0; > k_floor(Q2)
 CENSUS_FLOOR = 8                  # runs shorter than this are not even counted
-ENGINE_VERSION = "v1"
+ENGINE_VERSION = "v2"
 # THE HOST POOL IS SIZED FROM A MEASUREMENT AT THE CAMPAIGN'S OWN FILTER
 # (CLAUDE.md 5f and 5g; CONVENTIONS.md "Sizing a hunt"), not from a
 # constant: `Campaign.size_pool` sweeps the launches the loop is about to
@@ -1390,10 +1400,12 @@ def _resume_drill():
     for lab, fam, kw, j_at, span, cut in (
             ("one-level", "A088250", dict(p1=17, p2=None, p3=None, q2=512),
              10 ** 13, 60000, 23000),
-            # the production first two levels, in the unit
+            # the production first two levels, in the unit (a two-level
+            # period there is 6.2e17 of k and 2e10 candidates, 0.2 s, so
+            # the window sits above period 0 and spans six)
             ("two-level", "A125838", dict(p1=P1, p2=P2, p3=None, q2=Q2,
                                           unit=UNIT["A125838"]),
-             10 ** 15, 600, 230),
+             10 ** 19, 6, 2),
             ("three-level", "A088250", dict(p1=13, p2=17, p3=19, q2=128),
              9 * 10 ** 14, 4000, 1111)):
         eng = gpu.GpuEngine(15, fam, **kw)

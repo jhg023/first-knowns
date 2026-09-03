@@ -33,14 +33,26 @@ both.  Two things are different here, and both are gifts:
     (lladder_reference G2c), so at A088250's opening filter n = 15 the
     unit is 30030 (against prime-ladders' 2310 at n = 14) and every wheel
     prime above it kills the maximum min(15, q - 1) residues: the wheel
-    (..31],(31,41],(41,53] at unit 30030 has 14,336 x 572 x 34,048
-    residues per period of 3.26e19 -- 8.6e-9 of the line, 83x thinner than
-    prime-ladders' opening wheel.  A candidate rate in the 1e11/s range is
-    then a LINE rate in the 1e19-1e20 k/s range.
+    (..37],(37,47],(47,59] at unit 30030 has 315,392 x 23,296 x 1,672
+    residues per period of 1.92e21 -- 6.4e-9 of the line, 110x thinner
+    than prime-ladders' opening wheel.  A candidate rate in the 1e11/s
+    range is then a LINE rate in the 1e19-1e20 k/s range.
   * THE SIGN COSTS NOTHING.  K(q,n,-1) = -K(q,n,+1), so a family and its
     sign twin have identical table SIZES, identical survival curves and
     identical generated kernel source; only the table CONTENTS differ, and
     those are device arrays.  One compiled module serves both.
+
+v2 (2026-09-03, OPTIMIZATION_LOG.md) changed the CONFIGURATION and what the
+engine knows about itself, not the arithmetic: the wheel's third level
+reaches 59 (v1 stopped at 53, on a measurement that turned out to price a
+group budget and a queue cap rather than the wheel); the prefix's group
+budget is 2^19 with the tables capped in BYTES against L1
+(PREFIX_BYTES_MAX); the table offset folds into the load; the shared/L1
+carveout is pinned (CARVEOUT_PCT) instead of left to the driver's
+occupancy heuristic; the tail-queue cap and the launch are 4x and 2x; and
+the engine measures the registers and blocks per SM its kernel compiled
+to, retries a partially unrolled body when they fall short
+(OCC_MIN_BLOCKS), and reports them in config() -- G18 checks every opening.
 
 THE FACTORED WHEEL, THE ISSUE-BOUND TEST LOOP, THE (k, off) REPRESENTATION
 and the compaction design are square-ladders' v5 as re-tuned by
@@ -80,7 +92,7 @@ k, and `_collect` is the one place the unit is multiplied back in.
 dense CPU sieve can follow.  `assert_unit` refuses a unit that is not
 forced at the filter, which is the one way this could thin the line.
 
-A WINDOW MAY START INSIDE PERIOD ZERO.  A production period is 3.26e19 of
+A WINDOW MAY START INSIDE PERIOD ZERO.  A production period is 1.92e21 of
 k line and every family's frontier -- 1e19 at most -- sits INSIDE the first
 one, as do the modelled medians of the next term of each.  `sweep` and
 `survivors_j` take `k_min`: the device sieves the whole period and the
@@ -120,8 +132,10 @@ group tables, and the queue-overflow fallback), G15 (the (k, off)
 representation: base-shift invariance, the tail's masks and residue lists,
 and the folded group scalars), G16 (the third level: the global tail
 queue's overflow, chunking, and the power-of-two queue index), G17 (the
-production unit wheel returns a k-space wheel's identical survivors over a
-k-space period at the opening filter).
+production unit wheel, v1's wheel and a k-space wheel return identical
+survivors over the same absolute windows), G18 (every campaign opening
+compiles to the occupancy the engine was tuned at, with the carveout
+pinned and the prefix tables inside their cap).
 """
 
 import pathlib as _pathlib
@@ -153,9 +167,13 @@ P3_DEFAULT = 47
 # THE UNIT WHEEL (launch.py UNIT/P1/P2/P3).  The forcing lemma makes every
 # candidate a multiple of 30030 at every family's opening filter (510510
 # for A088651), so the device sweeps k' = k / unit and the primes of the
-# unit leave the wheel: (..31] is then 17*19*23*29*31 = 6.7e6 (u32),
-# (31, 41] and (41, 53] together 1.6e8 (u32), and 53 fits where in k space
-# nothing did.  The measurements are in OPTIMIZATION_LOG.md.
+# unit leave the wheel.  v1 ran (..31],(31,41],(41,53]; v2 runs
+# (..37],(37,47],(47,59]: (..37] is 17*19*23*29*31*37 = 2.5e8 (u32),
+# (37,59] is 41*43*47*53*59 = 2.6e8 (u32), W' = 6.5e16 < 2^63, a period of
+# 1.92e21 of k.  59 kills min(c, 58) more residues per period -- 1.31x
+# fewer candidates per unit of line at c = 14 -- and the wheel was measured
+# paired against v1's at every opening (OPTIMIZATION_LOG.md v2): 1.27x at
+# c = 15, 1.50x at 16, 1.20x at 17, 1.32x at 18, within 5% at c = 14.
 TPB_DEFAULT = 128            # threads per block (prime-ladders v2: 128 over 256 by 1.09x)
 # TUNING CONSTANTS COME IN TWO SETS, one per wheel family, because a
 # constant tuned against one geometry is wrong for the other (Rule 3a):
@@ -182,26 +200,26 @@ CPT_UNIT = 64
 # where anything is left to kill.
 LIT_SURV = 0.19              # k-space wheels
 K2_SURV = 0.015
-# THE UNIT WHEEL'S PREFIX COMPACTION POINT IS FILTER-SENSITIVE, and not
-# monotonically: prime-ladders measured its optimum at 0.12 for n = 12-15,
-# 0.28 at 16-18 and 0.12 again at 19, a shared-memory cliff deciding where
-# the prefix's compaction lands against the queue budget for that filter's
-# survival curve.  Here the survival curve is a function of the NUMBER OF
-# FORMS c (every wheel and sieve prime kills min(c, q - 1) residues, whatever
-# the family), so the table is keyed by c rather than by n -- A088250 at
-# n = 15, A173750 at n = 16 and A125839 at n = 17 are the same curve -- and
-# it is what was MEASURED here, interleaved, at the campaign's own wheel
-# and unit, the fingerprint identical across every variant
-# (OPTIMIZATION_LOG.md): 0.12 wins at c <= 15 by 1.13-1.25x over 0.28,
-# 0.28 wins at c = 16 and 17 by 1.05-1.14x over 0.12, 0.19 and 0.28 tie at
-# c = 18, and 0.40 is a 6x cliff from c = 17 on.  A form count past the
-# table's end takes the last entry (CLAUDE.md 5g: a constant swept at one
-# filter is re-swept one filter later, because the campaign promotes itself
-# there).
+# THE UNIT WHEEL'S PREFIX COMPACTION POINT IS FILTER-SENSITIVE.  The
+# survival curve is a function of the NUMBER OF FORMS c (every wheel and
+# sieve prime kills min(c, q - 1) residues, whatever the family), so the
+# table is keyed by c rather than by n -- A088250 at n = 15, A173750 at
+# n = 16 and A125839 at n = 17 are the same curve -- and it is what was
+# MEASURED, interleaved, at the campaign's own wheel and unit with the
+# fingerprint identical across every variant (OPTIMIZATION_LOG.md v2, on
+# the 59-wheel): 0.12 at c <= 16 (by 1.05-1.2x over 0.19 at c = 15 and 16),
+# 0.19 from c = 17 (by 1.03-1.06x over 0.12 at c = 17 and 19, a tie with
+# 0.28 at 18); 0.40 loses 0.83-0.9x everywhere.  TWO THINGS THE v1 SWEEP
+# MISTOOK FOR THE CONSTANT (same log): a variant whose queues push the
+# resident blocks' shared memory past the driver's default carveout drops
+# the group tables out of L1 (0.2-0.3x, now pinned by CARVEOUT_PCT), and
+# one whose register allocation lands at 90+ drops to 5 blocks per SM
+# (0.8x, now caught by OCC_MIN_BLOCKS).  A form count past the table's end
+# takes the last entry (CLAUDE.md 5g: a constant swept at one filter is
+# re-swept one filter later, because the campaign promotes itself there).
 LIT_SURV_UNIT_BY_C = {8: 0.12, 9: 0.12, 10: 0.12, 11: 0.12, 12: 0.12,
-                      13: 0.12, 14: 0.12, 15: 0.12,
-                      16: 0.28, 17: 0.28,
-                      18: 0.19, 19: 0.19, 20: 0.19}
+                      13: 0.12, 14: 0.12, 15: 0.12, 16: 0.12,
+                      17: 0.19, 18: 0.19, 19: 0.19, 20: 0.19}
 K2_SURV_UNIT = 0.008
 
 
@@ -229,13 +247,47 @@ UNROLL = 4                   # independent Barrett chains in the queue tail
 HIT_CAP = 1 << 20
 RES_MAX = 1 << 24            # refuse a one-level wheel table bigger than this
 LIT_INLINE_Q = 64            # below this, a group's kill set is a u64 literal
-# Largest modulus a CRT-combined prefix group may reach, and the total
-# table budget that goes with it -- the knob that keeps the combined
-# tables in L1.  square-ladders measured the cliff (0.34x at 147 KB of
-# tables against 96 KB) and the budget is a guard on the SUM of tables and
-# queues, not on either half.
-LIT_GROUP_MAX = 1 << 18
+# Largest modulus a CRT-combined prefix group may reach, and the BYTES the
+# hoisted prefix's tables may total.  Both bound the same thing: the group
+# tables live in L1, and L1 is what is left of the SM's 128 KB after the
+# resident blocks' shared memory -- 64 KB at the carveout pinned below --
+# so the tables have to stay well inside it or every gather goes to L2
+# (measured 0.15-0.3x, OPTIMIZATION_LOG.md v2).  2^19 lets the first three
+# sieve primes of the 59-wheel combine (61*67*71 = 290,177: one lookup
+# instead of two on every candidate, 1.07x at n = 17); the byte cap is
+# what stops a SECOND triple forming behind it (73*79*83 is a 58 KB table,
+# 94 KB in all, 0.2x).  A group whose table would push the prefix past
+# PREFIX_BYTES_MAX closes early instead.  GROUP_BYTES_MAX is the older
+# guard on the sum of prefix and round-2 tables (square-ladders: 0.34x at
+# 147 KB), still binding.
+LIT_GROUP_MAX = 1 << 19
+PREFIX_BYTES_MAX = 40 << 10
 GROUP_BYTES_MAX = 96 << 10
+# THE SHARED/L1 CARVEOUT, PINNED.  Left to the driver, the split of the
+# 128 KB unified cache follows OCCUPANCY: a configuration whose shared
+# queues grow by a few KB per block makes the driver take 100 KB for shared
+# memory, leaving 28 KB of L1 for 40-50 KB of tables -- the "shared-memory
+# cliff" prime-ladders v3 mapped at CPT 96, SPB 32 and LIT 0.40 was this
+# (an explicit 50% carveout recovers a +8 KB variant from 0.26x to 0.8x).
+# 50 = 64 KB shared, 64 KB L1: the driver's own choice for every v1
+# configuration, now stated rather than inherited.  0 and 25 were measured
+# (0.28-0.37x and 0.88-0.99x), 75 and 100 collapse (0.15-0.3x).
+CARVEOUT_PCT = 50
+# THE OCCUPANCY GUARD.  The hot body is 64 candidates unrolled with the
+# cold overflow fallback inlined at every one, and nvcc's register
+# allocation on it is not a function of the hot path: near-identical
+# configurations compile to 50 or 117 registers (9 or 4 blocks per SM,
+# 1.2x apart), and v1 shipped every c = 16 opening at 93 registers and 5
+# blocks without knowing.  Every attempt to steer it from the source
+# (launch bounds, a non-inlined or plain-loop fallback, an overflow mask
+# flushed after the loop) made it worse (OPTIMIZATION_LOG.md v2).  So the
+# engine MEASURES what it compiled to and, under OCC_MIN_BLOCKS, tries the
+# alternate body -- the same source with the residue loop unrolled 4 and
+# the jj loop not at all, which costs 0-2% where the full body compiles
+# well and buys 1.1-1.5x where it does not -- keeping whichever reaches
+# more blocks.  config() reports the choice; G18 checks every opening.
+OCC_MIN_BLOCKS = 8
+BODY_UNROLLS = ((None, None), (4, 1))       # (ss, jj): full, then partial
 # Copies of each HOISTED group's pattern: one, because the hoisted prefix
 # folds the base into its per-residue value and does not need the doubled
 # table the per-prime bitmap uses.
@@ -252,12 +304,21 @@ QCAP_SIGMA = 6.0
 
 # How much candidate work a single launch should carry: it sets how many
 # wheel blocks (and third-level residues) go in gridDim.z.  A tuning
-# constant (OPTIMIZATION.md 2.4).
-CAND_PER_LAUNCH = 1 << 30
+# constant (OPTIMIZATION.md 2.4): 2^31 over 2^30 is 1.03x at c = 17-18 on
+# the 59-wheel, where it makes a launch two third-level residues instead
+# of one; below c = 17 a single residue exceeds either, so a launch is one
+# residue (7.3e9 candidates at c = 15, 2.05e10 at c = 14) whatever this
+# says.
+CAND_PER_LAUNCH = 1 << 31
 
 # Ceiling on the GLOBAL tail queue, in candidates; overflow takes the
-# in-block fallback, so it costs correctness nothing.
-Q3_MAX = 1 << 26
+# in-block fallback, so it costs correctness nothing -- but it costs
+# 0.67x when it is the rule rather than the exception: at c = 14 on the
+# 59-wheel a launch's round-2 survivors are 1.6e8, over the v1 cap of 2^26,
+# and the fallback serialises a 6,500-prime tail inside the sieve block.
+# 2^28 lets the analytic size win everywhere (2 x 1.3 GB of queue at that
+# opening, a tenth of that from c = 15 on).
+Q3_MAX = 1 << 28
 TAIL_BLOCKS_PER_SM = 64
 # THE TAIL RUNS AS COMPACTION ROUNDS (OPTIMIZATION.md 2.2).  Its items are
 # rare-and-deep, so the tail sweeps its queue in rounds over prime ranges
@@ -286,8 +347,9 @@ NRES_MAX = 32                # residue-list slots; the form count may not exceed
 # Survivors read back per launch WITHOUT waiting for the next launch: the
 # first PRE_COPY entries of the survivor buffer are copied asynchronously
 # into pinned host memory behind each launch, and only a launch that
-# exceeds them pays a synchronous read.
-PRE_COPY = 1 << 13
+# exceeds them pays a synchronous read.  A c = 14 launch on the 59-wheel
+# returns ~15,000 (2.2% of wall in a synchronous read at 2^13).
+PRE_COPY = 1 << 15
 
 # The one-conditional-subtraction reduction is exact only below 2^63.  The
 # reduced quantity is the OFFSET within a launch, so the bound is on
@@ -336,20 +398,34 @@ def wheel(n, fam, p1, lo=1, unit=1):
     return W, res
 
 
-def lit_groups(primes, nlit, budget=LIT_GROUP_MAX, start=0):
+def _table_bytes(Q, reps):
+    """Bytes a group of modulus Q occupies: reps*Q bits, or none inline."""
+    return 0 if Q < LIT_INLINE_Q else ((reps * Q + 31) // 32) * 4
+
+
+def lit_groups(primes, nlit, budget=LIT_GROUP_MAX, start=0, cap_bytes=None,
+               reps=1):
     """Group primes[start:nlit] into CRT-combined test groups.
 
     "Killed by 59 or by 61" is a function of k mod (59*61) alone, so a
     group of primes costs ONE reduction and ONE bitmap lookup instead of
     one of each per prime.  Groups are grown greedily while the product
-    stays under `budget`.
+    stays under `budget` -- and, with `cap_bytes`, while the tables of
+    the groups so far stay under it: a prime that would grow the current
+    group's table past what is left starts a new group instead.  That is
+    what lets the modulus budget be large enough for the first triple
+    without a second, far bigger, triple forming behind it.
     """
-    groups, cur, prod = [], [], 1
+    groups, cur, prod, total = [], [], 1, 0
     for i in range(start, nlit):
         q = primes[i]
-        if cur and prod * q > budget:
+        if cur and (prod * q > budget
+                    or (cap_bytes is not None
+                        and total - _table_bytes(prod, reps)
+                        + _table_bytes(prod * q, reps) > cap_bytes)):
             groups.append(cur)
             cur, prod = [], 1
+        total += _table_bytes(prod * q, reps) - _table_bytes(prod, reps)
         cur.append(i)
         prod *= q
     if cur:
@@ -364,15 +440,16 @@ def _group_bytes(primes, groups, reps=2):
         Q = 1
         for i in g:
             Q *= primes[i]
-        if Q >= LIT_INLINE_Q:
-            tot += ((reps * Q + 31) // 32) * 4
+        tot += _table_bytes(Q, reps)
     return tot
 
 
-def _fit_groups(primes, nlit, budget, start, cap=GROUP_BYTES_MAX, reps=2):
-    """Greedy groups under `budget`, halved until they fit `cap` bytes."""
+def _fit_groups(primes, nlit, budget, start, cap=GROUP_BYTES_MAX, reps=2,
+                cap_bytes=None):
+    """Greedy groups under `budget` (and `cap_bytes` of tables, if given),
+    the budget halved until the tables fit `cap` bytes."""
     while True:
-        groups = lit_groups(primes, nlit, budget, start)
+        groups = lit_groups(primes, nlit, budget, start, cap_bytes, reps)
         if budget <= 1 or _group_bytes(primes, groups, reps) <= cap:
             return groups
         budget //= 2
@@ -476,9 +553,12 @@ def lit_prefix(n, fam, primes, groups, table="gbits", indent=12, pname="gp",
                                 f"& 1u; }}")
             descs.append(("table", Q, off_bits))
         elif HOIST_TABLE_REPS == 1:
-            lines.append(head + f"const unsigned int b = {off_bits}u + r; "
-                                f"kill |= ({table}[b >> 5] >> (b & 31)) "
-                                f"& 1u; }}")
+            # the table's word offset folds into the load's immediate, so
+            # the residue is shifted and masked as it is: one instruction
+            # fewer per group per candidate (1.02x, OPTIMIZATION_LOG.md v2)
+            assert off_bits % 32 == 0
+            lines.append(head + f"kill |= ({table}[{off_bits // 32}u + "
+                                f"(r >> 5)] >> (r & 31)) & 1u; }}")
             descs.append(("modq", Q, off_bits))
         else:
             lines.append(head + f"const unsigned int b = "
@@ -734,13 +814,13 @@ extern "C" __global__ void sieve(
        dimension, so they are hoisted: one test for the whole nest instead
        of one per candidate. */
     if (full) {
-#pragma unroll
+%(unroll_jj)s
         for (int jj = 0; jj < JPT; ++jj) {
             const uint2 e1 = res1x[tbase + jj * TPB];
             const unsigned long long b0 = base + (unsigned long long)e1.x;
 %(jjpre)s
 #if TWOLEVEL
-#pragma unroll
+%(unroll_ss)s
             for (int ss = 0; ss < SPB; ++ss)
                 STEP(e1.y, d2[ss], ss, jj)
 #else
@@ -857,6 +937,31 @@ extern "C" __global__ void tailround%(lpi)d(
     }
 }
 """
+
+
+def _occupancy(kernel, tpb):
+    """What a compiled sieve kernel would reach on this device: registers,
+    static shared bytes, and the resident blocks per SM at `tpb`."""
+    import cupy as cp
+    a = kernel.attributes
+    try:
+        blocks = int(cp.cuda.driver.occupancyMaxActiveBlocksPerMultiprocessor(
+            kernel.kernel.ptr, int(tpb), 0))
+    except Exception:                       # noqa: BLE001 -- an old CuPy
+        blocks = -1
+    return {"num_regs": int(a.get("num_regs", -1)),
+            "smem_bytes": int(a.get("shared_size_bytes", -1)),
+            "local_bytes": int(a.get("local_size_bytes", -1)),
+            "blocks_per_sm": blocks}
+
+
+def _set_carveout(kernel, pct):
+    """Pin the kernel's preferred shared/L1 carveout (percent shared)."""
+    import cupy as cp
+    cp.cuda.driver.funcSetAttribute(
+        kernel.kernel.ptr,
+        cp.cuda.driver.CU_FUNC_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT,
+        int(pct))
 
 
 def _qcap(tile, surv, sigma=QCAP_SIGMA):
@@ -1018,7 +1123,8 @@ class GpuEngine:
                    else min(max(k2, self.lit), len(self.primes)))
         reps = HOIST_TABLE_REPS if self.R2 > 1 else 2
         self.groups = _fit_groups(self.primes, self.lit, LIT_GROUP_MAX, 0,
-                                  GROUP_BYTES_MAX, reps=reps)
+                                  GROUP_BYTES_MAX, reps=reps,
+                                  cap_bytes=PREFIX_BYTES_MAX)
         left = GROUP_BYTES_MAX - _group_bytes(self.primes, self.groups, reps)
         self.groups2 = _fit_groups(self.primes, self.k2, K2_GROUP_MAX,
                                    self.lit, max(left, 0))
@@ -1253,30 +1359,50 @@ class GpuEngine:
                tuple(self.qcaps), tuple(self.bounds2),
                tuple(map(tuple, self.groups)),
                tuple(map(tuple, self.groups2)))
+        fill = {"w1": self.W1, "w2": self.W2, "w": self.Wp,
+                "two": 1 if self.R2 > 1 else 0, "lit": self.lit,
+                "three": 1 if self.R3 > 1 else 0, "nu": self.nu,
+                "k2": self.k2, "jpt": self.jpt, "tpb": tpb,
+                "spb": self.spb,
+                "logtpb": self.logtpb, "logspb": self.logspb,
+                "qtype": ("unsigned short" if self.tile <= 65535
+                          else "unsigned int"),
+                "unroll": UNROLL, "qcaps": qcaps_src,
+                "qdecl": qdecl, "qzero": qzero,
+                "rounds2": rounds2_src, "prefix_m": prefix_m,
+                "pdecl": pdecl, "blockpre": blockpre,
+                "jjpre": jjpre,
+                "round2": r2_src, "gparams": gparams,
+                "mask_bits": MASK_BITS, "nres": self.nres,
+                "ttpb": TAIL_TPB,
+                "tailrounds": "".join(
+                    _TAILROUND % {"lpi": l}
+                    for l in sorted(set(self.round_lpi)))}
+        # THE OCCUPANCY GUARD (see OCC_MIN_BLOCKS): compile the full body,
+        # measure what it compiled to, and only if it falls short try the
+        # partial one; the module cache holds the CHOICE, so a configuration
+        # compiles once and every engine at it gets the same kernel.
         if key not in _MODCACHE:
-            src = _SRC % {"w1": self.W1, "w2": self.W2, "w": self.Wp,
-                          "two": 1 if self.R2 > 1 else 0, "lit": self.lit,
-                          "three": 1 if self.R3 > 1 else 0, "nu": self.nu,
-                          "k2": self.k2, "jpt": self.jpt, "tpb": tpb,
-                          "spb": self.spb,
-                          "logtpb": self.logtpb, "logspb": self.logspb,
-                          "qtype": ("unsigned short" if self.tile <= 65535
-                                    else "unsigned int"),
-                          "unroll": UNROLL, "qcaps": qcaps_src,
-                          "qdecl": qdecl, "qzero": qzero,
-                          "rounds2": rounds2_src, "prefix_m": prefix_m,
-                          "pdecl": pdecl, "blockpre": blockpre,
-                          "jjpre": jjpre,
-                          "round2": r2_src, "gparams": gparams,
-                          "mask_bits": MASK_BITS, "nres": self.nres,
-                          "ttpb": TAIL_TPB,
-                          "tailrounds": "".join(
-                              _TAILROUND % {"lpi": l}
-                              for l in sorted(set(self.round_lpi)))}
-            _MODCACHE[key] = cp.RawModule(code=src, options=("-std=c++14",),
-                                          backend="nvrtc")
-        self.k_sieve = _MODCACHE[key].get_function("sieve")
-        self.k_tails = {l: _MODCACHE[key].get_function(f"tailround{l}")
+            best = None
+            for body, (uss, ujj) in enumerate(BODY_UNROLLS):
+                fill["unroll_ss"] = ("#pragma unroll" if uss is None
+                                     else f"#pragma unroll {uss}")
+                fill["unroll_jj"] = ("#pragma unroll" if ujj is None
+                                     else f"#pragma unroll {ujj}")
+                mod = cp.RawModule(code=_SRC % fill, options=("-std=c++14",),
+                                   backend="nvrtc")
+                occ = _occupancy(mod.get_function("sieve"), tpb)
+                if best is None or occ["blocks_per_sm"] > best[1]["blocks_per_sm"]:
+                    best = (mod, occ, body)
+                if occ["blocks_per_sm"] >= OCC_MIN_BLOCKS:
+                    break
+            mod, occ, body = best
+            _set_carveout(mod.get_function("sieve"), CARVEOUT_PCT)
+            _MODCACHE[key] = (mod, dict(occ, body=body,
+                                        carveout=CARVEOUT_PCT))
+        mod, self.occupancy = _MODCACHE[key]
+        self.k_sieve = mod.get_function("sieve")
+        self.k_tails = {l: mod.get_function(f"tailround{l}")
                         for l in set(self.round_lpi)}
         self.k_tail = self.k_tails[self.round_lpi[0]]
 
@@ -1308,7 +1434,13 @@ class GpuEngine:
                 "groups2": self.groups2, "q1cap": self.q1cap,
                 "q2cap": self.q2cap, "qcaps": self.qcaps,
                 "bounds2": self.bounds2, "q3cap": self.q3cap,
-                "rounds": self.rounds, "round_lpi": self.round_lpi}
+                "rounds": self.rounds, "round_lpi": self.round_lpi,
+                # what the sieve kernel COMPILED TO (the occupancy guard)
+                "body": self.occupancy["body"],
+                "num_regs": self.occupancy["num_regs"],
+                "smem_bytes": self.occupancy["smem_bytes"],
+                "blocks_per_sm": self.occupancy["blocks_per_sm"],
+                "carveout": self.occupancy["carveout"]}
 
     # ---------------------------------------------------------------- sieve
     def _launch_base(self, base):
@@ -1429,7 +1561,14 @@ class GpuEngine:
 
     def _enqueue(self, b, gx, gy, n_l, nu_l, u0, gps):
         """Enqueue one launch: counters zeroed, the sieve, the tail rounds,
-        the asynchronous readback of its survivors, and the WDDM flush."""
+        the asynchronous readback of its survivors, and the WDDM flush.
+
+        All on one stream.  Running the tail rounds on a second stream
+        behind the next launch's sieve was built and measured paired at
+        0.98-1.00x on the three frozen shapes (OPTIMIZATION_LOG.md v2): the
+        sieve saturates the SMs, so the rounds only interleave, and the
+        second set of tail queues it needs is 2.6 GB at c = 14.  Not kept.
+        """
         np_ = np.int32(len(self.primes))
         self.d_n[b].fill(0)
         self.d_n3.fill(0)
@@ -1444,7 +1583,10 @@ class GpuEngine:
         R = len(self.rounds)
         for r, (fr, to) in enumerate(self.rounds):
             qi, qo = self.d_q3[r & 1], self.d_q3[(r + 1) & 1]
-            ci = self.round_cap[r]
+            # round 0 may read only what the sieve could WRITE: its count
+            # includes the pushes that overflowed q3cap (G16 forces that
+            # cap to zero), and the slots past it hold whatever was there
+            ci = self.round_cap[r] if r else min(self.round_cap[0], self.q3cap)
             co = self.round_cap[r + 1] if r + 1 < R else 1
             lpi = self.round_lpi[r]
             grid = max(1, -(-ci // (self.tail_tpb // lpi)))
@@ -1600,7 +1742,9 @@ def g8_wheel_partitions_the_period():
         n0 = max(KNOWN[fam]) + 1
         unit = forced_unit(n0, fam)
         for n in (n0, n0 + 1, n0 + 2):
-            cases += [(fam, n, 31, 1, unit), (fam, n, 41, 31, unit),
+            cases += [(fam, n, 37, 1, unit), (fam, n, 47, 37, unit),
+                      (fam, n, 59, 47, unit),
+                      (fam, n, 31, 1, unit), (fam, n, 41, 31, unit),
                       (fam, n, 53, 41, unit)]
     for fam, n, p1, lo, unit in cases:
         W, res = wheel(n, fam, p1, lo=lo, unit=unit)
@@ -1622,8 +1766,9 @@ def g8_wheel_partitions_the_period():
                   f"duplicate-free, none of them killed by a wheel prime, on "
                   f"{len(cases)} (family, n, level, unit) cases: k-space "
                   f"levels for three families and the production levels "
-                  f"(..31], (31,41], (41,53] at every family's opening unit, "
-                  f"at its opening filter and the two after it")
+                  f"(..37], (37,47], (47,59] -- and v1's (..31], (31,41], "
+                  f"(41,53] -- at every family's opening unit, at its "
+                  f"opening filter and the two after it")
 
 
 def g9_gpu_matches_cpu():
@@ -1723,7 +1868,8 @@ def g13_production_wheel_constants():
         n0 = max(KNOWN[fam]) + 1
         unit = forced_unit(n0, fam)
         for n in (n0, n0 + 1, n0 + 2, n0 + 3):
-            cases.append((fam, n, 31, 41, 53, unit))
+            cases.append((fam, n, 37, 47, 59, unit))     # the v2 wheel
+            cases.append((fam, n, 31, 41, 53, unit))     # v1's, still a config
     for fam, n, p1, p2, p3, unit in cases:
         W1, r1 = wheel(n, fam, p1, unit=unit)
         W2a, r2 = wheel(n, fam, p2, lo=p1, unit=unit)
@@ -1783,8 +1929,9 @@ def g13_production_wheel_constants():
     return True, (f"G13 ok: the wheel constants (W1, W2a, W2b, W1^-1 and the "
                   f"two CRT lifts) are exact at {len(cases)} configurations: "
                   f"k-space (23,37,47] at n = 15, 16 and the production unit "
-                  f"wheel (..31],(31,41],(41,53] at every family's opening "
-                  f"unit for its opening filter and the three after it; "
+                  f"wheel (..37],(37,47],(47,59] -- and v1's (..31],(31,41],"
+                  f"(41,53] -- at every family's opening unit for its opening "
+                  f"filter and the three after it; "
                   f"3000 sampled CRT residues per configuration recombine to "
                   f"all three levels, survive every wheel prime IN K SPACE "
                   f"(k = unit*x) and are multiples of every forced prime; "
@@ -1801,11 +1948,13 @@ def g14_engine_mechanisms():
              ("A125838", 15, 23, 37, 47, 65536, 1),
              ("A088250", 15, 23, 31, None, 4096, 1),
              # the unit wheels the campaigns run
-             ("A088250", 15, 31, 41, 53, 65536, 30030),
-             ("A088250", 17, 31, 41, 53, 65536, 30030),
-             ("A125838", 15, 31, 41, 53, 65536, 30030),
-             ("A164325", 16, 31, 41, 53, 65536, 30030),
-             ("A088651", 16, 31, 41, 53, 65536, 510510))
+             ("A088250", 15, 37, 47, 59, 65536, 30030),
+             ("A088250", 17, 37, 47, 59, 65536, 30030),
+             ("A125838", 15, 37, 47, 59, 65536, 30030),
+             ("A164325", 16, 37, 47, 59, 65536, 30030),
+             ("A088651", 16, 37, 47, 59, 65536, 510510),
+             # and v1's, whose fingerprints the cross-wheel gate rests on
+             ("A088250", 17, 31, 41, 53, 65536, 30030))
     for fam, n, p1, p2, p3, q2, unit in cases:
         W1, r1 = wheel(n, fam, p1, unit=unit)
         W2a, r2 = wheel(n, fam, p2, lo=p1, unit=unit)
@@ -1939,15 +2088,18 @@ def g14_engine_mechanisms():
                        f"stream: {len(a)} survivors properly sized, "
                        f"{len(b)} with the queues forced full")
 
-    prod = GpuEngine(15, "A088250", p1=31, p2=41, p3=53, unit=30030)
+    prod = GpuEngine(15, "A088250", p1=37, p2=47, p3=59, unit=30030)
     if not 0 < prod.q1cap <= prod.tile or not 0 < prod.q2cap <= prod.tile:
         return False, (f"G14 FAIL: production queue capacities "
                        f"({prod.q1cap}, {prod.q2cap}) are not within "
                        f"(0, tile = {prod.tile}]")
+    if _group_bytes(prod.primes, prod.groups, HOIST_TABLE_REPS) > PREFIX_BYTES_MAX:
+        return False, (f"G14 FAIL: the production prefix tables exceed "
+                       f"PREFIX_BYTES_MAX")
     return True, (f"G14 ok: the split A/C/D generation tables reproduce the "
-                  f"one-table CRT on 18000 sampled triples at nine "
+                  f"one-table CRT on 20000 sampled triples at ten "
                   f"configurations including k-space (23,37,47] and the "
-                  f"production unit wheels (..31],(31,41],(41,53] at unit "
+                  f"production unit wheels (..37],(37,47],(47,59] at unit "
                   f"30030 (A088250 n = 15, 17; A125838 n = 15; A164325 "
                   f"n = 16) and 510510 (A088651 n = 16); the compaction "
                   f"depths derive from the survival curve (A088250 n = 15: "
@@ -2135,22 +2287,29 @@ def g16_third_level_mechanisms():
 
 
 def g17_unit_wheel_matches_k_wheel():
-    """The production unit wheel == a k-space wheel, on the line.
+    """The production unit wheel == a k-space wheel == v1's wheel, on the
+    line.
 
     G9 proves the unit machinery on wheels a dense CPU sieve can follow;
-    this pins the wheel the campaigns actually run -- (..31],(31,41],(41,53]
-    at unit 30030, a period of 3.26e19 -- against the k-space wheel
-    (23],(37],(47] (period 6.15e17) over one k-space period at A088250's
-    opening filter n = 15, at a height inside the first unit period, where
-    the campaign opens.  Two wheels enumerating the same candidates by
-    different arithmetic must return the identical survivor stream, and
-    every survivor must also pass the CPU engine's one-at-a-time k-space
-    test at the campaign's sieve depth.  Coverage is what a fingerprint
-    cannot see, so this is the gate the production wheel's claim stands on.
+    this pins the wheels the campaigns actually run against each other and
+    against a k-space wheel over the SAME absolute windows.  Two wheels
+    enumerating the same candidates by different arithmetic must return
+    the identical survivor stream, and every survivor must also pass the
+    CPU engine's one-at-a-time k-space test at the campaign's sieve depth.
+    Coverage is what a fingerprint cannot see, so this is the gate the
+    production wheel's claim stands on.
+
+    Leg 1, n = 15: v1's unit wheel (..31],(31,41],(41,53] (period 3.26e19)
+    against the k-space wheel (23],(37],(47] (period 6.15e17) over k-space
+    period 18, inside the first unit period, where the campaign opens.
+    Leg 2, n = 17: the v2 wheel (..37],(37,47],(47,59] (period 1.92e21,
+    swept whole and clipped) against v1's wheel AND the k-space wheel over
+    [1e6, 3.26e19) -- v1's period 0 -- three-way identical.  n = 17 because
+    a whole v2 period is seconds there and a minute at n = 15.
     """
-    n, fam = 15, "A088250"
-    kw = GpuEngine(n, fam, p1=23, p2=37, p3=47, q2=Q2_DEFAULT)
-    uw = GpuEngine(n, fam, p1=31, p2=41, p3=53, q2=Q2_DEFAULT, unit=30030)
+    fam = "A088250"
+    kw = GpuEngine(15, fam, p1=23, p2=37, p3=47, q2=Q2_DEFAULT)
+    uw = GpuEngine(15, fam, p1=31, p2=41, p3=53, q2=Q2_DEFAULT, unit=30030)
     jk = 18                              # 1.1e19 of k: A088250's frontier sits in period 18
     lo, hi = jk * kw.W, (jk + 1) * kw.W
     a = kw.survivors_j(jk, jk + 1)
@@ -2160,27 +2319,99 @@ def g17_unit_wheel_matches_k_wheel():
     if a != b:
         sa, sb = set(a), set(b)
         return False, (f"G17 FAIL: over [{lo:.4g}, {hi:.4g}) the k-space "
-                       f"wheel keeps {len(a)} survivors and the unit wheel "
+                       f"wheel keeps {len(a)} survivors and v1's unit wheel "
                        f"{len(b)}: diff {sorted(sa ^ sb)[:4]}")
-    cpu = CpuEngine(n, fam, q2=Q2_DEFAULT)
+    cpu = CpuEngine(15, fam, q2=Q2_DEFAULT)
     if not all(cpu.survives(k) for k in b):
         return False, "G17 FAIL: a survivor fails the CPU engine's k-space test"
     if any(k % 30030 for k in b):
         return False, "G17 FAIL: a survivor is not a multiple of 30030"
-    return True, (f"G17 ok: the unit wheel (..31],(31,41],(41,53] at unit "
+    # leg 2: the v2 wheel, three ways, at n = 17
+    w59 = GpuEngine(17, fam, p1=37, p2=47, p3=59, q2=Q2_DEFAULT, unit=30030)
+    w53 = GpuEngine(17, fam, p1=31, p2=41, p3=53, q2=Q2_DEFAULT, unit=30030)
+    k17 = GpuEngine(17, fam, p1=23, p2=37, p3=47, q2=Q2_DEFAULT)
+    lo2, hi2 = 10 ** 6, int(w53.W)
+    c59 = w59.survivors_k(lo2, hi2)
+    c53 = w53.survivors_k(lo2, hi2)
+    ck = k17.survivors_k(lo2, hi2)
+    if not c59:
+        return False, "G17 FAIL: the n = 17 window is empty -- vacuous"
+    if c59 != c53 or c59 != ck:
+        return False, (f"G17 FAIL: over [{lo2:.4g}, {hi2:.4g}) at n = 17 the "
+                       f"v2 wheel keeps {len(c59)} survivors, v1's {len(c53)} "
+                       f"and the k-space wheel {len(ck)}")
+    cpu17 = CpuEngine(17, fam, q2=Q2_DEFAULT)
+    if not all(cpu17.survives(k) for k in c59) or any(k % 30030 for k in c59):
+        return False, ("G17 FAIL: a v2-wheel survivor fails the CPU engine's "
+                       "k-space test or is not a multiple of 30030")
+    return True, (f"G17 ok: v1's unit wheel (..31],(31,41],(41,53] at unit "
                   f"30030 returns the IDENTICAL {len(a)} survivors as the "
                   f"k-space wheel (23],(37],(47] over k-space period {jk} "
-                  f"[{lo:.4g}, {hi:.4g}) at n = 15, every one a multiple of "
-                  f"30030 that the CPU engine's k-space test also keeps -- "
-                  f"the unit wheel's density is "
-                  f"{kw.density() / uw.density():.3f}x thinner for the same "
-                  f"line")
+                  f"[{lo:.4g}, {hi:.4g}) at n = 15; the v2 wheel "
+                  f"(..37],(37,47],(47,59] at unit 30030 returns the IDENTICAL "
+                  f"{len(c59)} survivors as BOTH over [{lo2:.4g}, {hi2:.4g}) "
+                  f"at n = 17 -- three wheels, three arithmetics, one stream "
+                  f"-- every survivor a multiple of 30030 that the CPU "
+                  f"engine's k-space test also keeps; the v2 wheel's density "
+                  f"is {w53.density() / w59.density():.3f}x thinner than v1's "
+                  f"and {k17.density() / w59.density():.1f}x thinner than "
+                  f"the k-space wheel's for the same line")
+
+
+def g18_every_opening_compiles_to_occupancy():
+    """Every campaign opening (and the filter after it) compiles to the
+    occupancy the engine was tuned at, with the carveout pinned and the
+    prefix tables inside their cap.
+
+    A kernel is not a configuration until it has compiled: the register
+    allocation of this body varies 50 to 117 between near-identical
+    configurations, and 5 blocks per SM instead of 9 is 0.8x with every
+    fingerprint green.  This is the 5g check for a cost no fingerprint
+    can see (OPTIMIZATION_LOG.md v2).
+    """
+    import cupy as cp
+    rows = []
+    for fam in FAMILIES:
+        n0 = max(KNOWN[fam]) + 1
+        unit = forced_unit(n0, fam)
+        for n in (n0, n0 + 1):
+            eng = GpuEngine(n, fam, p1=37, p2=47, p3=59, unit=unit)
+            c = eng.config()
+            if c["blocks_per_sm"] < OCC_MIN_BLOCKS:
+                return False, (f"G18 FAIL: {fam} n={n} unit {unit} compiles "
+                               f"to {c['num_regs']} registers and "
+                               f"{c['blocks_per_sm']} blocks per SM (body "
+                               f"{c['body']}), under OCC_MIN_BLOCKS = "
+                               f"{OCC_MIN_BLOCKS}")
+            got = cp.cuda.driver.funcGetAttribute(
+                cp.cuda.driver.CU_FUNC_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT,
+                eng.k_sieve.kernel.ptr)
+            if got != CARVEOUT_PCT or c["carveout"] != CARVEOUT_PCT:
+                return False, (f"G18 FAIL: {fam} n={n}: the sieve kernel's "
+                               f"carveout is {got}, not {CARVEOUT_PCT}")
+            pb = _group_bytes(eng.primes, eng.groups, HOIST_TABLE_REPS)
+            if pb > PREFIX_BYTES_MAX:
+                return False, (f"G18 FAIL: {fam} n={n}: prefix tables of "
+                               f"{pb} bytes exceed PREFIX_BYTES_MAX")
+            if eng.occupancy["local_bytes"] > 0:
+                return False, (f"G18 FAIL: {fam} n={n}: the sieve kernel "
+                               f"spills {eng.occupancy['local_bytes']} bytes "
+                               f"to local memory")
+            rows.append(f"{fam} n={n}: {c['num_regs']} regs, "
+                        f"{c['blocks_per_sm']} blocks/SM"
+                        + (f", body {c['body']}" if c["body"] else ""))
+    return True, (f"G18 ok: all {len(rows)} campaign openings (each family's "
+                  f"opening filter and the next) compile to >= "
+                  f"{OCC_MIN_BLOCKS} blocks per SM with no spills, the "
+                  f"carveout pinned at {CARVEOUT_PCT}% and the prefix tables "
+                  f"under {PREFIX_BYTES_MAX >> 10} KB: " + "; ".join(rows))
 
 
 GATES = [g7_wheel_matches_oracle, g8_wheel_partitions_the_period,
          g13_production_wheel_constants, g14_engine_mechanisms,
          g9_gpu_matches_cpu, g15_k_off_representation,
-         g16_third_level_mechanisms, g17_unit_wheel_matches_k_wheel]
+         g16_third_level_mechanisms, g17_unit_wheel_matches_k_wheel,
+         g18_every_opening_compiles_to_occupancy]
 
 # Ctrl+C is a normal exit everywhere in this repo (CONVENTIONS.md
 # "Stopping a run"): one path out, no traceback, exit 130.

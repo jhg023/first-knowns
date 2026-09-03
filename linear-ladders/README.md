@@ -19,16 +19,32 @@ siblings share the engine, each with its own campaign: **A173750**
 multipliers), and **A088651** (`r·k − 1`, `r = 1..n`). Every first
 occurrence of A088250 also settles **A202778** (its exact-run version) at
 the run's own index and **A071576** (`2ik + 1`) at half the value, and a
-find on A088651 settles **A202779** the same way. No campaign has run
-yet; the model puts A088250's `a(15)` at a median of `2.0×10²⁰` and its
-`a(17)` 68% under the engine's ceiling ([RESULTS.md](RESULTS.md)).
+find on A088651 settles **A202779** the same way.
 
-**Status: ACTIVE.** Built and gated on 2026-09-03: 41 gates and drills
-green, six benchmark shapes frozen, every opening priced. The A088250
-campaign opens at `n = 15` with the unit 30030 and runs to the +1
-ceiling of `3.317×10²⁴` in about three and a half hours of device at the
-scored rates ([BENCHMARKS.md](BENCHMARKS.md)); the siblings follow, one
-campaign each. The hunt is the owner's command.
+**Three new terms of A088250, and a bound** ([RESULTS.md](RESULTS.md)).
+The A088250 campaign ran on 2026-09-03, from `k = 10⁶` to the family's
+ceiling in 1.26 h, and found
+
+    a(15) = 1,555,360,041,314,493,173,760
+    a(16) = 87,117,680,854,368,555,070,680
+    a(17) = 1,048,124,771,278,912,649,231,910
+
+each verified three ways with a factor witness for the composite that
+stops its run, every value certified (`a(17)` sits past the proof
+crossing, and fourteen of its values carry BLS75 certificates), and each
+re-verified from disk. Every run is exact, so the same integers are
+`A202778(15..17)`, and their halves are `A071576(15..17)`. The sweep then
+went on at `n = 18` to the ceiling and found nothing: **`a(18) >
+3.3168×10²⁴`**, the first bound of any kind on this sequence at an open
+index.
+
+**Status: ACTIVE.** A088250 is at its ceiling with `a(18)` open above it
+(the model's median for it is 66× the ceiling). The six siblings are next,
+one campaign each, in the order of their expected terms per hour:
+A125838, A125839, A173750, A164326, A164325, A088651. The v2 engine
+(2026-09-03) is 1.2–1.5× v1 at every filter, 42 gates and drills green,
+six benchmark shapes frozen, every opening priced. The hunt is the
+owner's command.
 
 ## The problem
 
@@ -107,14 +123,14 @@ consequences:
   opens with 17 already forced, and every published term above the
   exception zone obeys its forced primes.
 - **The wheel is therefore extreme.** At A088250's opening filter the
-  (31],(41],(53] wheel in unit space holds `14,336 × 572 × 34,048`
-  residues per period of `3.26×10¹⁹`: `8.6×10⁻⁹` of the line, 83× thinner
-  than prime-ladders' opening wheel from the same primes, and `8.3×10⁻¹⁰`
-  at `n = 17`. The kernel runs at `1.8–2.5×10¹¹` candidates per second at
-  every opening, which the wheel turns into `7.6×10¹⁸` k per second at
-  the densest −1 opening and `2.9×10²⁰` at A088250's `n = 17`.
+  (37],(47],(59] wheel in unit space holds `315,392 × 23,296 × 1,672`
+  residues per period of `1.92×10²¹`: `6.4×10⁻⁹` of the line, 110× thinner
+  than prime-ladders' opening wheel from the same primes, and `5.9×10⁻¹⁰`
+  at `n = 17`. The kernel runs at `1.6–2.4×10¹¹` candidates per second at
+  every opening, which the wheel turns into `8.4×10¹⁸` k per second at
+  the densest −1 opening and `4.0×10²⁰` at A088250's `n = 17`.
 
-**The kernel is prime-ladders' v3.1, transferred.** The CPU engine
+**The kernel is prime-ladders' v3.1, transferred and re-tuned (v2).** The CPU engine
 materialises the dense `k` line and marks arithmetic progressions into it,
 with no wheel at all. The GPU engine never forms the line: it generates
 only the `k` that survive the three-level wheel by CRT recombination and
@@ -140,12 +156,23 @@ remains admissible at every promotion and the period `W` — the cursor's
 denomination — never moves inside a campaign. When a promotion forces a
 new prime (17 at A088250's `n = 16`, 19 at `n = 18`) that prime simply
 keeps one residue in the wheel; the candidates are identical either way.
-The wheel to 59 that the extra forced prime would admit was measured and
-declined ([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)): 1.23× and 1.66× at
-A088250's `n = 15` and `16`, **1.00× at `n = 17`** where the campaign
-spends its hours, 0.83× at A125838's opening, and a 59× longer period.
+**The wheel reaches 59 (v2).** v1 ran (31],(41],(53] and had measured
+the wheel to 59 at 1.00× at `n = 17` and 0.83× at A125838's opening and
+declined it; v2 found both numbers were the configuration and not the
+wheel — a group budget that stopped the wheel's first triple of sieve
+primes (61·67·71) combining into one lookup, and a tail-queue cap that
+sent 60% of a `2×10¹⁰`-candidate launch through the in-block fallback —
+and re-measured it paired at **1.27× / 1.50× / 1.20× / 1.32×** at
+`c = 15 / 16 / 17 / 18` forms and within 5% at `c = 14`
+([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v2). The same pass pinned two
+things no fingerprint can see and that had been read as tuning cliffs:
+the driver's shared/L1 carveout, now set explicitly (a few KB more shared
+per block used to drop the group tables out of L1, 0.2–0.3×), and the
+register allocation of the unrolled body, which the engine now measures
+after compiling and guards (G18: every opening compiles to ≥ 8 blocks per
+SM; v1 had shipped every `c = 16` opening at 5 without knowing).
 
-**A window may start inside period 0.** A period is `3.26×10¹⁹` of line
+**A window may start inside period 0.** A period is `1.92×10²¹` of line
 and every family's frontier sits inside the first one. `sweep` takes
 `k_min`: the device sieves the whole period and the host drops every
 survivor below it — exact, because a survivor above `k_min > q2` is a
@@ -187,12 +214,12 @@ to `3.317×10²⁴`.
 only thing a least-claim rests on, while the work cursor `(j, u)` advances
 every launch. Values classified mid-period are held *in the checkpoint*
 and narrated in `k` order when the period closes; a find costs at most one
-period of over-sweep — 1.5 s at the opening, a tenth of a second at
-`n = 17`. Because periods close many times a second at the deeper filters,
-the period-close save and log line are rate-limited (a save every 0.1 s
-would be 150,000 chances per campaign for a scanner's handle to land in
-the rename window); the boundary snapshot is still taken at every close,
-so an interrupt writes the latest one.
+period of over-sweep — about a minute at the opening, five seconds at
+`n = 17`. Because periods can close every few seconds at the deeper
+filters, the period-close save and log line are rate-limited (a save
+every few seconds would be tens of thousands of chances per campaign for
+a scanner's handle to land in the rename window); the boundary snapshot
+is still taken at every close, so an interrupt writes the latest one.
 
 **The host classifies in a ramped pool sized from a measurement at the
 campaign's own filter.** A survivor costs 14.5 µs with a base-2 strong-test
@@ -298,7 +325,7 @@ classification pool sized from a measurement at that filter and ramped
 one interpreter at a time, and the frontier promoting itself as terms
 land, the pool re-sized at each promotion. The hunt is indefinite by
 default, resumable, checkpointed at every period close (no more often
-than every two seconds) and every 128 launches inside a period, and stops
+than every two seconds) and every 32 launches inside a period, and stops
 cleanly on Ctrl+C with exit 130. **No flag makes it faster; the defaults
 are the measured optimum at every opening (CLAUDE.md 5g).** The
 throttles: `--to` caps the depth, `--stop-on-discovery` exits once
@@ -310,25 +337,28 @@ preset of one worker and a 2 ms yield, about a third of the rate.
 
 **What the first lines should say** (the rule 5g acceptance test, which
 only the owner can run because it is a hunt). For A088250 with no flags:
-the pool line `classification pool: 2 workers (measured on … launches …
-44,000 survivors/s x 14.5 us = 0.6 core-s per s, x2 margin)`, then a
-`period 0 complete: swept to 32,589,158,477,190,044,730` about 1.5 s after
-the sweep starts — a period is 1.5 s at this rate, so the first `[STATUS]`
-line at 30 s finds the campaign some 15 periods (`4×10²⁰`) in, and `a(15)`
-(median `2.0×10²⁰`, 96% inside period 0 or the next) has most likely
-already been narrated as a `[DISCOVERY]` banner with its `also settles`
-lines, followed by `filter follows the frontier: n = 15 -> 16` and a
-re-sized pool of 1. So the first `[STATUS]` reads either `A088250 filter
-n = 16`, a rate near `8e+19 k/s`, `finds 1`, `pool 1`, `next a(16) Q1
-6.5e+21 (ETA …)` and a small `P(a(16) under the claim)`; or, if `a(15)`
-has not yet landed, `filter n = 15`, a rate near `2.1e+19 k/s`, `finds 0`,
-`pool 2`, `next a(15) median 1.98e+20 (ETA …s)` (a rung above the period
-being worked carries a time; one inside it says so) and `P(a(15) under
-the claim)` climbing through 50–70%. Either way: no `HOST-BOUND` fragment,
-the rate at the benchmark's for the filter shown, and `next` naming the
-open term's rung. A rate under 90% of the benchmark's, a `HOST-BOUND`
-fragment, or a `next` naming a settled term is a defaults bug, not a flag
-to reach for.
+the pool line `classification pool: 2 workers (measured on 25 launches,
+1.00 s of device at 2.9e+19 k/s: 58,500 survivors/s x 13.1 us = 0.77
+core-s per s, x2 margin)` (the selftest's wiring drill takes the same
+measurement and printed exactly that). A period is `1.92×10²¹` of line,
+about 65 s at this rate, so the first `[STATUS]` line at 30 s is inside
+period 0: `swept to 0`, `period 0 [0, 1.9228e+21) 45%`, `A088250 filter
+n = 15`, a rate near `3.0e+19 k/s`, `finds 0`, `pool 2`, `next a(15)
+median 1.98e+20 (ETA inside the period being worked)` — every rung of
+`a(15)` sits inside period 0, and a rung inside the period being worked
+says so rather than carrying a time — and `P(a(15) under the claim) = 0%`,
+because the coverage claim does not move until the period closes. The
+second line (60 s) reads the same at ~90%. Then `period 0 complete: swept
+to 1,922,760,350,154,212,639,070`, and `a(15)` (median `2.0×10²⁰`, 96%
+inside period 0) has most likely been narrated as a `[DISCOVERY]` banner
+with its `also settles` lines, followed by `filter follows the frontier:
+n = 15 -> 16` and a re-sized pool of 1; the third `[STATUS]` then reads
+`filter n = 16`, a rate near `1.4e+20 k/s`, `finds 1`, `pool 1`, `next
+a(16) Q1 6.5e+21 (ETA …)` and a small `P(a(16) under the claim)`. Either
+way: no `HOST-BOUND` fragment, the rate at the benchmark's for the filter
+shown, and `next` naming the open term's rung. A rate under 90% of the
+benchmark's, a `HOST-BOUND` fragment, or a `next` naming a settled term
+is a defaults bug, not a flag to reach for.
 
 ## Trust
 

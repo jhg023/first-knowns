@@ -262,3 +262,292 @@ rejected lists applies to this kernel unchanged, since it is this kernel.
 - **A pool harness without a spawn guard** re-executed itself in every
   worker on Windows (`BrokenProcessPool`). Scaffolding gets the same
   discipline as the arithmetic (OPTIMIZATION.md rule 6).
+
+---
+
+## v2 — the wheel to 59, the L1 carveout pinned, the register allocation guarded. KEPT: 1.20× at n = 17, 1.27× at n = 15, 1.50× at n = 16 (2026-09-03)
+
+`SCORE 30,826,035,115,578` / `SCORE17 404,629,246,197,708` /
+`SCOREM 8,416,469,598,948`, the three shapes re-frozen on the new wheel
+(the wheel is a deliberate coverage change; the three k-space shapes keep
+v1's fingerprints and reproduce them). 42/42 green in 88 s (G18 is new;
+G17 gained a three-wheel leg). Every number below is a **paired,
+interleaved ratio** from a harness that builds two engines from the same
+module — different constants, source patches or wheels — and sweeps the
+frozen windows back to back with the fingerprint checked on every run;
+absolute rates drifted 10% across the afternoon and are quoted only as
+context. Nothing here is a campaign (CLAUDE.md 0a).
+
+The pass followed OPTIMIZATION.md Part 1 in order, and its shape is worth
+stating first because it is the finding: **every large number in it was
+a configuration mistaken for a constant.** v1's tuning table was measured
+correctly and read wrongly three times — a "shared-memory cliff" that was
+the driver's L1 carveout, a "LIT optimum" that was the compiler's register
+allocation, and a "wheel that ties at n = 17" that was a group budget one
+bit too small and a queue cap four times too small. None of the three is
+visible to a fingerprint, a gate or a rate; each needed a measurement of
+the thing itself.
+
+### Measurement 1 — the phase split, re-taken (rule 1)
+
+CUDA events around the sieve kernel and the tail rounds of every launch
+against the pipelined wall clock, three rounds each:
+
+| shape | wall / launch | sieve | tail rounds | host gap |
+|---|---|---|---|---|
+| `SCORE` (n = 15) | 5.2–5.6 ms | **86.5%** | 13.3% | 0.3% |
+| `SCORE17` | 3.8–4.0 ms | **84.4%** | 15.2% | 0.5% |
+| `SCOREM` (c = 14) | 5.6–6.1 ms | **84.3%** | 15.5% | 0.3% |
+
+The same split v1 recorded; the loop is device-bound and the sieve kernel
+is the phase. What v1 did not do was look inside it ("not re-profiled
+inside: the candidate rate matches prime-ladders'"), which Part 3.1 says
+is an inherited verdict. So:
+
+### Measurement 2 — what the sieve is bound by, priced by ADDING work (3.3)
+
+Each variant appends one statement to every hoisted prefix group's line
+whose result is ANDed with a kernel parameter that is 0 at runtime: the
+compiler cannot know that, so the work is done and the survivor stream —
+and the fingerprint — is untouched. The marginal cost of one such
+statement per group per candidate, on a launch of `1.07×10⁹` candidates
+at `SCORE` (5 groups), as the time it adds to the launch:
+
+| added per group per candidate | ratio | cost / launch | per instruction-equivalent |
+|---|---|---|---|
+| a 5-instruction dependent ALU chain | 0.894 | 0.12 ms | **0.025 ms per instruction** = 128 SMs × 4 issue/clk × 2.5 GHz: the SM's peak issue rate, at the margin |
+| a gather from one 32-byte sector (data-dependent index) | 0.812 | 0.24 ms | ≈ 10 instr-eq (8 of them its own address arithmetic) |
+| a gather spread over 1 KB | 0.786 | 0.28 ms | 11 |
+| over 8 KB | 0.698 | 0.45 ms | 18 |
+| over the 30 KB triple table | 0.657 | **0.54 ms** | 22 |
+| a conflict-free shared-memory gather (16 words) | 0.877 | 0.15 ms | 6 |
+| a shared gather over 256 words | 0.814 | 0.24 ms | 10 |
+
+(At `SCORE17`, two groups: 0.998 / 0.933 / 0.930 / 0.845 / 0.839 / 0.930
+for ALU / sector / 1 KB / 8 KB / 30 KB / shared, the same picture.) Read
+together: **the kernel is issue-bound, with one expensive load.** A prefix
+group is ~12 instructions plus its gather; a gather into a small table
+costs its instructions and little else, and only the 30 KB triple's
+gather carries an L1 penalty worth ~12 instructions — one group in five.
+The PTX confirms the count (6 for the candidate step, 12 per group, then
+the compiler turns the five `kill |= bit` accumulations into
+`and / setp / or.pred` triples) and shows where the rest of the kernel's
+17,000 PTX instructions are: the cold overflow fallback `tail_survives`
+inlined at all 128 candidate sites. The prefix is about three quarters of
+the sieve at c = 15.
+
+### Measurement 3 — the "shared-memory cliff" is the driver's L1 carveout
+
+A sink variant that adds an 8 KB shared array per block (and a gather
+into it) measured **0.257× / 0.203×** at `SCORE` / `SCORE17`; at
+`SCORE17` even 1 KB more was 0.186×. The gather is not the cost (a
+256-word shared gather is 0.24 ms above). The mechanism: the SM's 128 KB
+of unified cache is split by the driver to MAXIMISE OCCUPANCY, so a
+kernel whose resident blocks want a few KB more shared memory gets a
+100 KB shared carveout and 28 KB of L1 — and the 40–50 KB of group tables
+that were L1-resident are not any more. Setting the carveout explicitly
+(`cuFuncSetAttribute(PREFERRED_SHARED_MEMORY_CARVEOUT)`), each variant
+its own module (CuPy memoizes `RawModule` by source text, so two engines
+built from identical source share one function and its attributes — the
+first sweep measured one kernel six times):
+
+| carveout (% shared) | blocks/SM | `SCORE` | `SCORE17` | `SCOREM` |
+|---|---|---|---|---|
+| driver's choice | 9 | 1.000 | 1.000 | 1.000 |
+| 50 (64 KB shared, 64 KB L1) | 9 | 1.007 | 1.001 | 1.005 |
+| 25 (32 KB / 96 KB) | 6 / 5 / 6 | 0.986 | 0.885 | 0.990 |
+| 0 (max L1) | 1 | 0.374 | 0.283 | 0.385 |
+| 75 | 9 | 0.257 | 0.176 | 0.259 |
+| 100 | 9 | 0.295 | 0.155 | 0.269 |
+| the +8 KB variant at 50 | 5 / 4 / 5 | 0.797 | 0.716 | 0.812 |
+
+So the tables need between 32 and 64 KB of L1; the driver's default was
+already 50 for every v1 configuration (and is now **pinned**, so a change
+in shared footprint cannot move it); and occupancy is soft on the low
+side (6 blocks instead of 9 costs 1% at n = 15, 12% at n = 17). This is
+the cliff prime-ladders v3 mapped at CPT ≥ 96, SPB 32 and LIT 0.40 and
+called shared memory: the queues grew, the driver moved the split, and
+the tables fell out of L1. With the carveout pinned those constants were
+re-swept below.
+
+### Measurement 4 — things that did not pay, measured
+
+| attempt | `SCORE` | `SCORE17` | `SCOREM` | why it was tempting / why not |
+|---|---|---|---|---|
+| the pair-group tables (≤ 2 KB each) copied into shared memory per block, gathered there | 1.010 | 0.999 | 1.013 | a shared gather is cheaper than a 32-sector L1 gather — but a 1 KB-footprint L1 gather already costs 0.28 ms against shared's 0.24 (Measurement 2). A wash; not shipped |
+| `#pragma unroll 1` on jj / `unroll 4` on ss / `unroll 1` on ss / both | 0.996 / 0.987 / 0.970 / 0.992 | 0.999 / 0.997 / 0.978 / 1.001 | — | code size (the 64-candidate body is ~5,000 instructions): not instruction-cache-bound, and the unrolling buys almost nothing. Kept in reserve: the (4, 1) body is the occupancy guard's fallback below |
+| accumulate the raw shifted word, test bit 0 once (`kacc`) | 1.002 | 1.002 | 1.004 | the `and / setp / or.pred` triples in the PTX; nvcc had already fused them in SASS. Noise |
+| form the 64-bit offset only in the cold branch (`lazyoff`) | 1.004 | 1.006 | 1.003 | two instructions per candidate; noise |
+| **fold the table's word offset into the load's immediate (`nooff`)** | **1.025** | **1.016** | **1.019** | one `add` per group per candidate. KEPT |
+| `__noinline__` on the fallback | 0.787 | 0.774 | 0.796 | 156 registers, 3 blocks/SM: a real call inside the unrolled body |
+| a plain-loop cold fallback (no unrolled chains) at every site | 0.649 | 0.721 | 0.695 | 140 registers |
+| an overflow MASK per thread, flushed after the ss loop (8 cold sites instead of 128) | 0.839 | 0.850 | 0.843 | 138 / 105 registers — see Measurement 6 |
+| the same with `__ldcs` on the residue loads | 0.975 | 1.029 | 0.989 | 43 / 48 registers, 10 blocks/SM: the same source with one load hint compiles 3× smaller, and 40 warps buy nothing over 36 |
+| `__launch_bounds__(128, 9 / 10 / 12)` | 1.009 / 0.971 / 0.625 | 0.728 / 0.781 / 0.142 | 0.990 / 0.969 / 0.575 | the bound changes the scheduler's choices, not just the cap: n = 17 went from 50 registers and no spills to 56 with 40 bytes of local. Not a control |
+
+### Measurement 5 — the wheel to 59, re-priced (2.8, 2.11)
+
+v1 measured (..37],(37,47],(47,59] at 1.00× at n = 17 and 0.83× at
+A125838's opening and declined it. Paired against v1's wheel with the
+launch-denominated windows, as v1 measured it and then with the two
+configuration faults removed:
+
+| opening | as v1 measured (group budget 2¹⁸, Q3 2²⁶) | with 2¹⁹ | + Q3 2²⁸ |
+|---|---|---|---|
+| A088250 n = 17 | 1.080 | **1.127** | — |
+| A088250 n = 16 | 1.138 | **1.237** | — |
+| A088250 n = 15 | 1.179 | 1.174 | — |
+| A125838 n = 15 (c = 14) | 0.673 | 0.659 | **1.000** |
+
+Two faults. **The group budget.** On this wheel the first sieve prime is
+61, and 61·67·71 = 290,177 exceeds `LIT_GROUP_MAX = 2¹⁸`, so the prefix
+ran (61,67),(71,73),(79) — three lookups per candidate where v1's wheel
+ran (59,61,67),(71,73) — two. The 1.31× of density paid 1.5× of prefix.
+At 2¹⁹ the triple forms (a 35 KB table) and the wheel is 1.13× at n = 17.
+**The tail-queue cap.** At c = 14 a launch is one third-level residue of
+`2.05×10¹⁰` candidates (`R1 × R2 = 791,775 × 25,839`), its round-2
+survivors are `1.6×10⁸`, and `Q3_MAX = 2²⁶` sent 60% of them through the
+in-block fallback — a 6,500-prime tail serialised inside the sieve block.
+The phase split there read sieve 94% at `1.28×10¹¹` candidates/s against
+`2.3×10¹¹` elsewhere and tails 3.5%. At 2²⁸ the analytic size wins
+(`2 × 1.3 GB` of queue at that opening, a tenth of it from c = 15) and
+the opening ties.
+
+### Measurement 6 — the "LIT optimum" is the register allocation
+
+With the group budget at 2¹⁹, `LIT_SURV` 0.19 on the 59-wheel dropped to
+**0.19× / 0.27×** at n = 17 / 16 with the carveout pinned. The
+configuration it compiled to: groups (61,67,71),(73,79,83),(89) — a SECOND
+triple, 73·79·83 = 478,661, a 58 KB table, 94 KB of prefix tables. So the
+modulus budget alone is the wrong knob: `lit_groups` now also carries a
+running BYTE cap (`PREFIX_BYTES_MAX = 40 KB`) and closes a group early
+rather than let a table grow past it; with it, 0.19 at n = 17 is
+(61,67,71),(73,79),(83,89), 37 KB.
+
+And with THAT fixed the register count moved instead. The same hot path
+compiled to 50, 54, 56, 64, 94 and 117 registers across near-identical
+configurations (the 128 inlined copies of the cold fallback steer the
+allocator; `nres` 16 versus 32 flips it), and at 94 registers a block
+count of 5 instead of 9 is 0.8×. **v1 had shipped every c = 16 opening —
+A088250 n = 16, A164325 n = 16, A088651 n = 16 — at 93 registers and 5
+blocks per SM**, every fingerprint green. Every source-level attempt to
+steer it made it worse (Measurement 4). What works is measurement: the
+engine now reads the registers and blocks per SM its kernel compiled to
+and, under `OCC_MIN_BLOCKS = 8`, compiles the (ss 4, jj 1) body and keeps
+whichever reaches more blocks — that body costs 0–2% where the full body
+compiles well (Measurement 4) and was 1.11× at the 94-register n = 16
+case. `config()` reports the choice; **G18** builds every family's
+opening filter and the next and refuses one under 8 blocks, with spills,
+without the carveout, or with the prefix over its cap. Today all 14
+compile to 53–64 registers and 8–9 blocks on the full body.
+
+### Measurement 7 — `LIT_SURV` and the rest, re-swept on the 59-wheel (3.4)
+
+Paired against **v1's wheel with `nooff` on both**, each opening its own
+group, 4–5 rounds, all with the 2¹⁹ budget, the byte cap, Q3 2²⁸ and the
+carveout pinned. Registers / blocks per SM in brackets where they moved:
+
+| opening (forms) | 0.12 | 0.19 | 0.28 | 0.40 | kept |
+|---|---|---|---|---|---|
+| A125838 n = 15 (c = 14) | **0.936** [64/8] | 0.819 [128/4] | 0.717 [117/4] | — | 0.12 (0.96 on the (4,1) body at 0.19; a 5% loss at this one opening, the only one) |
+| A088250 n = 15 (15) | **1.271** | 0.978 [128/4] | 0.957 [117/4] | — | 0.12 |
+| A088250 n = 16 (16) | **1.503** | 1.226 [117/4] | 1.223 [94/5] | 1.109 | 0.12 (1.52 on the (4,1) body at 0.19 — the guard's fallback, not taken while the full body reaches 9) |
+| A088651 n = 16 (16, unit 510510) | **1.503** | 1.223 | 1.222 | — | 0.12 |
+| A164325 n = 16 (16, odd) | **1.418** | — | — | — | 0.12 |
+| A164326 n = 15 (15, odd) | **1.243** | — | — | — | 0.12 |
+| A088250 n = 17 (17) | 1.170 | **1.203** | 1.145 | 1.023 | 0.19 |
+| A088250 n = 18 (18) | 1.303 | 1.319 | **1.321** | 1.104 | 0.19 (a tie) |
+| A088250 n = 19 (19; vs 0.12 on the 59-wheel) | 1.000 | **1.063** | 1.001 | — | 0.19 |
+
+The three c = 16 references (v1's wheel at A088250, A088651 and A164325
+n = 16) are the 93-register, 5-block kernels of Measurement 6, so part of
+that 1.5× is v1's own occupancy loss; the honest cross-wheel number at
+c = 16 is nearer 1.25×. `LIT_SURV_UNIT_BY_C` is now 0.12 to c = 16 and
+0.19 from c = 17. The other constants, on the 59-wheel at n = 17 / 15
+(ratio to the shipped v2 value): `CPT` 128 0.971 / 1.030 (a wash; 32 is
+**0.248 / 0.240**, and `tpb` 64 — the same 4,096-candidate tile — 0.210 /
+0.224, so the tile stays 8,192); `SPB` 32 1.010 / 1.034 (a wash inside a
+±10% band), 8 0.946 / 0.953; `K2_SURV` 0.004 0.975 / 0.996, 0.015
+0.950 / 0.969; `K2_GROUP_MAX` 2¹⁵ 0.815 / 0.830, 2¹⁶ 0.844 / 0.821 (the
+round-2 tables leaving L1); `tpb` 256 0.980 / 0.960; `CAND_PER_LAUNCH`
+2³¹ **1.027 / 1.032** at n = 17 / 18 (two third-level residues per
+launch; below c = 17 one residue exceeds either budget) — KEPT; and the
+prefix byte cap itself on the k-space gate shapes (`SCORE10`, `SCORE2L`)
+1.003–1.007 against no cap. `PRE_COPY` was raised to 2¹⁵ because a c = 14
+launch returns ~15,000 survivors and the synchronous read past 2¹³ was
+the 2.2% host gap in that phase split.
+
+### What shipped, and the paired ratio it stands on
+
+Wheel (..37],(37,47],(47,59]; `LIT_GROUP_MAX` 2¹⁹ with `PREFIX_BYTES_MAX`
+40 KB; `LIT_SURV_UNIT_BY_C` 0.12 / 0.19; the offset fold; `Q3_MAX` 2²⁸;
+`CAND_PER_LAUNCH` 2³¹; `PRE_COPY` 2¹⁵; `CARVEOUT_PCT` 50 pinned;
+`OCC_MIN_BLOCKS` 8 with the (4, 1) body as the fallback; G18; G17's
+three-wheel leg (the v2 wheel, v1's and the k-space wheel over
+`[10⁶, 3.26×10¹⁹)` at n = 17: 799 identical survivors); `CKPT_LAUNCHES`
+32 (a launch is 8–40× the work it was). Against v1 at the same filter,
+paired: **1.27× (c = 15), 1.50× (16), 1.20× (17), 1.32× (18), 0.94–1.00×
+(14)**; the ledger's cross-run numbers are 1.38× / 1.29× / 1.18× on the
+three re-frozen shapes.
+
+### Termination table (OPTIMIZATION.md Part 3), v2
+
+| phase | share (n = 15 / 17) | verdict |
+|---|---|---|
+| sieve: prefix | ~65% / ~37% of wall | issue-bound at the margin (Measurement 2: an added instruction costs exactly the SM's peak issue), ~12 instructions and one gather per group; the gather is free for the pair tables and worth ~12 instructions for the triple. Levers left, priced: per-lane `ffs` compaction after the first group (56% of candidates are dead after it at c = 15; ~8% there, ~0 at n = 17); `LDS.128` for the per-group residue loads (~4%). The wheel is at its u32 / 2⁶³ limit again: (..37] is the last first level under 2³² and (37,59] the last second under 2³², so the next prime needs the k-windowed sweep square-ladders priced |
+| sieve: queue-0 push + round 2 + global push | ~20% / ~45% | round 2 is the larger part at n = 17 (27% of candidates enter it, 18 non-hoisted Barrett groups); its constants (`K2_SURV`, `K2_GROUP_MAX`, one split) re-swept and unmoved. Not attacked inside |
+| tail rounds | 13% / 15% | prime-ladders' lanes-per-item rounds; 14–18 rounds, LPI to 32. **The second-stream overlap was built and measured: 0.979 / 0.994 / 0.998** on `SCORE` / `SCORE17` / `SCOREM`, paired, intervals straddling 1 — the sieve saturates the SMs, so the rounds interleave rather than hide, and the second set of tail queues is 2.6 GB at c = 14. Reverted; what it left behind is the round-0 capacity fix below. Bounded by the share, and now shown not to hide behind the sieve |
+| host gap | < 0.5% | the pipelined loop; nothing to take |
+
+**Priced and not done:** y-chunked launches, so
+that c ≤ 14 runs `10⁹`-candidate launches instead of `2×10¹⁰` (it would
+remove the 2.6 GB of tail queue at those openings and probably turn the
+c = 14 tie into the 1.2× the density predicts — an engine change: a
+second-level offset in the kernel and a chunk loop in `_sweep`); the
+`ffs` compaction and the vectorised residue loads; an N+1 BLS75 route for
+the −1 families' ceilings (unchanged from v1). **Do not rebuild:** shared
+pair tables, unroll-depth changes, `kacc`, `lazyoff`, any variant of the
+fallback (Measurement 4), and every k-space reject in square-ladders' and
+prime-ladders' logs.
+
+### What the gates caught
+
+- **The resume drill's two-level window fell inside period 0.** Its
+  `k = 10¹⁵` sat in the first period of the wider two-level wheel
+  (`6.2×10¹⁷`), and the engine refused the unclipped window as designed;
+  the drill moved to `10¹⁹`, six periods, cut at two.
+- **The harness measured one kernel six times.** CuPy memoizes
+  `RawModule` by source text; six "variants" that differed only in a
+  function attribute shared one CUfunction, and the last attribute set
+  applied to all of them (Measurement 3, first attempt: every carveout
+  read 0.27×). Tagging each variant's source fixed it. Scaffolding gets
+  the same discipline as the arithmetic (OPTIMIZATION.md rule 6), again.
+- **The ovf-mask patch anchored on a pragma the unroll variants had
+  changed** and asserted rather than silently building the wrong kernel.
+- **G16 caught the second-stream overlap reading unwritten queue slots.**
+  Tail round 0 took `min(count, round_cap)` items, and the count includes
+  pushes that overflowed `q3cap`; production has `q3cap == round_cap[0]`
+  so nothing was ever read past what was written, but G16's forced-zero
+  cap exposed the gap the moment a second queue set stopped the stale
+  slots being the previous launch's. Round 0 now reads at most `q3cap`
+  slots, in the serial engine too.
+
+### What the A088250 campaign measured (2026-09-03: the acceptance test, run for real)
+
+Started with no flags at 17:59 and stopped at the family's ceiling at
+19:15 with `a(15)`, `a(16)` and `a(17)` found ([RESULTS.md](RESULTS.md)).
+Per filter, from the evidence timestamps and the checkpoint, against the
+v2 benchmarks:
+
+| filter | line swept | wall clock | campaign rate | benchmark |
+|---|---|---|---|---|
+| n = 15 (period 0) | `1.92×10²¹` | 65 s, pool sizing and ramp included | `3.0×10¹⁹ k/s` | `SCORE` `3.07×10¹⁹` |
+| n = 16 | `8.5×10²²` | 10.1 min | `1.4×10²⁰` | `1.38×10²⁰` (Measurement 7) |
+| n = 17 | `9.6×10²³` | 39.2 min | `4.1×10²⁰` | `SCORE17` `3.99×10²⁰` |
+| n = 18 | `2.27×10²⁴` | 25.4 min | `1.49×10²¹` | `1.45×10²¹` (Measurement 7) |
+
+Every phase ran at its benchmark's rate, the pool was sized to 2 at the
+opening and 1 after, and `a(15)` was narrated at the close of period 0 as
+the README's first-lines paragraph said it would be. The loop's wall
+clock per unit of line matched the device's at every filter, which is the
+measurement OPTIMIZATION.md 2.14 says only a campaign can take.

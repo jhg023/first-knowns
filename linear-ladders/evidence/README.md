@@ -8,10 +8,14 @@ later value that reaches the frontier) is counted in the checkpoint and
 shown in each 30-second `[STATUS]` line, never written here
 (CONVENTIONS.md, "The census is counted, not narrated").
 
-**Present:** nothing yet. This project was built on 2026-09-03 and no
-campaign has been run; the first find of any family writes the first file
-here, and [RESULTS.md](../RESULTS.md) is updated only after that file has
-been re-verified from disk.
+**Present:** A088250's `a(15)`, `a(16)` and `a(17)` — one file each, all
+three found by the single A088250 campaign of 2026-09-03 (from `k = 10⁶`
+to the family's ceiling in 1.26 h) — and the A088250 ledger. Each run is
+exact (the stopper at the next multiplier is composite), so each file also
+settles A202778 at its own index and A071576 at half its value. `a(17)` is
+the one past the proof crossing: 14 of its 17 values carry BLS75 Theorem 1
+certificates, the other three the deterministic test. All three were
+re-verified from disk before [RESULTS.md](../RESULTS.md) was written.
 
 Because the conditions of every family nest, one `k` can settle several
 terms at once. A find is evidenced **once**, under the first term it
