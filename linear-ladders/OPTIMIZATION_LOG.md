@@ -604,3 +604,20 @@ of line at the same kernel rate. The campaign's `1.95×10²⁰` is that
 engine's `1.82×10²⁰`. So the odd families have their own rates from
 n = 17 on, as the `2..n` and `3..n` families do from n = 17 and 18, and
 BENCHMARKS.md's sibling table carries them.
+
+**The A164325 campaign** (22:49–23:49, 1.00 h, `a(16)`–`a(18)` found,
+then swept to the +1 ceiling) ran `3.9×10¹⁹` / `1.93×10²⁰` / `5.3×10²⁰` /
+`1.82×10²¹` at n = 16 / 17 / 18 / 19 — the odd-family engine at each
+(`3.75×10¹⁹` Measurement 7; `1.82×10²⁰` and `4.87×10²⁰` paired above;
+and at n = 19, paired the next morning, **0.631× of A088250's n = 19**,
+`1.76×10²¹` against `2.79×10²¹`: the odd multipliers `1..37` cover 18
+residues at 23, 29, 31 and 37 where `1..19` cover 19, a first level of
+`5 · 11 · 13 · 19` against `4 · 10 · 12 · 18` per those primes, 1.57× the
+candidates, exactly the ratio). **A088651 at n = 17** (unit 510510) was
+paired at the same time for the last campaign's expectations: **1.014×
+of A088250's n = 17** — its multipliers are `1..n`, so its forcing and
+its wheel are A088250's, and the unit's extra prime (17 forced from its
+opening) changes nothing at the filters it will run. Six campaigns,
+twenty phases, every one at the engine's rate for its wheel; the
+`[STATUS]` line's rate is the benchmark's for every family at every
+filter, which is what rule 5g's acceptance test asks.

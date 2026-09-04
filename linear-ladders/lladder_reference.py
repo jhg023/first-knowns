@@ -233,6 +233,11 @@ FOUND["A173750"] = {16: 828196248070762801230,
 # 3.317e24 / 33 at n = 17.
 FOUND["A164326"] = {15: 392547927582515694990,
                     16: 10214000995018156616280}
+# A164325's three in one hour to the +1 ceiling, a(17) and a(18) past the
+# proof crossing and proved by BLS75 certificates.
+FOUND["A164325"] = {16: 1284243585711408422100,
+                    17: 317674273854740299136640,
+                    18: 511721589397871969516400}
 
 # No family carries a published bound of any kind -- no upper bound at any
 # open n, and no searched-empty lower bound beyond the last term.  The floor

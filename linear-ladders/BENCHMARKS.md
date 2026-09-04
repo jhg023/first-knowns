@@ -125,7 +125,7 @@ terms under each ceiling:
 | A125839 (n = 16) | `8.4×10¹⁸ k/s` | `2.1×10²³`: 7 h at the opening rate. **Ran 2026-09-03 in 15 min**: a(16), a(17), a(18) found, a(19) > `1.73×10²³` | a(16), a(17), a(18); a(19) 18% |
 | A173750 (n = 16) | `3.0×10¹⁹ k/s` | `3.3×10²⁴`: hours, mostly at n = 18 (`1.4×10²¹`). **Ran 2026-09-03 in 37 min**: a(16), a(17) and a(18) = a(19) found, a(20) > `3.32×10²⁴` | a(16), a(17); a(18) 66% |
 | A164326 (n = 15) | `1.25×10¹⁹ k/s` | `1.1×10²³`: 2.4 h at the opening rate. **Ran 2026-09-03 in 14 min**: a(15), a(16) found, a(17) > `1.0×10²³` | a(15), a(16); a(17) 16% |
-| A164325 (n = 16) | `3.75×10¹⁹ k/s` | `3.3×10²⁴`: hours, mostly at n = 17 | a(16); a(17) 85% |
+| A164325 (n = 16) | `3.75×10¹⁹ k/s` | `3.3×10²⁴`: hours, mostly at n = 17. **Ran 2026-09-03 in 60 min**: a(16), a(17), a(18) found, a(19) > `3.32×10²⁴` | a(16); a(17) 85% |
 | A088651 (n = 16) | `1.44×10²⁰ k/s` | `2.1×10²³`: **24 min** | a(16) 96%; a(17) 15% |
 
 Every -1 family's ceiling is its proof crossing — the deterministic

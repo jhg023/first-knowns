@@ -84,11 +84,22 @@ to the lowest ceiling of the seven (`3.317×10²⁴ / 33` at `n = 17`), found
 every certificate the deterministic test, each re-verified from disk;
 then **`a(17) > 9.998×10²²`**.
 
-**Status: ACTIVE.** Five of the seven families are at their ceilings with
-the next term of each open above it. The two remaining, A164325 and
-A088651, are next, one campaign each. The v2 engine (2026-09-03) is
-1.2–1.5× v1 at every filter, 42 gates and drills green, six benchmark
-shapes frozen, every opening priced. The hunt is the owner's command.
+**Three new terms of A164325, and a bound.** The sixth campaign, an hour
+to the +1 ceiling, found
+
+    a(16) = 1,284,243,585,711,408,422,100
+    a(17) = 317,674,273,854,740,299,136,640
+    a(18) = 511,721,589,397,871,969,516,400
+
+the last two past the proof crossing and proved by BLS75 certificates
+(12 and 15 of them), each re-verified from disk; then **`a(19) >
+3.3168×10²⁴`**.
+
+**Status: ACTIVE.** Six of the seven families are at their ceilings with
+the next term of each open above it; A088651 is the last, one campaign.
+The v2 engine (2026-09-03) is 1.2–1.5× v1 at every filter, 42 gates and
+drills green, six benchmark shapes frozen, every opening priced. The hunt
+is the owner's command.
 
 ## The problem
 
