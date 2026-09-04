@@ -1709,6 +1709,7 @@ def _v2_resume_drill():
                 setattr(a, kk, v)
             pol = _POLICIES[fam].at(path)
             pol.refuse_mismatch()                    # the third reader
+            kind = pol.load()[1]
             c = Campaign(a, ckpt=path, cursor=pol)
             front = max(ref.FOUND[fam]) if ref.FOUND[fam] else max(ref.KNOWN[fam])
             if not c.loaded or c.frontier() != front or c.filter_n() != front + 1:
@@ -1735,8 +1736,10 @@ def _v2_resume_drill():
             line = c.status_line()
             if f"filter n = {front + 1}" not in line or f"next a({front + 1})" not in line:
                 return False, f"V2 RESUME FAIL: {fam} status line: {line}"
-            rows.append(f"{fam} n = {front + 1} at k = {c.swept_k():.4g}"
-                        + (" (its crossing)" if ref.sign(fam) < 0 else ""))
+            at_cross = (ref.sign(fam) < 0
+                        and c.swept_k() < c.proof_crossing() + 2 * c.eng.W)
+            rows.append(f"{fam} n = {front + 1} at k = {c.swept_k():.4g} "
+                        f"({kind}{', its crossing' if at_cross else ''})")
     finally:
         for f in pathlib.Path(tmp).glob("*"):
             try:
@@ -1749,12 +1752,12 @@ def _v2_resume_drill():
             pass
     if not rows:
         return True, "v2 resume: no v2 checkpoints present; nothing to resume"
-    return True, (f"v2 resume ok: {len(rows)} real v2 checkpoints load as "
-                  f"inherited cursors through all three readers, at the "
-                  f"filter after each frontier with the census and finds "
-                  f"intact, under the ceiling with their next period "
-                  f"accepted, and --stop-on-discovery armed on THIS run's "
-                  f"finds only: " + "; ".join(rows))
+    return True, (f"v2 resume ok: {len(rows)} real checkpoints load through "
+                  f"all three readers (a v2 key as inherited, a v3 key as "
+                  f"own), at the filter after each frontier with the census "
+                  f"and finds intact, under the ceiling with their next "
+                  f"period accepted, and --stop-on-discovery armed on THIS "
+                  f"run's finds only: " + "; ".join(rows))
 
 
 def _other_families_cursor_drill(fam):

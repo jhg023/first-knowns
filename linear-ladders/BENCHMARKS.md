@@ -153,7 +153,7 @@ own next launches (OPTIMIZATION_LOG.md v3, Measurement 1):
 | A164325 | n = 19 | `1.78×10²¹` | `1.82×10²¹` | n = 20 `3.7×10²¹` (c = 20, odd wheel) |
 | A125838 | n = 19 | `7.05×10²⁰` | `7.2×10²⁰` | n = 20: 19 forced, A088250's n = 19 wheel |
 | A125839 | n = 19 | `2.51×10²⁰` | `2.7×10²⁰` | n = 20: the `2..n` n = 19 wheel, `7.2×10²⁰` |
-| A164326 | n = 17 | `1.85×10²⁰` | `1.95×10²⁰` | n = 18 `5×10²⁰` (A164325's n = 18) |
+| A164326 | n = 17, then 18 and 19 in the v3 campaign of 2026-09-04 | `1.85×10²⁰` | `2.0×10²⁰`; n = 18 `5.4×10²⁰`; n = 19 `1.9×10²¹` | resumes at n = 19 from `1.6×10²⁵` |
 | A088651 | n = 17 | `3.77×10²⁰` | `3.9×10²⁰` | n = 18: A088250's n = 18 wheel, `1.45×10²¹` |
 
 Budget two to three times the medians before expecting a term: this

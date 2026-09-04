@@ -433,6 +433,65 @@ is a proof. The model had given `a(17)` 9.6% under this ceiling from
 bound `3.317×10²⁴`, which is where an N+1 certificate route would let
 the sweep go (below).
 
+## A164326 under the v3 ceiling: two terms and a bound — 2026-09-04, 01:29–09:02
+
+The eighth campaign and the first under v3's `10⁴⁰` ceiling:
+`--family A164326` with no flags, resumed from the family's v2 cursor
+(period 52, `k = 9.998×10²²`, its old ceiling) at `n = 17` and stopped by
+hand 7.5 hours later at `n = 19`. Every value it certified lies past the
+deterministic bound, so these are the **first discoveries proved by the
+N+1 route**: `N + 1 = (2r−1)·k` factored once per find, BLS75 Theorem 15
+with a Lucas sequence per prime. Each file was re-verified from disk
+exactly as the earlier ones were, subproof machinery included (neither
+needed one: every prime factor of both `k` is under the bound).
+
+### A164326 a(17) = 2,071,342,181,735,785,633,264,590 — 04:13
+
+- **run 17**: `(2r−1)·k − 1` prime for `r = 1..17`; the 17th value is
+  `33·k − 1 = 68,354,291,997,280,925,897,731,469`. **stopper** `35·k − 1 =
+  72,496,976,360,752,497,164,260,649 = 3,997,749,779 ×
+  18,134,445,717,832,531`.
+- **certificates**: `k` is 20× past the proof crossing `k_proof(17) =
+  1.005×10²³` (the v2 ceiling this family stopped at). One value under
+  the bound (`r = 1`) by `deterministic-mr`; the other sixteen by
+  **BLS75 Theorem 15** on `N + 1 = (2r−1)·k` factored completely, each
+  with its own Lucas sequence and one shared discriminant, all 17
+  re-verified from scratch by the launcher and again from disk.
+- **model**: from the v2 bound `9.998×10²²`, median `1.05e+24`;
+  `k / median = 1.97`, `E = 1.22`. From `a(16)` the pre-run model had
+  put `a(17)` under the old ceiling with 12.5%; from the bound it put it
+  under `3.317×10²⁴` with 83% and it landed at 2.07×10²⁴.
+- **when**: 2.73 h in, at a campaign rate of `2.0×10²⁰ k/s` over the
+  `n = 17` phase.
+- `k = 2 · 3 · 5 · 7 · 11 · 13 · 17 · 113 · 35,906,175,756,150,593`.
+- evidence: `evidence/A164326_a17_2071342181735785633264590.json`
+
+### A164326 a(18) = 9,606,289,803,039,023,735,440,800 — 08:06
+
+- **run 18**: `35·k − 1 = 336,220,143,106,365,830,740,427,999`. **stopper**
+  `37·k − 1 = 355,432,722,712,443,878,211,309,599 = 19 ×
+  18,706,985,405,918,098,853,226,821`.
+- **certificates**: every value past the bound (`k_proof(18) =
+  9.48×10²²`); all 18 by BLS75 Theorem 15, all re-verified.
+- **model**: from `a(17)`, median `7e+25`; `k / median = 0.14`,
+  `E = 0.12` — early, only 4.6× `a(17)`. 6.6 h in, at `5.4×10²⁰ k/s`
+  over the `n = 18` phase.
+- `k = 2⁵ · 3² · 5² · 7³ · 11 · 13 · 17 · 32,803 · 48,778,736,311`.
+- evidence: `evidence/A164326_a18_9606289803039023735440800.json`
+
+`E` averages 0.67 over the two; `k / median` 1.97, 0.14. Over the
+family's four searched terms it is 1.23.
+
+### A bound: A164326 a(19) > 16,049,280,642,737,212,898,317,290
+
+The filter moved to `n = 19` and the sweep ran 56 minutes more at
+`1.9×10²¹ k/s`, to period 8,346, where the campaign was stopped by hand:
+no `k < 1.6049×10²⁵` has `(2r−1)·k − 1` prime for all `r = 1..19`. Above
+the crossing the classification is a probable-prime chain, which can only
+lengthen a run, never hide one, so the bound stands. The model, from
+`a(18)`, had given `a(19)` 0.3% under this cursor and puts its
+median at `8.01e+27`; the campaign resumes from here.
+
 ## The census
 
 Counts per run length from each checkpoint, as printed in every
@@ -446,8 +505,8 @@ Counts per run length from each checkpoint, as printed in every
               14: 298  15: 155  16: 73  17: 6  18: 1   near 40   survivors 39,888,590
     A173750   8: 19573  9: 7222  10: 2754  11: 1081  12: 353  13: 131
               14: 45  15: 18  16: 5  17: 1  19: 1     near 5    survivors 30,123,710
-    A164326   8: 5822  9: 2265  10: 825  11: 314  12: 98  13: 31
-              14: 20  15: 6  16: 1                    near 5    survivors 18,909,254
+    A164326   8: 25188  9: 8840  10: 3055  11: 1106  12: 361  13: 116
+              14: 50  15: 10  16: 5  17: 1  18: 1     near 7    survivors 171,594,458
     A164325   8: 3679  9: 1312  10: 465  11: 170  12: 61  13: 23
               14: 8  15: 4  16: 2  17: 1  18: 1       near 1    survivors 20,005,808
     A088651   8: 2714  9: 1002  10: 381  11: 134  12: 38  13: 17
@@ -523,7 +582,16 @@ A088651 (A088250's multipliers, unit 510510):
 | n = 16 | `4.42×10²²` | 320 s, pool sizing included | `1.38×10²⁰ k/s` | `1.44×10²⁰` (Measurement 7) |
 | n = 17 | `1.50×10²³` | 383 s | `3.9×10²⁰` | `3.75×10²⁰` (paired: 1.01× of A088250's n = 17) |
 
-Every phase of all seven campaigns ran at the engine's rate for its
+A164326 again, resumed under v3 (2026-09-04, 01:29–09:02, 7.54 h; the
+phases from the evidence timestamps and the checkpoint):
+
+| filter | line swept | wall clock | campaign rate | the engine at that filter |
+|---|---|---|---|---|
+| n = 17 (from the v2 cursor) | `1.97×10²⁴` | 2.73 h | `2.0×10²⁰ k/s` | `1.85×10²⁰` (v3 harness) / `1.95×10²⁰` (the v2 campaign) |
+| n = 18 | `7.54×10²⁴` | 3.88 h | `5.4×10²⁰` | `4.9–5.3×10²⁰` (A164325's n = 18, paired) |
+| n = 19 | `6.44×10²⁴` | 56 min | `1.9×10²¹` | `1.8×10²¹` (A164325's n = 19, paired) |
+
+Every phase of all eight campaigns ran at the engine's rate for its
 filter. The rates on the `2..n` and `3..n` families' later filters are **not** the
 A088250 rates at the same form count, and reading them as such first
 looked like a 0.5× slowdown; a paired engine check
@@ -560,7 +628,7 @@ from its v2 cursor at the filter after its frontier:
 | A125838 | **a(18) = 74,882,388,347,598,051,560,340 (this project, 2026-09-03)** | a(19) | > `1.7305×10²³` | n = 19 | `7.2×10²⁰` | `8.6×10²⁵` |
 | A125839 | **a(18) = 6,530,891,065,478,723,143,200 (this project, 2026-09-03)** | a(19) | > `1.7305×10²³` | n = 19 | `2.4×10²⁰` | `1.5×10²⁴` |
 | A173750 | **a(18) = a(19) = 147,316,106,448,079,863,444,150 (this project, 2026-09-03)** | a(20) | > `3.3168×10²⁴` | n = 20 | `3.0×10²¹` | `1.3×10²⁸` |
-| A164326 | **a(16) = 10,214,000,995,018,156,616,280 (this project, 2026-09-03)** | a(17) | > `9.998×10²²` | n = 17 | `1.8×10²⁰` | `1.05×10²⁴` |
+| A164326 | **a(18) = 9,606,289,803,039,023,735,440,800 (this project, 2026-09-04, v3)** | a(19) | > `1.6049×10²⁵` | n = 19 | `1.9×10²¹` | `8e+27` |
 | A164325 | **a(18) = 511,721,589,397,871,969,516,400 (this project, 2026-09-03)** | a(19) | > `3.3168×10²⁴` | n = 19 | `1.8×10²¹` | `7.9×10²⁷` |
 | A088651 | **a(16) = 43,263,866,546,732,976,414,270 (this project, 2026-09-04)** | a(17) | > `1.942×10²³` | n = 17 | `3.75×10²⁰` | `2.2×10²⁴` |
 
@@ -568,10 +636,14 @@ from its v2 cursor at the filter after its frontier:
 measured rate of its resumed filter and of the filters it promotes into
 (the rates above; [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v3 for the
 c = 20 ones), the model's expected number of terms in nine hours of
-sweep is **1.1 for each of A164326, A125839 and A088651** — `P(a(17))
+sweep was **1.1 for each of A164326, A125839 and A088651** — `P(a(17))
 = 94%`, `P(a(19)) = 93%`, `P(a(17)) = 93%` respectively, with about a
 one-in-five chance of the term after it landing in the same night — and
 0.24 for A125838, 0.20 for A088250, 0.02 each for A173750 and A164325.
+A164326 ran first (2026-09-04) and delivered both of its: `a(17)` at
+1.97× its median and `a(18)` at 0.14×. From its new bound its `a(19)`
+is worth 0.02 terms a night, so A125839 and A088651 are the next
+two.
 Read every figure as a floor: the twenty finds here landed anywhere from
 0.01× to 7.9× their medians, with the model's `E` averaging 1.2 over the
 eighteen searched terms. Where each campaign stands is read with

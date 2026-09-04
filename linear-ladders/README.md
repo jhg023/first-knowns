@@ -103,6 +103,19 @@ minutes to the crossing at `n = 17`, found
 which is also `A202779(16)`, every certificate the deterministic test,
 re-verified from disk; then **`a(17) > 1.942×10²³`**.
 
+**Two more terms of A164326, past the old ceiling, and a bound (v3).**
+The eighth campaign — the first under the 10⁴⁰ ceiling below — resumed
+that family from its v2 cursor and ran 7.5 hours overnight on
+2026-09-04, finding
+
+    a(17) = 2,071,342,181,735,785,633,264,590
+    a(18) = 9,606,289,803,039,023,735,440,800
+
+every one of whose 35 values lies past the deterministic bound: the
+first discoveries this repository has proved by the **N+1 route**, BLS75
+Theorem 15 on `N + 1 = (2r−1)·k`, all 35 certificates re-verified from
+disk; then **`a(19) > 1.6049×10²⁵`** by the sweep to where it was stopped.
+
 **v3 (2026-09-04): one ceiling of 10⁴⁰ for every family.** The v2
 campaigns stopped where their *proofs* stopped — the deterministic
 Miller–Rabin bound on `k` for the +1 families, the proof crossing for the
@@ -117,15 +130,15 @@ whole run proved in about a second. The wheel, the unit, the sieve and
 the segment are v2's, so every fingerprint reproduces and every v2
 cursor carries over whole: each campaign resumes at its v2 filter.
 
-**Status: ACTIVE.** Twenty new terms across all seven families, found
-and verified 2026-09-03/04 by seven campaigns totalling under four hours
-of device, and a searched-empty bound on the next term of each. All
-seven campaigns resume from their v2 cursors under the 10⁴⁰ ceiling; the
-model puts the −1 families' next terms — A164326's `a(17)`, A125839's
-`a(19)`, A088651's `a(17)` — at 93–94% within a night's sweep each, and
-the +1 families' at medians of `10²⁶` and above ([RESULTS.md](RESULTS.md),
-"What is open now"). 44 gates and drills green, six benchmark shapes
-reproduced, every resumed filter priced.
+**Status: ACTIVE.** Twenty-two new terms across all seven families,
+found and verified 2026-09-03/04 by eight campaigns totalling under
+twelve hours of device, and a searched-empty bound on the next term of
+each. Every campaign resumes from its cursor under the 10⁴⁰ ceiling; the
+model puts A125839's `a(19)` and A088651's `a(17)` at 93% within a
+night's sweep each, A164326's `a(19)` and the +1 families' next terms at
+medians of `10²⁶` and above ([RESULTS.md](RESULTS.md), "What is open
+now"). 44 gates and drills green, six benchmark shapes reproduced, every
+resumed filter priced.
 
 ## The problem
 

@@ -828,3 +828,25 @@ durability drill and the interrupt snapshot are unchanged and green.
   one time in 94); it now searches for the first two prime values per
   sign, so it drills both routes every run.
 - **CLAUDE.md rule 8, again**: one heredoc with quotes, one dead shell.
+
+### What the A164326 v3 campaign measured (2026-09-04: the resumed acceptance test, run for real)
+
+`--family A164326`, no flags, from the v2 cursor at period 52 (its old
+ceiling, `9.998e22`) at 01:29; stopped by hand at 09:02 at period 8,346,
+`n = 19`. Two finds, both past the bound and both certified by the N+1
+route, and a(19) > 1.6049e25 (RESULTS.md). Per filter, from the evidence
+timestamps and the checkpoint:
+
+| filter | line swept | wall clock | campaign rate | the harness / paired figure |
+|---|---|---|---|---|
+| n = 17 | `1.97e24` | 2.73 h | `2.0e20 k/s` | `1.85e20` (Measurement 1 above), `1.95e20` (v2 campaign) |
+| n = 18 | `7.54e24` | 3.88 h | `5.4e20` | `4.9-5.3e20` (A164325 n = 18, paired) |
+| n = 19 | `6.44e24` | 56 min | `1.9e21` | `1.8e21` (A164325 n = 19, paired) |
+
+The pool was 1 throughout, no `HOST-BOUND` fragment, and the wall clock
+per unit of line matched the device's at every filter, which is the
+measurement OPTIMIZATION.md 2.14 says only a campaign can take. The two
+certificates cost nothing visible: `k` of a(17) is `30030 * 113 * 3.59e16`
+and a(18)'s `unit * 3.3e4 * 4.9e10`, seconds of factoring at most, and
+the 34 Theorem 15 proofs re-verified from disk in under a second. Eight
+campaigns, twenty-five phases, all at the engine's rate.

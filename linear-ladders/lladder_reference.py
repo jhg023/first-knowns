@@ -229,10 +229,16 @@ FOUND["A173750"] = {16: 828196248070762801230,
                     17: 67335095107785754679430,
                     18: 147316106448079863444150,
                     19: 147316106448079863444150}
-# A164326's two in 14 minutes to its ceiling -- the lowest of the seven,
-# 3.317e24 / 33 at n = 17.
+# A164326's two in 14 minutes to its v2 ceiling -- the lowest of the
+# seven, 3.317e24 / 33 at n = 17 -- and then, under v3's 1e40 ceiling, two
+# more in a 7.5-hour overnight resume (2026-09-04): a(17) at 2.07e24 and
+# a(18) at 9.61e24, every value past the deterministic bound and proved by
+# BLS75 Theorem 15 on N + 1 = m*k, the first discoveries the N+1 route
+# certified; a(19) > 1.6049e25 by the sweep that followed.
 FOUND["A164326"] = {15: 392547927582515694990,
-                    16: 10214000995018156616280}
+                    16: 10214000995018156616280,
+                    17: 2071342181735785633264590,
+                    18: 9606289803039023735440800}
 # A164325's three in one hour to the +1 ceiling, a(17) and a(18) past the
 # proof crossing and proved by BLS75 certificates.
 FOUND["A164325"] = {16: 1284243585711408422100,

@@ -17,10 +17,12 @@ that settles `a(18)` and `a(19)` together (a run of 19 found while
 `a(18)` was open, `settles = [18, 19]`), from its 37-minute one,
 A164326's `a(15)` and `a(16)` from its 14-minute one, A164325's `a(16)`
 to `a(18)` from its one-hour one, and A088651's `a(16)` (also
-`A202779(16)`) from its 12-minute one — twenty terms on eighteen files,
-with a ledger per family. Every one of the seven families ran to its v2
-ceiling; v3 (2026-09-04) resumes each from that cursor under one ceiling
-of `10⁴⁰`, so the next files here will be the first past the old ones.
+`A202779(16)`) from its 12-minute one, and — under v3's `10⁴⁰` ceiling,
+from a 7.5-hour overnight resume on 2026-09-04 — A164326's `a(17)` and
+`a(18)`, the first two files whose certificates are all `bls75-thm15`
+(every one of their 35 values is past the deterministic bound) — twenty-two
+terms on twenty files, with a ledger per family. Every other family still
+sits at its v2 cursor and resumes from there.
 Each A088250 run is exact (the stopper at the next multiplier is
 composite), so each of those files also settles A202778 at its own index
 and A071576 at half its value; A088250's `a(17)` and A164325's `a(17)`
