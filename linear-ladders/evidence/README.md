@@ -11,16 +11,21 @@ shown in each 30-second `[STATUS]` line, never written here
 **Present:** A088250's `a(15)`, `a(16)` and `a(17)` — one file each, all
 three found by the single A088250 campaign of 2026-09-03 (from `k = 10⁶`
 to the family's ceiling in 1.26 h) — A125838's `a(15)` to `a(18)`, from
-its 17-minute campaign the same evening, and A125839's `a(16)` to
-`a(18)`, from its 15-minute one, with a ledger per family.
+its 17-minute campaign the same evening, A125839's `a(16)` to `a(18)`,
+from its 15-minute one, and A173750's `a(16)`, `a(17)` and the one file
+that settles `a(18)` and `a(19)` together (a run of 19 found while
+`a(18)` was open, `settles = [18, 19]`), from its 37-minute one, with a
+ledger per family.
 Each A088250 run is exact (the stopper at the next multiplier is
 composite), so each of those files also settles A202778 at its own index
 and A071576 at half its value; A088250's `a(17)` is the one past the proof
 crossing, with 14 of its 17 values carrying BLS75 Theorem 1 certificates
 and the other three the deterministic test. A125838 and A125839 are −1
 families whose values never leave the deterministic zone, so all 107 of
-their certificates are the seven-base test. Every file was re-verified
-from disk before [RESULTS.md](../RESULTS.md) was written.
+their certificates are the seven-base test, and A173750's 49 values all
+stayed under the bound too (its largest, `2.8×10²⁴`, just under). Every
+file was re-verified from disk before [RESULTS.md](../RESULTS.md) was
+written.
 
 Because the conditions of every family nest, one `k` can settle several
 terms at once. A find is evidenced **once**, under the first term it

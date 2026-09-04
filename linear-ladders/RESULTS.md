@@ -238,6 +238,66 @@ that filter's ceiling, and found no run of 19: no `k < 1.7305×10²³` has
 proof. The model had given `a(19)` 16% under the ceiling from `a(18)`
 and puts its median at `1.1×10²⁴`, six times the ceiling.
 
+## A173750: four terms on three integers, and a bound — 2026-09-03, 20:23–21:00
+
+The fourth campaign, `--family A173750` (`r·k + 1` for `r = 2..n`, a +1
+family), 37 minutes from `k = 10⁶` to the +1 ceiling `3.317×10²⁴`. Every
+value stayed under the deterministic bound (the largest, `19·k + 1 =
+2.8×10²⁴`, just under it), so every certificate is the seven-base test;
+each file was re-verified from disk.
+
+### A173750 a(16) = 828,196,248,070,762,801,230 — 20:24
+
+- **run 16**: `r·k + 1` prime for `r = 2..16`; `16·k + 1 =
+  13,251,139,969,132,204,819,681`. **stopper** `17·k + 1 =
+  14,079,336,217,202,967,620,911 = 419 × 33,602,234,408,598,968,069`.
+- 15 `deterministic-mr` certificates, re-verified.
+- **model**: from the published `a(15)`, median `1.94×10²⁰`;
+  `k / median = 4.3`, `E = 1.99`. Found 65 s in, at the close of period 0.
+- `k = 2 · 3 · 5 · 7 · 11 · 13 · 17 · 41 · 173 · 228717315661`.
+- evidence: `evidence/A173750_a16_828196248070762801230.json`
+
+### A173750 a(17) = 67,335,095,107,785,754,679,430 — 20:39
+
+- **run 17**: `17·k + 1 = 1,144,696,616,832,357,829,550,311`. **stopper**
+  `18·k + 1 = 1,212,031,711,940,143,584,229,741 = 19 ×
+  63,791,142,733,691,767,591,039`.
+- 16 `deterministic-mr` certificates, re-verified.
+- **model**: from `a(16)`, median `1.18×10²²`; `k / median = 5.7`,
+  `E = 2.65`. 15.4 min in.
+- `k = 2 · 3 · 5 · 7 · 11 · 13 · 17 · 32029 · 41729 · 98686073`.
+- evidence: `evidence/A173750_a17_67335095107785754679430.json`
+
+### A173750 a(18) = a(19) = 147,316,106,448,079,863,444,150 — 20:42
+
+- **run 19, found while `a(18)` was open**: `r·k + 1` is prime for every
+  `r = 2..19`, so this one `k` settles two terms at once — a **rider**,
+  as this family's published `a(12) = a(13) = a(14)` are. `19·k + 1 =
+  2,799,006,022,513,517,405,438,851`, the largest value any campaign here
+  has certified by the deterministic test (the bound is `3.317×10²⁴`).
+  **stopper** `20·k + 1 = 2,946,322,128,961,597,268,883,001 = 19 ×
+  155,069,585,734,820,908,888,579`.
+- 18 `deterministic-mr` certificates, re-verified. Evidenced once, under
+  `a(18)`, with `settles = [18, 19]`.
+- **model**: from `a(17)`, `a(18)`'s median `2.06×10²⁴`; `k / median =
+  0.07`, `E = 0.05` — very early, and it carried `a(19)` with it. 19.7 min
+  in.
+- `k = 2 · 3 · 5² · 7 · 11 · 13 · 17 · 37 · 1559819157504709`.
+- evidence: `evidence/A173750_a18_147316106448079863444150.json`
+
+`E` averages 1.56 over the three searched terms (the rider is not
+scored: it was never searched for); `k / median` 4.3, 5.7, 0.07.
+
+### A bound: A173750 a(20) > 3,316,761,604,016,016,802,395,750
+
+The filter moved to `n = 20` and the sweep ran on to the last whole
+period under the +1 ceiling, finding no run of 20: no `k < 3.3168×10²⁴`
+has `r·k + 1` prime for all `r = 2..20`. Above the proof crossing
+`k_proof(20) = 1.66×10²³` the classification is a probable-prime chain,
+which can only lengthen a run, never hide one, so the bound stands. The
+model had given `a(20)` 0.2% under the ceiling from `a(19)` and puts its
+median at `1.3×10²⁸`.
+
 ## The census
 
 Counts per run length from each checkpoint, as printed in every
@@ -249,6 +309,8 @@ Counts per run length from each checkpoint, as printed in every
               14: 137  15: 75  16: 7  17: 1  18: 1   near 40   survivors 48,139,929
     A125839   8: 90682  9: 35465  10: 13724  11: 5392  12: 2182  13: 822
               14: 298  15: 155  16: 73  17: 6  18: 1   near 40   survivors 39,888,590
+    A173750   8: 19573  9: 7222  10: 2754  11: 1081  12: 353  13: 131
+              14: 45  15: 18  16: 5  17: 1  19: 1     near 5    survivors 30,123,710
 
 A value that reached the settled frontier and no further while a term was
 open is a `[NEAR]` line; everything shorter is a count and nothing else.
@@ -286,8 +348,18 @@ A125839 (`a(16)` and `a(17)` both in period 0, so the filter went from
 | n = 18 | `5.77×10²¹` | 82 s | `7.0×10¹⁹` | `6.5×10¹⁹` (paired) |
 | n = 19 | `1.65×10²³` | 10.3 min | `2.7×10²⁰` | `2.4×10²⁰` (paired) |
 
-Every phase of all three campaigns ran at the engine's rate for its
-filter. The rates on the −1 families' later filters are **not** the
+A173750 (a +1 family whose rungs start at 2, so its wheel lags A088250's
+by one filter the same way):
+
+| filter | line swept | wall clock | campaign rate | the engine at that filter |
+|---|---|---|---|---|
+| n = 16 (period 0) | `1.92×10²¹` | 65 s, pool sizing included | `3.0×10¹⁹ k/s` | `3.07×10¹⁹` (`SCORE`) |
+| n = 17 | `6.73×10²²` | 15.4 min | `7.3×10¹⁹` | `6.5×10¹⁹` (paired, as A125839's n = 18) |
+| n = 18 | `7.88×10²²` | 194 s | `4.1×10²⁰` | `3.99×10²⁰` (`SCORE17`) |
+| n = 20 | `3.17×10²⁴` | 17.4 min | `3.0×10²¹` | `2.8×10²¹` (A088250 n = 19, Measurement 7) |
+
+Every phase of all four campaigns ran at the engine's rate for its
+filter. The rates on the `2..n` and `3..n` families' later filters are **not** the
 A088250 rates at the same form count, and reading them as such first
 looked like a 0.5× slowdown; a paired engine check
 ([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md), "What the campaigns
@@ -310,12 +382,12 @@ state, and BENCHMARKS.md's sibling table now says so.
 | A088250 | **a(17) = 1,048,124,771,278,912,649,231,910 (this project, 2026-09-03)** | a(18) > `3.3168×10²⁴` (swept empty to the ceiling) | `2.2×10²⁶` | 0% — the campaign is at its ceiling |
 | A125838 | **a(18) = 74,882,388,347,598,051,560,340 (this project, 2026-09-03)** | a(19) > `1.7305×10²³` (swept empty to the ceiling) | `8.5×10²⁵` | 0% — the campaign is at its ceiling |
 | A125839 | **a(18) = 6,530,891,065,478,723,143,200 (this project, 2026-09-03)** | a(19) > `1.7305×10²³` (swept empty to the ceiling) | `1.1×10²⁴` | 0% — the campaign is at its ceiling |
-| A173750 | a(15) = 4,646,092,391,146,085,880 (Resta, 2017) | a(16) | `1.9×10²⁰` | a(16), a(17): ~100%; a(18) 66% |
+| A173750 | **a(18) = a(19) = 147,316,106,448,079,863,444,150 (this project, 2026-09-03)** | a(20) > `3.3168×10²⁴` (swept empty to the ceiling) | `1.3×10²⁸` | 0% — the campaign is at its ceiling |
 | A164325 | a(15) = 10,718,654,377,787,155,800 (Resta, 2017) | a(16) | `4.9×10²¹` | a(16): ~100%; a(17) 85%; a(18) 9% |
 | A164326 | a(14) = 68,086,992,545,221,650 (Resta, 2017) | a(15) | `6.2×10¹⁹` | a(15), a(16): ~100%; a(17) 16% |
 | A088651 | a(15) = 53,792,264,108,455,702,830 (J. K. Andersen, 2008) | a(16) | `2.3×10²²` | a(16) 96%; a(17) 15% |
 
-The four remaining siblings open at the index after their published
+The three remaining siblings open at the index after their published
 frontier, inside period 0 of the wheel, clipped at `k = 10⁶`; their
 medians are the odds model's pre-run predictions (`model_results.json`).
 Read every median as a floor: this repository's finds have landed at

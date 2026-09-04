@@ -578,3 +578,12 @@ line at the same candidate rate — exactly the campaign ratios. v1's
 state, and the sibling table in BENCHMARKS.md now carries the −1
 families' own rates at their later filters. The campaigns ran at the
 engine's rate at every filter, and there is nothing to fix.
+
+**The A173750 campaign** (20:23–21:00, 37 min, `a(16)`, `a(17)` and
+`a(18) = a(19)` found, then swept to the +1 ceiling) confirmed the
+reading on a +1 family with the same rung start: n = 16 (period 0)
+`3.0×10¹⁹` (`SCORE` `3.07×10¹⁹`); n = 17 `7.3×10¹⁹` (the lagged wheel,
+`6.5×10¹⁹` paired); n = 18 `4.1×10²⁰` (`SCORE17` `3.99×10²⁰`, every
+prime forced there); n = 20 `3.0×10²¹` (A088250's n = 19 wheel,
+`2.8×10²¹`, Measurement 7). Four campaigns, fourteen phases, every one at
+the engine's rate for its wheel.

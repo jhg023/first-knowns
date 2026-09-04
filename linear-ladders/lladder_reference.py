@@ -222,6 +222,13 @@ FOUND["A125838"] = {15: 45187548280664790,
 FOUND["A125839"] = {16: 14423013361403116470,
                     17: 771355748787892768500,
                     18: 6530891065478723143200}
+# A173750's four in 37 minutes to the +1 ceiling: a(18) = a(19) is a RIDER
+# -- one k with a run of 19 found while a(18) was open, like the family's
+# published a(12) = a(13) = a(14) -- evidenced once under a(18).
+FOUND["A173750"] = {16: 828196248070762801230,
+                    17: 67335095107785754679430,
+                    18: 147316106448079863444150,
+                    19: 147316106448079863444150}
 
 # No family carries a published bound of any kind -- no upper bound at any
 # open n, and no searched-empty lower bound beyond the last term.  The floor

@@ -63,13 +63,24 @@ each under A125838's term at its index as the subset of conditions
 requires, every certificate the deterministic test, each re-verified
 from disk; then **`a(19) > 1.7305×10²³`**.
 
-**Status: ACTIVE.** A088250, A125838 and A125839 are at their ceilings
-with `a(18)`, `a(19)` and `a(19)` open above them. The four remaining
+**Four new terms of A173750 on three integers, and a bound.** The fourth
+campaign, 37 minutes to the +1 ceiling, found
+
+    a(16) = 828,196,248,070,762,801,230
+    a(17) = 67,335,095,107,785,754,679,430
+    a(18) = a(19) = 147,316,106,448,079,863,444,150
+
+the last a run of 19 found while `a(18)` was open, settling both at once
+as this family's published `a(12) = a(13) = a(14)` did; every value under
+the deterministic bound, each re-verified from disk; then **`a(20) >
+3.3168×10²⁴`**.
+
+**Status: ACTIVE.** A088250, A125838, A125839 and A173750 are at their
+ceilings with the next term of each open above it. The three remaining
 siblings are next, one campaign each, in the order of their expected
-terms per hour: A173750, A164326, A164325, A088651. The v2 engine
-(2026-09-03) is 1.2–1.5× v1 at every filter, 42 gates and drills green,
-six benchmark shapes frozen, every opening priced. The hunt is the
-owner's command.
+terms per hour: A164326, A164325, A088651. The v2 engine (2026-09-03) is
+1.2–1.5× v1 at every filter, 42 gates and drills green, six benchmark
+shapes frozen, every opening priced. The hunt is the owner's command.
 
 ## The problem
 
