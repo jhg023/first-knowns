@@ -18,8 +18,9 @@ that settles `a(18)` and `a(19)` together (a run of 19 found while
 A164326's `a(15)` and `a(16)` from its 14-minute one, A164325's `a(16)`
 to `a(18)` from its one-hour one, and A088651's `a(16)` (also
 `A202779(16)`) from its 12-minute one — twenty terms on eighteen files,
-with a ledger per family. Every one of the seven families has run to its
-ceiling.
+with a ledger per family. Every one of the seven families ran to its v2
+ceiling; v3 (2026-09-04) resumes each from that cursor under one ceiling
+of `10⁴⁰`, so the next files here will be the first past the old ones.
 Each A088250 run is exact (the stopper at the next multiplier is
 composite), so each of those files also settles A202778 at its own index
 and A071576 at half its value; A088250's `a(17)` and A164325's `a(17)`
@@ -54,17 +55,26 @@ trust in this repository. It carries:
   (`3.317×10²⁴`) a certificate is that seven-base test itself
   (`deterministic-mr`). Past the bound a `+1` value carries a BLS75
   Theorem 1 certificate (`bls75-thm1`): the complete factorization of
-  `N − 1 = m·k` into primes each under the bound (the multiplier's own
-  small factors folded in), and a witness per prime factor satisfying
-  the two Pocklington conditions (huntlib.certificate). The `−1`
-  families' ceilings keep every value under the bound, so every one of
-  their certificates is the deterministic test. `certificates_verified`,
-  `unproved` and `proof_routes` say whether every value was proved and by
-  which route;
+  `N − 1 = m·k` (the multiplier's own small factors folded in) and a
+  witness per prime factor satisfying the two Pocklington conditions. A
+  `−1` value past the bound (v3, 2026-09-04) carries a BLS75 Theorem 15
+  certificate (`bls75-thm15`): the complete factorization of
+  `N + 1 = m·k`, one discriminant `D` with Jacobi `(D/N) = −1`, and per
+  prime `q` of it a Lucas sequence `(P, Q)` with `P² − 4Q = D`,
+  `N | U_{N+1}` and `gcd(U_{(N+1)/q}, N) = 1`. On either route a prime
+  factor above the bound is admitted only with a `subproofs` entry of
+  its own — the same kinds of certificate one level down, so the tree's
+  leaves are all deterministic tests (huntlib.certificate).
+  `certificates_verified`, `unproved` and `proof_routes` say whether
+  every value was proved and by which route;
 - `stopper` — the value at the next multiplier, which must be
   **composite**, with the multiplier and a factor exhibited. This is what
   bounds the claim to exactly `run` rather than more, and it is the one
-  number a reader can check on a calculator;
+  number a reader can check on a calculator. The factor comes from a
+  bounded effort (trial division, rho, 200 ECM curves; the full search
+  only under `10³⁰`); a stopper that keeps its factors from that would
+  be recorded with `factor: null`, composite by the strong test alone —
+  a failed Miller-Rabin is a proof of compositeness;
 - `verification` — the four legs the discovery protocol ran, each named;
 - `also_settles` — what the find settles in the derived entries: for
   A088250, `A202778(run) = k` (the exact-run version, at the last index

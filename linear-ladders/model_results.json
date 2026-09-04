@@ -58,19 +58,19 @@
    },
    "under_the_ceiling": {
     "15": {
-     "ceiling": 3.3170440646798873e+24,
+     "ceiling": 1e+40,
      "proof_crossing": 2.2113627097865916e+23,
      "P_under_ceiling": 1.0
     },
     "16": {
-     "ceiling": 3.3170440646798873e+24,
+     "ceiling": 1e+40,
      "proof_crossing": 2.0731525404249296e+23,
-     "P_under_ceiling": 0.9999999999195025
+     "P_under_ceiling": 1.0
     },
     "17": {
-     "ceiling": 3.3170440646798873e+24,
+     "ceiling": 1e+40,
      "proof_crossing": 1.951202390988169e+23,
-     "P_under_ceiling": 0.6754827513328696
+     "P_under_ceiling": 1.0
     }
    },
    "also_settles": [
@@ -139,19 +139,19 @@
    },
    "under_the_ceiling": {
     "16": {
-     "ceiling": 3.3170440646798873e+24,
+     "ceiling": 1e+40,
      "proof_crossing": 2.0731525404249296e+23,
      "P_under_ceiling": 1.0
     },
     "17": {
-     "ceiling": 3.3170440646798873e+24,
+     "ceiling": 1e+40,
      "proof_crossing": 1.951202390988169e+23,
      "P_under_ceiling": 1.0
     },
     "18": {
-     "ceiling": 3.3170440646798873e+24,
+     "ceiling": 1e+40,
      "proof_crossing": 1.842802258155493e+23,
-     "P_under_ceiling": 0.6567577014212875
+     "P_under_ceiling": 1.0
     }
    },
    "also_settles": []
@@ -212,19 +212,19 @@
    },
    "under_the_ceiling": {
     "15": {
-     "ceiling": 2.2113627097865916e+23,
+     "ceiling": 1e+40,
      "proof_crossing": 2.2113627097865916e+23,
      "P_under_ceiling": 1.0
     },
     "16": {
-     "ceiling": 2.0731525404249296e+23,
+     "ceiling": 1e+40,
      "proof_crossing": 2.0731525404249296e+23,
      "P_under_ceiling": 1.0
     },
     "17": {
-     "ceiling": 1.951202390988169e+23,
+     "ceiling": 1e+40,
      "proof_crossing": 1.951202390988169e+23,
-     "P_under_ceiling": 0.9971846775189451
+     "P_under_ceiling": 1.0
     }
    },
    "also_settles": []
@@ -285,19 +285,19 @@
    },
    "under_the_ceiling": {
     "16": {
-     "ceiling": 2.0731525404249296e+23,
+     "ceiling": 1e+40,
      "proof_crossing": 2.0731525404249296e+23,
      "P_under_ceiling": 1.0
     },
     "17": {
-     "ceiling": 1.951202390988169e+23,
+     "ceiling": 1e+40,
      "proof_crossing": 1.951202390988169e+23,
      "P_under_ceiling": 1.0
     },
     "18": {
-     "ceiling": 1.842802258155493e+23,
+     "ceiling": 1e+40,
      "proof_crossing": 1.842802258155493e+23,
-     "P_under_ceiling": 0.995551563334108
+     "P_under_ceiling": 1.0
     }
    },
    "also_settles": []
@@ -357,19 +357,19 @@
    },
    "under_the_ceiling": {
     "16": {
-     "ceiling": 3.3170440646798873e+24,
+     "ceiling": 1e+40,
      "proof_crossing": 1.0700142144128669e+23,
      "P_under_ceiling": 1.0
     },
     "17": {
-     "ceiling": 3.3170440646798873e+24,
+     "ceiling": 1e+40,
      "proof_crossing": 1.0051648680848144e+23,
-     "P_under_ceiling": 0.8545500343776664
+     "P_under_ceiling": 1.0
     },
     "18": {
-     "ceiling": 3.3170440646798873e+24,
+     "ceiling": 1e+40,
      "proof_crossing": 9.477268756228249e+22,
-     "P_under_ceiling": 0.08704810657076734
+     "P_under_ceiling": 1.0
     }
    },
    "also_settles": []
@@ -430,19 +430,19 @@
    },
    "under_the_ceiling": {
     "15": {
-     "ceiling": 1.1438082981654783e+23,
+     "ceiling": 1e+40,
      "proof_crossing": 1.1438082981654783e+23,
      "P_under_ceiling": 1.0
     },
     "16": {
-     "ceiling": 1.0700142144128669e+23,
+     "ceiling": 1e+40,
      "proof_crossing": 1.0700142144128669e+23,
-     "P_under_ceiling": 0.9975242106874685
+     "P_under_ceiling": 1.0
     },
     "17": {
-     "ceiling": 1.0051648680848144e+23,
+     "ceiling": 1e+40,
      "proof_crossing": 1.0051648680848144e+23,
-     "P_under_ceiling": 0.1561408705072732
+     "P_under_ceiling": 1.0
     }
    },
    "also_settles": []
@@ -503,19 +503,19 @@
    },
    "under_the_ceiling": {
     "16": {
-     "ceiling": 2.0731525404249296e+23,
+     "ceiling": 1e+40,
      "proof_crossing": 2.0731525404249296e+23,
-     "P_under_ceiling": 0.960006808102096
+     "P_under_ceiling": 1.0
     },
     "17": {
-     "ceiling": 1.951202390988169e+23,
+     "ceiling": 1e+40,
      "proof_crossing": 1.951202390988169e+23,
-     "P_under_ceiling": 0.1453148945974837
+     "P_under_ceiling": 1.0
     },
     "18": {
-     "ceiling": 1.842802258155493e+23,
+     "ceiling": 1e+40,
      "proof_crossing": 1.842802258155493e+23,
-     "P_under_ceiling": 0.005455286998084841
+     "P_under_ceiling": 1.0
     }
    },
    "also_settles": [

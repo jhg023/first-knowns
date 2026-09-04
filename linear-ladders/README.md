@@ -338,8 +338,13 @@ prime than the first `n` primes do; fewer `k` qualify per unit of line and
 the terms are larger for their `n`, but the wheel thins the candidates by
 exactly the same factors, so a unit of device time covers far more line.
 
-Stated **before** any sweep (`model_results.json`, written 2026-09-03),
-measured from each family's published frontier:
+Stated **before** any sweep (`model_results.json`, written 2026-09-03
+and regenerated 2026-09-04 with the v3 ceiling in its `under_the_ceiling`
+field; the predictions themselves are unchanged), measured from each
+family's published frontier. The "under the ceiling" column is against
+the **v2 ceilings** the campaigns actually ran to — the deterministic
+bound on `k` for the +1 families, the proof crossing for the −1 ones —
+which is what the finds below were scored against:
 
 | term | Q1 | median | Q3 | P90 | under the ceiling |
 |------|----|--------|----|-----|-------------------|
