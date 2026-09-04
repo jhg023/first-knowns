@@ -41,15 +41,18 @@ WHAT IS OPEN, AND WHY IT IS WORTH A SWEEP.  None of the seven published
 frontiers had moved since Giovanni Resta's 2017 extensions (A088651's
 a(15) is Jens Kruse Andersen's, 2008), and none carries a bound of any
 kind at any open n.  Every published frontier sits inside the FIRST
-PERIOD of this engine's wheel.  Six campaigns have run (2026-09-03,
+PERIOD of this engine's wheel.  ALL SEVEN CAMPAIGNS HAVE RUN (2026-09-03/04,
 RESULTS.md): A088250's found a(15)..a(17) and swept empty to the ceiling
 at n = 18; A125838's found a(15)..a(18) and A125839's a(16)..a(18), each
 swept empty to the ceiling at n = 19; A173750's found a(16), a(17) and
 a(18) = a(19) on one k and swept empty to the ceiling at n = 20;
 A164326's found a(15), a(16) and swept empty to the ceiling at n = 17;
-A164325's found a(16)..a(18) and swept empty to the ceiling at n = 19.
-Those checkpoints sit at their ceilings, so a resume of any of them stops
-at once; `--fresh` would re-sweep the whole line.
+A164325's found a(16)..a(18) and swept empty to the ceiling at n = 19;
+A088651's found a(16) and swept empty to the ceiling at n = 17.  Every
+checkpoint sits at its ceiling, so a resume of any family stops at once
+and `--fresh` would only re-sweep a settled line; the next term of every
+family needs a higher ceiling, which is a new engine version (RESULTS.md,
+"What is open now").
 
 THE CLAIM'S FLOOR IS FREE.  a() is non-decreasing (the conditions nest), so
 the next term is at least the last one and nothing below it has to be swept

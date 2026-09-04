@@ -621,3 +621,11 @@ opening) changes nothing at the filters it will run. Six campaigns,
 twenty phases, every one at the engine's rate for its wheel; the
 `[STATUS]` line's rate is the benchmark's for every family at every
 filter, which is what rule 5g's acceptance test asks.
+
+**The A088651 campaign** (00:06–00:18 the next morning, 12 min, `a(16)`
+found, then swept to the crossing at n = 17) ran `1.38×10²⁰` at n = 16
+(Measurement 7: `1.44×10²⁰`) and `3.9×10²⁰` at n = 17 (paired above:
+`3.75×10²⁰`). Seven campaigns, twenty-two phases, all at the engine's
+rate. With that the v2 engine has done everything its ceilings allow:
+every family's next term is above its ceiling, and the next engine
+version is the one that raises them (RESULTS.md, "What is open now").

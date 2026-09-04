@@ -15,16 +15,19 @@ its 17-minute campaign the same evening, A125839's `a(16)` to `a(18)`,
 from its 15-minute one, and A173750's `a(16)`, `a(17)` and the one file
 that settles `a(18)` and `a(19)` together (a run of 19 found while
 `a(18)` was open, `settles = [18, 19]`), from its 37-minute one,
-A164326's `a(15)` and `a(16)` from its 14-minute one, and A164325's
-`a(16)` to `a(18)` from its one-hour one, with a ledger per family.
+A164326's `a(15)` and `a(16)` from its 14-minute one, A164325's `a(16)`
+to `a(18)` from its one-hour one, and A088651's `a(16)` (also
+`A202779(16)`) from its 12-minute one — twenty terms on eighteen files,
+with a ledger per family. Every one of the seven families has run to its
+ceiling.
 Each A088250 run is exact (the stopper at the next multiplier is
 composite), so each of those files also settles A202778 at its own index
 and A071576 at half its value; A088250's `a(17)` and A164325's `a(17)`
 and `a(18)` are the ones past the proof crossing, with 14, 12 and 15 of
 their values carrying BLS75 Theorem 1 certificates and the rest the
-deterministic test. A125838, A125839 and A164326
+deterministic test. A125838, A125839, A164326 and A088651
 are −1 families whose values never leave the deterministic zone, so all
-138 of their certificates are the seven-base test, and A173750's 49
+154 of their certificates are the seven-base test, and A173750's 49
 values all stayed under the bound too (its largest, `2.8×10²⁴`, just
 under). Every
 file was re-verified from disk before [RESULTS.md](../RESULTS.md) was

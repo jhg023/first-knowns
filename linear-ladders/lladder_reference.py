@@ -238,6 +238,9 @@ FOUND["A164326"] = {15: 392547927582515694990,
 FOUND["A164325"] = {16: 1284243585711408422100,
                     17: 317674273854740299136640,
                     18: 511721589397871969516400}
+# A088651's one, 12 minutes to its ceiling (the crossing at n = 17); the
+# run is exact, so A202779(16) is the same integer.
+FOUND["A088651"] = {16: 43263866546732976414270}
 
 # No family carries a published bound of any kind -- no upper bound at any
 # open n, and no searched-empty lower bound beyond the last term.  The floor

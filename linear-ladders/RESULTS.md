@@ -400,6 +400,39 @@ probable-prime chain can only lengthen a run, never hide one, so the
 bound stands. The model, from `a(18)`, had `a(19)` 0.2% under the ceiling
 and puts its median at `7.9×10²⁷`.
 
+## A088651: one term and a bound — 2026-09-04, 00:06–00:18
+
+The seventh and last campaign, `--family A088651` (`r·k − 1` for
+`r = 1..n`, A088250's multipliers with the other sign; A202779 is its
+exact-run version), 12 minutes from `k = 10⁶` to the crossing at
+`n = 17`, `3.317×10²⁴ / 17 = 1.951×10²³`, at unit 510510 (17 is forced
+from its opening). Every certificate is the deterministic test; the file
+was re-verified from disk.
+
+### A088651 a(16) = 43,263,866,546,732,976,414,270 — 00:12
+
+- **run 16**: `r·k − 1` prime for `r = 1..16`; the 16th value is
+  `16·k − 1 = 692,221,864,747,727,622,628,319`. **stopper** `17·k − 1 =
+  735,485,731,294,460,599,042,589 = 31 × 23,725,346,170,789,051,582,019`.
+- 16 `deterministic-mr` certificates, re-verified.
+- **also settles**: `A202779(16) = 43,263,866,546,732,976,414,270` (the
+  run is exact).
+- **model**: from Jens Kruse Andersen's `a(15)`, median `2.34×10²²`;
+  `k / median = 1.85`, `E = 1.07`. Found 5.3 min in, at the close of
+  period 22.
+- `k = 2 · 3 · 5 · 7 · 11 · 13 · 17 · 19 · 29 · 5869 · 26206279483`.
+- evidence: `evidence/A088651_a16_43263866546732976414270.json`
+
+### A bound: A088651 a(17) > 194,198,795,365,575,476,546,070
+
+The filter moved to `n = 17` and the sweep ran to period 101, the last
+whole period under `1.951×10²³`, with no run of 17: no `k < 1.942×10²³`
+has `r·k − 1` prime for all `r = 1..17`. Every decision on this family
+is a proof. The model had given `a(17)` 9.6% under this ceiling from
+`a(16)` and puts its median at `1.9×10²⁴` — under the deterministic
+bound `3.317×10²⁴`, which is where an N+1 certificate route would let
+the sweep go (below).
+
 ## The census
 
 Counts per run length from each checkpoint, as printed in every
@@ -417,6 +450,8 @@ Counts per run length from each checkpoint, as printed in every
               14: 20  15: 6  16: 1                    near 5    survivors 18,909,254
     A164325   8: 3679  9: 1312  10: 465  11: 170  12: 61  13: 23
               14: 8  15: 4  16: 2  17: 1  18: 1       near 1    survivors 20,005,808
+    A088651   8: 2714  9: 1002  10: 381  11: 134  12: 38  13: 17
+              14: 6  15: 3  16: 1                     near 2    survivors 11,126,630
 
 A value that reached the settled frontier and no further while a term was
 open is a `[NEAR]` line; everything shorter is a count and nothing else.
@@ -481,7 +516,14 @@ A164325 (the odd multipliers, a +1 family):
 | n = 18 | `1.94×10²³` | 368 s | `5.3×10²⁰` | `4.9×10²⁰` (paired) |
 | n = 19 | `2.80×10²⁴` | 25.7 min | `1.82×10²¹` | `1.8×10²¹` (paired, OPTIMIZATION_LOG.md) |
 
-Every phase of all six campaigns ran at the engine's rate for its
+A088651 (A088250's multipliers, unit 510510):
+
+| filter | line swept | wall clock | campaign rate | the engine at that filter |
+|---|---|---|---|---|
+| n = 16 | `4.42×10²²` | 320 s, pool sizing included | `1.38×10²⁰ k/s` | `1.44×10²⁰` (Measurement 7) |
+| n = 17 | `1.50×10²³` | 383 s | `3.9×10²⁰` | `3.75×10²⁰` (paired: 1.01× of A088250's n = 17) |
+
+Every phase of all seven campaigns ran at the engine's rate for its
 filter. The rates on the `2..n` and `3..n` families' later filters are **not** the
 A088250 rates at the same form count, and reading them as such first
 looked like a 0.5× slowdown; a paired engine check
@@ -503,7 +545,11 @@ same kernel). The v1 log's "the density is a function of the form count
 and nothing else" is true only between filters in the same forcing
 state, and BENCHMARKS.md's sibling table now says so.
 
-## In progress
+## What is open now
+
+Every family has been swept to its ceiling. The frontier of each is now
+this project's, and the next term of each is open above a searched-empty
+bound:
 
 | family | frontier | open next | median | under the ceiling |
 |---|---|---|---|---|
@@ -513,13 +559,31 @@ state, and BENCHMARKS.md's sibling table now says so.
 | A173750 | **a(18) = a(19) = 147,316,106,448,079,863,444,150 (this project, 2026-09-03)** | a(20) > `3.3168×10²⁴` (swept empty to the ceiling) | `1.3×10²⁸` | 0% — the campaign is at its ceiling |
 | A164326 | **a(16) = 10,214,000,995,018,156,616,280 (this project, 2026-09-03)** | a(17) > `9.998×10²²` (swept empty to the ceiling) | `8.3×10²³` | 0% — the campaign is at its ceiling |
 | A164325 | **a(18) = 511,721,589,397,871,969,516,400 (this project, 2026-09-03)** | a(19) > `3.3168×10²⁴` (swept empty to the ceiling) | `7.9×10²⁷` | 0% — the campaign is at its ceiling |
-| A088651 | a(15) = 53,792,264,108,455,702,830 (J. K. Andersen, 2008) | a(16) | `2.3×10²²` | a(16) 96%; a(17) 15% |
+| A088651 | **a(16) = 43,263,866,546,732,976,414,270 (this project, 2026-09-04)** | a(17) > `1.942×10²³` (swept empty to the ceiling) | `2.2×10²⁴` | 0% — the campaign is at its ceiling |
 
-The one remaining sibling opens at the index after its published
-frontier, inside period 0 of the wheel, clipped at `k = 10⁶`; its
-medians are the odds model's pre-run predictions (`model_results.json`).
-Read every median as a floor: this repository's finds have landed at
-about 2× their medians on average, though the seven here scatter from
-0.02× to 7.9×. Where each campaign stands is read with `python launch.py
---status --family <name>`; the hunt itself is the owner's command
-([README.md](README.md#running-it)).
+So no campaign remains for this engine, and the project is **paused**.
+What moves any of these is a higher ceiling, which is a new engine
+version, and the model says where it would pay. The −1 families' ceilings
+are their proof crossings, `3.317×10²⁴ / m_max`, because their values'
+structure is on `N + 1 = m·k` and huntlib has no N+1 certificate; an
+**N+1 BLS75 route** would lift all four to the deterministic bound on `k`
+itself, `3.317×10²⁴`, and from each family's bound the model puts its
+next term under that with
+
+| family | open term | median from the bound | P(under `3.317×10²⁴`) |
+|---|---|---|---|
+| A164326 | a(17) | `1.05×10²⁴` | **83%** |
+| A125839 | a(19) | `1.5×10²⁴` | **74%** |
+| A088651 | a(17) | `2.2×10²⁴` | **62%** |
+| A125838 | a(19) | `8.6×10²⁵` | 6% |
+
+— three probable terms for one certificate route, on sweeps of an hour
+or two each at the v2 rates. The +1 families' ceilings are the bound on
+`k` itself, past which a factor of `k` could exceed the bound and need a
+subproof; a recursive certificate would raise them, but their next terms'
+medians are `2.3×10²⁶` (A088250 a(18)), `1.3×10²⁸` (A173750 a(20)) and
+`7.9×10²⁷` (A164325 a(19)), so the probability of any under even
+`10²⁵` is a few percent. Read every median as a floor: the twenty finds
+here landed anywhere from 0.01× to 7.9× theirs, with the model's `E`
+averaging 1.2 over the eighteen searched terms. Where each campaign
+stands is read with `python launch.py --status --family <name>`.

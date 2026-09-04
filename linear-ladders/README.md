@@ -95,11 +95,29 @@ the last two past the proof crossing and proved by BLS75 certificates
 (12 and 15 of them), each re-verified from disk; then **`a(19) >
 3.3168×10²⁴`**.
 
-**Status: ACTIVE.** Six of the seven families are at their ceilings with
-the next term of each open above it; A088651 is the last, one campaign.
-The v2 engine (2026-09-03) is 1.2–1.5× v1 at every filter, 42 gates and
-drills green, six benchmark shapes frozen, every opening priced. The hunt
-is the owner's command.
+**One new term of A088651, and a bound.** The seventh campaign, 12
+minutes to the crossing at `n = 17`, found
+
+    a(16) = 43,263,866,546,732,976,414,270
+
+which is also `A202779(16)`, every certificate the deterministic test,
+re-verified from disk; then **`a(17) > 1.942×10²³`**.
+
+**Status: PAUSED — open to others.** Twenty new terms across all seven
+families, found and verified 2026-09-03/04 by seven campaigns totalling
+under four hours of device, and a searched-empty bound on the next term
+of each. Every family is swept to its ceiling, so no campaign remains
+for this engine: the next term of every family lies above its ceiling,
+and the next engine version is the one that raises them. For the −1
+families that is an **N+1 primality certificate route** in huntlib
+(their structure is `N + 1 = m·k`), which would lift their four ceilings
+from `1.0–1.9×10²³` to `3.317×10²⁴` and, by the model, reach A164326's
+`a(17)`, A125839's `a(19)` and A088651's `a(17)` with 60–85% probability
+each; for the +1 families it is a certificate that recurses into the
+factors of `k`, and their next terms sit at medians of `10²⁶` and above
+([RESULTS.md](RESULTS.md), "What is open now"). The v2 engine
+(2026-09-03) is 1.2–1.5× v1 at every filter, 42 gates and drills green,
+six benchmark shapes frozen, every opening priced.
 
 ## The problem
 
