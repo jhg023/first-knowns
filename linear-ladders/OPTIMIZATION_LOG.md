@@ -553,16 +553,28 @@ clock per unit of line matched the device's at every filter, which is the
 measurement OPTIMIZATION.md 2.14 says only a campaign can take.
 
 **The A125838 campaign** (19:28–19:46 the same day, 17.2 min to its
-ceiling, `a(15)`–`a(18)` found) read, from its timestamps: n = 15
-(period 0) `9.2×10¹⁸` against the `SCOREM` `8.4×10¹⁸`; n = 18
-`4.0×10²⁰` against `3.99×10²⁰`; but n = 17 `7.2×10¹⁹` against
-`1.38×10²⁰` and n = 19 `7.2×10²⁰` against `1.45×10²¹` — two phases at
-half. The kernels at those filters are byte-identical to A088250's at
-n = 16 and n = 18 (same form count, same tables), which ran at their
-benchmarks 40 minutes earlier, and the log of the A125838 run was not
-kept, so the timestamps cannot separate a loaded machine from a defaults
-fault. **Open until the next −1 campaign's `[STATUS]` lines at n = 17 and
-n = 19 are read** (the rate and any `HOST-BOUND` fragment are on them);
-if they read under 90% of the benchmark with the machine idle, the place
-to look is what a −1 family's launcher does differently from a +1's at a
-promotion, since the engine does nothing different.
+ceiling, `a(15)`–`a(18)` found) and **the A125839 campaign** (19:55–20:10,
+15 min, `a(16)`–`a(18)`) read, from their timestamps: period 0 at
+`9.2×10¹⁸` / `9.4×10¹⁸` against the `SCOREM` `8.4×10¹⁸`, and then, at
+their later filters, `7.2×10¹⁹` / `7.0×10¹⁹` at c = 16 and `7.2×10²⁰` /
+`2.7×10²⁰` at c = 18 / 17 — half to two thirds of A088250's rates at the
+same form counts, which had run at their benchmarks an hour earlier.
+
+That was first written up here as an open question about the launcher.
+It is not one. **Paired, in one process, 4 rounds:** A125839 at n = 18
+against A088250 at n = 16 (both c = 16, both 54 registers and 9 blocks
+per SM, the same generated source) is **0.503×**, and A125839 at n = 19
+against A088250 at n = 17 (c = 17, 56 registers, 9 blocks) is **0.655×**.
+The kernels are the same; **the wheels are not.** A family whose rungs
+start at 2 or 3 forces each small prime one or two filters later than
+the `1..n` family (README.md's thresholds: `2..n` forces `q` from
+`n = q + 1`, `3..n` from `q + 2`), so at A125839's n = 18 the prime 17
+keeps `17 − 15 = 2` residues in the first wheel level where A088250's
+n = 16 keeps one, and at its n = 19 the prime 19 keeps three where
+A088250's n = 17 keeps two: twice and 1.5× the candidates per unit of
+line at the same candidate rate — exactly the campaign ratios. v1's
+"the density is a function of the form count c and nothing else"
+(Measurement 2 above) holds only between filters in the same forcing
+state, and the sibling table in BENCHMARKS.md now carries the −1
+families' own rates at their later filters. The campaigns ran at the
+engine's rate at every filter, and there is nothing to fix.

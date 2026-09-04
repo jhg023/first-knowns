@@ -217,6 +217,11 @@ FOUND["A125838"] = {15: 45187548280664790,
                     16: 436409209028729276340,
                     17: 44387933133290055609300,
                     18: 74882388347598051560340}
+# A125839's three, 15 minutes to its ceiling; each under A125838's term at
+# the same index, as the subset of conditions requires.
+FOUND["A125839"] = {16: 14423013361403116470,
+                    17: 771355748787892768500,
+                    18: 6530891065478723143200}
 
 # No family carries a published bound of any kind -- no upper bound at any
 # open n, and no searched-empty lower bound beyond the last term.  The floor

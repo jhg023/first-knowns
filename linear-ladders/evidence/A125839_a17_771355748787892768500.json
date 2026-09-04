@@ -1,0 +1,163 @@
+{
+ "sequence": "A125839",
+ "forms": "r*k - 1, r = 3..n",
+ "sign": -1,
+ "k": 771355748787892768500,
+ "run": 17,
+ "settles": [
+  17
+ ],
+ "values": {
+  "3": 2314067246363678305499,
+  "4": 3085422995151571073999,
+  "5": 3856778743939463842499,
+  "6": 4628134492727356610999,
+  "7": 5399490241515249379499,
+  "8": 6170845990303142147999,
+  "9": 6942201739091034916499,
+  "10": 7713557487878927684999,
+  "11": 8484913236666820453499,
+  "12": 9256268985454713221999,
+  "13": 10027624734242605990499,
+  "14": 10798980483030498758999,
+  "15": 11570336231818391527499,
+  "16": 12341691980606284295999,
+  "17": 13113047729394177064499
+ },
+ "multipliers": {
+  "3": 3,
+  "4": 4,
+  "5": 5,
+  "6": 6,
+  "7": 7,
+  "8": 8,
+  "9": 9,
+  "10": 10,
+  "11": 11,
+  "12": 12,
+  "13": 13,
+  "14": 14,
+  "15": 15,
+  "16": 16,
+  "17": 17
+ },
+ "verification": {
+  "mr_chain": true,
+  "sympy_bpsw": true,
+  "resieve_other_wheel": true,
+  "stopper_composite": true
+ },
+ "stopper": {
+  "i": 18,
+  "multiplier": 18,
+  "value": 13884403478182069832999,
+  "factor": 17
+ },
+ "certificates": {
+  "3": {
+   "proof": "deterministic-mr",
+   "N": 2314067246363678305499,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "4": {
+   "proof": "deterministic-mr",
+   "N": 3085422995151571073999,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "5": {
+   "proof": "deterministic-mr",
+   "N": 3856778743939463842499,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "6": {
+   "proof": "deterministic-mr",
+   "N": 4628134492727356610999,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "7": {
+   "proof": "deterministic-mr",
+   "N": 5399490241515249379499,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "8": {
+   "proof": "deterministic-mr",
+   "N": 6170845990303142147999,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "9": {
+   "proof": "deterministic-mr",
+   "N": 6942201739091034916499,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "10": {
+   "proof": "deterministic-mr",
+   "N": 7713557487878927684999,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "11": {
+   "proof": "deterministic-mr",
+   "N": 8484913236666820453499,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "12": {
+   "proof": "deterministic-mr",
+   "N": 9256268985454713221999,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "13": {
+   "proof": "deterministic-mr",
+   "N": 10027624734242605990499,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "14": {
+   "proof": "deterministic-mr",
+   "N": 10798980483030498758999,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "15": {
+   "proof": "deterministic-mr",
+   "N": 11570336231818391527499,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "16": {
+   "proof": "deterministic-mr",
+   "N": 12341691980606284295999,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "17": {
+   "proof": "deterministic-mr",
+   "N": 13113047729394177064499,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  }
+ },
+ "certificates_verified": true,
+ "unproved": [],
+ "proof_routes": {
+  "deterministic-mr": 15
+ },
+ "also_settles": [],
+ "least_claim": {
+  "swept_from": 1000000,
+  "swept_to": 771355748787892768500,
+  "wheel": 1922760350154212639070,
+  "sieve_depth": 65536,
+  "unit": 30030,
+  "monotone_floor": 45187548280664790
+ },
+ "engine": "a125839-v2-u30030-p137-p247-p359-q265536-seg32"
+}

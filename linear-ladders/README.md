@@ -52,12 +52,24 @@ seven-base test itself, each re-verified from disk; then **`a(19) >
 literature already holds as A125839's `a(15)`, and each term is an upper
 bound on A125839 at its index.
 
-**Status: ACTIVE.** A088250 and A125838 are at their ceilings with `a(18)`
-and `a(19)` open above them. The five remaining siblings are next, one
-campaign each, in the order of their expected terms per hour: A125839,
-A173750, A164326, A164325, A088651. The v2 engine (2026-09-03) is
-1.2–1.5× v1 at every filter, 42 gates and drills green, six benchmark
-shapes frozen, every opening priced. The hunt is the owner's command.
+**Three new terms of A125839, and a bound.** The third campaign, 15
+minutes to the same ceiling, found
+
+    a(16) = 14,423,013,361,403,116,470
+    a(17) = 771,355,748,787,892,768,500
+    a(18) = 6,530,891,065,478,723,143,200
+
+each under A125838's term at its index as the subset of conditions
+requires, every certificate the deterministic test, each re-verified
+from disk; then **`a(19) > 1.7305×10²³`**.
+
+**Status: ACTIVE.** A088250, A125838 and A125839 are at their ceilings
+with `a(18)`, `a(19)` and `a(19)` open above them. The four remaining
+siblings are next, one campaign each, in the order of their expected
+terms per hour: A173750, A164326, A164325, A088651. The v2 engine
+(2026-09-03) is 1.2–1.5× v1 at every filter, 42 gates and drills green,
+six benchmark shapes frozen, every opening priced. The hunt is the
+owner's command.
 
 ## The problem
 

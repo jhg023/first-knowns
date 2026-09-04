@@ -122,7 +122,7 @@ terms under each ceiling:
 | family | opening rate | to the ceiling at the opening rate | terms expected under the ceiling |
 |---|---|---|---|
 | A125838 (n = 15) | `8.4×10¹⁸ k/s` | `2.2×10²³`: 7.3 h at the opening rate, far less after the promotions (each ~3–4×). **Ran 2026-09-03 in 17 min**: a(15), a(16), a(17) and a(18) found, a(19) > `1.73×10²³` ([RESULTS.md](RESULTS.md)) | a(15), a(16), a(17); a(18) 13% |
-| A125839 (n = 16) | `8.4×10¹⁸ k/s` | `2.1×10²³`: 7 h at the opening rate | a(16), a(17), a(18); a(19) 18% |
+| A125839 (n = 16) | `8.4×10¹⁸ k/s` | `2.1×10²³`: 7 h at the opening rate. **Ran 2026-09-03 in 15 min**: a(16), a(17), a(18) found, a(19) > `1.73×10²³` | a(16), a(17), a(18); a(19) 18% |
 | A173750 (n = 16) | `3.0×10¹⁹ k/s` | `3.3×10²⁴`: hours, mostly at n = 18 (`1.4×10²¹`) | a(16), a(17); a(18) 66% |
 | A164326 (n = 15) | `1.25×10¹⁹ k/s` | `1.1×10²³`: 2.4 h at the opening rate | a(15), a(16); a(17) 16% |
 | A164325 (n = 16) | `3.75×10¹⁹ k/s` | `3.3×10²⁴`: hours, mostly at n = 17 | a(16); a(17) 85% |
@@ -135,3 +135,17 @@ families run to the bound on k itself with BLS75 certificates past their
 crossings (README.md). Budget two to three times the medians above before
 expecting a term: this repository's finds land at 1.9–2.5× their medians
 on average.
+
+**The later filters of the `2..n` and `3..n` families are slower than
+A088250's at the same form count, and that is the wheel, not the
+kernel.** Those families force each small prime one or two filters later
+(`2..n` forces `q` from `n = q + 1`, `3..n` from `q + 2`), so at the
+filters where the prime `n` or `n − 1` is not yet forced it keeps two or
+three residues in the wheel instead of one. Measured paired against
+A088250 at the same form count (OPTIMIZATION_LOG.md v2, "What the
+campaigns measured"): A125839 n = 18 `6.5×10¹⁹ k/s` (0.50× of A088250's
+n = 16), A125839 n = 19 `2.4×10²⁰` (0.66× of n = 17); A125838's n = 17
+and n = 19 are the same two wheels (`7.2×10¹⁹` and `7.2×10²⁰` in its
+campaign). Its n = 18 has every prime forced and runs at A088250's n = 17
+rate. The odd families (`A164325`, `A164326`) force by their own rule
+(`n = q`) and were priced at their openings in Measurement 7.

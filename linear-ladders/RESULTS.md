@@ -184,6 +184,60 @@ probabilistic. The model had given `a(19)` 0.4% under this ceiling from
 `a(18)` and puts its median at `8.5×10²⁵`; lifting the ceiling needs an
 N+1 certificate route ([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)).
 
+## A125839: three terms and a bound — 2026-09-03, 19:55–20:10
+
+The third campaign, `--family A125839` (`r·k − 1` for `r = 3..n`), 15
+minutes from `k = 10⁶` to the same ceiling as A125838's (`1.746×10²³` at
+`n = 19`). Its conditions are a subset of A125838's, so A125838's terms
+bounded these from above before the campaign started, and each landed
+under its bound. All certificates are the deterministic test; each file
+was re-verified from disk.
+
+### A125839 a(16) = 14,423,013,361,403,116,470 — 19:58
+
+- **run 16**: `r·k − 1` prime for `r = 3..16`; `16·k − 1 =
+  230,768,213,782,449,863,519`. **stopper** `17·k − 1 =
+  245,191,227,143,852,979,989 = 31 × 7,909,394,423,995,257,419`.
+- 14 `deterministic-mr` certificates, re-verified.
+- **model**: from the published `a(15)`, median `2.67×10¹⁸`;
+  `k / median = 5.4`, `E = 2.30`. Bound from A125838: `≤ 4.36×10²⁰`.
+  Inside period 0, narrated at its close 3.4 min in, together with
+  `a(17)`.
+- `k = 2 · 3² · 5 · 7 · 11 · 13 · 29569 · 5414305807`.
+- evidence: `evidence/A125839_a16_14423013361403116470.json`
+
+### A125839 a(17) = 771,355,748,787,892,768,500 — 19:58
+
+- **run 17**: `17·k − 1 = 13,113,047,729,394,177,064,499`. **stopper**
+  `18·k − 1 = 13,884,403,478,182,069,832,999 = 17 ×
+  816,729,616,363,651,166,647`.
+- 15 `deterministic-mr` certificates, re-verified.
+- **model**: from `a(16)`, median `1.43×10²⁰`; `k / median = 5.4`,
+  `E = 2.61`. Bound from A125838: `≤ 4.44×10²²`. Inside period 0.
+- `k = 2² · 3 · 5³ · 7 · 11 · 13 · 19 · 31 · 872195997311`.
+- evidence: `evidence/A125839_a17_771355748787892768500.json`
+
+### A125839 a(18) = 6,530,891,065,478,723,143,200 — 19:59
+
+- **run 18**: `18·k − 1 = 117,556,039,178,617,016,577,599`. **stopper**
+  `19·k − 1 = 124,086,930,244,095,739,720,799 = 17 ×
+  7,299,231,190,829,161,160,047`.
+- 16 `deterministic-mr` certificates, re-verified.
+- **model**: from `a(17)`, median `1.23×10²²`; `k / median = 0.53`,
+  `E = 0.41`. Bound from A125838: `≤ 7.49×10²²`. 4.7 min in.
+- `k = 2⁵ · 3 · 5² · 7 · 11² · 13 · 23 · 31 · 79 · 439 · 9994321`.
+- evidence: `evidence/A125839_a18_6530891065478723143200.json`
+
+`E` averages 1.77 over the three; `k / median` 5.4, 5.4, 0.53.
+
+### A bound: A125839 a(19) > 173,048,431,513,879,137,516,300
+
+The sweep continued at `n = 19` to period 90, the last whole period under
+that filter's ceiling, and found no run of 19: no `k < 1.7305×10²³` has
+`r·k − 1` prime for all `r = 3..19`. Every decision on this family is a
+proof. The model had given `a(19)` 16% under the ceiling from `a(18)`
+and puts its median at `1.1×10²⁴`, six times the ceiling.
+
 ## The census
 
 Counts per run length from each checkpoint, as printed in every
@@ -193,6 +247,8 @@ Counts per run length from each checkpoint, as printed in every
               14: 26   15: 4   16: 1   17: 1      near 8    survivors 47,258,905
     A125838   8: 41999  9: 16395  10: 6236  11: 2483  12: 976  13: 370
               14: 137  15: 75  16: 7  17: 1  18: 1   near 40   survivors 48,139,929
+    A125839   8: 90682  9: 35465  10: 13724  11: 5392  12: 2182  13: 822
+              14: 298  15: 155  16: 73  17: 6  18: 1   near 40   survivors 39,888,590
 
 A value that reached the settled frontier and no further while a term was
 open is a `[NEAR]` line; everything shorter is a count and nothing else.
@@ -214,20 +270,38 @@ landed at half its median and the remaining line was swept at the n = 18
 rate. A125838 (its `a(15)` and `a(16)` both lie in period 0, so the
 filter went straight from 15 to 17 at that period's close):
 
-| filter | line swept | wall clock | campaign rate | benchmark |
+| filter | line swept | wall clock | campaign rate | the engine at that filter |
 |---|---|---|---|---|
-| n = 15 (period 0) | `1.92×10²¹` | 210 s, pool sizing included | `9.2×10¹⁸ k/s` | `8.4×10¹⁸` |
-| n = 17 | `4.42×10²²` | 10.2 min | `7.2×10¹⁹` | `1.38×10²⁰` |
-| n = 18 | `2.88×10²²` | 73 s | `4.0×10²⁰` | `3.99×10²⁰` |
-| n = 19 | `9.8×10²²` | 136 s | `7.2×10²⁰` | `1.45×10²¹` |
+| n = 15 (period 0) | `1.92×10²¹` | 210 s, pool sizing included | `9.2×10¹⁸ k/s` | `8.4×10¹⁸` (`SCOREM`) |
+| n = 17 | `4.42×10²²` | 10.2 min | `7.2×10¹⁹` | `6.5×10¹⁹` (paired, below) |
+| n = 18 | `2.88×10²²` | 73 s | `4.0×10²⁰` | `3.99×10²⁰` (`SCORE17`) |
+| n = 19 | `9.8×10²²` | 136 s | `7.2×10²⁰` | `7.2×10²⁰` (half of A088250's n = 18) |
 
-Two of its four phases read at about half their benchmark from the
-timestamps alone, the other two at the benchmark. The timestamps cannot
-say why (the campaign's own `[STATUS]` lines carry the rate and any
-`HOST-BOUND` fragment, and the log of that run was not kept); the same
-kernels ran at the benchmark in the A088250 campaign, so it is worth
-reading the rate off the next −1 campaign's `[STATUS]` lines at its
-`n = 17` and `n = 19` filters before treating it as a defaults bug.
+A125839 (`a(16)` and `a(17)` both in period 0, so the filter went from
+16 to 18 at its close):
+
+| filter | line swept | wall clock | campaign rate | the engine at that filter |
+|---|---|---|---|---|
+| n = 16 (period 0) | `1.92×10²¹` | 3.4 min, pool sizing included | `9.4×10¹⁸ k/s` | `8.4×10¹⁸` (`SCOREM`) |
+| n = 18 | `5.77×10²¹` | 82 s | `7.0×10¹⁹` | `6.5×10¹⁹` (paired) |
+| n = 19 | `1.65×10²³` | 10.3 min | `2.7×10²⁰` | `2.4×10²⁰` (paired) |
+
+Every phase of all three campaigns ran at the engine's rate for its
+filter. The rates on the −1 families' later filters are **not** the
+A088250 rates at the same form count, and reading them as such first
+looked like a 0.5× slowdown; a paired engine check
+([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md), "What the campaigns
+measured") showed the kernels identical and the wheel twice as dense. A
+family whose rungs start at 2 or 3 forces each small prime one or two
+filters later than the `1..n` family does (the thresholds in
+[README.md](README.md#the-mathematics-of-the-engine)): at A125838's
+`n = 17` the prime 17 is not yet forced and keeps two residues in the
+wheel where A088250's `n = 16` keeps one, so there are twice the
+candidates per unit of line at the same kernel rate. The same holds at
+A125838's `n = 19` (the prime 19) and A125839's `n = 18` and `n = 19`
+(17 and 19). The v1 log's "the density is a function of the form count
+and nothing else" is true only between filters in the same forcing
+state, and BENCHMARKS.md's sibling table now says so.
 
 ## In progress
 
@@ -235,13 +309,13 @@ reading the rate off the next −1 campaign's `[STATUS]` lines at its
 |---|---|---|---|---|
 | A088250 | **a(17) = 1,048,124,771,278,912,649,231,910 (this project, 2026-09-03)** | a(18) > `3.3168×10²⁴` (swept empty to the ceiling) | `2.2×10²⁶` | 0% — the campaign is at its ceiling |
 | A125838 | **a(18) = 74,882,388,347,598,051,560,340 (this project, 2026-09-03)** | a(19) > `1.7305×10²³` (swept empty to the ceiling) | `8.5×10²⁵` | 0% — the campaign is at its ceiling |
+| A125839 | **a(18) = 6,530,891,065,478,723,143,200 (this project, 2026-09-03)** | a(19) > `1.7305×10²³` (swept empty to the ceiling) | `1.1×10²⁴` | 0% — the campaign is at its ceiling |
 | A173750 | a(15) = 4,646,092,391,146,085,880 (Resta, 2017) | a(16) | `1.9×10²⁰` | a(16), a(17): ~100%; a(18) 66% |
-| A125839 | a(15) = 45,187,548,280,664,790 (Resta, 2017) | a(16) ≤ `4.36×10²⁰` (A125838's a(16)) | `2.7×10¹⁸` | a(16)–a(18): ~100%; a(19) 18% |
 | A164325 | a(15) = 10,718,654,377,787,155,800 (Resta, 2017) | a(16) | `4.9×10²¹` | a(16): ~100%; a(17) 85%; a(18) 9% |
 | A164326 | a(14) = 68,086,992,545,221,650 (Resta, 2017) | a(15) | `6.2×10¹⁹` | a(15), a(16): ~100%; a(17) 16% |
 | A088651 | a(15) = 53,792,264,108,455,702,830 (J. K. Andersen, 2008) | a(16) | `2.3×10²²` | a(16) 96%; a(17) 15% |
 
-The five remaining siblings open at the index after their published
+The four remaining siblings open at the index after their published
 frontier, inside period 0 of the wheel, clipped at `k = 10⁶`; their
 medians are the odds model's pre-run predictions (`model_results.json`).
 Read every median as a floor: this repository's finds have landed at
