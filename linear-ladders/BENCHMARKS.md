@@ -124,7 +124,7 @@ terms under each ceiling:
 | A125838 (n = 15) | `8.4×10¹⁸ k/s` | `2.2×10²³`: 7.3 h at the opening rate, far less after the promotions (each ~3–4×). **Ran 2026-09-03 in 17 min**: a(15), a(16), a(17) and a(18) found, a(19) > `1.73×10²³` ([RESULTS.md](RESULTS.md)) | a(15), a(16), a(17); a(18) 13% |
 | A125839 (n = 16) | `8.4×10¹⁸ k/s` | `2.1×10²³`: 7 h at the opening rate. **Ran 2026-09-03 in 15 min**: a(16), a(17), a(18) found, a(19) > `1.73×10²³` | a(16), a(17), a(18); a(19) 18% |
 | A173750 (n = 16) | `3.0×10¹⁹ k/s` | `3.3×10²⁴`: hours, mostly at n = 18 (`1.4×10²¹`). **Ran 2026-09-03 in 37 min**: a(16), a(17) and a(18) = a(19) found, a(20) > `3.32×10²⁴` | a(16), a(17); a(18) 66% |
-| A164326 (n = 15) | `1.25×10¹⁹ k/s` | `1.1×10²³`: 2.4 h at the opening rate | a(15), a(16); a(17) 16% |
+| A164326 (n = 15) | `1.25×10¹⁹ k/s` | `1.1×10²³`: 2.4 h at the opening rate. **Ran 2026-09-03 in 14 min**: a(15), a(16) found, a(17) > `1.0×10²³` | a(15), a(16); a(17) 16% |
 | A164325 (n = 16) | `3.75×10¹⁹ k/s` | `3.3×10²⁴`: hours, mostly at n = 17 | a(16); a(17) 85% |
 | A088651 (n = 16) | `1.44×10²⁰ k/s` | `2.1×10²³`: **24 min** | a(16) 96%; a(17) 15% |
 
@@ -147,5 +147,10 @@ campaigns measured"): A125839 n = 18 `6.5×10¹⁹ k/s` (0.50× of A088250's
 n = 16), A125839 n = 19 `2.4×10²⁰` (0.66× of n = 17); A125838's n = 17
 and n = 19 are the same two wheels (`7.2×10¹⁹` and `7.2×10²⁰` in its
 campaign). Its n = 18 has every prime forced and runs at A088250's n = 17
-rate. The odd families (`A164325`, `A164326`) force by their own rule
-(`n = q`) and were priced at their openings in Measurement 7.
+rate. The odd families (`A164325`, `A164326`) have their own wheels from
+n = 17 on for a different reason: the odd multipliers `1, 3, …, 33` cover
+only 16 nonzero residues modulo 19, 23, 29 and 31 where `1..17` cover 17,
+so their first wheel level is 81,900 residues to A088250's 40,320 —
+paired, A164326 at n = 17 is `1.8×10²⁰ k/s` (0.49× of A088250's n = 17)
+and A164325 at n = 18 `4.9×10²⁰` (0.48× of n = 18). Their openings are
+in Measurement 7.

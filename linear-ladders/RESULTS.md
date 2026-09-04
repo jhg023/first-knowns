@@ -298,6 +298,48 @@ which can only lengthen a run, never hide one, so the bound stands. The
 model had given `a(20)` 0.2% under the ceiling from `a(19)` and puts its
 median at `1.3×10²⁸`.
 
+## A164326: two terms and a bound — 2026-09-03, 22:27–22:41
+
+The fifth campaign, `--family A164326` (`(2r−1)·k − 1` for `r = 1..n`,
+the odd multipliers, a −1 family), 14 minutes from `k = 10⁶` to the
+lowest ceiling of the seven: the proof crossing for its largest
+multiplier, `3.317×10²⁴ / 33 = 1.005×10²³` at `n = 17`. Every
+certificate is the deterministic test; each file was re-verified from
+disk.
+
+### A164326 a(15) = 392,547,927,582,515,694,990 — 22:29
+
+- **run 15**: `(2r−1)·k − 1` prime for `r = 1..15`; the 15th value is
+  `29·k − 1 = 11,383,889,899,892,955,154,709`. **stopper** `31·k − 1 =
+  12,168,985,755,057,986,544,689 = 19 × 640,472,934,476,736,133,931`.
+- 15 `deterministic-mr` certificates, re-verified.
+- **model**: from the published `a(14)`, median `6.24×10¹⁹`;
+  `k / median = 6.3`, `E = 2.46`. Found 145 s in, at the close of
+  period 0.
+- `k = 2 · 3 · 5 · 7 · 11² · 13 · 59 · 285841 · 70464137`.
+- evidence: `evidence/A164326_a15_392547927582515694990.json`
+
+### A164326 a(16) = 10,214,000,995,018,156,616,280 — 22:33
+
+- **run 16**: `31·k − 1 = 316,634,030,845,562,855,104,679`. **stopper**
+  `33·k − 1 = 337,062,032,835,599,168,337,239 = 23 ×
+  14,654,870,992,852,137,753,793`.
+- 16 `deterministic-mr` certificates, re-verified.
+- **model**: from `a(15)`, median `6.12×10²¹`; `k / median = 1.7`,
+  `E = 1.04`. 6.4 min in.
+- `k = 2³ · 3 · 5 · 7 · 11 · 13 · 17 · 769 · 6504371094253`.
+- evidence: `evidence/A164326_a16_10214000995018156616280.json`
+
+`E` averages 1.75 over the two; `k / median` 6.3, 1.7.
+
+### A bound: A164326 a(17) > 99,983,538,208,019,057,231,640
+
+At `n = 17` the sweep ran to period 52, the last whole period under
+`1.005×10²³`, and found no run of 17: no `k < 9.998×10²²` has
+`(2r−1)·k − 1` prime for all `r = 1..17`. Every decision on this family
+is a proof. The model had given `a(17)` 12.5% under the ceiling from
+`a(16)` and puts its median at `8.3×10²³`, eight times the ceiling.
+
 ## The census
 
 Counts per run length from each checkpoint, as printed in every
@@ -311,6 +353,8 @@ Counts per run length from each checkpoint, as printed in every
               14: 298  15: 155  16: 73  17: 6  18: 1   near 40   survivors 39,888,590
     A173750   8: 19573  9: 7222  10: 2754  11: 1081  12: 353  13: 131
               14: 45  15: 18  16: 5  17: 1  19: 1     near 5    survivors 30,123,710
+    A164326   8: 5822  9: 2265  10: 825  11: 314  12: 98  13: 31
+              14: 20  15: 6  16: 1                    near 5    survivors 18,909,254
 
 A value that reached the settled frontier and no further while a term was
 open is a `[NEAR]` line; everything shorter is a count and nothing else.
@@ -358,7 +402,15 @@ by one filter the same way):
 | n = 18 | `7.88×10²²` | 194 s | `4.1×10²⁰` | `3.99×10²⁰` (`SCORE17`) |
 | n = 20 | `3.17×10²⁴` | 17.4 min | `3.0×10²¹` | `2.8×10²¹` (A088250 n = 19, Measurement 7) |
 
-Every phase of all four campaigns ran at the engine's rate for its
+A164326 (the odd multipliers, a −1 family):
+
+| filter | line swept | wall clock | campaign rate | the engine at that filter |
+|---|---|---|---|---|
+| n = 15 (period 0) | `1.92×10²¹` | 145 s, pool sizing included | `1.3×10¹⁹ k/s` | `1.25×10¹⁹` (Measurement 7) |
+| n = 16 | `9.6×10²¹` | 236 s | `4.1×10¹⁹` | `3.75×10¹⁹` (Measurement 7, on the +1 twin) |
+| n = 17 | `8.84×10²²` | 454 s | `1.95×10²⁰` | `1.82×10²⁰` (paired against A088250's n = 17: 0.49×) |
+
+Every phase of all five campaigns ran at the engine's rate for its
 filter. The rates on the `2..n` and `3..n` families' later filters are **not** the
 A088250 rates at the same form count, and reading them as such first
 looked like a 0.5× slowdown; a paired engine check
@@ -371,7 +423,12 @@ filters later than the `1..n` family does (the thresholds in
 wheel where A088250's `n = 16` keeps one, so there are twice the
 candidates per unit of line at the same kernel rate. The same holds at
 A125838's `n = 19` (the prime 19) and A125839's `n = 18` and `n = 19`
-(17 and 19). The v1 log's "the density is a function of the form count
+(17 and 19). The odd families have the same property from `n = 17` on
+for a different reason: their multipliers `1, 3, …, 2n − 1` cover only 16
+nonzero residues modulo 19, 23, 29 and 31 at `n = 17` where `1..17`
+cover all 17, so their first wheel level holds `81,900` residues to
+A088250's `40,320` and their rate there is 0.49× of A088250's (paired,
+same kernel). The v1 log's "the density is a function of the form count
 and nothing else" is true only between filters in the same forcing
 state, and BENCHMARKS.md's sibling table now says so.
 
@@ -383,11 +440,11 @@ state, and BENCHMARKS.md's sibling table now says so.
 | A125838 | **a(18) = 74,882,388,347,598,051,560,340 (this project, 2026-09-03)** | a(19) > `1.7305×10²³` (swept empty to the ceiling) | `8.5×10²⁵` | 0% — the campaign is at its ceiling |
 | A125839 | **a(18) = 6,530,891,065,478,723,143,200 (this project, 2026-09-03)** | a(19) > `1.7305×10²³` (swept empty to the ceiling) | `1.1×10²⁴` | 0% — the campaign is at its ceiling |
 | A173750 | **a(18) = a(19) = 147,316,106,448,079,863,444,150 (this project, 2026-09-03)** | a(20) > `3.3168×10²⁴` (swept empty to the ceiling) | `1.3×10²⁸` | 0% — the campaign is at its ceiling |
+| A164326 | **a(16) = 10,214,000,995,018,156,616,280 (this project, 2026-09-03)** | a(17) > `9.998×10²²` (swept empty to the ceiling) | `8.3×10²³` | 0% — the campaign is at its ceiling |
 | A164325 | a(15) = 10,718,654,377,787,155,800 (Resta, 2017) | a(16) | `4.9×10²¹` | a(16): ~100%; a(17) 85%; a(18) 9% |
-| A164326 | a(14) = 68,086,992,545,221,650 (Resta, 2017) | a(15) | `6.2×10¹⁹` | a(15), a(16): ~100%; a(17) 16% |
 | A088651 | a(15) = 53,792,264,108,455,702,830 (J. K. Andersen, 2008) | a(16) | `2.3×10²²` | a(16) 96%; a(17) 15% |
 
-The three remaining siblings open at the index after their published
+The two remaining siblings open at the index after their published
 frontier, inside period 0 of the wheel, clipped at `k = 10⁶`; their
 medians are the odds model's pre-run predictions (`model_results.json`).
 Read every median as a floor: this repository's finds have landed at

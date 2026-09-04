@@ -229,6 +229,10 @@ FOUND["A173750"] = {16: 828196248070762801230,
                     17: 67335095107785754679430,
                     18: 147316106448079863444150,
                     19: 147316106448079863444150}
+# A164326's two in 14 minutes to its ceiling -- the lowest of the seven,
+# 3.317e24 / 33 at n = 17.
+FOUND["A164326"] = {15: 392547927582515694990,
+                    16: 10214000995018156616280}
 
 # No family carries a published bound of any kind -- no upper bound at any
 # open n, and no searched-empty lower bound beyond the last term.  The floor

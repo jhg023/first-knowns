@@ -587,3 +587,20 @@ reading on a +1 family with the same rung start: n = 16 (period 0)
 prime forced there); n = 20 `3.0×10²¹` (A088250's n = 19 wheel,
 `2.8×10²¹`, Measurement 7). Four campaigns, fourteen phases, every one at
 the engine's rate for its wheel.
+
+**The A164326 campaign** (22:27–22:41, 14 min, `a(15)`, `a(16)` found,
+then swept to its `n = 17` ceiling of `1.005×10²³`) ran `1.3×10¹⁹` /
+`4.1×10¹⁹` / `1.95×10²⁰` at n = 15 / 16 / 17. The first two are
+Measurement 7's odd-family rates; the third had no benchmark, and paired
+in one process **A164326 at n = 17 is 0.491× of A088250 at n = 17, and
+A164325 at n = 18 is 0.478× of A088250 at n = 18**, the same generated
+source, 56 registers and 9 blocks per SM on both sides. The wheel again:
+the odd multipliers `1, 3, …, 33` cover only 16 nonzero residues modulo
+19, 23, 29 and 31 (the seventeenth, an even one such as 16 mod 19, is
+never reached) where the consecutive `1..17` cover all 17, so the odd
+family's first wheel level is `3 · 7 · 13 · 15 · 20 = 81,900` residues to
+A088250's `2 · 6 · 12 · 14 · 20 = 40,320` — 2.03× the candidates per unit
+of line at the same kernel rate. The campaign's `1.95×10²⁰` is that
+engine's `1.82×10²⁰`. So the odd families have their own rates from
+n = 17 on, as the `2..n` and `3..n` families do from n = 17 and 18, and
+BENCHMARKS.md's sibling table carries them.

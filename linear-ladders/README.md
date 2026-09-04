@@ -75,10 +75,18 @@ as this family's published `a(12) = a(13) = a(14)` did; every value under
 the deterministic bound, each re-verified from disk; then **`a(20) >
 3.3168×10²⁴`**.
 
-**Status: ACTIVE.** A088250, A125838, A125839 and A173750 are at their
-ceilings with the next term of each open above it. The three remaining
-siblings are next, one campaign each, in the order of their expected
-terms per hour: A164326, A164325, A088651. The v2 engine (2026-09-03) is
+**Two new terms of A164326, and a bound.** The fifth campaign, 14 minutes
+to the lowest ceiling of the seven (`3.317×10²⁴ / 33` at `n = 17`), found
+
+    a(15) = 392,547,927,582,515,694,990
+    a(16) = 10,214,000,995,018,156,616,280
+
+every certificate the deterministic test, each re-verified from disk;
+then **`a(17) > 9.998×10²²`**.
+
+**Status: ACTIVE.** Five of the seven families are at their ceilings with
+the next term of each open above it. The two remaining, A164325 and
+A088651, are next, one campaign each. The v2 engine (2026-09-03) is
 1.2–1.5× v1 at every filter, 42 gates and drills green, six benchmark
 shapes frozen, every opening priced. The hunt is the owner's command.
 
