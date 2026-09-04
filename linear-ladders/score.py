@@ -66,7 +66,7 @@ import pathlib as _pathlib
 import sys as _sys
 
 _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
-from huntlib import certificate                                 # noqa: E402
+from huntlib import ceiling, certificate                        # noqa: E402
 from huntlib import scoring                                     # noqa: E402
 from huntlib import shutdown as _shutdown                       # noqa: E402
 import lladder_gpu                                              # noqa: E402
@@ -132,7 +132,8 @@ def work_for(eng, j0, blocks, launches):
 
 def main():
     gates = (lladder_reference.GATES + lladder_search.GATES
-             + lladder_gpu.GATES + lladder_model.GATES + certificate.GATES)
+             + lladder_gpu.GATES + lladder_model.GATES + certificate.GATES
+             + ceiling.GATES)
     if not scoring.run_gates(gates):
         print("SCORE 0 (gates are not green)")
         return 1

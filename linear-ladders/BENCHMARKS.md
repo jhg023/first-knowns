@@ -56,6 +56,16 @@ the identical 799 survivors as *both* over `[10⁶, 3.26×10¹⁹)` at n = 17.
 |------|--------|-------|---------|--------|---------|---------|---------|---------|
 | 2026-09-03 | v1 | 22,213,403,242,865 | 309,319,190,496,309 | 7,131,893,874,253 | 3,368,117,521,997 | 41,199,194,529 | 8,632,986 | 41/41 green, 75 s; score.py 76 s |
 | 2026-09-03 | **v2** | **30,826,035,115,578** | **404,629,246,197,708** | **8,416,469,598,948** | 4,332,707,571,725 | 40,288,865,686 | 7,830,573 | 42/42 green, 88 s; score.py 97 s |
+| 2026-09-04 | v3 | 28,054,713,983,765 | 372,003,148,777,901 | 7,678,166,804,168 | 3,926,953,287,006 | 37,327,360,412 | 7,427,414 | 44/44 green, 120 s; score.py ~110 s |
+
+The v3 row is **v2's engine at every fingerprint** — v3 changed the
+ceiling, the certificate routes and the resume policy and touched no
+kernel, wheel or sieve constant (OPTIMIZATION_LOG.md v3) — so its
+numbers are the ambient band and not a ratio: the same afternoon's
+pre-change run of v2 on the same desktop scored 28,518,537,703,981 /
+376,557,197,309,340 / 7,771,393,268,663, 1.6% above the v3 row and
+8–9% under the ledger's v2 row, with every fingerprint identical across
+all three runs.
 
 The v2 row's three unit-wheel shapes are **new shapes** (the wheel is a
 deliberate coverage change, so their windows and fingerprints moved) and
@@ -128,13 +138,26 @@ terms under each ceiling:
 | A164325 (n = 16) | `3.75×10¹⁹ k/s` | `3.3×10²⁴`: hours, mostly at n = 17. **Ran 2026-09-03 in 60 min**: a(16), a(17), a(18) found, a(19) > `3.32×10²⁴` | a(16); a(17) 85% |
 | A088651 (n = 16) | `1.44×10²⁰ k/s` | `2.1×10²³`: **24 min**. **Ran 2026-09-04 in 12 min**: a(16) found, a(17) > `1.94×10²³` | a(16) 96%; a(17) 15% |
 
-Every -1 family's ceiling is its proof crossing — the deterministic
-Miller–Rabin bound rearranged for its largest form — because its values'
-structure is on `N + 1`, for which huntlib has no certificate; the +1
-families run to the bound on k itself with BLS75 certificates past their
-crossings (README.md). Budget two to three times the medians above before
-expecting a term: this repository's finds land at 1.9–2.5× their medians
-on average.
+Those were the v2 ceilings: the −1 families' proof crossings (no N+1
+certificate existed) and the deterministic bound on k for the +1
+families. **v3 raised every ceiling to `10⁴⁰`** (README.md; the N+1 route
+and the recursion in huntlib.certificate, the measured budget in
+huntlib.ceiling), and each campaign resumes from its v2 cursor at the
+filter after its frontier. The resumed filters, priced on the campaign's
+own next launches (OPTIMIZATION_LOG.md v3, Measurement 1):
+
+| family | resumes at | device | the campaign's own rate at that filter (RESULTS.md) | next filter |
+|---|---|---|---|---|
+| A088250 | n = 18 | `1.39×10²¹ k/s` | `1.49×10²¹` | n = 19 `2.8×10²¹`, n = 20 `6.3×10²¹` |
+| A173750 | n = 20 | `2.86×10²¹` | `3.0×10²¹` | n = 21 `6.3×10²¹` (c = 20, swept 2026-09-04) |
+| A164325 | n = 19 | `1.78×10²¹` | `1.82×10²¹` | n = 20 `3.7×10²¹` (c = 20, odd wheel) |
+| A125838 | n = 19 | `7.05×10²⁰` | `7.2×10²⁰` | n = 20: 19 forced, A088250's n = 19 wheel |
+| A125839 | n = 19 | `2.51×10²⁰` | `2.7×10²⁰` | n = 20: the `2..n` n = 19 wheel, `7.2×10²⁰` |
+| A164326 | n = 17 | `1.85×10²⁰` | `1.95×10²⁰` | n = 18 `5×10²⁰` (A164325's n = 18) |
+| A088651 | n = 17 | `3.77×10²⁰` | `3.9×10²⁰` | n = 18: A088250's n = 18 wheel, `1.45×10²¹` |
+
+Budget two to three times the medians before expecting a term: this
+repository's finds land at 1.9–2.5× their medians on average.
 
 **The later filters of the `2..n` and `3..n` families are slower than
 A088250's at the same form count, and that is the wheel, not the

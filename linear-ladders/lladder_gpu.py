@@ -103,14 +103,15 @@ costs nothing on the device.  G9 pins the clipped period-0 stream against
 the CPU engine.
 
 CEILINGS, stated and enforced (CONVENTIONS.md "Numeric hygiene"):
-  * k < k_ceil(n, F) = the PRIMALITY-PROOF VALIDITY BOUND of the family
-    (lladder_search, G10).  For the -1 families it is the deterministic
-    Miller-Rabin bound rearranged for m_max*k - 1, 2.2e23 at n = 15: every
-    decision there is a proof.  For the +1 families it is that bound on k
-    ITSELF, 3.317e24: below the proof crossing the classification is a
-    proof, above it a discovery is proved by a BLS75 certificate on
-    N - 1 = m*k (launch.py certify_run), one level deep while every factor
-    of k is under the bound.  No machine word appears in either.
+  * k < k_ceil(n, F) = huntlib.ceiling.K_CEIL = 1e40 for every family and
+    both signs (lladder_search, G10; v3).  Below the proof crossing
+    k_proof(n, F) -- the deterministic Miller-Rabin bound rearranged for
+    m_max*k + s, 2.2e23 at n = 15 -- the classification is a proof; above
+    it a discovery is proved by a BLS75 certificate on N - s = m*k, k
+    factored once (launch.py certify_run: Theorem 1 on N - 1 for +1,
+    Theorem 15 on N + 1 for -1, subproofs for factors past the bound),
+    and the ceiling is where that certificate's worst case was measured
+    to cost seconds.  No machine word appears anywhere in it.
   * W' * per_launch + q2 < 2^63 = REDUCE_MAX, on the DEVICE period W'
     (k' units), which is what keeps the Barrett reduction within ONE
     conditional subtraction of exact.
@@ -147,7 +148,8 @@ from sympy import primerange
 _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
 from huntlib import shutdown as _shutdown                      # noqa: E402
 from huntlib.gpu import barrett_magics                         # noqa: E402
-from lladder_reference import (FAMILIES, KNOWN, family,         # noqa: E402
+from huntlib.primes import MR_VALID_BELOW                      # noqa: E402
+from lladder_reference import (FAMILIES, FOUND, KNOWN, family,  # noqa: E402
                                forbidden_k_residues, nforms, sign,
                                wheel_residues)
 from lladder_search import (Q2_DEFAULT, CpuEngine, assert_unit,  # noqa: E402
@@ -217,6 +219,9 @@ K2_SURV = 0.015
 # (0.8x, now caught by OCC_MIN_BLOCKS).  A form count past the table's end
 # takes the last entry (CLAUDE.md 5g: a constant swept at one filter is
 # re-swept one filter later, because the campaign promotes itself there).
+# c = 20 was swept on 2026-09-04 (v3), paired at A173750 n = 21, A164325
+# n = 20 and A088250 n = 20: 0.19 by 1.02x over 0.12 and 1.07x over 0.28
+# at all three, so the last entry stands and c = 21 takes it.
 LIT_SURV_UNIT_BY_C = {8: 0.12, 9: 0.12, 10: 0.12, 11: 0.12, 12: 0.12,
                       13: 0.12, 14: 0.12, 15: 0.12, 16: 0.12,
                       17: 0.19, 18: 0.19, 19: 0.19, 20: 0.19}
@@ -1783,8 +1788,10 @@ def g9_gpu_matches_cpu():
     The windows are wide because survivors are sparse: forced divisibility
     alone leaves one k in 30030 at n = 15.
     """
-    ceil_p = k_ceil(15, "A088250")             # 3.3e24, the +1 ceiling
-    ceil_m = k_ceil(15, "A125838")             # 2.2e23, a -1 crossing
+    from lladder_search import k_proof
+    ceil_p = MR_VALID_BELOW                    # 3.3e24, the v2 +1 ceiling
+    ceil_m = k_proof(15, "A125838")            # 2.2e23, a -1 crossing
+    ceil_v3 = k_ceil(15, "A088250")            # 1e40, the v3 ceiling
     W23 = 223_092_870
     fl = k_floor(128) + 1
     cases = (
@@ -1823,6 +1830,11 @@ def g9_gpu_matches_cpu():
         ("A164325", 16, 19, 23, 29, 32, 10 ** 12, 8 * 10 ** 8, 30030),
         ("A088651", 16, 19, 23, 29, 32, 10 ** 12, 10 ** 9, 510510),
         ("A088250", 15, 17, 19, 23, 32, fl, 30030 * 7429 - fl, 30030),
+        # THE v3 CEILING, 1e40, on both signs at the filters the resumed
+        # campaigns run: sixteen orders of magnitude above the old windows,
+        # the base a 133-bit Python int on both engines
+        ("A088250", 18, 19, 23, 29, 32, ceil_v3 - 10 ** 13, 3 * 10 ** 9, 30030),
+        ("A125838", 19, 19, 23, None, 32, ceil_v3 - 10 ** 12, 3 * 10 ** 9, 30030),
     )
     total = 0
     for fam, n, p1, p2, p3, q2, k_lo, span, unit in cases:
@@ -1844,10 +1856,11 @@ def g9_gpu_matches_cpu():
     return True, (f"G9 ok: GPU stream == CPU stream on {len(cases)} populated "
                   f"windows ({total} survivors) -- one-, two- and three-level "
                   f"wheels in k space AND in unit space (2310, 30030, "
-                  f"510510), six families, filters n = 10 to 17, heights 2e9 "
-                  f"-> {ceil_p:.3g} with the top windows ABOVE 2^64 and one "
-                  f"against a -1 crossing, and period 0 clipped at the "
-                  f"engine floor on both")
+                  f"510510), six families, filters n = 10 to 19, heights 2e9 "
+                  f"-> {ceil_v3:.3g} with windows ABOVE 2^64, against the v2 "
+                  f"+1 bound and a -1 crossing, and two hard against the v3 "
+                  f"ceiling on both signs; and period 0 clipped at the engine "
+                  f"floor on both")
 
 
 def g13_production_wheel_constants():
@@ -2359,9 +2372,10 @@ def g17_unit_wheel_matches_k_wheel():
 
 
 def g18_every_opening_compiles_to_occupancy():
-    """Every campaign opening (and the filter after it) compiles to the
-    occupancy the engine was tuned at, with the carveout pinned and the
-    prefix tables inside their cap.
+    """Every campaign opening (and the filter after it), and every filter
+    a RESUMED campaign runs or promotes into next (the frontier's successor
+    and the two after it), compiles to the occupancy the engine was tuned
+    at, with the carveout pinned and the prefix tables inside their cap.
 
     A kernel is not a configuration until it has compiled: the register
     allocation of this body varies 50 to 117 between near-identical
@@ -2374,7 +2388,11 @@ def g18_every_opening_compiles_to_occupancy():
     for fam in FAMILIES:
         n0 = max(KNOWN[fam]) + 1
         unit = forced_unit(n0, fam)
-        for n in (n0, n0 + 1):
+        ns = [n0, n0 + 1]
+        if FOUND[fam]:                         # the resumed filter and next two
+            nr = max(FOUND[fam]) + 1
+            ns += [n for n in (nr, nr + 1, nr + 2) if n not in ns]
+        for n in ns:
             eng = GpuEngine(n, fam, p1=37, p2=47, p3=59, unit=unit)
             c = eng.config()
             if c["blocks_per_sm"] < OCC_MIN_BLOCKS:
@@ -2400,8 +2418,9 @@ def g18_every_opening_compiles_to_occupancy():
             rows.append(f"{fam} n={n}: {c['num_regs']} regs, "
                         f"{c['blocks_per_sm']} blocks/SM"
                         + (f", body {c['body']}" if c["body"] else ""))
-    return True, (f"G18 ok: all {len(rows)} campaign openings (each family's "
-                  f"opening filter and the next) compile to >= "
+    return True, (f"G18 ok: all {len(rows)} campaign configurations (each "
+                  f"family's opening filter and the next, its resumed filter "
+                  f"and the two after it) compile to >= "
                   f"{OCC_MIN_BLOCKS} blocks per SM with no spills, the "
                   f"carveout pinned at {CARVEOUT_PCT}% and the prefix tables "
                   f"under {PREFIX_BYTES_MAX >> 10} KB: " + "; ".join(rows))

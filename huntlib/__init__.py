@@ -8,6 +8,8 @@ benchmark. The pieces that are identical across projects live here:
     huntlib.checkpoint  atomic JSON checkpoints (config-keyed, resumable)
     huntlib.primes      deterministic 64-bit Miller-Rabin, factor witnesses
     huntlib.certificate BLS75 primality proofs above the Miller-Rabin bound
+                        (N-1 and N+1 routes, subproofs for large factors)
+    huntlib.ceiling     the measured k ceiling a new project starts from
     huntlib.gpu         Barrett reciprocal helpers for CUDA kernels
     huntlib.pool        the host classification pool: ramped, polite
     huntlib.frontier    settledness bookkeeping and the census counters
@@ -32,5 +34,6 @@ legs stay independent), and `event_kind` stays in each project even though
 the rule it implements is repo-wide.
 """
 
-from . import (certificate, checkpoint, drills, evidence, frontier,  # noqa: F401
-               gpu, hlog, pool, primes, rungs, scoring, shutdown)    # noqa: F401
+from . import (ceiling, certificate, checkpoint, drills, evidence,   # noqa: F401
+               frontier, gpu, hlog, pool, primes, rungs, scoring,    # noqa: F401
+               shutdown)                                             # noqa: F401

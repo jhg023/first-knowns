@@ -103,21 +103,29 @@ minutes to the crossing at `n = 17`, found
 which is also `A202779(16)`, every certificate the deterministic test,
 re-verified from disk; then **`a(17) > 1.942×10²³`**.
 
-**Status: PAUSED — open to others.** Twenty new terms across all seven
-families, found and verified 2026-09-03/04 by seven campaigns totalling
-under four hours of device, and a searched-empty bound on the next term
-of each. Every family is swept to its ceiling, so no campaign remains
-for this engine: the next term of every family lies above its ceiling,
-and the next engine version is the one that raises them. For the −1
-families that is an **N+1 primality certificate route** in huntlib
-(their structure is `N + 1 = m·k`), which would lift their four ceilings
-from `1.0–1.9×10²³` to `3.317×10²⁴` and, by the model, reach A164326's
-`a(17)`, A125839's `a(19)` and A088651's `a(17)` with 60–85% probability
-each; for the +1 families it is a certificate that recurses into the
-factors of `k`, and their next terms sit at medians of `10²⁶` and above
-([RESULTS.md](RESULTS.md), "What is open now"). The v2 engine
-(2026-09-03) is 1.2–1.5× v1 at every filter, 42 gates and drills green,
-six benchmark shapes frozen, every opening priced.
+**v3 (2026-09-04): one ceiling of 10⁴⁰ for every family.** The v2
+campaigns stopped where their *proofs* stopped — the deterministic
+Miller–Rabin bound on `k` for the +1 families, the proof crossing for the
+−1 ones, which had no certificate route at all. v3 adds the **N+1
+certificate route** to huntlib (BLS75 Theorem 15: a Lucas sequence per
+prime of `N + 1 = m·k`, one shared discriminant), makes both routes
+**recurse into the factors of `k`** past the bound, and moves the ceiling
+to where the *cost* of a certificate was measured rather than where a
+test stops being one: `huntlib.ceiling.K_CEIL = 10⁴⁰`, at which a
+worst-case `k` (the unit times two 18-digit primes) is factored and a
+whole run proved in about a second. The wheel, the unit, the sieve and
+the segment are v2's, so every fingerprint reproduces and every v2
+cursor carries over whole: each campaign resumes at its v2 filter.
+
+**Status: ACTIVE.** Twenty new terms across all seven families, found
+and verified 2026-09-03/04 by seven campaigns totalling under four hours
+of device, and a searched-empty bound on the next term of each. All
+seven campaigns resume from their v2 cursors under the 10⁴⁰ ceiling; the
+model puts the −1 families' next terms — A164326's `a(17)`, A125839's
+`a(19)`, A088651's `a(17)` — at 93–94% within a night's sweep each, and
+the +1 families' at medians of `10²⁶` and above ([RESULTS.md](RESULTS.md),
+"What is open now"). 44 gates and drills green, six benchmark shapes
+reproduced, every resumed filter priced.
 
 ## The problem
 
@@ -259,27 +267,37 @@ the floor, in `k` space and in unit space.
 **Candidates are carried as `(k, off)` from the first commit**, with the
 launch base a host-side big integer folded once per launch into the
 per-prime and per-group tables (G15: the stream does not depend on where
-the base was put, at bases up to `10³⁰`). No machine word bounds the
-search; the enforced ceiling is the family's **primality-proof validity
-bound** (G10, tight to one `k`).
+the base was put, at bases up to `10³⁰`; G9 pins the stream against the
+CPU engine on two windows hard against `10⁴⁰`). No machine word bounds
+the search; the enforced ceiling is the **measured certificate budget**,
+`huntlib.ceiling.K_CEIL = 10⁴⁰` (G10, one number for all seven families).
 
 **Where the proofs come from.** The largest value is `m_max·k + s`, and
 below the **proof crossing** `k_proof(n, F) = (3.317×10²⁴ − s − 1) / m_max`
-— `2.2×10²³` at `n = 15`, `2.0×10²³` at `n = 17` — every classification
+— `2.2×10²³` at `n = 15`, `1.7×10²³` at `n = 19` — every classification
 the hunt makes is a deterministic Miller–Rabin proof. Past it the same
-seven-base chain is a strong probable-prime test, and for the +1 families
-a *discovery* is proved instead by the value's own structure: `N − 1 =
-m·k` is completely factored once `k` is (the multiplier's own factors
-folded in — `15 = 3·5`), so BLS75 Theorem 1 (huntlib.certificate) proves
-every value of the run on one factorization, and every certificate is
-re-verified from scratch before it is written (`certify_run`; drilled on
-a value past the bound). The +1 ceiling is therefore the deterministic
-bound on `k` itself, `3.317×10²⁴`. The −1 families' structure is on
-`N + 1`, which needs an N+1 test huntlib does not have, so their ceiling
-stays at the crossing and every decision on them is a proof; that costs
-A125838 87% of its `a(18)` and A088651 85% of its `a(17)`
-([RESULTS.md](RESULTS.md)), and an N+1 route would lift every −1 ceiling
-to `3.317×10²⁴`.
+seven-base chain is a strong probable-prime test; the census is still a
+count and a `[NEAR]` still a health check, and a *discovery* is proved
+by the value's own structure: `N − s = m·k` is completely factored once
+`k` is (`huntlib.certificate.factor_full`, the multiplier's own factors
+folded in — `15 = 3·5`), so **BLS75 Theorem 1 on `N − 1`** (the +1
+families) or **Theorem 15 on `N + 1`** — the N+1 test, a Lucas sequence
+`U(P, Q)` per prime of `m·k` with one shared discriminant `D`, `(D/N) =
+−1`, `N | U_{N+1}` and `gcd(U_{(N+1)/q}, N) = 1` (the −1 families) —
+proves every value of the run on that one factorization. A prime factor
+of `k` above the bound is admitted only with a **subproof** of its own,
+found by the same machinery on whichever of `p ∓ 1` factors, so a
+certificate is a finite tree whose leaves are deterministic tests. Every
+certificate is re-verified from scratch before it is written
+(`certify_run`), and the drill proves both routes at the crossing and
+**at the ceiling** on both signs, with the recursion exercised and the
+subproof shown unstrippable. What bounds `k` is therefore the *cost* of
+that certificate per discovery — factoring `k` once, then a witness
+search per value — and `huntlib.ceiling` measured it: a worst-case `k`
+(the unit times a balanced semiprime) at `10⁴⁰` is factored in 0.2–3 s
+and a run of values proved in a further second
+([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v3). The crossing is logged
+once per filter as a `[MILESTONE]` and never stops the run.
 
 **Coverage is coarser than work, and the checkpoint carries both**
 (CONVENTIONS.md "Two cursors"). The wheel emits a period's candidates in
@@ -369,11 +387,11 @@ a term that arrives on the median as luck.
 Requires an NVIDIA GPU with CuPy, plus numpy and sympy.
 
 ```bash
-python launch.py --selftest    # 41 gates and drills; must end ALL GREEN (~100 s)
+python launch.py --selftest    # 44 gates and drills; must end ALL GREEN (~120 s)
 ```
 
 ```bash
-python score.py                # gates x 6 fingerprinted shapes (~80 s)
+python score.py                # gates x 6 fingerprinted shapes (~100 s)
 ```
 
 ```bash
@@ -392,7 +410,13 @@ python launch.py --family A125838    # any of the seven; A202778/A202779 alias A
 ```
 
 Each family keeps its own checkpoint under its own config key, and no
-campaign will read another's cursor. A fresh campaign opens at period 0,
+campaign will read another's cursor. **Every family's v2 checkpoint is
+in the tree and v3 resumes it**: the v3 key accepts the v2 key (the
+identical line — same wheel, unit, sieve depth and period `W`, every
+fingerprint reproduced), so `python launch.py --family <name>` continues
+at the filter after that family's frontier, from its v2 ceiling, with
+its census and finds intact (drilled on all seven real checkpoints).
+A fresh campaign (`--fresh`, only ever deliberately) opens at period 0,
 clipped at `k = 10⁶`, with the filter at the next open term, a
 classification pool sized from a measurement at that filter and ramped
 one interpreter at a time, and the frontier promoting itself as terms
@@ -408,8 +432,27 @@ does), `--gpu-yield-ms` idles the device after every launch (1 ms
 against a 5 ms launch is about 17% of the rate), and `--gentle` is the
 preset of one worker and a 2 ms yield, about a third of the rate.
 
-**What the first lines should say** (the rule 5g acceptance test, which
-only the owner can run because it is a hunt). For A088250 with no flags:
+**What the first lines of a RESUMED campaign should say** (v3; the
+numbers are the harness measurements in
+[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v3). For `--family A164326`:
+a `[STAGE]` line `checkpoint MIGRATED from a164326-v2-... to a164326-v3-...`,
+then `resume at period 52, u = 0 (k = 99,983,538,208,019,057,231,640)`,
+the `a(17)` quantiles from the model, a `[MILESTONE]` saying the sweep
+is already past the proof crossing `k_proof(17, A164326) = 1.005e+23`
+with the certificate route named, and a pool line `classification pool:
+1 workers (measured on ~150 launches, 1.00 s of device at 1.7e+20 k/s:
+~6,000 survivors/s x ~13 us = 0.08 core-s per s, x2 margin)`. The first
+`[STATUS]` at 30 s: `swept to 9.99835e+22` or a period or two above it
+(a period is `1.92×10²¹`, about 11 s at this filter), `A164326 filter
+n = 17`, a rate near `1.8e+20 k/s`, `census ... 16:1`, `finds 2`,
+`pool 1`, and `next a(17) median 1.05e+24 (ETA ~1.5 h)`. The
+line-per-second, the pool of 1 and the rung named are the three things
+to check; a `HOST-BOUND` fragment or a rate under 90% of that is a
+defaults bug.
+
+**What the first lines of a FRESH campaign should say** (the rule 5g
+acceptance test as it was run for v2, kept for `--fresh`). For A088250
+with no flags:
 the pool line `classification pool: 2 workers (measured on 25 launches,
 1.00 s of device at 2.9e+19 k/s: 58,500 survivors/s x 13.1 us = 0.77
 core-s per s, x2 margin)` (the selftest's wiring drill takes the same
@@ -462,13 +505,20 @@ here is built to. Specific to this one:
   exceed it at the rider indices), and `A071576(n) = A088250(n)/2` for
   `n ≥ 3`, on all 41 published terms; the protocol drill checks the
   `also_settles` records a find would write.
-- **A discovery past the proof crossing is proved, not tested.** The
-  certificate drill proves the A088250 frontier's 14 values by the
-  deterministic route and a value past the bound (`15·k + 1` at
-  `k = 2.2×10²³`) by BLS75 Theorem 1 on `N − 1 = 15·k` factored
-  completely, re-verifies it from scratch, and refuses it for `N + 2` and
-  as a bare Miller–Rabin claim. Every certificate a campaign writes is
-  re-verified before it lands.
+- **A discovery past the proof crossing is proved, not tested — on
+  both signs, and at the ceiling.** The certificate drill proves the
+  A088250 frontier's 14 values by the deterministic route; a value past
+  the bound on each sign (`15·k + 1` at `k = 2.2×10²³` by BLS75 Theorem 1
+  on `N − 1`, `19·k − 1` at `k = 1.7×10²³` by Theorem 15 on `N + 1`,
+  each factored completely), re-verified from scratch and refused for
+  `N + 2` and as a bare Miller–Rabin claim; and then at `k ≈ 10⁴⁰` on
+  both signs a worst-case `k` (the unit times two 18-digit primes) and a
+  `k` with a 30-digit prime factor above the bound, whose certificate
+  must carry a subproof that cannot be stripped. huntlib's own gates
+  drill the N+1 arithmetic (a tampered Lucas witness, a neighbouring
+  `N`, a truncated factorization, a mislabelled theorem, a constructed
+  composite) and the machinery at `10⁴⁰`. Every certificate a campaign
+  writes is re-verified before it lands.
 - **The benchmark checks itself.** `SCORE2L` and `SCORE1L` sweep the
   *identical absolute window* with the wheel at (23],(37] and at 23 alone
   — 33,263× as many periods — and must return the same 123 survivors and
@@ -486,16 +536,21 @@ here is built to. Specific to this one:
   the all-bases chain must give identical run lengths on real survivors,
   the pool's chunked answer must reassemble to the serial one, and the
   families whose rungs start at 2 or 3 must count from there.
-- **Ceilings raise rather than compute** — both signs' primality-proof
-  caps, the engine floor and a clip at or below it, the flat wheel's size
-  limit, the `u32` first-level modulus, the `gridDim.y` cap, the 32-slot
-  residue list that bounds the form count, a unit that is not forced at
-  the filter, and an unknown family. All drilled.
+- **Ceilings raise rather than compute** — the one `10⁴⁰` ceiling on
+  both signs (tight to one wheel period; the last period under it is
+  accepted and the next refused), the engine floor and a clip at or
+  below it, the flat wheel's size limit, the `u32` first-level modulus,
+  the `gridDim.y` cap, the 32-slot residue list that bounds the form
+  count, a unit that is not forced at the filter, and an unknown family.
+  All drilled.
 - **The cursor's unit is asserted, not just described.** The checkpoint
   stores `W` and the campaign refuses to read a cursor counted in a
   different period (OPTIMIZATION.md 2.9). All seven families' cursor
-  policies are put in front of every key they declare, by both readers,
-  and no policy reads another family's key.
+  policies are put in front of every key they declare — the v3 key and
+  the v2 key it inherits — by all three readers, no policy reads another
+  family's key, and the v2-resume drill builds a campaign on each
+  family's real v2 checkpoint and checks it continues under the new
+  ceiling at the right filter with its finds and census intact.
 - **The loop is built to the load rules.** The pool is ramped (drilled),
   sized from a live measurement at the campaign's filter (drilled, and
   re-sized inside the noise band without thrashing), the device is bounded

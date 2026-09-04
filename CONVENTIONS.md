@@ -29,6 +29,15 @@ Plus documentation: `README.md` (problem, mathematics, model, usage),
 (score ledger), `OPTIMIZATION_LOG.md` (every attempt → measurement →
 kept/rejected, including the failures).
 
+**And nothing else (repo-wide, binding; CLAUDE.md rule 9).** A project
+directory is the five files, the four documents, `model_results.json`
+and `evidence/`. Harnesses — A/B sweeps, timing scripts, model queries,
+one-off verifiers — live in the session scratchpad and are never
+committed; their *measurements* go into `OPTIMIZATION_LOG.md` with
+enough of the method to rewrite them. A script nobody will run again
+against a tree that has moved on is clutter that makes the tree stop
+being the answer to "what runs from zero".
+
 **Making it fast is a separate discipline with its own document.** See
 [OPTIMIZATION.md](OPTIMIZATION.md) for the process (measure the phase
 split before touching code; interleaved paired A/B or the numbers are
@@ -707,6 +716,40 @@ State every ceiling (64-bit value caps, primality-test validity bounds)
 as an enforced constant, not an assumption. Parity-gate at the ceiling.
 Raising a ceiling is a new engine version: new gates, new fingerprint,
 log entry.
+
+**The ceiling on k is high by default, and it is measured (repo-wide,
+binding; CLAUDE.md 5h).** The deterministic Miller–Rabin bound, 3.317×10²⁴,
+is where a *classification* stops being a proof — the census is still
+counted, a `[NEAR]` is still a health check, and the searched-empty bound
+still holds above it (a composite that passes a probable-prime chain can
+only lengthen a run, never hide one). A *discovery* is proved by
+certificate on the value's own structure: every ladder here forms
+`m·k ± 1`, so `N ∓ 1 = m·k` is completely factored once `k` is, and
+`huntlib.certificate` proves the whole run on that one factorization —
+BLS75 Theorem 1 on `N − 1`, Theorem 15 (a Lucas sequence per prime) on
+`N + 1`, with a subproof for any prime factor of `k` past the bound. What
+bounds `k` is therefore the **cost of one certificate per discovery**, and
+`huntlib.ceiling` measures it: the worst case is `k` whose hard part is a
+balanced semiprime, and to `10⁴⁰` that is factored and proved in seconds
+on this repository's machine, so **`huntlib.ceiling.K_CEIL = 10⁴⁰` is the
+ceiling a new project starts from, on both signs**. The first six projects
+used the deterministic bound as their ceiling and four campaigns ran into
+it with the next term probably just above; each paid an engine version to
+move it.
+
+What a project owes for its ceiling: `k_ceil` returns `K_CEIL`; the proof
+crossing (`k_proof`, the bound rearranged for the largest value) is logged
+as a `[MILESTONE]` and never stops the run; a certificate drill at the
+height proves the project's own values on every route it uses, exercises
+the recursion on a `k` with a prime factor past the bound and shows the
+subproof cannot be stripped nor the proof moved to a neighbouring `N`;
+`huntlib.ceiling.GATES` is in the battery; and a populated parity window
+sits against the ceiling. A lower ceiling is allowed only with a
+measurement that says why — a value without `m·k ± 1` structure leaves
+`N ∓ 1` structureless, and then `factor_partial`'s success rate at the
+height (`huntlib.ceiling.subproof_rate`) is the honest limit. Raising it
+past `10⁴⁰` is the same measurement one decade up (ECM's curve count is
+the knob), written into `huntlib/ceiling.py`.
 
 ## Documentation template (binding for every project)
 

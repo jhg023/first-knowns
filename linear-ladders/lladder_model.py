@@ -130,8 +130,12 @@ def p_by(fam, n, frontier, k):
     return 1.0 - math.exp(-e) if e > 0 else 0.0
 
 
-def quantile(fam, n, frontier, p, hi=1e30):
-    """The k at which P(a(n) found) reaches p, searching from `frontier`."""
+def quantile(fam, n, frontier, p, hi=None):
+    """The k at which P(a(n) found) reaches p, searching from `frontier`
+    (up to `hi`, by default the engine ceiling)."""
+    if hi is None:
+        from huntlib.ceiling import K_CEIL
+        hi = K_CEIL
     target = -math.log(1.0 - p)
     lo, c = float(max(frontier, 100.0)), float(hi)
     if expected(fam, n, lo, c) < target:

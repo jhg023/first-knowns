@@ -28,7 +28,7 @@ survive before it is recorded.
 | [square-ladders](square-ladders/) | [A089761](https://oeis.org/A089761): the least k such that k·i²+1 is prime for every i = 1..n — a Dickson ladder whose rungs are the squares | **PAUSED — open to others** — a(16), a(17) and a(18) found & verified 2026-08-21/23, the first terms anyone has found since 2008 and the first break in a five-term plateau. Paused at k = 1.10×10²⁰, with a(19) open. |
 | [shift-ladders](shift-ladders/) | [A130003](https://oeis.org/A130003) and [A110096](https://oeis.org/A110096): the least m such that m + b^k is prime for every k = 1..n, at b = 4 and b = 2 — shift ladders, whose killed set is a geometric orbit rather than a quadratic one | **PAUSED — open to others** — six terms found & verified 2026-08-23/09-01: a(19), a(20) and a(21) of A130003, the first advance there since 2007, and a(17), a(18), a(19) of A110096. Paused at m = 2.86×10²⁰ at base 4 with a(22) open, and at m = 5.64×10²³ at base 2, where a(20) is only 13% likely to sit under the engine's proof ceiling. |
 | [prime-ladders](prime-ladders/) | [A084700](https://oeis.org/A084700) and [A084701](https://oeis.org/A084701): the least k such that prime(i)·k ± 1 is prime for every i = 1..n — prime ladders, whose rungs are the primes themselves and whose small-prime wheel collapses to forced divisibility | **PAUSED — open to others** — a(14) through a(18) of A084700 and a(12) through a(18) of A084701 found & verified 2026-09-02/03, the first advance on either since 2004 and 2003. Paused at k = 4.16×10²³ on A084700 with a(19) open, 22% likely under the engine's proof ceiling, and at A084701's own ceiling, k = 4.95×10²², with its a(19) open above it. |
-| [linear-ladders](linear-ladders/) | [A088250](https://oeis.org/A088250) and six siblings ([A173750](https://oeis.org/A173750), [A125838](https://oeis.org/A125838), [A125839](https://oeis.org/A125839), [A164325](https://oeis.org/A164325), [A164326](https://oeis.org/A164326), [A088651](https://oeis.org/A088651)): the least k such that r·k ± 1 is prime for every r in a run of consecutive (or consecutive odd) integers — linear ladders, whose consecutive multipliers force divisibility by every prime up to n + 1 | **PAUSED — open to others** — twenty terms found & verified 2026-09-03/04 across all seven families (a(15)–a(17) of A088250, a(15)–a(18) of A125838, a(16)–a(18) of A125839, a(16)–a(19) of A173750, a(15)–a(16) of A164326, a(16)–a(18) of A164325, a(16) of A088651), the first advance on any since 2017, with A202778, A071576 and A202779 settled alongside. Paused at every family's ceiling (k = 3.32×10²⁴ for the +1 families, 1.0–1.9×10²³ for the −1), the next term of each open above it and three of them likely under 3.32×10²⁴ once an N+1 certificate route exists. |
+| [linear-ladders](linear-ladders/) | [A088250](https://oeis.org/A088250) and six siblings ([A173750](https://oeis.org/A173750), [A125838](https://oeis.org/A125838), [A125839](https://oeis.org/A125839), [A164325](https://oeis.org/A164325), [A164326](https://oeis.org/A164326), [A088651](https://oeis.org/A088651)): the least k such that r·k ± 1 is prime for every r in a run of consecutive (or consecutive odd) integers — linear ladders, whose consecutive multipliers force divisibility by every prime up to n + 1 | **ACTIVE** — twenty terms found & verified 2026-09-03/04 across all seven families (a(15)–a(17) of A088250, a(15)–a(18) of A125838, a(16)–a(18) of A125839, a(16)–a(19) of A173750, a(15)–a(16) of A164326, a(16)–a(18) of A164325, a(16) of A088651), the first advance on any since 2017, with A202778, A071576 and A202779 settled alongside. Every campaign resumes from its v2 cursor (k = 3.32×10²⁴ for the +1 families, 1.0–1.9×10²³ for the −1) under one ceiling of 10⁴⁰, with the next term of each open. |
 
 Project documentation follows a fixed template (see
 [CONVENTIONS.md](CONVENTIONS.md) § Documentation template): every
@@ -64,12 +64,19 @@ The projects share a skeleton and a library:
   optional polish; two of its rules are design decisions best made
   before the first engine is written.
 - [`huntlib/`](huntlib/) — the shared code: deterministic Miller-Rabin and
-  BLS75 primality certificates, Barrett reciprocal helpers for CUDA
+  BLS75 primality certificates (the N−1 routes and the N+1 Lucas route,
+  with subproofs for factors past the deterministic bound), **the
+  measured ceiling every new hunt starts from** (`huntlib.ceiling`:
+  10⁴⁰ on both signs, because a discovery is proved by certificate on its
+  own structure and the only thing a height costs is one factorization of
+  k per find — CLAUDE.md rule 5h), Barrett reciprocal helpers for CUDA
   kernels, crash-durable checkpoints, tagged logging and the wall-clock
   heartbeat, the ramped classification pool, frontier and census
   bookkeeping, the progress ladder, first-occurrence evidence files,
   graceful shutdown, the un-gameable SCORE runner — and the repo-wide
-  selftest drills every project owes.
+  selftest drills every project owes. A project directory holds only the
+  hunt (CLAUDE.md rule 9): harnesses stay in the scratchpad and their
+  measurements go in the log.
 
 ## Reproducing results
 

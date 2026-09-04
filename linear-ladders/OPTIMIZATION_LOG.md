@@ -629,3 +629,202 @@ found, then swept to the crossing at n = 17) ran `1.38×10²⁰` at n = 16
 rate. With that the v2 engine has done everything its ceilings allow:
 every family's next term is above its ceiling, and the next engine
 version is the one that raises them (RESULTS.md, "What is open now").
+
+---
+
+## v3 -- the ceiling from the certificate's cost, not the test's validity: one ceiling of 1e40 for every family, the N+1 route and the recursion in huntlib. KEPT (2026-09-04)
+
+`SCORE`, `SCORE17`, `SCOREM`, `SCORE2L`, `SCORE1L` and `SCORE10` all
+reproduce their v2 fingerprints (the wheel, the unit, the sieve depth and
+the segment are v2's; nothing in the kernel moved), so this version has no
+paired engine ratio to report and the SCORE row in BENCHMARKS.md is the
+ambient band. 44/44 green in 120 s (three new drills, two gates extended).
+Nothing here is a campaign (CLAUDE.md 0a): every number is an engine call
+on a chosen window, a certificate timed on a constructed k, or a model
+query.
+
+### The design (handoff items 1-3), and why the ceiling is not two numbers
+
+The v2 ceilings were where the PROOFS stopped: the deterministic
+Miller-Rabin bound on k for the +1 families (so that every prime factor
+of k stayed under the bound and Theorem 1 needed no subproof), and the
+proof crossing itself for the -1 families, whose values' structure is on
+`N + 1 = m*k` and for which huntlib had no test at all. Both were limits
+of the CERTIFICATE, not of the engine -- candidates are `(k, off)` with a
+Python-int base, the CPU engine, the model and the checkpoint are Python
+ints -- so the design is three things in huntlib and none in the kernel:
+
+1. **The N+1 route** (`huntlib.certificate`, BLS75 Theorem 15). For
+   `N + 1 = F*R`, F completely factored, one discriminant D with Jacobi
+   `(D/N) = -1` and, per prime `q | F`, a Lucas sequence `U(P_q, Q_q)`
+   with `P_q^2 - 4Q_q = D`, `gcd(Q_q, N) = 1`, `N | U_{N+1}` and
+   `gcd(U_{(N+1)/q}, N) = 1`: then every prime factor p of N is `+-1
+   (mod F)`, so `(F - 1)^2 > N` proves N prime. The sequences may differ
+   per q but MUST share D -- `(D/p)` is what fixes the sign, and the
+   certificate's `verify` checks every pair against the one D it carries.
+   A pair whose `U_{N+1}` is not divisible by N proves N composite (the
+   Fermat failure's twin). Implemented with a binary Lucas ladder on
+   `(U, V, Q^k)`, ~120 bits of exponent, milliseconds per value; the
+   verifier re-derives all of it and refuses a neighbouring N, a tampered
+   `(P, Q)`, a truncated factorization and a mislabelled theorem (gated
+   in huntlib on fixed samples: `F = 2^2 3^24 5^7 7^9`, `N = F - 1` prime
+   past the bound; `N = 2P - 1` with P a prime past the bound, for the
+   recursion; and `(F' - 1)(F' + 1)` for the composite side). The
+   cube-root N+1 theorem (BLS75 Theorem 17) is NOT implemented, priced
+   at nothing: a value `m*k - 1` has `N + 1` fully factored once k is, so
+   `F = N + 1` and the square-root condition holds trivially; a subproof
+   of a structureless prime has Theorem 5 (cube root) on its `p - 1` side
+   already, and the measured subproof rate below says that suffices.
+2. **The recursion on both sides.** `prove(N, fac=...)` and `prove(N,
+   fac_plus=...)` admit a claimed prime factor above the bound only with
+   a subproof of it, found by `prove` one level down on whichever of
+   `p - 1`, `p + 1` factors (`_admit`); a factor that gets no subproof
+   inside the depth moves to R and the theorem's size test decides. A
+   prime cofactor gets the same treatment. `factor_full` is the bounded
+   chain then `factorint` -- the one unbounded call, which is exactly
+   what the ceiling bounds.
+3. **The ceiling from the measurement** (`huntlib.ceiling`). The worst
+   case for the factoring chain is a k whose hard part is a balanced
+   semiprime; here every k is a multiple of its unit (30030, 510510, or
+   9699690 from n = 18), so the hard part is `k / unit`. Measured 2026-09-04,
+   `factor_full` (200 ECM curves, then factorint), two seeds per height,
+   k = unit x two primes within 1% of `sqrt(k / unit)`:
+
+   | height | unit 1 (huntlib's default case) | unit 9699690 (this project from n = 18) |
+   |---|---|---|
+   | 1e26 | -- | 0.0 s |
+   | 1e28 | 0.3, 0.5 s (14-digit factors) | 0.1 s |
+   | 1e30 | 0.4, 0.5 s | 0.1, 0.2 s |
+   | 1e32 | 0.7, 0.2 s | 0.2 s |
+   | 1e34 | 1.1, 0.2 s (17-digit) | 0.2, 0.1 s |
+   | 1e36 | 0.5, 2.2 s (18-digit) | 0.3, 0.2 s |
+   | 1e38 | 1.6, 2.7 s | 0.9, 0.2 s |
+   | 1e40 | 0.9, 3.4 s (20-digit) | 0.9, 1.4 s (17-digit) |
+   | 1e42 | not measured | 1.6, 0.3 s |
+
+   `factorint` was never reached: the 200 curves found every factor.
+   The other expensive shape, `k = unit * P` with P a prime above the
+   bound (a subproof of P): `factor_partial` leaves P in 0.1 s and the
+   subproof is the question. A random prime near each height, eight (six
+   from 1e35) samples each, `prove(P)` with both sides available: **8/8
+   at 1e25, 1e27, 1e29, 1e31, 1e33 (worst 0.5 s), 6/6 at 1e35, 1e37,
+   1e39 (worst 0.4 s)**, routes Theorem 1 with a subproof of the cofactor
+   in a third of the cases from 1e33. So the certificate a discovery
+   costs at 1e40 is one or two seconds of factoring plus tens of
+   milliseconds per value, on either sign; the huntlib gate at K_CEIL
+   times four proofs on a worst-case k at 0.9 s and four with a subproof
+   of a 35-digit factor at 1.2 s, against a 60 s budget. **K_CEIL =
+   1e40**, one number for every family and both signs (`lladder_search
+   .k_ceil`, G10); what would raise it is the same table one decade up
+   (ECM's curve count is the knob for 22-digit factors) and the subproof
+   rate at 1e41-1e43. The proof crossing stays what it was and is logged
+   once per filter as a `[MILESTONE]`.
+
+**Where the cost actually goes in the campaign.** A discovery's
+`certify_run` is one `factor_full(k)` and then, per value, a witness
+search: measured on a worst-case k at 1e40 with this project's units and
+signs, `ceiling.certificate_cost` (three values per family, Measurement
+1): factoring 1.3-3.8 s, three proofs 0.01 s. `verify()`'s stopper witness is now
+BOUNDED too (`stopper_witness`: trial division, rho, 200 ECM curves; the
+full `factor_witness` only under 1e30) -- a 40-digit stopper that is a
+semiprime of two 20-digit primes would otherwise hold the campaign for
+whatever `factorint` needed, and the evidence then records the stopper
+as composite by the strong test (a failed Miller-Rabin is a proof of
+compositeness) with no witness rather than with an hour's stall.
+
+### Measurement 1 -- the resumed filters, priced (5g), and the c = 20 sweep
+
+Every family resumes at the filter after its frontier (`Campaign.calibrate`
+on a scratch copy of the real v2 checkpoint, one second of the campaign's
+own next launches; nothing recorded):
+
+| family | resumes at | k (v2 cursor) | device | survivors / s | host need | pool | regs / blocks |
+|---|---|---|---|---|---|---|---|
+| A088250 | n = 18 | `3.317e24` (period 1725) | `1.39e21 k/s` | 3,350 | 0.047 core-s/s | 1 | 56 / 9 |
+| A173750 | n = 20 | `3.317e24` (1725) | `2.86e21` | 1,320 | 0.017 | 1 | 56 / 9 |
+| A125838 | n = 19 | `1.730e23` (90) | `7.05e20` | 3,500 | 0.043 | 1 | 56 / 9 |
+| A125839 | n = 19 | `1.730e23` (90) | `2.51e20` | 9,000 | 0.108 | 1 | 56 / 9 |
+| A164325 | n = 19 | `3.317e24` (1725) | `1.78e21` | 1,270 | 0.016 | 1 | 56 / 9 |
+| A164326 | n = 17 | `9.998e22` (52) | `1.85e20` | 9,000 | 0.122 | 1 | 56 / 9 |
+| A088651 | n = 17 | `1.942e23` (101) | `3.77e20` | 9,020 | 0.113 | 1 | 56 / 9 |
+
+(one-second windows, the fingerprint of each family's first launches
+implicit in the survivor counts; the campaign rates in RESULTS.md, taken
+over minutes, agree to 5% -- `1.45e21`, `3.0e21`, `7.2e20`, `2.4e20`,
+`1.8e21`, `1.8e20`, `3.75e20` -- and are the numbers to check the first
+`[STATUS]` lines against.) The host need is 0.02-0.12 core-seconds per
+second everywhere, so every resumed campaign sizes a pool of 1, and the
+loop is device-bound by 8x or more. The certificate at k = 9.83e39 with
+each family's own unit, sign and multipliers (`ceiling.certificate_cost`,
+three prime values each): factoring 1.3 s (3.8 s for A088651's unit
+510510, whose hard part is a 19-digit square) and 0.00-0.01 s for the
+three proofs -- Theorem 1 for the +1 families, Theorem 15 for the -1,
+all re-verified, none unproved.
+
+**`LIT_SURV` at c = 20**, the table's last entry, which v2 had measured
+only to c = 19 and which A173750 (n = 21) and A164325 (n = 20) promote
+into on their next find. Paired and interleaved, three rounds, whole
+periods from period 1, the fingerprint identical across the variants of
+each configuration (ratio to the shipped 0.19):
+
+| configuration (forms) | 0.12 | 0.19 | 0.28 |
+|---|---|---|---|
+| A173750 n = 21 (c = 20) | 0.977 | **1.000** (`6.28e21 k/s`) | 0.928 |
+| A164325 n = 20 (c = 20, odd) | 0.977 | **1.000** (`3.72e21`) | 0.933 |
+| A088250 n = 20 (c = 20) | 0.979 | **1.000** (`6.28e21`) | 0.934 |
+| A088250 n = 19 (c = 19, the control) | 0.967 | **1.000** (`2.81e21`) | 0.964 |
+
+The last entry stands, c = 21 takes it, and the n = 19 control reproduces
+v2's Measurement 7 row. All twelve configurations compiled to 50-58
+registers and 8-9 blocks per SM on the full body. **G18** now compiles
+every family's resumed filter and the two after it as well as the
+openings: 34 configurations, all at 8-9 blocks, no spills.
+
+### Measurement 2 -- nothing in the segment loop scales with the campaign's age
+
+The host side of one launch (`_submit`, `_drain`, `_backpressure`, the
+rate-limited save check) on 200 fake launches of 320 real wheel k at
+n = 18 through a real 2-worker pool, and the period close (`handle` on the
+pending census, `check_rungs`, `status_line`, one save), at three ages:
+
+| campaign age | host per launch | period close | checkpoint | census | survivors |
+|---|---|---|---|---|---|
+| fresh | 1.25 ms | 471 ms (the ladder's one build) | 621 B | 0 | 6.4e4 |
+| 3 days | 1.26 ms | 2.1 ms | 750 B | 5.7e9 | 3.0e9 |
+| 30 days | 1.27 ms | 2.4 ms | 780 B | 5.7e10 | 3.0e10 |
+
+Constant: the census is a dict keyed by run length, `pending` empties at
+every period close, `passed` is bounded by the ladder, the checkpoint is
+under a kilobyte, and the heartbeat's one integral is once per 30 s.
+Against 4-13 ms of device per launch at these filters the host is 10-25%
+of a launch's wall clock *when the pool is bypassed* and overlapped when
+it is not (v2's phase split: host gap under 0.5%). The lock drill, the
+durability drill and the interrupt snapshot are unchanged and green.
+
+### What was not done, priced
+
+- **The kernel: untouched.** v2's termination table stands; the priced
+  levers (per-lane `ffs` compaction ~8% at c = 15 and ~0 at c >= 17,
+  `LDS.128` residue loads ~4%, y-chunked launches at c <= 14) are all
+  at filters no resumed campaign runs, or single digits. Not taken.
+- **Theorem 17 (N+1, cube root).** Unneeded here (F = N + 1) and not
+  needed for subproofs at the measured rate; priced at a day of
+  transcription risk against no measured gain.
+- **A per-family ceiling.** The certificate cost is symmetric in the
+  sign and the unit only helps, so one number; the +1 families lose
+  nothing by it and the -1 families gain 17 decades.
+
+### What the gates caught
+
+- **The first per-family harness timed the fallback, not the route.** It
+  called `certify_run` on a worst-case k whose values are not prime, so
+  every value fell through to `certificate.prove(N)`'s own bounded search
+  on both sides -- about a second each, 17-20 s per family. A real
+  discovery's values are prime and take the structured route (0.03 s for
+  three); the number is real, though, and it is what a value that fails
+  its structured proof costs. Rewritten to time prime values.
+- **The huntlib ceiling gate's first draft chose multipliers by hand** and
+  found one prime value in twelve at 1e41 (a random value there is prime
+  one time in 94); it now searches for the first two prime values per
+  sign, so it drills both routes every run.
+- **CLAUDE.md rule 8, again**: one heredoc with quotes, one dead shell.

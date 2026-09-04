@@ -19,40 +19,47 @@ THE OPENINGS (CLAUDE.md 5g, step 1 -- the test plan for every default
 below).  Each family opens at the filter after its published frontier and
 promotes itself one filter per find; the unit is fixed per family at its
 opening and stays (a forced prime stays forced as n grows), so the wheel
-period W = 1.92e21 never moves inside a campaign.  Up to each family's
-ceiling the campaign can be at:
+period W = 1.92e21 never moves inside a campaign.  The v2 campaigns ran
+every family from its opening to its v2 ceiling (below); v3 RESUMES each
+one from its v2 checkpoint at the filter after this project's frontier,
+under ONE ceiling for every family, K_CEIL = 1e40 (huntlib.ceiling):
 
-    A088250  n = 15 (unit 30030) -> 16 -> 17 -> 18      ceiling 3.3e24 (+1)
-    A173750  n = 16 (unit 30030) -> 17 -> 18            ceiling 3.3e24 (+1)
-    A164325  n = 16 (unit 30030) -> 17 -> 18            ceiling 3.3e24 (+1)
-    A125838  n = 15 (unit 30030) -> 16 -> 17 -> 18      ceiling 2.2e23 (-1, the crossing)
-    A125839  n = 16 (unit 30030) -> 17 -> 18 -> 19      ceiling 2.1e23 (-1)
-    A164326  n = 15 (unit 30030) -> 16 -> 17            ceiling 1.1e23 (-1)
-    A088651  n = 16 (unit 510510) -> 17                 ceiling 2.1e23 (-1)
+    family    v2 opening -> filters run    v3 resumes at  v2 ceiling (stopped there)
+    A088250   n = 15 (unit 30030) .. 18    n = 18         3.317e24 (+1: the bound on k)
+    A173750   n = 16 (unit 30030) .. 20    n = 20         3.317e24
+    A164325   n = 16 (unit 30030) .. 19    n = 19         3.317e24
+    A125838   n = 15 (unit 30030) .. 19    n = 19         1.75e23  (-1: the crossing)
+    A125839   n = 16 (unit 30030) .. 19    n = 19         1.75e23
+    A164326   n = 15 (unit 30030) .. 17    n = 17         1.00e23
+    A088651   n = 16 (unit 510510) .. 17   n = 17         1.95e23
 
 Every one of those (family, filter) pairs was priced by calling the
-engine on a chosen window (OPTIMIZATION_LOG.md): the line rate, the
-survivors per unit of line and the host need at each, and the compaction
-constant re-swept at each.  The pool is not one of the priced constants:
-it is MEASURED at the campaign's own configuration at start and at every
-promotion (size_pool).
+engine on a chosen window (OPTIMIZATION_LOG.md), and so were the resumed
+filters and the two after each (v3: the compaction constant re-swept at
+c = 20, G18 compiling every filter a resumed campaign can promote through
+next).  The pool is not one of the priced constants: it is MEASURED at
+the campaign's own configuration at start and at every promotion
+(size_pool).
 
 WHAT IS OPEN, AND WHY IT IS WORTH A SWEEP.  None of the seven published
 frontiers had moved since Giovanni Resta's 2017 extensions (A088651's
 a(15) is Jens Kruse Andersen's, 2008), and none carries a bound of any
 kind at any open n.  Every published frontier sits inside the FIRST
-PERIOD of this engine's wheel.  ALL SEVEN CAMPAIGNS HAVE RUN (2026-09-03/04,
-RESULTS.md): A088250's found a(15)..a(17) and swept empty to the ceiling
-at n = 18; A125838's found a(15)..a(18) and A125839's a(16)..a(18), each
-swept empty to the ceiling at n = 19; A173750's found a(16), a(17) and
-a(18) = a(19) on one k and swept empty to the ceiling at n = 20;
-A164326's found a(15), a(16) and swept empty to the ceiling at n = 17;
-A164325's found a(16)..a(18) and swept empty to the ceiling at n = 19;
-A088651's found a(16) and swept empty to the ceiling at n = 17.  Every
-checkpoint sits at its ceiling, so a resume of any family stops at once
-and `--fresh` would only re-sweep a settled line; the next term of every
-family needs a higher ceiling, which is a new engine version (RESULTS.md,
-"What is open now").
+PERIOD of this engine's wheel.  ALL SEVEN v2 CAMPAIGNS HAVE RUN (2026-09-03/04,
+RESULTS.md): A088250's found a(15)..a(17) and swept empty to the v2
+ceiling at n = 18; A125838's found a(15)..a(18) and A125839's
+a(16)..a(18), each swept empty to the v2 ceiling at n = 19; A173750's
+found a(16), a(17) and a(18) = a(19) on one k and swept empty at n = 20;
+A164326's found a(15), a(16) and swept empty at n = 17; A164325's found
+a(16)..a(18) and swept empty at n = 19; A088651's found a(16) and swept
+empty at n = 17.  Every checkpoint sits at its v2 ceiling with its
+frontier, filter and census, and v3 RESUMES it there: the v3 config key
+accepts the v2 key (same wheel, same unit, same W -- the identical line,
+so `accept`, never `adopt`), and the campaign continues at the same
+filter toward K_CEIL.  The -1 families' next terms are the ones the model
+puts under the old +1 ceiling with 62-83% (A164326 a(17), A125839 a(19),
+A088651 a(17)); the +1 families' medians are 2e26-1e28 (RESULTS.md, "What
+is open now").
 
 THE CLAIM'S FLOOR IS FREE.  a() is non-decreasing (the conditions nest), so
 the next term is at least the last one and nothing below it has to be swept
@@ -63,17 +70,20 @@ rests on monotonicity -- A088250's a(14) is 1.1e19 -- and above it on our
 own coverage.
 
 INDEFINITE BY DEFAULT (CONVENTIONS.md).  With no arguments this runs until
-the engine's enforced ceiling -- the PRIMALITY-PROOF validity bound of the
-family, k_ceil(n, F) in lladder_search -- which is the last rung.  For the
-+1 families that is k < 3.317e24, the deterministic Miller-Rabin bound on
-k itself: below the PROOF CROSSING k_proof(n, F) (2.2e23 at n = 15) every
-classification is a deterministic proof, above it the same seven-base
-chain is a strong probable-prime test and a DISCOVERY is proved by a BLS75
-Theorem 1 certificate on N - 1 = m*k, k factored once per find
-(certify_run); the ceiling is where a factor of k could itself pass the
-bound and need a subproof.  The -1 families' structure is on N + 1 and
-huntlib has no N+1 test, so their ceiling is the crossing.  `--to` and
-`--stop-on-discovery` are the only stops and both are opt-in.  Progress is
+the engine's enforced ceiling -- k_ceil(n, F) in lladder_search, which is
+huntlib.ceiling.K_CEIL = 1e40 for every family and both signs (v3) -- and
+that is the last rung.  Below the PROOF CROSSING k_proof(n, F) (2.2e23 at
+n = 15, 1.7e23 at n = 19) every classification is a deterministic proof;
+above it the same seven-base chain is a strong probable-prime test, the
+census is a count and a NEAR is a health check either way, and a
+DISCOVERY is proved by CERTIFICATE on its own structure, k factored once
+per find (certify_run): BLS75 Theorem 1 on N - 1 = m*k for the +1
+families, Theorem 15 (the N+1 test, a Lucas sequence per prime) on
+N + 1 = m*k for the -1 ones, and a subproof for any prime factor of k
+past the bound.  The ceiling is where that certificate's COST was
+measured to be seconds (huntlib.ceiling); the crossing is a [MILESTONE],
+not a stop.  `--to` and `--stop-on-discovery` are the only stops and both
+are opt-in.  Progress is
 read off RUNGS taken from the odds model's quantiles, logged as they are
 passed and shown with an ETA in every [STATUS].  A rung retires with its
 term: the ladder is derived from the LIVE frontier and cached on it
@@ -154,7 +164,7 @@ import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from huntlib import certificate, checkpoint, drills, evidence   # noqa: E402
+from huntlib import ceiling, certificate, checkpoint, drills, evidence  # noqa: E402
 from huntlib import pool as _pool                               # noqa: E402
 from huntlib import shutdown                                    # noqa: E402
 from huntlib.gpu import device_report                           # noqa: E402
@@ -213,7 +223,14 @@ UNIT = {fam: cpu.forced_unit(open_n(fam), fam) for fam in ref.FAMILIES}
 CKPT_LAUNCHES = 32
 K_START = 10 ** 6                 # the clip inside period 0; > k_floor(Q2)
 CENSUS_FLOOR = 8                  # runs shorter than this are not even counted
-ENGINE_VERSION = "v2"
+# v3 (2026-09-04): the ceiling moved from the deterministic bound (3.317e24
+# on k for +1, the crossing for -1) to huntlib.ceiling.K_CEIL = 1e40 on
+# every family, with the N+1 certificate route and the subproof recursion
+# behind it.  The wheel, the unit, the sieve depth and the segment are v2's,
+# so the survivor stream is IDENTICAL (every fingerprint reproduces) and a
+# v2 cursor carries over whole: the v2 key is in `accept`, never `adopt`.
+ENGINE_VERSION = "v3"
+PREVIOUS_ENGINES = ("v2",)        # keys this version inherits, same line
 # THE HOST POOL IS SIZED FROM A MEASUREMENT AT THE CAMPAIGN'S OWN FILTER
 # (CLAUDE.md 5f and 5g; CONVENTIONS.md "Sizing a hunt"), not from a
 # constant: `Campaign.size_pool` sweeps the launches the loop is about to
@@ -270,11 +287,15 @@ def ledger_path(fam):
 # load, --status, and the refusal check in main() -- and passing the same
 # list to three places is a thing you can forget at one of them; it cost
 # this repo two campaign starts before the policy existed (CONVENTIONS.md
-# "Reading an existing cursor").  This project has no predecessor engine,
-# so every policy declares its own key and nothing else; the cursor drills
-# in --selftest put every reader in front of it and refuse a foreign key.
-_POLICIES = {fam: checkpoint.CursorPolicy(ckpt_path(fam), config_key(fam),
-                                          accept=(), adopt=())
+# "Reading an existing cursor").  v3 inherits v2's cursor (the identical
+# line: same wheel, unit, sieve and W, every fingerprint reproduced), so
+# every policy ACCEPTS the v2 key; the cursor drills in --selftest put all
+# three readers in front of every declared key, the v2-resume drill builds
+# a campaign on each family's real v2 checkpoint, and a foreign key refuses.
+_POLICIES = {fam: checkpoint.CursorPolicy(
+                 ckpt_path(fam), config_key(fam),
+                 accept=tuple(config_key(fam, engine=e) for e in PREVIOUS_ENGINES),
+                 adopt=())
              for fam in ref.FAMILIES}
 
 
@@ -309,7 +330,11 @@ def verify(k, run, fam):
 
     plus a factor witness for the composite that STOPS the run, which is
     what bounds the claim to exactly `run`.  Nothing here is unbounded: the
-    witness is trial division, then a bounded rho, then bounded ECM.
+    witness is trial division, then a bounded rho, then bounded ECM
+    (stopper_witness), and a stopper that keeps its factors from that
+    effort is recorded as composite by the strong test -- a failed
+    Miller-Rabin is a PROOF of compositeness -- with no witness rather
+    than with an hour of factorint at the campaign's expense.
     """
     fam = ref.family(fam)
     lo = ref.rungs_from(fam)
@@ -320,8 +345,28 @@ def verify(k, run, fam):
     stop = ref.value(fam, k, run + 1)
     legs["stopper_composite"] = not mr_is_prime(stop)
     ok = all(legs.values())
-    wit = factor_witness(stop) if legs["stopper_composite"] else None
+    wit = stopper_witness(stop) if legs["stopper_composite"] else None
     return ok, legs, {"i": run + 1, "value": stop, "factor": wit}
+
+
+# Below this a stopper's full factorization is seconds at worst (every v2
+# stopper factored on the spot), so huntlib's factor_witness -- which ends
+# in sympy's factorint -- may still be asked; above it only the BOUNDED
+# chain runs, because a 40-digit semiprime with two 20-digit factors would
+# hold the campaign for as long as factorint needs.
+WITNESS_FULL_BELOW = 10 ** 30
+
+
+def stopper_witness(stop):
+    """A nontrivial prime factor of the composite stopper, or None if the
+    bounded effort (trial division, rho, 200 ECM curves) found none."""
+    fac, _R = certificate.factor_partial(int(stop), ecm_curves=200)
+    if fac:
+        return int(min(fac))
+    if stop < WITNESS_FULL_BELOW:
+        w = factor_witness(int(stop))
+        return int(w) if w and w > 1 else None
+    return None
 
 
 def certify_run(k, run, fam, only=None):
@@ -329,19 +374,20 @@ def certify_run(k, run, fam, only=None):
     run: ({str(i): proof}, [the i left UNPROVED]).
 
     Below the deterministic bound huntlib.certificate.prove answers with
-    the seven-base test, which IS the proof there.  Above it, for the +1
-    families, N - 1 = m*k with m the multiplier: k is factored ONCE --
-    trial division, a bounded rho, bounded ECM, then sympy's factorint on
-    whatever is left, which for a k under the 3.317e24 ceiling is a
-    25-digit number and seconds at most -- the multiplier's own small
-    factors are folded in (m is composite in general here: 15 = 3 * 5),
-    and every value gets BLS75 Theorem 1 on that one factorization.  Every
-    prime factor of k is under the bound because k is, so the certificate
-    is one level deep.  A value the shared factorization cannot prove
-    falls back to certificate.prove's own bounded search, and for the -1
-    families only that fallback runs: the structure there is on N + 1, the
-    ceiling keeps those families under the bound, and the answer stays
-    honest if it is ever asked.
+    the seven-base test, which IS the proof there.  Above it the value's
+    own structure does the work: N - s = m*k with m the multiplier, so k is
+    factored ONCE -- huntlib's bounded chain (trial division, rho, 200 ECM
+    curves) then sympy's factorint on whatever is left (certificate
+    .factor_full; the ceiling K_CEIL is where that was measured to stay
+    seconds in the worst case) -- the multiplier's own small factors are
+    folded in (m is composite in general here: 15 = 3 * 5), and every
+    value gets BLS75 Theorem 1 on N - 1 (s = +1) or Theorem 15, the N+1
+    test with a Lucas sequence per prime, on N + 1 (s = -1) from that one
+    factorization.  A prime factor of k past the bound is admitted with a
+    SUBPROOF of its own (huntlib.certificate's recursion), so the
+    certificate is a finite tree whose leaves are deterministic tests.  A
+    value the shared factorization cannot prove falls back to
+    certificate.prove's own bounded search on both sides.
 
     Every proof is RE-VERIFIED from scratch before it is returned.  A
     certificate that was not checked is a claim, not a certificate.
@@ -349,20 +395,16 @@ def certify_run(k, run, fam, only=None):
     from sympy import factorint
     fam = ref.family(fam)
     k, s = int(k), ref.sign(fam)
-    fac, R = certificate.factor_partial(k, ecm_curves=200)
-    if R > 1:
-        for p, e in factorint(R).items():
-            fac[int(p)] = fac.get(int(p), 0) + int(e)
+    fac = certificate.factor_full(k)
     certs, unproved = {}, []
     lo = ref.rungs_from(fam)
     for i in (range(lo, run + 1) if only is None else only):
         N = ref.value(fam, k, i)
-        proof = None
-        if s > 0:
-            facN = dict(fac)
-            for p, e in factorint(ref.rung(fam, i)).items():
-                facN[int(p)] = facN.get(int(p), 0) + int(e)
-            proof = certificate.prove(N, fac=facN)
+        facN = dict(fac)
+        for p, e in factorint(ref.rung(fam, i)).items():
+            facN[int(p)] = facN.get(int(p), 0) + int(e)
+        proof = (certificate.prove(N, fac=facN) if s > 0
+                 else certificate.prove(N, fac_plus=facN))
         if proof is None:
             proof = certificate.prove(N)
         if proof is not None and not certificate.verify(proof)[0]:
@@ -603,8 +645,12 @@ class Campaign:
                 f"{self.oeis}) = {pc:.4g}: {ref.rung(self.fam, self.filter_n())}"
                 f"*k {self.s:+d} now exceeds the deterministic Miller-Rabin "
                 f"bound, so classification is a seven-base strong "
-                f"probable-prime chain from here and a DISCOVERY is proved "
-                f"by BLS75 certificate (certify_run); the ceiling is k < "
+                f"probable-prime chain from here (the census is counted and "
+                f"a NEAR is a health check either way) and a DISCOVERY is "
+                f"proved by BLS75 certificate on "
+                f"{'N - 1' if self.s > 0 else 'N + 1'} = m*k "
+                f"({'Theorem 1' if self.s > 0 else 'Theorem 15, Lucas'}; "
+                f"certify_run); the ceiling is k < "
                 f"{cpu.k_ceil(self.filter_n(), self.fam):.4g}")
 
     # ---------------------------------------------------------- checkpoint
@@ -1045,9 +1091,12 @@ class Campaign:
                      f"k_proof({self.filter_n()}, {self.oeis}) = "
                      f"{self.proof_crossing():.4g} and a seven-base strong "
                      f"probable-prime chain above it; a DISCOVERY is proved "
-                     f"by certificate either way (certify_run), and the "
-                     f"engine ceiling {target:.4g} is the family's "
-                     f"primality-proof validity bound")
+                     f"by certificate either way (certify_run: BLS75 "
+                     f"{'Theorem 1 on N - 1' if self.s > 0 else 'Theorem 15 on N + 1'}"
+                     f" = m*k, k factored once, subproofs for factors past "
+                     f"the bound), and the engine ceiling {target:.4g} is "
+                     f"where a worst-case certificate was measured to cost "
+                     f"seconds (huntlib.ceiling)")
         self.check_proof_crossing(self.swept_k())
         self.size_pool()
         self.hb.mark(self.u_progress(self.j, self.u))
@@ -1275,24 +1324,33 @@ def _ceiling_drill():
         return False, "CEILING FAIL: the CPU engine swept past k_ceil"
     except ValueError:
         raised.append("cpu k_ceil")
-    # the two signs have DIFFERENT ceilings (lladder_search.k_ceil): the +1
-    # families' is the deterministic bound on k, the -1 families' their
-    # proof crossing, and the engines enforce each
-    if cpu.k_ceil(15, "A088250") != MR_VALID_BELOW or \
-            cpu.k_ceil(15, "A125838") != cpu.k_proof(15, "A125838") or \
-            not cpu.k_proof(15, "A088250") < cpu.k_ceil(15, "A088250"):
+    # the two signs share ONE ceiling (lladder_search.k_ceil, v3): huntlib's
+    # measured K_CEIL, above both crossings, and the engines enforce it on
+    # a -1 family too -- and refuse it tight: the last whole period under
+    # it sweeps (checked, not swept), the next raises
+    if cpu.k_ceil(15, "A088250") != ceiling.K_CEIL or \
+            cpu.k_ceil(15, "A125838") != ceiling.K_CEIL or \
+            not cpu.k_proof(15, "A088250") < cpu.k_ceil(15, "A088250") or \
+            not cpu.k_proof(15, "A125838") < cpu.k_ceil(15, "A125838"):
         return False, ("CEILING FAIL: the family ceilings are not the "
-                       "proof bounds G10 pins")
+                       "one K_CEIL G10 pins")
     engm = gpu.GpuEngine(12, "A125838", p1=13, p2=None, p3=None, q2=1024)
     ceilm = cpu.k_ceil(12, "A125838")
     try:
         engm.sweep(ceilm // engm.W - 1, ceilm // engm.W + 2)
-        return False, "CEILING FAIL: a -1 engine swept past its proof crossing"
+        return False, "CEILING FAIL: a -1 engine swept past K_CEIL"
     except ValueError:
-        raised.append("gpu k_ceil (-1: the proof crossing)")
+        raised.append("gpu k_ceil (-1, past the crossing, at K_CEIL)")
+    jc = ceilm // engm.W
+    engm._check_window(jc - 1, jc, None)        # the last period under it
+    try:
+        engm._check_window(jc, jc + 1, None)
+        return False, "CEILING FAIL: the first period past K_CEIL was accepted"
+    except ValueError:
+        raised.append("gpu k_ceil tight to one period")
     try:
         cpu.CpuEngine(12, "A125838", q2=1024).survivors(10 ** 5, ceilm + 10)
-        return False, "CEILING FAIL: a -1 CPU engine swept past its proof crossing"
+        return False, "CEILING FAIL: a -1 CPU engine swept past K_CEIL"
     except ValueError:
         raised.append("cpu k_ceil (-1)")
     try:
@@ -1337,18 +1395,34 @@ def _ceiling_drill():
                   ", ".join(raised))
 
 
+def _first_prime_rung(fam, k, n_max=24):
+    """The first rung i <= n_max whose value at k is a probable prime, or
+    None -- a drill at an arbitrary k has to take the value it is given."""
+    for i in range(ref.rungs_from(fam), n_max + 1):
+        v = ref.value(fam, k, i)
+        if v >= MR_VALID_BELOW and sprp_base2(v) and mr_is_prime(v):
+            return i
+    return None
+
+
 def _certificate_drill():
-    """A discovery past the proof crossing is PROVED, not just tested.
+    """A discovery past the proof crossing is PROVED, not just tested --
+    on BOTH signs, and at the CEILING.
 
     Below the crossing every certificate takes the deterministic route.
-    Above it the value's own structure -- N - 1 = m*k, k factored once, m's
-    own factors folded in -- gives BLS75 Theorem 1, and the proof must
-    re-verify from scratch and refuse a neighbouring N.  Drilled on the
-    A088250 frontier (every value under the bound) and on the first wheel k
-    past k_proof(15, A088250) whose 15th value is a strong probable prime
-    -- a value past the bound, proved by exactly the wiring the campaign
-    runs when a(15) lands past the crossing.  The multiplier there is 15 =
-    3 * 5, composite, which is what makes the fold worth drilling.
+    Above it the value's own structure -- N - s = m*k, k factored once,
+    m's own factors folded in -- gives BLS75 Theorem 1 (s = +1) or Theorem
+    15, the N+1 Lucas test (s = -1), and each proof must re-verify from
+    scratch and refuse a neighbouring N.  Drilled on the A088250 frontier
+    (every value under the bound), on the first wheel k past
+    k_proof(15, A088250) whose 15th value is a probable prime (Theorem 1;
+    the multiplier 15 = 3 * 5 is composite, which is what makes the fold
+    worth drilling), on the first wheel k past k_proof(19, A125838) whose
+    19th value is one (Theorem 15), and then AT K_CEIL on both signs: a
+    worst-case k (the unit times a balanced semiprime near the ceiling,
+    huntlib.ceiling.hard_k) and a k with a prime factor above the
+    deterministic bound, whose certificate must carry a subproof that
+    cannot be stripped.
     """
     top = max(ref.KNOWN["A088250"])
     k = ref.KNOWN["A088250"][top]
@@ -1359,45 +1433,103 @@ def _certificate_drill():
     if any(c.get("proof") != "deterministic-mr" for c in certs.values()):
         return False, ("CERTIFICATE FAIL: a value under the bound took the "
                        "certificate route")
-    unit = UNIT["A088250"]
-    m = -(-cpu.k_proof(15, "A088250") // unit)
-    kk = None
-    for _ in range(4000):
-        cand = unit * m
-        if ref.value("A088250", cand, 15) >= MR_VALID_BELOW and \
-                sprp_base2(ref.value("A088250", cand, 15)):
-            kk = cand
-            break
-        m += 1
-    if kk is None:
-        return False, ("CERTIFICATE FAIL: no wheel k past the crossing with "
-                       "a probable-prime 15th value in 4000 tries")
-    certs, unproved = certify_run(kk, 15, "A088250", only=(15,))
-    c15 = certs.get("15")
-    if unproved or c15 is None or c15.get("proof") != "bls75-thm1":
-        return False, (f"CERTIFICATE FAIL: 15*{kk}+1 (past the bound) was "
-                       f"not proved by BLS75 Theorem 1: {c15 and c15.get('proof')}")
-    if int(c15["N"]) != ref.value("A088250", kk, 15) or int(c15["R"]) != 1:
-        return False, ("CERTIFICATE FAIL: the Theorem 1 proof is not about "
-                       "the value, or N - 1 was not factored completely")
-    ok, why = certificate.verify(c15)
-    if not ok:
-        return False, f"CERTIFICATE FAIL: the proof does not re-verify: {why}"
-    if certificate.verify(dict(c15, N=int(c15["N"]) + 2))[0]:
-        return False, ("CERTIFICATE FAIL: the proof verified for a "
-                       "neighbouring N")
-    if certificate.verify({"proof": "deterministic-mr",
-                           "N": int(c15["N"])})[0]:
-        return False, ("CERTIFICATE FAIL: a deterministic-MR claim past the "
-                       "bound was accepted as a proof")
-    return True, (f"certificates ok: A088250 a({top})'s {top} values take the "
-                  f"deterministic route and re-verify; past the crossing, "
-                  f"15*k+1 = {ref.value('A088250', kk, 15):.4g} at k = {kk:.4g} "
-                  f"is proved by BLS75 Theorem 1 on N - 1 = 15*k factored "
-                  f"completely ({len(c15['factors'])} prime factors, every "
-                  f"one under the deterministic bound), re-verifies from "
-                  f"scratch, and is refused for N + 2 and as a bare "
-                  f"deterministic-MR claim")
+    parts = [f"A088250 a({top})'s {top} values take the deterministic route "
+             f"and re-verify"]
+    # past the crossing, both signs, at the filters the campaigns cross it
+    for fam, n, want in (("A088250", 15, "bls75-thm1"),
+                         ("A125838", 19, "bls75-thm15")):
+        unit = UNIT[fam]
+        m = -(-cpu.k_proof(n, fam) // unit)
+        kk = None
+        for _ in range(4000):
+            cand = unit * m
+            v = ref.value(fam, cand, n)
+            if v >= MR_VALID_BELOW and sprp_base2(v) and mr_is_prime(v):
+                kk = cand
+                break
+            m += 1
+        if kk is None:
+            return False, (f"CERTIFICATE FAIL: no wheel k of {fam} past the "
+                           f"crossing with a probable-prime value at rung "
+                           f"{n} in 4000 tries")
+        certs, unproved = certify_run(kk, n, fam, only=(n,))
+        c = certs.get(str(n))
+        if unproved or c is None or c.get("proof") != want:
+            return False, (f"CERTIFICATE FAIL: {ref.rung(fam, n)}*{kk}{ref.sign(fam):+d} "
+                           f"(past the bound) was not proved by {want}: "
+                           f"{c and c.get('proof')}")
+        if int(c["N"]) != ref.value(fam, kk, n) or int(c["R"]) != 1:
+            return False, (f"CERTIFICATE FAIL: the {want} proof is not about "
+                           f"the value, or N - s was not factored completely")
+        ok, why = certificate.verify(c)
+        if not ok:
+            return False, f"CERTIFICATE FAIL: the {want} proof does not re-verify: {why}"
+        if certificate.verify(dict(c, N=int(c["N"]) + 2))[0]:
+            return False, (f"CERTIFICATE FAIL: the {want} proof verified for "
+                           f"a neighbouring N")
+        if certificate.verify({"proof": "deterministic-mr",
+                               "N": int(c["N"])})[0]:
+            return False, ("CERTIFICATE FAIL: a deterministic-MR claim past "
+                           "the bound was accepted as a proof")
+        parts.append(f"{fam}: {ref.rung(fam, n)}*k{ref.sign(fam):+d} = "
+                     f"{ref.value(fam, kk, n):.4g} at k = {kk:.4g} past the "
+                     f"crossing is proved by {want} on N {'-' if ref.sign(fam) > 0 else '+'} 1 "
+                     f"factored completely ({len(c['factors'])} primes), "
+                     f"re-verifies, refused for N + 2 and as a bare MR claim")
+    # AT THE CEILING, both signs: the worst-case k, then the recursion
+    t0 = time.time()
+    for fam in ("A088250", "A125838"):
+        unit = UNIT[fam]
+        want = "bls75-thm1" if ref.sign(fam) > 0 else "bls75-thm15"
+        for label, maker in (("hard", lambda sd: ceiling.hard_k(
+                                  ceiling.K_CEIL - 10 ** 38, unit, seed=sd)[0]),
+                             ("big-prime", lambda sd: ceiling.big_prime_k(
+                                  ceiling.K_CEIL // 10 ** 6 + sd * 10 ** 30, unit)[0])):
+            kk, i = None, None
+            for sd in range(1, 40):
+                cand = maker(sd)
+                i = _first_prime_rung(fam, cand)
+                if i is not None:
+                    kk = cand
+                    break
+            if kk is None:
+                return False, (f"CERTIFICATE FAIL: no {label} k of {fam} near "
+                               f"K_CEIL with a probable-prime value in 39 tries")
+            if kk >= cpu.k_ceil(i, fam):
+                return False, f"CERTIFICATE FAIL: the {label} k is past the ceiling"
+            certs, unproved = certify_run(kk, i, fam, only=(i,))
+            c = certs.get(str(i))
+            if unproved or c is None or c.get("proof") != want:
+                return False, (f"CERTIFICATE FAIL ({label}, {fam}): rung {i} at "
+                               f"k = {kk:.4g} not proved by {want}: "
+                               f"{c and c.get('proof')}")
+            if int(c["R"]) != 1 or not certificate.verify(c)[0]:
+                return False, (f"CERTIFICATE FAIL ({label}, {fam}): the proof "
+                               f"at the ceiling is incomplete or does not "
+                               f"re-verify")
+            if certificate.verify(dict(c, N=int(c["N"]) + 2))[0]:
+                return False, (f"CERTIFICATE FAIL ({label}, {fam}): verified "
+                               f"for a neighbouring N")
+            if label == "big-prime":
+                subs = c.get("subproofs") or {}
+                big = [p for p in c["factors"] if int(p) >= MR_VALID_BELOW]
+                if not big or any(p not in subs for p in big):
+                    return False, (f"CERTIFICATE FAIL ({fam}): the prime factor "
+                                   f"of k above the bound carries no subproof")
+                if certificate.verify({a: b for a, b in c.items()
+                                       if a != "subproofs"})[0]:
+                    return False, (f"CERTIFICATE FAIL ({fam}): the proof "
+                                   f"stripped of its subproof still verified")
+                parts.append(f"{fam} at k = {kk:.3g} (a {len(str(big[0]))}-digit "
+                             f"prime factor above the bound): {want} with a "
+                             f"subproof of it, which cannot be stripped")
+            else:
+                parts.append(f"{fam} at k = {kk:.3g} (the unit x two "
+                             f"{len(str(max(int(p) for p in c['factors'])))}-digit "
+                             f"primes): {want}, R = 1, re-verified")
+    parts.append(f"the four ceiling certificates took {time.time() - t0:.1f} s "
+                 f"in all")
+    return True, "certificates ok: " + "; ".join(parts)
 
 
 def _resume_drill():
@@ -1533,6 +1665,96 @@ def _stop_on_discovery_drill():
     return True, ("stop-on-discovery ok: a resumed campaign with 0, 1, 2 or "
                   "7 finds already in the checkpoint does NOT stop before "
                   "finding something, and DOES stop on the next new find")
+
+
+def _v2_resume_drill():
+    """Every family's REAL v2 checkpoint resumes under v3 -- through the
+    policy, at the same filter, with the frontier and census intact, at a
+    cursor the new ceiling lets CONTINUE.
+
+    This is the drill for what the battery could not see twice before: a
+    campaign that refuses its own predecessor's cursor.  The four -1
+    families sit exactly at their v2 ceilings (the proof crossing of their
+    filter), so under v3 their first period has to be accepted by the
+    engine's window check and the loop's own two conditions -- the swept k
+    is under k_ceil and the next period fits under it -- and
+    --stop-on-discovery must not fire on the finds already in the file.
+    Read-only on the real files: each is copied into a scratch path.
+    """
+    import json
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix="lladder-v2resume-")
+    path = str(pathlib.Path(tmp) / "c.json")
+
+    class _A:
+        pass
+    rows = []
+    try:
+        for fam in ref.FAMILIES:
+            real = ckpt_path(fam)
+            if not os.path.exists(real):
+                continue
+            with open(real) as fh:
+                st = json.load(fh)
+            if st.get("key") not in _POLICIES[fam].readable():
+                return False, (f"V2 RESUME FAIL: {real} carries the key "
+                               f"{st.get('key')!r}, which the {fam} policy "
+                               f"does not list")
+            checkpoint.save(path, st)
+            a = _A()
+            for kk, v in dict(family=fam, fresh=False, to=None,
+                              stop_on_discovery=True, heartbeat=30.0,
+                              gpu_yield_ms=0.0, status=False, selftest=False,
+                              workers=1, worker_ramp=WORKER_RAMP_S).items():
+                setattr(a, kk, v)
+            pol = _POLICIES[fam].at(path)
+            pol.refuse_mismatch()                    # the third reader
+            c = Campaign(a, ckpt=path, cursor=pol)
+            front = max(ref.FOUND[fam]) if ref.FOUND[fam] else max(ref.KNOWN[fam])
+            if not c.loaded or c.frontier() != front or c.filter_n() != front + 1:
+                return False, (f"V2 RESUME FAIL: {fam} loaded={c.loaded}, "
+                               f"frontier {c.frontier()}, filter {c.filter_n()} "
+                               f"-- expected a({front}) and n = {front + 1}")
+            if c.swept_k() != int(st["k"]) or c.j != int(st["j"]) or \
+                    c.discoveries != int(st["discoveries"]):
+                return False, (f"V2 RESUME FAIL: {fam} resumed at k = "
+                               f"{c.swept_k()}, period {c.j}, {c.discoveries} "
+                               f"finds; the file says {st['k']}, {st['j']}, "
+                               f"{st['discoveries']}")
+            ceil = cpu.k_ceil(c.filter_n(), fam)
+            if not (c.swept_k() < ceil and (c.j + 1) * c.eng.W <= ceil):
+                return False, (f"V2 RESUME FAIL: {fam} at k = {c.swept_k():.4g} "
+                               f"would stop at once under the ceiling {ceil:.4g}")
+            c.eng._check_window(c.j, c.j + 1, c.k_min())   # the engine agrees
+            if c.discoveries > c._discoveries_at_start:
+                return False, (f"V2 RESUME FAIL: {fam} would stop on the "
+                               f"{c.discoveries} finds already in the file")
+            if ref.sign(fam) < 0 and c.swept_k() < c.proof_crossing() - 2 * c.eng.W:
+                return False, (f"V2 RESUME FAIL: {fam}'s v2 cursor is not at "
+                               f"its crossing {c.proof_crossing():.4g}")
+            line = c.status_line()
+            if f"filter n = {front + 1}" not in line or f"next a({front + 1})" not in line:
+                return False, f"V2 RESUME FAIL: {fam} status line: {line}"
+            rows.append(f"{fam} n = {front + 1} at k = {c.swept_k():.4g}"
+                        + (" (its crossing)" if ref.sign(fam) < 0 else ""))
+    finally:
+        for f in pathlib.Path(tmp).glob("*"):
+            try:
+                f.unlink()
+            except OSError:
+                pass
+        try:
+            pathlib.Path(tmp).rmdir()
+        except OSError:
+            pass
+    if not rows:
+        return True, "v2 resume: no v2 checkpoints present; nothing to resume"
+    return True, (f"v2 resume ok: {len(rows)} real v2 checkpoints load as "
+                  f"inherited cursors through all three readers, at the "
+                  f"filter after each frontier with the census and finds "
+                  f"intact, under the ceiling with their next period "
+                  f"accepted, and --stop-on-discovery armed on THIS run's "
+                  f"finds only: " + "; ".join(rows))
 
 
 def _other_families_cursor_drill(fam):
@@ -1805,7 +2027,7 @@ def selftest(fam="A088250"):
     t0 = time.time()
     rows = []
     for g in (ref.GATES + cpu.GATES + gpu.GATES + model.GATES
-              + certificate.GATES):
+              + certificate.GATES + ceiling.GATES):
         rows.append(g())
     rows.append(drills.event_kind_drill(
         lambda c: event_kind(*c), _event_cases()))
@@ -1814,7 +2036,7 @@ def selftest(fam="A088250"):
         rows.append(d)
     rows.append(_other_families_cursor_drill(fam))
     for d in (_ceiling_drill, _canary_hunt, _protocol_drill,
-              _certificate_drill, _resume_drill,
+              _certificate_drill, _resume_drill, _v2_resume_drill,
               _classification_drill, _stop_on_discovery_drill,
               _families_stay_apart):
         rows.append(d())
@@ -1874,9 +2096,9 @@ def main(argv=None):
                     help="read the checkpoint and say where the hunt is")
     ap.add_argument("--to", type=float, default=None,
                     help="stop at this depth on the k line (default: the "
-                         "engine ceiling -- the family's primality-proof "
-                         "validity bound, 3.3e24 for the +1 families and "
-                         "the proof crossing, about 2e23, for the -1 ones)")
+                         "engine ceiling, huntlib.ceiling.K_CEIL = 1e40 for "
+                         "every family -- where a worst-case certificate per "
+                         "discovery was measured to cost seconds)")
     ap.add_argument("--stop-on-discovery", action="store_true",
                     help="checkpoint and exit once THIS RUN confirms a find "
                          "(finds already in the checkpoint do not count)")

@@ -31,16 +31,22 @@ families, 2n - 1 for the odd ones.  So the classification is a PROOF below
 the PROOF CROSSING k_proof(n, F) = (3.317e24 - 1 - s) / m_max -- 2.2e23 at
 n = 15 for A088250, 1.1e23 at n = 16 for A164325 -- and above it the same
 seven-base chain is a strong probable-prime test: excellent evidence, not
-a proof.  For the +1 families that is where the CERTIFICATE takes over:
-N - 1 = m*k is completely factored once k is (m is tiny), so BLS75
-Theorem 1 (huntlib.certificate) proves every value of a discovery at any
-height, and the proof is ONE LEVEL DEEP as long as every prime factor of
-k is under the deterministic bound -- guaranteed while k is.  So the +1
-ceiling is k_ceil = MR_VALID_BELOW on k itself.  The -1 families' structure
-is on N + 1, which needs an N+1 test huntlib does not have, so their
-ceiling stays AT the crossing and every primality decision on them is a
-proof.  G10 pins the crossing per (n, F) and both ceilings, so no future
-edit can quietly assume determinism after the range moves.
+a proof.  That is where the CERTIFICATE takes over, on BOTH signs (v3):
+N - s = m*k is completely factored once k is (m is tiny), so BLS75
+Theorem 1 on N - 1 (the +1 families) or Theorem 15 on N + 1 (the -1
+families; huntlib.certificate's N+1 route, with a Lucas sequence per prime
+of the factorization) proves every value of a discovery at any height, and
+a prime factor of k above the deterministic bound gets a subproof of its
+own by the same machinery.  So no value size bounds k; what does is the
+COST of that certificate per discovery -- factoring k once and proving its
+factors -- which huntlib.ceiling measured (a worst-case k, unit times a
+balanced semiprime, is seconds to 1e40) and pins as K_CEIL = 1e40, ONE
+ceiling for every family and both signs.  v2's ceilings were the
+deterministic bound on k for the +1 families and the crossing itself for
+the -1 ones (no N+1 route existed); the crossing is now a MILESTONE the
+launcher logs, not a stop.  G10 pins the crossing per (n, F) and the
+ceiling, so no future edit can quietly assume determinism after the
+range moves.
 
 Gates here: G3 (constructed killed set == oracle divisibility, both
 directions, all families, k space and unit space; a unit that is not
@@ -48,7 +54,7 @@ forced is refused), G4 (CPU survivors == the oracle's definition of a
 survivor on populated windows), G5 (CPU re-derives two knowns of every
 family end-to-end as FIRST occurrences), G6 (engine run lengths == sympy
 BPSW), G10 (numeric hygiene: where the values pass the deterministic
-Miller-Rabin bound, and the two ceilings that follow).
+Miller-Rabin bound, and the one measured ceiling above it).
 """
 
 import pathlib as _pathlib
@@ -59,6 +65,7 @@ from sympy import primerange
 
 _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
 from huntlib import shutdown as _shutdown                      # noqa: E402
+from huntlib.ceiling import K_CEIL                             # noqa: E402
 from huntlib.primes import MR_VALID_BELOW, mr_is_prime         # noqa: E402
 from lladder_reference import (K_FLOOR, KNOWN, FAMILIES,        # noqa: E402
                                family, forbidden_k_residues, mults, rung,
@@ -90,26 +97,27 @@ def k_proof(n, fam):
 
 
 def k_ceil(n, fam):
-    """The enforced ceiling on k: the PRIMALITY-PROOF VALIDITY BOUND of the
-    family, which is what OPTIMIZATION.md 2.7 says to pick.
+    """The enforced ceiling on k: huntlib.ceiling.K_CEIL, the height below
+    which a worst-case CERTIFICATE per discovery is measured to cost
+    seconds -- the same number for every family and both signs (v3).
 
-    s = -1: the proof crossing itself.  The structure there is
-    N + 1 = m*k and huntlib has no N+1 test, so past k_proof nothing could
-    prove a discovery; the engine stops where the proofs do.
+    Above the proof crossing a discovery is proved by certificate on its
+    own structure, N - s = m*k factored once per find: BLS75 Theorem 1 on
+    N - 1 for s = +1, Theorem 15 on N + 1 for s = -1, with a subproof for
+    any prime factor of k past the deterministic bound.  v2 stopped the +1
+    families at the deterministic bound on k (3.317e24, so that no factor
+    needed a subproof) and the -1 families at the crossing (no N+1 route);
+    both limits were the certificate's, not the engine's, and both are
+    gone.  `n` and `fam` are kept in the signature because the ceiling is
+    a property of the family's certificate route, which G10 checks per
+    (n, F) -- and because a project whose route depended on n would state
+    it here.
 
-    s = +1: MR_VALID_BELOW, on k ITSELF.  Above the crossing a discovery is
-    proved by BLS75 Theorem 1 (huntlib.certificate) on N - 1 = m*k, which
-    is completely factored once k is.  Every prime factor of k is below k,
-    so with k under the deterministic bound the certificate is ONE LEVEL
-    DEEP.  Past this k a factor of k could itself exceed the bound and need
-    a subproof; that is a new engine version with gates at that height.
-
-    Both are EXCLUSIVE: k_ceil - 1 is the largest k that may be swept.
+    EXCLUSIVE: k_ceil - 1 is the largest k that may be swept.
     """
-    fam = family(fam)
-    if sign(fam) > 0:
-        return MR_VALID_BELOW
-    return k_proof(n, fam)
+    family(fam)
+    int(n)
+    return K_CEIL
 
 
 def k_floor(q2):
@@ -471,13 +479,16 @@ def g10_values_stay_inside_the_mr_bound():
     halves, per (n, F), because a bound derived by formula fails by being
     off by one, not by being wildly wrong.
 
-    Then the two CEILINGS.  For the -1 families the ceiling IS the
-    crossing.  For the +1 families it is the deterministic bound on k
-    itself: at the top of the range the values are PAST the bound, so the
-    certificate is load-bearing there rather than decorative, while every
-    k -- hence every prime factor of k -- is under it, so the certificate
-    is one level deep.
+    Then the CEILING.  It is huntlib.ceiling's measured K_CEIL for every
+    family and both signs; it sits above every crossing the campaigns can
+    reach (so the certificate is load-bearing at the top of the range,
+    not decorative), above every frontier this project has found and above
+    every v2 ceiling the campaigns stopped at (so a resumed campaign
+    continues rather than stopping at once); and at the ceiling the
+    largest value is past the deterministic bound on every family, which
+    is what the certificate drill in launch.py proves both routes at.
     """
+    from lladder_reference import FOUND
     for fam in FAMILIES:
         s = sign(fam)
         for n in range(FAMILIES[fam]["first_n"], 41):
@@ -494,25 +505,26 @@ def g10_values_stay_inside_the_mr_bound():
                                "be deterministic -- the crossing is not the "
                                "bound" % (n, fam, c, c))
             top = k_ceil(n, fam)
-            if s < 0 and top != c:
+            if top != K_CEIL:
                 return False, ("G10 FAIL: the %s ceiling at n = %d is %.4g, "
-                               "not its proof crossing %.4g -- a -1 family "
-                               "has no certificate past the crossing"
-                               % (fam, n, top, c))
-            if s > 0:
-                if top != MR_VALID_BELOW:
-                    return False, ("G10 FAIL: the %s ceiling at n = %d is "
-                                   "%.4g, not the deterministic bound on k"
-                                   % (fam, n, top))
-                if mm * (top - 1) + s < MR_VALID_BELOW:
-                    return False, ("G10 FAIL: at the %s ceiling the top value "
-                                   "at n = %d is still deterministic -- the "
-                                   "certificate would be decorative"
-                                   % (fam, n))
-                if top - 1 >= MR_VALID_BELOW:
-                    return False, ("G10 FAIL: the largest sweepable k of %s "
-                                   "is not under the bound -- a factor of k "
-                                   "could need a subproof" % fam)
+                               "not huntlib.ceiling.K_CEIL = %.4g"
+                               % (fam, n, top, K_CEIL))
+            if top <= c:
+                return False, ("G10 FAIL: the %s ceiling at n = %d is under "
+                               "its proof crossing %.4g -- the certificate "
+                               "would be decorative" % (fam, n, c))
+            if mm * (top - 1) + s < MR_VALID_BELOW:
+                return False, ("G10 FAIL: at the %s ceiling the top value at "
+                               "n = %d is still deterministic" % (fam, n))
+        # the v2 ceilings the campaigns stopped at, and the frontiers
+        v2 = MR_VALID_BELOW if s > 0 else k_proof(max(FOUND[fam]) + 1, fam)
+        if K_CEIL <= v2 or any(K_CEIL <= k for k in FOUND[fam].values()):
+            return False, (f"G10 FAIL: K_CEIL = {K_CEIL:.4g} does not lie "
+                           f"above {fam}'s v2 ceiling {v2:.4g} and its "
+                           f"frontier -- a resumed campaign would stop at "
+                           f"once")
+    if K_CEIL - 1 < MR_VALID_BELOW:
+        return False, "G10 FAIL: the ceiling is under the deterministic bound"
     kk, ii = 11429352906540438870, 15
     if not mr_is_prime(14 * kk + 1):
         return False, "G10 FAIL: A088250's frontier term's 14th value is not prime"
@@ -522,12 +534,14 @@ def g10_values_stay_inside_the_mr_bound():
                   "(3.317e24) rearranged, tight to one k, for every filter "
                   "up to n = 40 of all seven families -- k < %.4g at n = 15 "
                   "and %.4g at n = 17 for A088250, %.4g at n = 16 for A164325 "
-                  "(m_max = 31); the -1 families' ceilings are their "
-                  "crossings (every decision a proof) and the +1 families' "
-                  "is the bound on k itself, %.4g, where the top value is "
-                  "past the bound and every factor of k is under it"
+                  "(m_max = 31); the ceiling is ONE number for every family "
+                  "and both signs, huntlib.ceiling.K_CEIL = %.4g (measured: "
+                  "a worst-case certificate there is seconds), above every "
+                  "crossing to n = 40, every frontier found and every v2 "
+                  "ceiling, with the top value past the bound at it on every "
+                  "family"
                   % (k_proof(15, "A088250"), k_proof(17, "A088250"),
-                     k_proof(16, "A164325"), k_ceil(15, "A088250")))
+                     k_proof(16, "A164325"), K_CEIL))
 
 
 GATES = [g3_table_matches_divisibility, g4_cpu_matches_oracle,

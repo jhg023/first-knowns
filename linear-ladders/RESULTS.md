@@ -547,43 +547,47 @@ state, and BENCHMARKS.md's sibling table now says so.
 
 ## What is open now
 
-Every family has been swept to its ceiling. The frontier of each is now
+Every family was swept to its v2 ceiling; the frontier of each is now
 this project's, and the next term of each is open above a searched-empty
-bound:
+bound. **v3 (2026-09-04) raised every ceiling to `10⁴⁰`** — one number
+for all seven families, from the measured cost of a certificate rather
+than from where a test stops being a proof — and each campaign resumes
+from its v2 cursor at the filter after its frontier:
 
-| family | frontier | open next | median | under the ceiling |
-|---|---|---|---|---|
-| A088250 | **a(17) = 1,048,124,771,278,912,649,231,910 (this project, 2026-09-03)** | a(18) > `3.3168×10²⁴` (swept empty to the ceiling) | `2.2×10²⁶` | 0% — the campaign is at its ceiling |
-| A125838 | **a(18) = 74,882,388,347,598,051,560,340 (this project, 2026-09-03)** | a(19) > `1.7305×10²³` (swept empty to the ceiling) | `8.5×10²⁵` | 0% — the campaign is at its ceiling |
-| A125839 | **a(18) = 6,530,891,065,478,723,143,200 (this project, 2026-09-03)** | a(19) > `1.7305×10²³` (swept empty to the ceiling) | `1.1×10²⁴` | 0% — the campaign is at its ceiling |
-| A173750 | **a(18) = a(19) = 147,316,106,448,079,863,444,150 (this project, 2026-09-03)** | a(20) > `3.3168×10²⁴` (swept empty to the ceiling) | `1.3×10²⁸` | 0% — the campaign is at its ceiling |
-| A164326 | **a(16) = 10,214,000,995,018,156,616,280 (this project, 2026-09-03)** | a(17) > `9.998×10²²` (swept empty to the ceiling) | `8.3×10²³` | 0% — the campaign is at its ceiling |
-| A164325 | **a(18) = 511,721,589,397,871,969,516,400 (this project, 2026-09-03)** | a(19) > `3.3168×10²⁴` (swept empty to the ceiling) | `7.9×10²⁷` | 0% — the campaign is at its ceiling |
-| A088651 | **a(16) = 43,263,866,546,732,976,414,270 (this project, 2026-09-04)** | a(17) > `1.942×10²³` (swept empty to the ceiling) | `2.2×10²⁴` | 0% — the campaign is at its ceiling |
+| family | frontier | open next | bound (swept empty) | resumes at | rate | median from the bound |
+|---|---|---|---|---|---|---|
+| A088250 | **a(17) = 1,048,124,771,278,912,649,231,910 (this project, 2026-09-03)** | a(18) | > `3.3168×10²⁴` | n = 18 | `1.45×10²¹ k/s` | `2.2×10²⁶` |
+| A125838 | **a(18) = 74,882,388,347,598,051,560,340 (this project, 2026-09-03)** | a(19) | > `1.7305×10²³` | n = 19 | `7.2×10²⁰` | `8.6×10²⁵` |
+| A125839 | **a(18) = 6,530,891,065,478,723,143,200 (this project, 2026-09-03)** | a(19) | > `1.7305×10²³` | n = 19 | `2.4×10²⁰` | `1.5×10²⁴` |
+| A173750 | **a(18) = a(19) = 147,316,106,448,079,863,444,150 (this project, 2026-09-03)** | a(20) | > `3.3168×10²⁴` | n = 20 | `3.0×10²¹` | `1.3×10²⁸` |
+| A164326 | **a(16) = 10,214,000,995,018,156,616,280 (this project, 2026-09-03)** | a(17) | > `9.998×10²²` | n = 17 | `1.8×10²⁰` | `1.05×10²⁴` |
+| A164325 | **a(18) = 511,721,589,397,871,969,516,400 (this project, 2026-09-03)** | a(19) | > `3.3168×10²⁴` | n = 19 | `1.8×10²¹` | `7.9×10²⁷` |
+| A088651 | **a(16) = 43,263,866,546,732,976,414,270 (this project, 2026-09-04)** | a(17) | > `1.942×10²³` | n = 17 | `3.75×10²⁰` | `2.2×10²⁴` |
 
-So no campaign remains for this engine, and the project is **paused**.
-What moves any of these is a higher ceiling, which is a new engine
-version, and the model says where it would pay. The −1 families' ceilings
-are their proof crossings, `3.317×10²⁴ / m_max`, because their values'
-structure is on `N + 1 = m·k` and huntlib has no N+1 certificate; an
-**N+1 BLS75 route** would lift all four to the deterministic bound on `k`
-itself, `3.317×10²⁴`, and from each family's bound the model puts its
-next term under that with
+**Where a night's sweep pays.** From each family's bound, at the
+measured rate of its resumed filter and of the filters it promotes into
+(the rates above; [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v3 for the
+c = 20 ones), the model's expected number of terms in nine hours of
+sweep is **1.1 for each of A164326, A125839 and A088651** — `P(a(17))
+= 94%`, `P(a(19)) = 93%`, `P(a(17)) = 93%` respectively, with about a
+one-in-five chance of the term after it landing in the same night — and
+0.24 for A125838, 0.20 for A088250, 0.02 each for A173750 and A164325.
+Read every figure as a floor: the twenty finds here landed anywhere from
+0.01× to 7.9× their medians, with the model's `E` averaging 1.2 over the
+eighteen searched terms. Where each campaign stands is read with
+`python launch.py --status --family <name>`.
 
-| family | open term | median from the bound | P(under `3.317×10²⁴`) |
-|---|---|---|---|
-| A164326 | a(17) | `1.05×10²⁴` | **83%** |
-| A125839 | a(19) | `1.5×10²⁴` | **74%** |
-| A088651 | a(17) | `2.2×10²⁴` | **62%** |
-| A125838 | a(19) | `8.6×10²⁵` | 6% |
-
-— three probable terms for one certificate route, on sweeps of an hour
-or two each at the v2 rates. The +1 families' ceilings are the bound on
-`k` itself, past which a factor of `k` could exceed the bound and need a
-subproof; a recursive certificate would raise them, but their next terms'
-medians are `2.3×10²⁶` (A088250 a(18)), `1.3×10²⁸` (A173750 a(20)) and
-`7.9×10²⁷` (A164325 a(19)), so the probability of any under even
-`10²⁵` is a few percent. Read every median as a floor: the twenty finds
-here landed anywhere from 0.01× to 7.9× theirs, with the model's `E`
-averaging 1.2 over the eighteen searched terms. Where each campaign
-stands is read with `python launch.py --status --family <name>`.
+**The bounds hold above the crossing, on both signs.** Every −1
+family's v2 sweep stayed under its crossing, so those bounds rest on
+proofs alone; from here every family sweeps past its crossing, where the
+classification is a seven-base strong probable-prime chain. The
+searched-empty claim is sound there for the reason the +1 sections
+already give: a composite that passes the chain can only *lengthen* a
+run, never hide one, so a true run of `n` would have passed every test
+and been claimed — and then proved by certificate (BLS75 Theorem 1 on
+`N − 1 = m·k` for the +1 families, Theorem 15 on `N + 1 = m·k` for the
+−1 ones, `k` factored once, subproofs for any factor past the bound,
+every proof re-verified before the evidence file is written). The
+census above the crossing is a count of probable-prime runs; the
+`[NEAR]` line is a health check on the cheap legs; only a discovery is
+certified.

@@ -293,6 +293,30 @@ each README stays.
    `[STATUS]` lines that the pool is not binding, the rate is the
    benchmark's for that filter, and `next` names the right rung.
 
+5h. **THE CEILING IS HIGH BY DEFAULT, AND IT COMES FROM `huntlib.ceiling`.**
+   The deterministic Miller-Rabin bound (3.317e24) is where a CLASSIFICATION
+   stops being a proof; it is NOT where a hunt stops. A discovery is proved
+   by CERTIFICATE on its own structure -- `huntlib.certificate` has BLS75
+   Theorem 1 and 5 on N - 1, Theorem 15 (Lucas) on N + 1, and subproofs for
+   any prime factor past the bound -- so for every ladder here (values
+   m*k +- 1) one factorization of k proves a whole run at any height. What
+   bounds k is the COST of that certificate per discovery, and
+   `huntlib.ceiling` MEASURED it: a worst-case k (a balanced semiprime) is
+   factored and proved in seconds to 1e40, so **`huntlib.ceiling.K_CEIL =
+   1e40` is the ceiling every new project starts from, on both signs.**
+   Four campaigns ran into the deterministic bound with their next term
+   probably just above it (prime-ladders' A084701, linear-ladders' four -1
+   families) and each paid an engine version to move it; that was the
+   wrong default. A project's `k_ceil` returns `K_CEIL`, states its proof
+   crossing separately as a `[MILESTONE]`, drills its own values at the
+   height on every route it uses (`certificate_drill` at `K_CEIL`, with
+   the recursion exercised and the subproof shown unstrippable), runs the
+   repo-wide `huntlib.ceiling.GATES`, and puts a populated parity window
+   against the ceiling. A LOWER ceiling is allowed only with a
+   measurement that says why (a value with no m*k +- 1 structure, whose
+   N -+ 1 is structureless: measure `subproof_rate` there). See
+   CONVENTIONS.md "Numeric hygiene".
+
 6. **New projects** copy the skeleton, import huntlib for
    infrastructure, keep all mathematics in-project, and add a row to the
    top-level README's project table. Only projects with verified
@@ -321,6 +345,12 @@ each README stays.
    - [ ] campaign configuration priced the way 5c says (device s and
          host core-s per unit k-line, per candidate setting), not just a
          fast kernel
+   - [ ] **the ceiling is `huntlib.ceiling.K_CEIL` (1e40) on every sign**
+         (rule 5h), not the deterministic bound: `k_ceil` returns it, the
+         proof crossing is a `[MILESTONE]`, the certificate route for each
+         sign (N - 1 or N + 1, from the value's structure) is drilled AT
+         the ceiling with a subproof exercised, `huntlib.ceiling.GATES` is
+         in the battery, and a populated parity window sits against it
    - [ ] checkpoints fsynced + `.bak` rotated, corrupt-file path drilled,
          and a save that a file lock defeats DEFERS instead of ending the
          run (`drills.lock_drill`; CONVENTIONS.md "Writing a cursor")
@@ -389,6 +419,21 @@ each README stays.
    in every session that tried it. Write the script to a file in the
    scratchpad with the Write tool and run `python that_file.py`. A
    one-line `python -c` with simple quoting is fine.
+
+9. **A project directory holds ONLY what the hunt needs.** The five
+   files, the four documents, `model_results.json`, `evidence/` -- and
+   nothing else. Every harness an agent writes -- an A/B sweep, a
+   certificate-cost timer, a model query that says which family to run
+   tonight, a one-off verification script -- is written to the session
+   SCRATCHPAD, never into the project, and is not committed. What
+   survives of a harness is its MEASUREMENT, written into the project's
+   OPTIMIZATION_LOG.md (or RESULTS.md) with enough of the method that the
+   next person can rewrite it in ten minutes; the script itself is a
+   thing nobody will run again against a tree that has moved on, and a
+   tree with stray scripts in it stops being the answer to "what runs if
+   someone starts this from zero" (OPTIMIZATION.md rule 0). Before
+   committing, `git status` must show only the skeleton, the documents
+   and evidence; anything else gets deleted, not explained.
 
 ## Quick commands (run them in the ACTIVE project only -- Rule 2)
 
