@@ -111,22 +111,23 @@ protocol").  A survivor is a k with a run length r:
   None       r < CENSUS_FLOOR: noise, not counted.
 
 TWO CURSORS, BECAUSE COVERAGE IS COARSER THAN WORK (CONVENTIONS.md).  The
-three-level wheel emits a period's candidates in (t, s, u) order, so the k
-line is contiguous only at the end of a whole period -- 1.92e21 of k, a
-minute of device at A088250's opening filter and five seconds at n = 17.
-COVERAGE (`boundary`, the k below which every value is swept) advances one
-period at a time and is the only thing a least-claim rests on; WORK
-(`j`, `u`) advances every launch.  Values classified mid-period are held IN
-THE CHECKPOINT (`pending`) and narrated in k order when the period closes,
-so a discovery is only announced once it is known to be the least.  A find
-costs at most one period of over-sweep (a minute at the opening filters,
-seconds from n = 17).  Because periods can close every few seconds at the
-deeper filters, the period-close save and the period-close log line are
-RATE-LIMITED (CKPT_MIN_S, PERIOD_LOG_S): a save every few seconds is tens
-of thousands of chances per campaign for a scanner's handle to land in
-the rename window (CONVENTIONS.md "Writing a cursor"), and a line every
+v4 engine sieves a SEGMENT of eng.seg_periods wheel periods at once (64 on
+the unit wheel: 1.23e23 of k), and a segment's candidates come out in
+(t, s, u, period) order, so the k line is contiguous only at the end of a
+whole segment.  COVERAGE (`boundary`, the k below which every value is
+swept) advances one segment at a time and is the only thing a least-claim
+rests on; WORK (`j`, `u`) advances every launch: `j` is the segment's first
+period and `u` the launches of it that are classified.  Values classified
+mid-segment are held IN THE CHECKPOINT (`pending`) and narrated in k order
+when the segment closes, so a discovery is only announced once it is known
+to be the least.  A find costs at most one segment of over-sweep (minutes
+at the opening filters, seconds from n = 18).  Because segments can close
+every few seconds at the deeper filters, the close save and the close log
+line are RATE-LIMITED (CKPT_MIN_S, PERIOD_LOG_S): a save every few seconds
+is tens of thousands of chances per campaign for a scanner's handle to land
+in the rename window (CONVENTIONS.md "Writing a cursor"), and a line every
 few seconds is a log nobody can read.  The boundary snapshot is still
-taken at every period close, so an interrupt writes the latest one.
+taken at every segment close, so an interrupt writes the latest one.
 
 LOAD (CONVENTIONS.md "Sizing a hunt so it leaves the machine usable").
 Measured at every opening configuration (OPTIMIZATION_LOG.md v2), paired
@@ -229,8 +230,20 @@ CENSUS_FLOOR = 8                  # runs shorter than this are not even counted
 # behind it.  The wheel, the unit, the sieve depth and the segment are v2's,
 # so the survivor stream is IDENTICAL (every fingerprint reproduces) and a
 # v2 cursor carries over whole: the v2 key is in `accept`, never `adopt`.
-ENGINE_VERSION = "v3"
-PREVIOUS_ENGINES = ("v2",)        # keys this version inherits, same line
+# v4 (2026-09-05): the WINDOW engine -- the sieve primes below ~250 tested
+# 64 wheel periods at a time per candidate residue through bit patterns,
+# the rest per candidate in in-block rounds (lladder_gpu, OPTIMIZATION_LOG.md
+# v4).  The wheel, the unit, the sieve depth and every kill are v3's, so the
+# survivor stream is IDENTICAL (pinned bit for bit against the v3 engine on
+# the production wheels before v3 was retired, and every k-space fingerprint
+# reproduces) and a v2 or v3 cursor carries over: `accept`, never `adopt`.
+# WHAT DOES CHANGE is the WORK cursor's meaning: `u` was a third-level
+# residue index inside ONE period; it is now a launch index inside a
+# SEGMENT of eng.seg_periods periods.  A cursor inherited from v2/v3 is
+# therefore taken at its PERIOD (its j), with u floored to 0: the partial
+# period is re-swept, which costs at most one period of device.
+ENGINE_VERSION = "v4"
+PREVIOUS_ENGINES = ("v2", "v3")   # keys this version inherits, same line
 # THE HOST POOL IS SIZED FROM A MEASUREMENT AT THE CAMPAIGN'S OWN FILTER
 # (CLAUDE.md 5f and 5g; CONVENTIONS.md "Sizing a hunt"), not from a
 # constant: `Campaign.size_pool` sweeps the launches the loop is about to
@@ -270,8 +283,14 @@ CHUNK = 256                       # survivors per pool task
 
 def config_key(fam, engine=None):
     fam = ref.family(fam)
-    return (f"{fam.lower()}-{engine or ENGINE_VERSION}-u{UNIT[fam]}"
-            f"-p1{P1}-p2{P2}-p3{P3}-q2{Q2}-seg{CKPT_LAUNCHES}")
+    key = (f"{fam.lower()}-{engine or ENGINE_VERSION}-u{UNIT[fam]}"
+           f"-p1{P1}-p2{P2}-p3{P3}-q2{Q2}-seg{CKPT_LAUNCHES}")
+    if (engine or ENGINE_VERSION) == "v4":
+        # the launch decomposition (segment width, candidate budget) is what
+        # gives the work cursor its meaning, so it is in the key
+        key += (f"-pbc{max(gpu.PB_BY_C)}x{gpu.PB_BY_C[max(gpu.PB_BY_C)]}"
+                f"d{gpu.PB_DEFAULT}-cpl{gpu.CAND_PER_LAUNCH4.bit_length() - 1}")
+    return key
 
 
 def ckpt_path(fam):
@@ -556,7 +575,16 @@ class Campaign:
         self._plog_n = 0               # periods closed since it
         self._snapshot = None
         self._proof_logged = None      # the filter whose crossing was logged
+        self._load_kind = None
         self.loaded = self.load()
+        if self.loaded and self._load_kind != "own" and self.u:
+            # a v2/v3 work cursor counts third-level residues of one period;
+            # v4's counts launches of a segment.  Resume at the period.
+            log("STAGE", f"inherited cursor: u = {self.u} was a third-level "
+                         f"residue index of period {self.j}; v4 re-sweeps "
+                         f"that period from its start (at most one period "
+                         f"of device)")
+            self.u = 0
         self.eng = gpu.GpuEngine(self.filter_n(), self.fam, p1=P1, p2=P2,
                                  p3=P3, q2=Q2, unit=UNIT[self.fam])
         # STORE THE UNIT NEXT TO THE NUMBER AND ASSERT IT ON LOAD
@@ -662,6 +690,8 @@ class Campaign:
                 "unit": int(self.eng.unit),
                 "j": int(self.j),
                 "u": int(self.u),
+                "seg_periods": int(self.eng.seg_periods),
+                "launches_per_segment": int(self.eng.launches_per_segment),
                 "W": int(self.eng.W),
                 # the COVERAGE claim: every k in [K_START, k) is swept.  It
                 # is the period boundary, never the live (j, u) cursor,
@@ -711,6 +741,7 @@ class Campaign:
         st, kind = self.cursor.load(warn=lambda m: log("STAGE", m))
         if not st:
             return False
+        self._load_kind = kind
         self._stored_w = int(st.get("W", 0))
         self.j = int(st["j"])
         self.u = int(st.get("u", 0))
@@ -732,9 +763,15 @@ class Campaign:
         return self.boundary * self.eng.W
 
     def u_progress(self, jn, un):
-        """A k for the HEARTBEAT inside a period -- progress, not coverage."""
-        return int(jn * self.eng.W
-                   + self.eng.W * un // max(self.eng.R3, 1))
+        """A k for the HEARTBEAT inside a segment -- progress, not coverage:
+        `un` launches of the segment starting at period `jn` are done."""
+        return self.eng.progress_k(jn, un)
+
+    def segment_end(self):
+        """The first period after the segment being worked, clamped to the
+        ceiling; equal to self.j when nothing is left to sweep."""
+        jmax = cpu.k_ceil(self.filter_n(), self.fam) // self.eng.W
+        return min(self.j + self.eng.seg_periods, jmax)
 
     # ------------------------------------------------------------- status
     def status_line(self):
@@ -749,10 +786,11 @@ class Campaign:
         cov = self.swept_k()
         rate = self.hb.rate()
         lo = self.boundary * self.eng.W
-        pct = min(100.0, max(0.0, 100.0 * (k - lo) / self.eng.W))
+        seg = self.eng.seg_periods
+        pct = min(100.0, max(0.0, 100.0 * (k - lo) / (seg * self.eng.W)))
         parts = [f"swept to {self.swept_k():.6g}",
-                 f"period {self.boundary} [{lo:.5g}, {lo + self.eng.W:.5g}) "
-                 f"{pct:.0f}%",
+                 f"periods [{self.boundary}, {self.boundary + seg}) "
+                 f"[{lo:.5g}, {lo + seg * self.eng.W:.5g}) {pct:.0f}%",
                  f"{self.oeis} filter n = {self.filter_n()}"]
         if rate:
             parts.append(f"{rate:.3g} k/s")
@@ -927,7 +965,8 @@ class Campaign:
         shorter than the calibration window (8 launches at n = 18) is
         measured as exactly the line it is."""
         sync = self.eng.cp.cuda.Stream.null.synchronize
-        it = self.eng.sweep(self.j, self.j + 1, u_from=self.u,
+        nl = self.eng.launches_per_segment
+        it = self.eng.sweep(self.j, self.segment_end(), u_from=self.u,
                             k_min=self.k_min())
         surv, launches, u_prev, cov = [], 0, self.u, 0
         sync()
@@ -935,7 +974,7 @@ class Campaign:
         try:
             for _jn, un, sv in it:
                 launches += 1
-                cov += (un if un else self.eng.R3) - u_prev
+                cov += (un if un else nl) - u_prev
                 u_prev = un
                 surv.extend(int(k) for k in sv)
                 sync()
@@ -946,7 +985,7 @@ class Campaign:
         finally:
             it.close()
         dt = max(time.perf_counter() - t0, 1e-9)
-        line = cov * self.eng.W / max(self.eng.R3, 1)
+        line = cov * self.eng.W * self.eng.seg_periods / max(nl, 1)
         cap = self.filter_n() + 8
         sample = surv[:CAL_SAMPLE]
         t1 = time.perf_counter()
@@ -1051,10 +1090,10 @@ class Campaign:
                     self.survivors += 1
                     if r >= CENSUS_FLOOR:
                         self.pending.append((k, r))
-            if cur[1]:                         # still inside the period
+            if cur[1]:                         # still inside the segment
                 self.j, self.u = cur
-            else:                              # the period's last launch
-                self.j, self.u = cur[0] - 1, 0
+            else:                              # the segment's last launch:
+                self.u = 0                     # closed by the loop, below
                 self._period_done = True
 
     # ---------------------------------------------------------------- loop
@@ -1069,9 +1108,12 @@ class Campaign:
             f"{self.filter_n()}; wheel W = {self.eng.W:,} at unit "
             f"{self.eng.unit} ({self.eng.R:,} residues, {self.eng.R1} x "
             f"{self.eng.R2} x {self.eng.R3}, {100.0 * self.eng.density():.6f}% "
-            f"of the line); {cfg['nu']} third-level residues per launch, "
-            f"{-(-self.eng.R3 // cfg['nu'])} launches per period; resume at "
-            f"period {self.j}, u = {self.u} (k = "
+            f"of the line); a segment is {self.eng.seg_periods} periods "
+            f"({self.eng.seg_periods * self.eng.W:.4g} of line) in "
+            f"{self.eng.launches_per_segment} launches of "
+            f"{cfg['cand_per_launch']:.3g} candidates ({cfg['nu']} "
+            f"third-level residues x {cfg['tchunk']} first-level); resume at "
+            f"period {self.j}, launch {self.u} (k = "
             f"{self.u_progress(self.j, self.u):,})")
         for n, qs in sorted(model.predictions(
                 self.fam, self.frontier(), self.frontier_k(),
@@ -1107,10 +1149,10 @@ class Campaign:
         self._plog_t = time.time()
         try:
             while self.swept_k() < target and not stop_now:
-                j1 = self.j + 1                 # ONE PERIOD
-                if j1 * self.eng.W > cpu.k_ceil(self.filter_n(), self.fam):
+                j1 = self.segment_end()         # ONE SEGMENT of periods
+                if j1 <= self.j:
                     break
-                self.hb.doing(f"sieving period {self.j} "
+                self.hb.doing(f"sieving periods [{self.j}, {j1}) "
                               f"[{self.j * self.eng.W:.4g}, "
                               f"{j1 * self.eng.W:.4g})")
                 inflight = collections.deque()
@@ -1131,7 +1173,8 @@ class Campaign:
                         time.sleep(self.args.gpu_yield_ms / 1000.0)
                     if un == 0:
                         break
-                self.hb.doing(f"classifying the tail of period {self.j}")
+                self.hb.doing(f"classifying the tail of periods "
+                              f"[{self.j}, {j1})")
                 self._drain(inflight, block=True)
                 # The period is closed, so its values are contiguous in k
                 # again and the LEAST of them is meaningful.  Nothing is
@@ -1146,11 +1189,12 @@ class Campaign:
                 self._plog_n += 1
                 if found_now or time.time() - self._plog_t >= PERIOD_LOG_S:
                     log("STAGE",
-                        f"period {j1 - 1} complete: swept to "
-                        f"{self.swept_k():,} (+{self.eng.W:.4g} of line; "
-                        f"{held} value{'' if held == 1 else 's'} at run >= "
-                        f"{CENSUS_FLOOR} classified in k order"
-                        + (f"; {self._plog_n} periods closed since the last "
+                        f"periods [{j1 - self.eng.seg_periods}, {j1}) "
+                        f"complete: swept to {self.swept_k():,} "
+                        f"(+{self.eng.seg_periods * self.eng.W:.4g} of "
+                        f"line; {held} value{'' if held == 1 else 's'} at "
+                        f"run >= {CENSUS_FLOOR} classified in k order"
+                        + (f"; {self._plog_n} segments closed since the last "
                            f"such line" if self._plog_n > 1 else "") + ")")
                     self._plog_t, self._plog_n = time.time(), 0
                 if found_now:
@@ -1560,44 +1604,49 @@ def _resume_drill():
                            f"{len(split)} split")
         total += len(whole)
 
-    # THE (j, u) SEAM: sweeping u in [0, c) then [c, R3) must give the same
-    # set as sweeping the period whole -- and in PERIOD 0 with the clip,
-    # which is where every campaign's first interrupt will land.  nu is
-    # forced below R3 so the period really is cut into launches; in k space
-    # and in UNIT space -- the campaigns' engine -- where a period is 30030
-    # times a k' period and the seam must still close.
+    # THE (j, u) SEAM: sweeping the launches [0, c) of a segment and then
+    # [c, all) must give the same set as sweeping the segment whole -- and
+    # in the segment that starts at PERIOD 0 with the clip, which is where
+    # every campaign's first interrupt will land.  nu is forced below R3 so
+    # the segment really is cut into launches; in k space and in UNIT space
+    # -- the campaigns' engine -- where a period is 30030 times a k' period
+    # and the seam must still close.
     for eng in (gpu.GpuEngine(15, "A088250", p1=13, p2=23, p3=37, q2=512,
                               nu=64),
                 gpu.GpuEngine(15, "A088250", p1=19, p2=23, p3=31, q2=64,
                               nu=4, unit=30030)):
-        if eng.nu >= eng.R3:
-            return False, "RESUME FAIL: the seam engine has no sub-period cursor"
+        nl = eng.launches_per_segment
+        if nl < 4:
+            return False, "RESUME FAIL: the seam engine has no sub-segment cursor"
+        seg = eng.seg_periods
         for j0, k_min in ((eng.j_of(9 * 10 ** 14), None), (0, K_START)):
-            whole = sorted(eng.survivors_j(j0, j0 + 1, k_min=k_min))
+            whole = sorted(eng.survivors_j(j0, j0 + seg, k_min=k_min))
             if not whole:
                 return False, (f"RESUME FAIL: the (j, u) seam window is empty "
                                f"(unit {eng.unit}, period {j0})")
-            for cut in (1, 3, eng.R3 - 1):
+            for cut in (1, 3, nl - 1):
                 part, stopped = [], 0
-                for _, un, sv in eng.sweep(j0, j0 + 1, k_min=k_min):
+                for _, un, sv in eng.sweep(j0, j0 + seg, k_min=k_min):
                     part.extend(sv)
                     stopped = un
                     if un == 0 or un >= cut:
                         break
                 if stopped:
-                    for _, _, sv in eng.sweep(j0, j0 + 1, u_from=stopped,
+                    for _, _, sv in eng.sweep(j0, j0 + seg, u_from=stopped,
                                               k_min=k_min):
                         part.extend(sv)
                 if sorted(part) != whole:
                     return False, (f"RESUME FAIL: the (j, u) seam at u = "
-                                   f"{stopped} (period {j0}, unit "
+                                   f"{stopped} (segment at period {j0}, unit "
                                    f"{eng.unit}) loses or repeats values: "
                                    f"{len(part)} vs {len(whole)}")
             total += len(whole)
     return True, (f"resume ok: split sweep == unsplit sweep on all three "
-                  f"kernels, across the (j, u) sub-period seam in k space "
-                  f"and in unit space (30030), and inside the clipped period "
-                  f"0 on both ({total} survivors across the seams)")
+                  f"kernels (segment boundaries and partial segments "
+                  f"included), across the (j, u) sub-segment seam in k "
+                  f"space and in unit space (30030), and inside the clipped "
+                  f"segment at period 0 on both ({total} survivors across "
+                  f"the seams)")
 
 
 def _classification_drill():
@@ -1711,7 +1760,10 @@ def _v2_resume_drill():
             pol.refuse_mismatch()                    # the third reader
             kind = pol.load()[1]
             c = Campaign(a, ckpt=path, cursor=pol)
-            front = max(ref.FOUND[fam]) if ref.FOUND[fam] else max(ref.KNOWN[fam])
+            # the frontier is the CHECKPOINT's: a campaign may carry a find
+            # the reference table does not list yet (the owner's to record)
+            front = max([max(ref.KNOWN[fam])]
+                        + [int(n) for n in st.get("found", {})])
             if not c.loaded or c.frontier() != front or c.filter_n() != front + 1:
                 return False, (f"V2 RESUME FAIL: {fam} loaded={c.loaded}, "
                                f"frontier {c.frontier()}, filter {c.filter_n()} "
@@ -1722,11 +1774,17 @@ def _v2_resume_drill():
                                f"{c.swept_k()}, period {c.j}, {c.discoveries} "
                                f"finds; the file says {st['k']}, {st['j']}, "
                                f"{st['discoveries']}")
+            if kind != "own" and c.u != 0:
+                return False, (f"V2 RESUME FAIL: {fam}'s inherited cursor kept "
+                               f"u = {c.u}, a third-level residue index that "
+                               f"v4 must not read as a launch index")
+            if kind == "own" and c.u != int(st.get("u", 0)):
+                return False, f"V2 RESUME FAIL: {fam}'s own cursor lost its u"
             ceil = cpu.k_ceil(c.filter_n(), fam)
-            if not (c.swept_k() < ceil and (c.j + 1) * c.eng.W <= ceil):
+            if not (c.swept_k() < ceil and c.segment_end() > c.j):
                 return False, (f"V2 RESUME FAIL: {fam} at k = {c.swept_k():.4g} "
                                f"would stop at once under the ceiling {ceil:.4g}")
-            c.eng._check_window(c.j, c.j + 1, c.k_min())   # the engine agrees
+            c.eng._check_window(c.j, c.segment_end(), c.k_min())   # the engine agrees
             if c.discoveries > c._discoveries_at_start:
                 return False, (f"V2 RESUME FAIL: {fam} would stop on the "
                                f"{c.discoveries} finds already in the file")
@@ -1752,12 +1810,13 @@ def _v2_resume_drill():
             pass
     if not rows:
         return True, "v2 resume: no v2 checkpoints present; nothing to resume"
-    return True, (f"v2 resume ok: {len(rows)} real checkpoints load through "
-                  f"all three readers (a v2 key as inherited, a v3 key as "
-                  f"own), at the filter after each frontier with the census "
-                  f"and finds intact, under the ceiling with their next "
-                  f"period accepted, and --stop-on-discovery armed on THIS "
-                  f"run's finds only: " + "; ".join(rows))
+    return True, (f"prior-engine resume ok: {len(rows)} real checkpoints load "
+                  f"through all three readers (v2 and v3 keys as inherited, "
+                  f"a v4 key as own; an inherited work cursor floored to its "
+                  f"period), at the filter after each frontier with the "
+                  f"census and finds intact, under the ceiling with their "
+                  f"next segment accepted, and --stop-on-discovery armed on "
+                  f"THIS run's finds only: " + "; ".join(rows))
 
 
 def _other_families_cursor_drill(fam):
@@ -1867,7 +1926,7 @@ def _campaign_wiring_drill(fam="A088250"):
         if c.eng.n != n0 or c.eng.fam != fam or c.eng.unit != UNIT[fam]:
             return False, "WIRING FAIL: the engine is not at the campaign filter"
         line = c.status_line()
-        for want in ("swept to", fam, "census", "period 0"):
+        for want in ("swept to", fam, "census", "periods [0,"):
             if want not in line:
                 return False, f"WIRING FAIL: status line lacks {want!r}"
         if c.handle(K_START + 1, 9) is not False or c.census.get(9) != 1:

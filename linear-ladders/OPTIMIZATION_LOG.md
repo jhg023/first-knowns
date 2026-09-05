@@ -850,3 +850,250 @@ certificates cost nothing visible: `k` of a(17) is `30030 * 113 * 3.59e16`
 and a(18)'s `unit * 3.3e4 * 4.9e10`, seconds of factoring at most, and
 the 34 Theorem 15 proofs re-verified from disk in under a second. Eight
 campaigns, twenty-five phases, all at the engine's rate.
+
+---
+
+## v4 -- the WINDOW sieve: the small sieve primes tested 64-128 periods at a time per residue, the survivors through in-block rounds; one reservation per warp. KEPT: 10.5-13x on the frozen windows, 8.8x at the live filters (2026-09-05)
+
+`SCORE 187,807,812,253,300` / `SCORE17 3,341,618,357,877,466` / `SCOREM 47,453,753,517,089`, the three
+unit-wheel shapes RE-DENOMINATED (a v4 launch is a different thing; the
+new windows were swept by both engines and the fingerprints are their
+agreement, below); `SCORE2L`, `SCORE1L` and `SCORE10` reproduce their v1
+fingerprints unchanged. 44/44 green. Every number below is a **paired,
+interleaved ratio** on the same launches with the survivor fingerprint
+checked on every run (the harness rebuilt one engine per variant with the
+module cache cleared and warmed the clocks for 1.5 s before each round --
+a desktop GPU idles at 285 MHz and a 50 ms measurement taken cold is a
+clock measurement); the v3 engine was kept in the tree until the last
+pin and then retired (OPTIMIZATION.md rule 0). Nothing here is a campaign
+(CLAUDE.md 0a).
+
+### Where v3 stood, and why a constant could not get 10x
+
+Baseline on 2026-09-05, the frozen shapes with the fingerprint checked:
+`SCORE` `1.81e11` candidates/s (`2.83e19 k/s`), `SCORE17` `2.22e11`
+(`3.73e20`), `SCOREM` `1.45e11` (`7.75e18`); tail rounds 10.7-11.2% of
+every launch, entered by 0.78% of candidates. v2's termination table had
+the sieve kernel issue-bound at ~12 instructions per candidate per prefix
+group -- five groups at c = 15 -- and ~170 issue slots per candidate in
+all. The tail alone was 0.5 ns per candidate, which is the WHOLE budget
+at 10x. So this pass did not tune the kernel; it replaced its front half.
+
+### The design (OPTIMIZATION.md 2.1: invert the loop)
+
+A candidate is `(t, s, u)` in period j, `k' = Wp*j + off(t, s, u)`. For a
+FIXED residue the candidates of consecutive periods form an arithmetic
+progression modulo every sieve prime q with an invertible step (`Wp mod
+q`; q is above the wheel and not in the unit). So "which of the next P
+periods does q kill" depends on `off mod q` alone and is a P-bit WINDOW
+into a periodic pattern: with `Dinv = (Wp mod q)^-1`, `r'' = off * Dinv
+mod q`, q kills period j0 + j iff `(r'' + j) mod q` is in `C_q = { kr *
+Dinv }`. The pattern "bit p set iff p mod q in C_q" is stored once per
+prime (2q + 96 bits, ~40-140 bytes), and a window is NW + 1 aligned
+32-bit words funnel-shifted by `r'' & 31`. `r''` is linear in the
+decomposition `off = (r1_t + W1*A_t) - W1*D_s + Wp*bw`: it is `x0[t] +
+ne[s] + bw`, with `x0[t] = (r1 + W1*A_t)*Dinv mod q` a table per
+first-level residue (launch-independent, u16, 27 MB at n = 15) and
+`ne[s] = (j0 - (W1*D_s)*Dinv) mod q` computed once per block -- the
+launch base folds in as `j0 mod q`, because `Wp*Dinv == 1`. Per group per
+residue per 64 candidates: one IADD3, three shared loads, two funnel
+shifts, two ORs. The survivors (0.7%) are extracted from the live words
+and take the per-candidate route -- in-block compaction rounds over
+single-prime Barrett tests (round 2's generated tests, now five rounds
+deep at a 50% drop), then the unchanged global tail rounds. `G14` checks
+the whole chain (x0, ne, bw, pattern word) against `killed_residues` on
+sampled candidates at two launch bases, one above 2^64; `G9` pins the
+stream to the CPU engine as before; the last act of the v3 engine was to
+sweep the new benchmark windows and every family's resumed filter and
+return the identical survivors.
+
+### Measurement 1 -- the first build, and the split it hid (rule 1)
+
+The first build returned the IDENTICAL stream to v3 on all three
+production configurations and ran 8.9-9.1x faster in the same harness
+(`1.37e12` / `8.4e11` / `7.2e11` candidates/s at n = 17 / 15 / c = 14
+against v3 driven period by period) -- 4.6-6.2x against the properly
+pipelined baseline. Un-pipelined: sieve kernel `1.19e12` at n = 17, tail
+rounds 10.6%. The design count said ~6 issue slots per candidate for the
+window sieve; the kernel was at ~65 per group per warp-step. Ablations,
+each a differential variant of the same source (3.3):
+
+| variant (n = 17) | ratio | what it says |
+|---|---|---|
+| extraction removed (a data-dependent test that is never true) | **2.87** | two thirds of the kernel was the survivor path, at 0.7% survivors |
+| per-lane shared atomics in the extraction replaced by ONE reservation per warp (`warp_reserve`: a shuffle prefix and one atomic) | **1.50** | a same-address shared atomic from k lanes is k-deep |
+| round loop unrolled 4 (`ROUND_ILP`) vs 1 | 0.95 | no ILP gain, 4x the round code (477 vs 180 `mul.hi.u64` in the PTX) -- back to 1 |
+| the `while (alive)` bit loop replaced by one `if` (wrong answer) | **4.3** | a data-dependent loop INSIDE the residue loop stopped the compiler overlapping one residue's loads with the next's |
+| live words written to shared, extraction after the sieve loop | 1.10 | the loop out of the hot body; registers 87 -> 66 |
+| the queue-full fallback out of the hot extraction loop (`hotloop`) | 1.10 | the inlined `tail_survives` at the loop's `else` |
+| one reservation per EXTRACTION BLOCK of residues and per ROUND, instead of per (residue, word) and per iteration | **1.15** | a reservation is ~300 clocks of dependent latency (five shuffles, a shared atomic, a shuffle); it was made 16 times per warp-step |
+
+### Measurement 2 -- what the window sieve is bound by (2.12, 3.3)
+
+With the survivor path fixed, differential variants of the group body
+(same instruction count, wrong answer where noted):
+
+| variant (n = 17) | ratio | verdict |
+|---|---|---|
+| the pattern loads replaced by a multiply of the same operand | **1.80** (1.56 after the 32-bit words) | the loads are the cost |
+| the `ne` shared load replaced by a register expression | 1.05 | not the ne load |
+| ONE EXTRA pattern load per word (99 more loads per warp-step, results ORed in) | 0.936 | ... but not their THROUGHPUT: adding as many loads again costs 6%, removing them saves 36%. The kernel is bound by the LATENCY of the load -> funnel-shift chain, with a handful of groups in flight per warp |
+| 32-bit pattern words (3 one-cycle loads) instead of overlapping 64-bit entries (2 two-cycle loads) | 1.00 | data-path width is not it either; kept for the smaller tables |
+| L1/shared carveout 25 / 75 / 100 (v3's pin was 50) | 1.005 / 1.007 / 1.043 at P = 64; 0.99 / 1.00 at P = 128 | L1 residency is not it: with the whole cache given to shared memory the kernel is no slower. Pinned at 100 (see "What the gates caught") |
+| pattern tables in shared memory vs L1 | 1.02 | kept in shared (`PAT_SHARED`) |
+| x0 in shared memory (frees 33 registers; +1 load per group) | 0.87 | registers are not the limiter either |
+| `__launch_bounds__(128, 8)` / `(128, 6)` | 0.91-0.93 / 0.94 | 72 bytes spilled; 8 blocks buy nothing -- more warps did not hide the latency, so the limit is inside the warp |
+| block prologue (the per-residue ne Barretts) replaced by a constant | 0.99 | free |
+| window 128 periods (`pb=128`, extraction buffer for one residue) | **1.10** at n = 17, 1.06 at c = 20, 1.00 at c = 15, 1.05 at c = 14 | amortises the per-residue arithmetic and the loads over twice the candidates; 96 periods 1.04; 256 is not admissible on the unit wheel ((PB + 1) W' passes 2^63) |
+| extraction buffer every 2 / 4 / 8 residues (P = 64) | 0.99 / 1.00 / 0.86 | shared memory per block: 8 KB of buffer cost a block per SM |
+
+So the window sieve runs at ~30% issue and ~30% load-pipe utilisation
+with 20-24 warps per SM and is bound by the dependent chain `ne -> IADD3
+-> address -> LDS -> SHF -> LOP` with the compiler keeping a handful of
+groups in flight; neither more warps nor fewer registers moved it. What
+did move it was fewer chains per candidate (the 128-period window).
+**Priced and not done:** software-pipelining two residues by hand
+(interleave the loads of residue s + 1 with the shifts of s; the
+compiler would not across the loop), and register-resident windows for
+primes q <= 64 (a 128-bit doubled pattern in uniform registers, 8 ALU
+instructions instead of 3 loads -- only 61 qualifies here).
+
+### Measurement 3 -- the constants, swept on the new engine (3.4)
+
+Interleaved, the fingerprint identical across every variant, ratio to
+the shipped value:
+
+| constant | shipped | variants | n = 17 | c = 20 | verdict |
+|---|---|---|---|---|---|
+| `BIT_SURV` (window depth) | 0.007 | 0.004 / 0.009 / 0.012 / 0.02 | 0.99 / 0.99 / 0.94 / 0.79 | -- | the crossover between a window group (~10 instructions per prime per 64 candidates whatever it kills) and a per-candidate test (~15 per entrant) is at ~1% survival; 0.7% |
+| `K2_SURV4` (in-block rounds end, global tail start) | 0.0003 | 0.0005 / 0.001 / none (0.007) | 1.00 / 0.99 / **0.72** | 1.00 / 1.00 / 0.79 | the in-block rounds are 3-4x cheaper per item than the global tail's first round; flat between 3e-4 and 1e-3 |
+| CRT pairs in the rounds (`K2_GROUP_MAX4` 2^19) | 1 (singles) | pairs | **0.54** | -- | 10-90 KB tables gathered from L2 |
+| `TAIL_ROUND_DROP` | 0.5 | 0.3 / 0.7 | 0.99 / 1.02 | 0.99 / -- | flat |
+| `UNROLL` (tail chains) | 4 | 2 / 8 | -- / 1.035 | -- / 1.007 | inside the band |
+| `TAIL_FILL` | 2^19 | 2^21 | 1.01 | -- | flat |
+| `SPB` | 8 | 4 / 16 | 0.99 / 0.88 | -- / 0.89 | 16 costs shared memory |
+| `TPB` | 128 | 256 | 0.89-0.96 | 0.96 | 3 blocks per SM |
+| `EXTRACT_EVERY` at NW = 4 | 1 | 2 | 0.98 (of the 1.10) | -- | the buffer again |
+
+### The tail (unchanged code), measured round by round
+
+One n = 17 launch of `3.4e10` candidates (P = 64): sieve kernel 17.3 ms,
+13 tail rounds 1.68 ms (8.8%): rounds 0-4 (primes 691-3187, `1.0e7` down
+to `6e5` items) 1.09 ms of real work at ~40 ns per item in round 0, rounds
+5-12 (lanes per item 2-32, `3e5` down to `2.4e3` items) 0.59 ms of
+latency at 45-130 us each. At the openings the tail is 14-17% of the
+kernel (n = 15, c = 14), not because it costs more per candidate -- it is
+~0.1 ns per candidate at both n = 15 and n = 17, the same 0.03% of
+entrants -- but because the rest of the kernel costs more there: 43-51
+window groups against 24-33 and 123 round primes against 74, so the
+sieve's share of the launch grows and the tail's with it. **Priced and
+not done:** merging the
+last rounds (a 0.3 drop measured flat), a second stream for the rounds
+(v2 measured 0.98-1.00 with a saturating sieve; the window sieve is
+latency-bound at 30% issue, so it may hide now -- not built), bigger
+launches (`CAND_PER_LAUNCH4` 2^35: 2^36 doubles the global queues to
+0.5 GB per launch).
+
+### Where the time goes now (the termination table, OPTIMIZATION.md Part 3)
+
+| phase (n = 17 / c = 20) | share | verdict |
+|---|---|---|
+| window sieve | ~65% / ~70% | latency-bound on the load -> shift chain (Measurement 2: loads removed 1.56-1.8x, loads doubled 0.94x, carveout and registers flat, more warps flat); the 128-period window is the lever that paid. Two priced levers left: hand-pipelined residues, register windows for q <= 64 |
+| in-block rounds | ~18% / ~15% | five rounds of ~15 single-prime Barrett tests each, all lanes alive; one reservation per round. The ceil-waste (rounds with fewer items than threads run one iteration at 21-86% lane use) is ~30% of the phase: lanes-per-item for the small rounds, priced at ~3% of the total, not built. Storing `off` in the later queues saves the `off_of` per round (~2%, +4 KB shared) |
+| extraction | ~5% | one reservation per block of residues; the bit loop after the sieve loop |
+| tail rounds | 7-9% (14-17% at c <= 15) | see above |
+| host + prologue | < 2% | the prologue is free (Measurement 2); the pipelined loop's gap under 0.5% |
+
+### Measurement 4 -- the pin against v3, and the rates that stand
+
+The v3 engine was kept in the tree until it had swept the same windows as
+v4 (whole periods, so no launch decomposition of either engine is in the
+comparison) and returned the identical survivors, family by family at the
+filter each campaign resumes at:
+
+| configuration | window | survivors | v4 candidates/s | v4 k/s | v3 candidates/s | ratio |
+|---|---|---|---|---|---|---|
+| A088250 n = 18 (c = 18) | the 128-period segment at period 1 | 596,704 | `2.18e12` | `1.29e22` | `2.35e11` | **9.3x** |
+| A088250 n = 19 (c = 19) | the 128-period segment at period 1 | 112,795 | `2.35e12` | `2.60e22` | `2.52e11` | **9.3x** |
+| A088250 n = 20 (c = 20) | the 128-period segment at period 1 | 19,312 | `2.52e12` | `5.71e22` | `2.73e11` | **9.2x** |
+| A173750 n = 21 (c = 20) | the 128-period segment at period 1 | 19,324 | `2.53e12` | `5.73e22` | `2.74e11` | **9.2x** |
+| A164325 n = 20 (c = 20) | the 128-period segment at period 1 | 33,071 | `2.54e12` | `3.37e22` | `2.77e11` | **9.2x** |
+| A125838 n = 20 (c = 19) | the 128-period segment at period 1 | 112,028 | `2.38e12` | `2.64e22` | `2.51e11` | **9.5x** |
+| A125839 n = 20 (c = 18) | the 128-period segment at period 1 | 1,194,610 | `2.20e12` | `6.50e21` | `2.35e11` | **9.4x** |
+| A164326 n = 19 (c = 19) | the 128-period segment at period 1 | 176,296 | `2.36e12` | `1.66e22` | `2.50e11` | **9.4x** |
+| A088651 n = 18 (c = 18) | the 128-period segment at period 1 | 598,191 | `2.18e12` | `1.29e22` | `(not run; A088250's n = 18 wheel, 2.35e11)` | **~9.3x** |
+
+and on the three re-frozen benchmark windows: `SCORE` (one third-level
+residue of the 64-period segment at period 1, `7.36e19` of line) 150,985
+survivors, xor 144395210679418703534414 from both, `1.23e12` against
+`9.4e10` candidates/s (13.1x); `SCORE17` (eight residues of the 128-period
+segment, `1.30e21`) 31,431 / 118193132530909840366348, `1.85e12` against
+`1.77e11` (10.5x); `SCOREM` (one residue of the 64-period segment,
+`7.01e19`) 1,166,647 / 240031737716965866902, `9.07e11` against `8.0e10`
+(11.3x). (The v3 side of those three is v3 driven one period at a time
+without its pipeline; against v3's own pipelined benchmark rates --
+`1.81e11`, `2.22e11`, `1.45e11` -- v4's score.py rates are 6.6× / 9.0× / 6.1×.)
+Then `GpuEngineV3` and its template were deleted; the CPU parity gate
+(G9, 25 windows) and the three k-space fingerprints are the permanent
+other half.
+
+### What the gates caught during the build
+
+- **A `ROUND(off, kl)` macro invoked on a variable named `off`**: its
+  first line `const unsigned long long off = (OFF);` initialised the new
+  `off` from itself. Three parity cases lost or gained survivors; the
+  argument is now `oz`. A macro that declares what it is passed is a
+  trap, and the parity test was the only thing that could see it.
+- **A runtime-indexed `keep[]` array in the rounds went to local memory**
+  (40 bytes): 20x slower, same stream. Replaced by a survivor bitmask.
+- **Two ablations that priced the wrong thing** (OPTIMIZATION.md 3.3):
+  removing the queue STORE left the reservation's count in place, so the
+  rounds ran on uninitialised queue entries (0.43x, meaningless); and
+  the first "no extraction" variant removed the loop and with it the
+  compiler's constraint, so its 2.9x was two effects, separated later
+  into 1.5x (atomics) and 1.10x (the loop's placement).
+- **The gate windows of 16 and 32 periods measured the engine at a
+  quarter and a half of its rate**: a segment is 64-128 periods and the
+  live-period mask idles the rest of the window. The engine's coverage
+  unit is the segment; the launcher never sweeps less (except at the
+  ceiling), and the benchmark windows are whole segments.
+- **The k-space wheel to 47 (W' = 6.2e17) cannot hold 32 periods under
+  the 2^63 reduction bound** ((PB + 1) W' + q2 < 2^63 caps it at 14) and
+  the first build raised at construction, failing G14 and G17. The
+  window's bit width (PB, a multiple of 32) is now decoupled from the
+  periods a segment holds (PV <= PB, chosen under the bound; the bits past
+  PV are masked): that wheel runs 14 live periods in a 32-bit window, the
+  unit wheel 128 in 128, and G17's three-wheel leg returned its 799
+  survivors identically from all three.
+- **G18 read the same configuration at 3 blocks per SM in the battery and
+  5 in a harness.** The occupancy API's answer depends on the carveout
+  attribute, and CuPy hands every engine with identical source the same
+  compiled function, so a query made before the pin can read another
+  engine's pin. Probed directly: at the 50% pin (64 KB, 1 KB reserved per
+  block) the 128-period kernels of 14-15 KB fit 3-4 times; at 75 and 100
+  the register file sets the occupancy (5-7). Timing is flat across the
+  three (0.99-1.00 at n = 16 and 17): the kernel is bound inside the warp,
+  not by warps. The sieve kernel is now pinned at 100% shared (its tables
+  are in shared memory; v3's pin at 50 protected L1 tables that no longer
+  exist), the occupancy is measured AFTER the pin, and G18's floor is 4.
+- **Shallow gate configurations (two sieve primes above the wheel) sized
+  a 65,536-entry shared queue**: `QUEUE_BYTES_MAX` halves the analytic
+  capacities until the block's queues fit 12 KB; overflow is the harmless
+  fallback, exercised by G14's forced-overflow drill as before.
+- **CLAUDE.md rule 8, twice**: two heredocs with escapes inside quotes,
+  two dead edits.
+
+### What changed for the launcher (CONVENTIONS.md "Two cursors")
+
+The coverage unit is the SEGMENT: `eng.seg_periods` periods (64 at
+c <= 15, 128 from c = 16), swept in `eng.launches_per_segment` launches of
+a first-level chunk x a few third-level residues x every second-level
+residue x every period of the segment. The work cursor `u` is the launch
+index inside the segment; a v2/v3 cursor (`u` a third-level residue index
+of one period) is inherited at its period with `u` floored to 0, which
+re-sweeps at most one period. The over-sweep at a find is one segment:
+`1.23e23`-`2.46e23` of k -- 20 minutes at A088250's n = 15, 1.7 hours at
+A125838's c = 14 opening at P = 64 (the reason the width is 64 there),
+and 5-20 s at the resumed filters where the campaigns run. The
+heartbeat's `periods [j, j+seg) ..%` is progress through the segment.
+

@@ -130,15 +130,27 @@ whole run proved in about a second. The wheel, the unit, the sieve and
 the segment are v2's, so every fingerprint reproduces and every v2
 cursor carries over whole: each campaign resumes at its v2 filter.
 
+**v4 (2026-09-05): the window sieve, 6–13× the engine before it.** The
+sieve primes below ~250 are now tested 64–128 wheel periods at a time
+per candidate residue through bit patterns instead of once per candidate,
+and the survivors go through in-block compaction rounds before the global
+tail (the engine section below; [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)
+v4). The wheel, the unit, the sieve depth and every kill are unchanged, so
+the survivor stream is identical — the retiring v3 engine swept the new
+benchmark windows and every family's resumed filter and returned the same
+survivors bit for bit, and every k-space fingerprint reproduces — and
+every v2/v3 cursor carries over. The coverage unit is now a segment of
+64–128 periods.
+
 **Status: ACTIVE.** Twenty-two new terms across all seven families,
 found and verified 2026-09-03/04 by eight campaigns totalling under
 twelve hours of device, and a searched-empty bound on the next term of
-each. Every campaign resumes from its cursor under the 10⁴⁰ ceiling; the
-model puts A125839's `a(19)` and A088651's `a(17)` at 93% within a
-night's sweep each, A164326's `a(19)` and the +1 families' next terms at
-medians of `10²⁶` and above ([RESULTS.md](RESULTS.md), "What is open
-now"). 44 gates and drills green, six benchmark shapes reproduced, every
-resumed filter priced.
+each. Every campaign resumes from its cursor under the 10⁴⁰ ceiling at
+6–10 times the rate it stopped at; the model puts A125839's `a(19)` and
+A088651's `a(17)` at 93% within a night's sweep each, A164326's `a(19)`
+and the +1 families' next terms at medians of `10²⁶` and above
+([RESULTS.md](RESULTS.md), "What is open now"). 44 gates and drills green,
+six benchmark shapes reproduced, every resumed filter priced.
 
 ## The problem
 
@@ -220,25 +232,48 @@ consequences:
   (37],(47],(59] wheel in unit space holds `315,392 × 23,296 × 1,672`
   residues per period of `1.92×10²¹`: `6.4×10⁻⁹` of the line, 110× thinner
   than prime-ladders' opening wheel from the same primes, and `5.9×10⁻¹⁰`
-  at `n = 17`. The kernel runs at `1.6–2.4×10¹¹` candidates per second at
-  every opening, which the wheel turns into `8.4×10¹⁸` k per second at
-  the densest −1 opening and `4.0×10²⁰` at A088250's `n = 17`.
+  at `n = 17`. The v4 kernel runs at `0.9–2.4×10¹²` candidates per second
+  (`1.6–2.4×10¹¹` before it), which the wheel turns into `4.75×10¹⁹` k
+  per second at the densest −1 opening, `3.34×10²¹` at A088250's
+  `n = 17` and `5.5×10²²` at `c = 20`, where the campaigns now run.
 
-**The kernel is prime-ladders' v3.1, transferred and re-tuned (v2).** The CPU engine
-materialises the dense `k` line and marks arithmetic progressions into it,
-with no wheel at all. The GPU engine never forms the line: it generates
-only the `k` that survive the three-level wheel by CRT recombination and
-*tests* each against packed forbidden-residue tables by Barrett
-magic-multiply, bailing out at the first kill, with the divergence
-compacted inside the block and the deep tail swept as compaction rounds
-over global queues with several lanes per item. Nothing in that kernel
-knows about the forms: every problem-specific object — the wheel tables,
-the masks and residue lists, the CRT-combined prefix groups, the survival
-curve the compaction points are derived from — is built from
-`killed_residues(q, n, F, unit)`, and the parity gate G9 pins the result to
-the CPU engine bit for bit on 22 populated windows across six families,
-one-, two- and three-level wheels in `k` space and in unit space, from
-`k = 2×10⁹` to `3.3×10²⁴` with the top windows above `2⁶⁴`.
+**The kernel is a window sieve (v4).** The CPU engine materialises the
+dense `k` line and marks arithmetic progressions into it, with no wheel at
+all. The GPU engine never forms the line: it generates only the `k` that
+survive the three-level wheel by CRT recombination and then, for each such
+residue, sieves **64 or 128 consecutive wheel periods at once**. For a
+fixed residue the candidates of successive periods are an arithmetic
+progression modulo every sieve prime `q`, so which of the next periods `q`
+kills is a function of the residue mod `q` alone: a 64- or 128-bit
+*window* into a periodic bit pattern stored once per prime, read as a few
+aligned 32-bit words and two funnel shifts — one add, three shared loads,
+two shifts and two ORs per prime per 64 candidates, against twelve
+instructions per candidate per group in the engine it replaced. The
+residue itself is linear in the wheel's CRT decomposition, so it is a
+per-thread table value plus a per-block value plus the CRT borrow, and the
+launch base folds in as `j₀ mod q`. The ~0.7% of candidates that survive
+the window sieve are extracted from the live words and take the
+per-candidate route the earlier engines took for everything: in-block
+compaction rounds of single-prime Barrett tests against packed tables,
+then the deep tail as compaction rounds over global queues with several
+lanes per item; every queue push is one shared atomic per warp. Nothing in
+the kernel knows about the forms: every problem-specific object — the
+wheel tables, the window patterns, the per-residue tables, the round
+tables, the masks and residue lists, the survival curve the compaction
+points are derived from — is built from `killed_residues(q, n, F, unit)`,
+and the parity gate G9 pins the result to the CPU engine bit for bit on 25
+populated windows across six families, one-, two- and three-level wheels
+in `k` space and in unit space, from `k = 2×10⁹` to `10⁴⁰` with the top
+windows above `2⁶⁴`; G14 checks the window chain itself — table, per-block
+value, borrow, pattern word — against `killed_residues` on sampled
+candidates; and before the v3 engine was retired it swept the new
+benchmark windows and every family's resumed filter and returned the
+identical survivors. The window sieve is **6–13× the engine it replaced**
+on the frozen windows and 9× at the filters the campaigns run
+([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v4, with every variant that
+did not pay). What bounds it now is the latency of its load chain, not
+issue: the loads removed is 1.6–1.8×, the loads doubled 0.94×, the cache
+carveout and the register count flat.
 
 **Unit space.** Every candidate at a campaign filter is a multiple of the
 forced primes, so the device sweeps `k' = k / unit` with the kill sets
@@ -260,11 +295,12 @@ and re-measured it paired at **1.27× / 1.50× / 1.20× / 1.32×** at
 `c = 15 / 16 / 17 / 18` forms and within 5% at `c = 14`
 ([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v2). The same pass pinned two
 things no fingerprint can see and that had been read as tuning cliffs:
-the driver's shared/L1 carveout, now set explicitly (a few KB more shared
-per block used to drop the group tables out of L1, 0.2–0.3×), and the
-register allocation of the unrolled body, which the engine now measures
-after compiling and guards (G18: every opening compiles to ≥ 8 blocks per
-SM; v1 had shipped every `c = 16` opening at 5 without knowing).
+the driver's shared/L1 carveout, now set explicitly, and the register
+allocation of the compiled body, which the engine measures after compiling
+and guards (G18: every campaign configuration compiles to the occupancy
+the engine was tuned at with no spills — ≥ 4 blocks per SM for the v4
+kernel, whose optimum is 5–7 and which spilled and slowed when forced to
+8).
 
 **A window may start inside period 0.** A period is `1.92×10²¹` of line
 and every family's frontier sits inside the first one. `sweep` takes
@@ -313,17 +349,23 @@ and a run of values proved in a further second
 once per filter as a `[MILESTONE]` and never stops the run.
 
 **Coverage is coarser than work, and the checkpoint carries both**
-(CONVENTIONS.md "Two cursors"). The wheel emits a period's candidates in
-`(t, s, u)` order, so `swept to` advances one period at a time and is the
-only thing a least-claim rests on, while the work cursor `(j, u)` advances
-every launch. Values classified mid-period are held *in the checkpoint*
-and narrated in `k` order when the period closes; a find costs at most one
-period of over-sweep — about a minute at the opening, five seconds at
-`n = 17`. Because periods can close every few seconds at the deeper
-filters, the period-close save and log line are rate-limited (a save
-every few seconds would be tens of thousands of chances per campaign for
-a scanner's handle to land in the rename window); the boundary snapshot
-is still taken at every close, so an interrupt writes the latest one.
+(CONVENTIONS.md "Two cursors"). The window engine sieves a **segment** of
+64 wheel periods (`1.23×10²³` of k; 128 from `c = 16` forms, `2.46×10²³`)
+at once and emits its candidates in `(t, s, u, period)` order, so `swept
+to` advances one segment at a time and is the only thing a least-claim
+rests on, while the work cursor `(j, u)` — the segment's first period and
+the launches of it that are classified — advances every launch. Values
+classified mid-segment are held *in the checkpoint* and narrated in `k`
+order when the segment closes; a find costs at most one segment of
+over-sweep — twenty minutes at A088250's opening, 1.7 hours at A125838's
+(which is why the width is 64 there), five to twenty seconds at the
+filters the campaigns resume at. A v2 or v3 cursor is inherited at its
+period with its sub-period index floored, re-sweeping at most one period.
+Because segments can close every few seconds at the deeper filters, the
+close save and log line are rate-limited (a save every few seconds would
+be tens of thousands of chances per campaign for a scanner's handle to
+land in the rename window); the boundary snapshot is still taken at every
+close, so an interrupt writes the latest one.
 
 **The host classifies in a ramped pool sized from a measurement at the
 campaign's own filter.** A survivor costs 14.5 µs with a base-2 strong-test

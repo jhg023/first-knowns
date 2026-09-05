@@ -11,25 +11,26 @@ Six shapes, because one configuration is not a benchmark:
   SCORE     A088250, n = 15, the production unit wheel (..37],(37,47],(47,59]
             at unit 30030, sieve 65536, from period 1 (k = 1.92e21) -- the
             configuration the headline campaign OPENS in, and the row to
-            read for opening throughput.  Denominated in kernel LAUNCHES
-            rather than wheel periods because one period is 1.92e21 of k
-            line (a minute of device); a launch there is ONE third-level
-            residue of 7.3e9 candidates, and 24 launches are 24 of the
-            1,672 residues a period holds -- just as reproducible a set of
-            candidates, and a second of device.
-  SCORE17   the same wheel at n = 17 -- the filter the A088250 campaign
-            spends most of its wall clock at (a(15) and a(16) are expected
-            within minutes; a(17)'s median is 1.7e24, hours) -- 64 launches
-            of two third-level residues each (128 of the period's 1,512).
-            The tables are a tenth the size of n = 15's and the line rate
-            13x, so this is the row to read for the live hunt.
+            read for opening throughput.  Denominated in THIRD-LEVEL
+            RESIDUES of one SEGMENT: the v4 engine sieves a segment of
+            eng.pb (64) wheel periods at once, so its natural work unit is
+            one third-level residue x every first- and second-level residue
+            x 64 periods -- 4.7e11 candidates, 1.23e23 of k line -- and the
+            shape is the first U such residues of the segment that starts
+            at period 1.  A set of candidates that no launch decomposition
+            (first-level chunk, residues per launch) can move, and one the
+            v3 engine could and did sweep identically before it was retired.
+  SCORE17   the same wheel at n = 17 -- the filter class every resumed
+            campaign runs in (n = 17..21: c >= 17 forms) -- 8 residues of
+            the segment (3.9e11 candidates).  The tables are a tenth the
+            size of n = 15's and the line rate 13x, so this is the row to
+            read for the live hunt.
   SCOREM    A125838, n = 15, the unit wheel at unit 30030 -- a -1 family's
             opening filter, where the forms are r*k - 1 for r = 2..n: one
             condition fewer than A088250 at the same n, so the wheel is
-            2.9x denser and the line rate a third.  A launch is one
-            residue of 2.05e10 candidates; 8 of the period's 1,755.  The
-            other w-class's tables are not the same tables, and this is
-            where that is measured.
+            2.9x denser and the line rate a third.  One residue of the
+            segment, 1.3e12 candidates.  The other w-class's tables are not
+            the same tables, and this is where that is measured.
   SCORE2L   the k-space TWO-level wheel (23],(37] at n = 15 over 6,656 of
             ITS periods (W = 7.42e12), and
   SCORE1L   the k-space ONE-level wheel (primes to 23) over the IDENTICAL
@@ -52,12 +53,17 @@ modulus, and SCORE1L's window is deliberately the SAME ABSOLUTE WINDOW as
 SCORE2L's, which is only possible because W(2L) = W(1L) * 33263.
 
 SCORE2L, SCORE1L and SCORE10 were frozen on 2026-09-03 on the v1 engine
-and reproduce unchanged on v2; SCORE, SCORE17 and SCOREM were RE-FROZEN
-the same day on v2, whose wheel is the deliberate coverage change that
-moves them (OPTIMIZATION_LOG.md v2, with the paired ratio against v1's
-wheel on the same line).  A deliberate coverage change -- a new wheel, a
-new sieve depth -- legitimately moves a fingerprint: update it in the same
-commit and say why in OPTIMIZATION_LOG.md.
+and reproduce unchanged on v2, v3 and v4 -- whole wheel periods are the
+same candidates whatever engine sweeps them, which is what makes them the
+anchors across engine generations.  SCORE, SCORE17 and SCOREM were frozen
+on v2 in LAUNCHES of that engine, a denomination v4 does not have (its
+launch is a first-level chunk of a segment), so they were RE-DENOMINATED
+on 2026-09-05 in third-level residues of one segment: the v4 engine and
+the v3 engine were run on those exact windows and returned the identical
+survivors, and the fingerprints here are that agreement (OPTIMIZATION_LOG.md
+v4).  A deliberate coverage change -- a new wheel, a new sieve depth --
+legitimately moves a fingerprint: update it in the same commit and say why
+in OPTIMIZATION_LOG.md.
 
 Wall clock: about 3 min, of which the gates are most.
 """
@@ -75,19 +81,20 @@ import lladder_reference                                        # noqa: E402
 import lladder_search                                           # noqa: E402
 from lladder_gpu import GpuEngine                               # noqa: E402
 
-# label, family, n, p1, p2, p3, q2, j0, blocks, launches, expected count,
+# label, family, n, p1, p2, p3, q2, j0, blocks, residues, expected count,
 # xor, unit
 #
-# `blocks` sweeps whole wheel periods from period j0.  `launches` is for
-# the launch-denominated shapes: the first `launches` kernel launches of
-# period j0.
+# `blocks` sweeps whole wheel periods from period j0.  `residues` is for
+# the segment-denominated shapes: the first `residues` third-level
+# residues (every first- and second-level residue, every period) of the
+# segment that starts at period j0.
 SHAPES = [
-    ("SCORE",   "A088250", 15, 37,   47,   59, 65536,           1, None,   24,
-     56165, 247205394479927860656, 30030),
-    ("SCORE17", "A088250", 17, 37,   47,   59, 65536,           1, None,   64,
-     3957, 2153040604752053900382, 30030),
-    ("SCOREM",  "A125838", 15, 37,   47,   59, 65536,           1, None,    8,
-     146036, 4331048872519602054736, 30030),
+    ("SCORE",   "A088250", 15, 37,   47,   59, 65536,           1, None,    1,
+     150985, 144395210679418703534414, 30030),
+    ("SCORE17", "A088250", 17, 37,   47,   59, 65536,           1, None,    8,
+     31431, 118193132530909840366348, 30030),
+    ("SCOREM",  "A125838", 15, 37,   47,   59, 65536,           1, None,    1,
+     1166647, 240031737716965866902, 30030),
     ("SCORE2L", "A088250", 15, 23,   37, None, 65536,       94334, 6656, None,
      123, 706879083926370176, 1),
     # the SAME absolute window as SCORE2L: W(2L) = W(1L) * 33263 exactly, so
@@ -102,32 +109,33 @@ SHAPES = [
 ]
 
 
-def work_for(eng, j0, blocks, launches):
+def work_for(eng, j0, blocks, residues):
     """The benchmark's work function for one shape: a callable returning the
     sorted survivors, plus the line it covers and the units it is counted in."""
-    if launches is None:
+    if residues is None:
         line = blocks * eng.W
 
         def work():
             return eng.survivors_j(j0, j0 + blocks)
         return work, line, blocks, eng.R
-    per_launch_cand = eng.R1 * eng.R2 * eng.nu
-    lpp = -(-eng.R3 // eng.nu)
-    if launches > lpp:
-        raise ValueError(f"{launches} launches exceed the {lpp} a period "
-                         f"holds; denominate this shape in periods")
-    line = launches * per_launch_cand / eng.density()
+    if residues > eng.R3 or residues % eng.nu:
+        raise ValueError(f"{residues} third-level residues: a segment holds "
+                         f"{eng.R3} and a launch {eng.nu}, so the count must "
+                         f"be a multiple of {eng.nu} up to {eng.R3}")
+    per_res_cand = eng.R1 * eng.R2 * eng.seg_periods
+    nl = (residues // eng.nu) * eng.n_tchunks    # launches to take
+    line = residues * per_res_cand / eng.density()
 
     def work():
         out = []
-        it = eng.sweep(j0, j0 + 1)
+        it = eng.sweep(j0, j0 + eng.seg_periods)
         for i, (_, _, sv) in enumerate(it):
             out.extend(sv)
-            if i + 1 >= launches:
+            if i + 1 >= nl:
                 break
         it.close()
         return sorted(out)
-    return work, line, launches, per_launch_cand
+    return work, line, residues, per_res_cand
 
 
 def main():
@@ -146,10 +154,10 @@ def main():
         return 1
 
     ok_all = True
-    for (label, fam, n, p1, p2, p3, q2, j0, blocks, launches,
+    for (label, fam, n, p1, p2, p3, q2, j0, blocks, residues,
          count, xor, unit) in SHAPES:
         eng = GpuEngine(n, fam, p1=p1, p2=p2, p3=p3, q2=q2, unit=unit)
-        work, line, units, per_unit = work_for(eng, j0, blocks, launches)
+        work, line, units, per_unit = work_for(eng, j0, blocks, residues)
         work()                                          # warm on the window
         runs = 3 if units * per_unit > 10 ** 10 else 5
         rate_units, ok = scoring.fingerprint_benchmark(
