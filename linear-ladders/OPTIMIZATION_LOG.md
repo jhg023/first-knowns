@@ -1037,6 +1037,35 @@ Then `GpuEngineV3` and its template were deleted; the CPU parity gate
 (G9, 25 windows) and the three k-space fingerprints are the permanent
 other half.
 
+### Measurement 5 -- the resumed campaigns, calibrated on their real checkpoints (5g)
+
+Each family's REAL checkpoint copied to a scratch path, loaded through
+the v4 policy into a `Campaign` (every one `inherited`; A088651's u = 945
+floored to 0 with its line), and `Campaign.calibrate()` on the launches
+the loop would run next -- about a second of device, nothing recorded:
+
+| family | filter (c) | launches in 1 s | k/s | survivors/s | us each | core-s/s | pool |
+|---|---|---|---|---|---|---|---|
+| A088250 | n = 18 (18) | 81 | `1.385e22` | 33,866 | 12.0 | 0.41 | 1 |
+| A173750 | n = 20 (19) | 80 | `2.861e22` | 13,149 | 11.9 | 0.16 | 1 |
+| A125838 | n = 19 (18) | 82 | `6.965e21` | 33,498 | 11.7 | 0.39 | 1 |
+| A125839 | n = 19 (17) | 71 | `2.286e21` | 83,083 | 13.4 | 1.12 | 3 |
+| A164325 | n = 19 (19) | 101 | `1.818e22` | 12,864 | 12.4 | 0.16 | 1 |
+| A164326 | n = 19 (19) | 101 | `1.811e22` | 13,115 | 14.1 | 0.19 | 1 |
+| A088651 | n = 18 (18) | 82 | `1.391e22` | 33,370 | 12.7 | 0.42 | 1 |
+
+and the fresh openings (a scratch checkpoint at period 0): A088250
+n = 15 `1.967e20 k/s`, 404,145 survivors/s, 4.63 core-s/s, pool 10;
+A125838 n = 15 `5.004e19`, 850,726/s, 9.94 core-s/s, pool 20 (of the 31
+a 32-core host offers); A164325 n = 16 `3.372e20`, 200,642/s, 2.31,
+pool 5. Segment 0 takes 626 s, 2,459 s and 730 s of device at those
+openings. So the load picture inverted (CLAUDE.md 5f): the openings are
+now host-heavy and the resumed filters trivially light, and the pool
+sized from the measurement is what makes both defaults right. Every
+`swept to` equalled the file's k; every next segment sat under the
+ceiling.
+
+
 ### What the gates caught during the build
 
 - **A `ROUND(off, kl)` macro invoked on a variable named `off`**: its

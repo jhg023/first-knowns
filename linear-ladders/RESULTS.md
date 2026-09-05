@@ -644,6 +644,20 @@ A164326 ran first (2026-09-04) and delivered both of its: `a(17)` at
 1.97× its median and `a(18)` at 0.14×. From its new bound its `a(19)`
 is worth 0.02 terms a night, so A125839 and A088651 are the next
 two.
+
+**v4 (2026-09-05) multiplies every rate in the table above by 6–10**
+([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v4; the resumed filters
+calibrated on the real checkpoints run at `1.39×10²²`, `2.86×10²²`,
+`6.97×10²¹`, `2.29×10²¹`, `1.82×10²²`, `1.81×10²²` and `1.39×10²²` k/s
+for A088250, A173750, A125838, A125839, A164325, A164326 and A088651).
+Nine hours at those rates from each family's current bound puts the
+open term under the sweep with probability **68% for A088250's a(18),
+75% for A125838's a(19), ~100% for A125839's a(19), 60% for A088651's
+a(18)** (from the `1.388×10²⁶` its own campaign reached on 2026-09-05)
+and 10% each for A173750's a(20), A164325's a(19) and A164326's a(19)
+— floors, since a find promotes the filter and the rate with it, and
+the P90 of the +1 families' next terms is now a night or two of sweep
+rather than a week.
 Read every figure as a floor: the twenty finds here landed anywhere from
 0.01× to 7.9× their medians, with the model's `E` averaging 1.2 over the
 eighteen searched terms. Where each campaign stands is read with

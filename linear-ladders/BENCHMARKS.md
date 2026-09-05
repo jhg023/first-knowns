@@ -12,9 +12,10 @@ buys, candidate rate is what the kernel does, and the wheel is the exchange
 rate between them. Here that exchange rate is extreme: forced divisibility
 by every prime to 13 (README.md, "The mathematics of the engine") leaves
 `6.4×10⁻⁹` of the line as candidates at A088250's opening filter and
-`5.9×10⁻¹⁰` at n = 17, so a candidate rate of `2.4×10¹¹` per second is a
-line rate of `4.0×10²⁰` k per second — 60× the prime ladders' live rate
-from the same kernel.
+`5.9×10⁻¹⁰` at n = 17, so the v4 engine's candidate rate of `2.0×10¹²`
+per second at n = 17 is a line rate of `3.3×10²¹` k per second (v2's
+`2.4×10¹¹` was `4.0×10²⁰`, itself 60× the prime ladders' live rate from
+the same kernel).
 
 ## The shapes
 
@@ -189,9 +190,15 @@ same; OPTIMIZATION_LOG.md v4, Measurement 4):
 | A164326 | n = 19 | `2.36e12` | `1.66e22` | `2.50e11 candidates/s` |
 | A088651 | n = 18 | `2.18e12` | `1.29e22` | `(not run; A088250's n = 18 wheel, 2.35e11) candidates/s` |
 
-The rates at the two OPENING filters the shapes measure (`SCORE`,
-`SCOREM`) are 6-7x, at c = 17 8-9x and at c >= 18 -- where every campaign
-now runs -- 9x: the window sieve's cost per candidate is the number of
+Calibrated on each family's REAL checkpoint (its own next launches, one
+second, nothing recorded) the resumed campaigns run at `1.39×10²²`
+(A088250 n = 18), `2.86×10²²` (A173750 n = 20), `6.97×10²¹` (A125838
+n = 19), `2.29×10²¹` (A125839 n = 19), `1.82×10²²` (A164325 n = 19),
+`1.81×10²²` (A164326 n = 19) and `1.39×10²²` k/s (A088651 n = 18), with
+pools of 1 (A125839: 3); the table in README.md "Running it" has the
+survivor rates and host needs. The rates at the two OPENING filters the
+shapes measure (`SCORE`, `SCOREM`) are 6-7x, at c = 17 8-9x and at
+c >= 18 -- where every campaign now runs -- 9x: the window sieve's cost per candidate is the number of
 window groups (24 at c = 20, 51 at c = 14) and the tail's fixed latency
 weighs more on the denser openings.
 

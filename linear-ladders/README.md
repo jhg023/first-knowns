@@ -374,13 +374,16 @@ arrive per second depends on the filter: 46,000 at A088250's opening
 (0.66 core-seconds per second), 117,000 at A125838's (1.7), 6,900 at
 `n = 17` (0.10). So at start, and again at every promotion, the launcher
 sweeps the launches it is about to run, counts their survivors, times a
-sample, and ramps `ceil(need × 2)` interpreters (`size_pool`, drilled) —
-two at A088250's opening, three or four at the −1 openings, one from
-`n = 16` on. The device may run at most 64 launches ahead of the pool; if
-the pool binds, the device waits and the `[STATUS]` line says `HOST-BOUND`
-and by how much. The loop is measured device-bound at every opening
-(sieve plus tail rounds are 95–101% of the pipelined wall clock;
-[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)).
+sample, and ramps `ceil(need × 2)` interpreters (`size_pool`, drilled).
+Under v4 the survivors arrive 6–9× faster, so the openings are host-heavy
+— ten workers at A088250's `n = 15` (4.6 core-seconds per second), twenty
+at A125838's (9.9), five at A164325's `n = 16` — while every resumed
+filter needs one (A125839's `n = 19`, three): the measurements are in
+the "first lines" paragraphs below. The device may run at most 64
+launches ahead of the pool; if the pool binds, the device waits and the
+`[STATUS]` line says `HOST-BOUND` and by how much. The loop was measured
+device-bound at every opening under v2 (sieve plus tail rounds 95–101% of
+the pipelined wall clock; [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)).
 
 ## The odds model
 
@@ -492,49 +495,72 @@ does), `--gpu-yield-ms` idles the device after every launch (1 ms
 against a 5 ms launch is about 17% of the rate), and `--gentle` is the
 preset of one worker and a 2 ms yield, about a third of the rate.
 
-**What the first lines of a RESUMED campaign should say** (v3; the
-numbers are the harness measurements in
-[OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v3). For `--family A164326`:
-a `[STAGE]` line `checkpoint MIGRATED from a164326-v2-... to a164326-v3-...`,
-then `resume at period 52, u = 0 (k = 99,983,538,208,019,057,231,640)`,
-the `a(17)` quantiles from the model, a `[MILESTONE]` saying the sweep
-is already past the proof crossing `k_proof(17, A164326) = 1.005e+23`
-with the certificate route named, and a pool line `classification pool:
-1 workers (measured on ~150 launches, 1.00 s of device at 1.7e+20 k/s:
-~6,000 survivors/s x ~13 us = 0.08 core-s per s, x2 margin)`. The first
-`[STATUS]` at 30 s: `swept to 9.99835e+22` or a period or two above it
-(a period is `1.92×10²¹`, about 11 s at this filter), `A164326 filter
-n = 17`, a rate near `1.8e+20 k/s`, `census ... 16:1`, `finds 2`,
-`pool 1`, and `next a(17) median 1.05e+24 (ETA ~1.5 h)`. The
-line-per-second, the pool of 1 and the rung named are the three things
-to check; a `HOST-BOUND` fragment or a rate under 90% of that is a
-defaults bug.
+**What the first lines of a RESUMED campaign should say** (v4; every
+number below was measured on 2026-09-05 by loading each family's REAL
+checkpoint into a campaign on a scratch copy and calibrating its own
+next launches for one second — nothing swept for real, CLAUDE.md 0a).
+For `--family A088651`: a `[STAGE]` line `checkpoint MIGRATED from
+a088651-v3-... to a088651-v4-...: the configurations cover the same line,
+so the cursor carries over`, then — because that checkpoint was written
+mid-period — `inherited cursor: u = 945 was a third-level residue index
+of period 72178; v4 re-sweeps that period from its start (at most one
+period of device)`, then `resume at period 72178, launch 0 (k =
+138,780,996,553,430,759,862,794,460)`, the `a(18)` quantiles, a
+`[MILESTONE]` saying the sweep is past the proof crossing with the
+Theorem 15 route named, and a pool line `classification pool: 1 workers
+(measured on ~80 launches, 1.01 s of device at 1.39e+22 k/s: ~33,000
+survivors/s x ~13 us = 0.42 core-s per s, x2 margin)`. The first
+`[STATUS]` at 30 s: `swept to 1.38781e+26` (a segment is 128 periods,
+`2.46×10²³` of line, about 18 s at this filter, so the claim has moved
+once or twice), `periods [72306, 72434) [...) 60%` or thereabouts,
+`A088651 filter n = 18`, a rate near `1.4e+22 k/s`, `census ... 17:2`,
+`finds 2`, `pool 1`, and `next a(18) median 2.2e+26 (ETA ~1.7 h)`. The
+line-per-second, the pool and the rung named are the three things to
+check; a `HOST-BOUND` fragment or a rate under 90% of the table's is a
+defaults bug. All seven, from their checkpoints as they stand:
 
-**What the first lines of a FRESH campaign should say** (the rule 5g
-acceptance test as it was run for v2, kept for `--fresh`). For A088250
-with no flags:
-the pool line `classification pool: 2 workers (measured on 25 launches,
-1.00 s of device at 2.9e+19 k/s: 58,500 survivors/s x 13.1 us = 0.77
-core-s per s, x2 margin)` (the selftest's wiring drill takes the same
-measurement and printed exactly that). A period is `1.92×10²¹` of line,
-about 65 s at this rate, so the first `[STATUS]` line at 30 s is inside
-period 0: `swept to 0`, `period 0 [0, 1.9228e+21) 45%`, `A088250 filter
-n = 15`, a rate near `3.0e+19 k/s`, `finds 0`, `pool 2`, `next a(15)
-median 1.98e+20 (ETA inside the period being worked)` — every rung of
-`a(15)` sits inside period 0, and a rung inside the period being worked
-says so rather than carrying a time — and `P(a(15) under the claim) = 0%`,
-because the coverage claim does not move until the period closes. The
-second line (60 s) reads the same at ~90%. Then `period 0 complete: swept
-to 1,922,760,350,154,212,639,070`, and `a(15)` (median `2.0×10²⁰`, 96%
-inside period 0) has most likely been narrated as a `[DISCOVERY]` banner
-with its `also settles` lines, followed by `filter follows the frontier:
-n = 15 -> 16` and a re-sized pool of 1; the third `[STATUS]` then reads
-`filter n = 16`, a rate near `1.4e+20 k/s`, `finds 1`, `pool 1`, `next
-a(16) Q1 6.5e+21 (ETA …)` and a small `P(a(16) under the claim)`. Either
-way: no `HOST-BOUND` fragment, the rate at the benchmark's for the filter
-shown, and `next` naming the open term's rung. A rate under 90% of the
-benchmark's, a `HOST-BOUND` fragment, or a `next` naming a settled term
-is a defaults bug, not a flag to reach for.
+| family | resumes at | filter | window | first `[STATUS]` rate | survivors/s | host need | pool | P(next term) in 9 h |
+|---|---|---|---|---|---|---|---|---|
+| A088250 | period 1725, `3.317×10²⁴` | n = 18 | 128 periods, 1,435 launches | `1.39×10²² k/s` | 33,900 | 0.41 core-s/s | 1 | a(18) 68% |
+| A173750 | period 1725 | n = 20 | 128, 680 | `2.86×10²²` | 13,100 | 0.16 | 1 | a(20) 10% |
+| A125838 | period 90, `1.73×10²³` | n = 19 | 128, 2,870 | `6.97×10²¹` | 33,500 | 0.39 | 1 | a(19) 75% |
+| A125839 | period 90 | n = 19 | 128, 7,560 | `2.29×10²¹` | 83,100 | 1.12 | 3 | a(19) ~100% |
+| A164325 | period 1725 | n = 19 | 128, 1,360 | `1.82×10²²` | 12,900 | 0.16 | 1 | a(19) 10% |
+| A164326 | period 8347, `1.605×10²⁵` | n = 19 | 128, 1,360 | `1.81×10²²` | 13,100 | 0.19 | 1 | a(19) 10% |
+| A088651 | period 72178, `1.388×10²⁶` (u = 945 floored to 0) | n = 18 | 128, 1,435 | `1.39×10²²` | 33,400 | 0.42 | 1 | a(18) 60% |
+
+The last column is the model's probability that the open term lies
+under nine hours of sweep from the current bound at the resumed filter's
+rate (a floor: a find promotes the filter and the rate with it;
+[RESULTS.md](RESULTS.md), "What is open now"). A125839 and A088651 are
+the nights that pay, then A125838 and A088250.
+
+**What the first lines of a FRESH campaign should say** (v4, measured
+the same way on a scratch checkpoint at period 0; the v2 acceptance test
+is in the log). For A088250 with `--fresh` and no other flags: the pool
+line `classification pool: 10 workers (measured on ~38 launches, 1.02 s
+of device at 1.97e+20 k/s: 404,000 survivors/s x 11.4 us = 4.6 core-s
+per s, x2 margin)` — the window engine delivers survivors seven times
+faster than v2 did at this filter, and the opening filters are where the
+host works hardest (A125838's `--fresh` opening measures 9.9 core-s per
+s and ramps 20 of the 31 workers this 32-core machine offers; from
+`c = 17` every filter needs one to three). A segment is 64 periods here,
+`1.23×10²³` of line, about 10 minutes at this rate, so the first
+`[STATUS]` lines read `swept to 0`, `periods [0, 64) [0, 1.2306e+23)
+5%`, `A088250 filter n = 15`, a rate near `2.0e+20 k/s`, `finds 0`, `pool
+10`, `next a(15) median 1.98e+20 (ETA inside the period being worked)`
+and `P(a(15) under the claim) = 0%`, because the coverage claim does not
+move until the segment closes. Then `periods [0, 64) complete: swept to
+123,056,662,409,869,608,900,480` and — since `a(15)` (`1.56×10²¹`) AND
+`a(16)` (`8.7×10²²`) both lie inside segment 0 — two `[DISCOVERY]`
+banners in `k` order with their `also settles` lines, `filter follows
+the frontier: n = 15 -> 17` and a re-sized pool; the next `[STATUS]`
+reads `filter n = 17`, a rate near `3.3e+21 k/s`, `finds 2`, `pool 1`,
+`next a(17) Q1 4.7e+23 (ETA …)`. Either way: no `HOST-BOUND` fragment
+(with 10 workers on 32 cores there is none), the rate at the benchmark's
+for the filter shown, and `next` naming the open term's rung. A rate
+under 90% of the benchmark's, a `HOST-BOUND` fragment, or a `next` naming
+a settled term is a defaults bug, not a flag to reach for.
 
 ## Trust
 

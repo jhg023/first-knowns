@@ -137,8 +137,15 @@ and interleaved:
     A125838 n = 15   7.6e18 k/s   1.7e-14                          1.3e5/s  1.9 core-s/s
     A088250 n = 17   3.7e20 k/s   2.5e-17                          9.2e3/s  0.13 core-s/s
 
-so the host need runs from about two cores at the -1 openings to a
-fraction of one at the live filters, and no constant serves them all: the
+and under v4 (2026-09-05), calibrated on the campaigns' own launches:
+
+    A088250 n = 15 (fresh)   2.0e20 k/s   4.0e5/s   4.6 core-s/s   pool 10 of 31
+    A125838 n = 15 (fresh)   5.0e19 k/s   8.5e5/s   9.9 core-s/s   pool 20 of 31
+    A088250 n = 18 (resumed) 1.4e22 k/s   3.4e4/s   0.41 core-s/s  pool 1
+    A125839 n = 19 (resumed) 2.3e21 k/s   8.3e4/s   1.12 core-s/s  pool 3
+
+so the host need runs from ten cores at the -1 openings to a fraction of
+one at the live filters, and no constant serves them all: the
 pool is SIZED FROM A MEASUREMENT AT THE CAMPAIGN'S OWN FILTER, again every
 time the filter moves (Campaign.size_pool: the next launches are swept and
 timed, their survivors counted, a sample of them classified, and
