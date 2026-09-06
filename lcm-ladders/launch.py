@@ -131,6 +131,7 @@ is ever changed on the owner's behalf.
 import argparse
 import collections
 import concurrent.futures as _cf
+import functools
 import math
 import os
 import pathlib
@@ -169,13 +170,27 @@ EVID = str(HERE / "evidence")
 PLAN_VERSION = "p1"               # bump when plan_for's answer changes
 
 
+@functools.lru_cache(maxsize=None)
 def plan_for(fam, n):
     """(unit, p1, p2, p3, q2) for filter n of family F -- the configuration
     the campaign runs there, and the fastest correct one it has (CLAUDE.md
     5g).  Measured, not assumed: the wheel maximises candidates per unit of
     line subject to the 2^63 reduction bound and a window worth having, and
     the depth is the smallest whose analytic survivor rate two workers can
-    absorb (lcml_gpu.wheel_plan, lcml_gpu.plan_q2)."""
+    absorb (lcml_gpu.wheel_plan, lcml_gpu.plan_q2).
+
+    CACHED, AND THAT IS NOT AN OPTIMISATION DETAIL.  Planning enumerates
+    every admissible three-level split and walks the sieve primes: 33 ms.
+    It is a pure function of (family, filter), so its answer changes a
+    handful of times in a campaign -- but `x_floor` calls it, `k_min` calls
+    `x_floor` every segment and `state` calls it every launch, and 33 ms
+    against a 14 ms launch is OPTIMIZATION.md 2.14's trap wearing a
+    different hat: a per-launch cost that does not scale with the work.
+    Measured on the campaign's own loop, before and after: 34.1 ms per
+    `mark_boundary` -> 4.6 us.  The tell was the same one shift-ladders
+    left: an absolute per-launch constant that two configurations four
+    orders of magnitude apart in line agreed on.
+    """
     fam = ref.family(fam)
     unit = cpu.forced_unit(n, fam)
     p1, p2, p3 = gpu.wheel_plan(n, fam, unit)
@@ -183,6 +198,7 @@ def plan_for(fam, n):
     return unit, p1, p2, p3, q2
 
 
+@functools.lru_cache(maxsize=None)
 def x_floor(fam, n, frontier_N):
     """Where the sweep for a(n) starts, in x at filter n.
 

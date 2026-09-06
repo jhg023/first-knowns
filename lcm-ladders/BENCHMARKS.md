@@ -19,9 +19,16 @@ nothing about the next.
 | date | engine | SCORE | SCOREP | SCORE16 | SCORE17 | SCORE2L | SCORE1L | SCORE9 |
 |---|---|---|---|---|---|---|---|---|
 | 2026-09-06 | v1 | 52,833 | 52,698 | 301,058 | 38,295 | 20,331 | 4,955 | 6.7 |
+| 2026-09-06 | v1 round 2 | 53,408 | 53,340 | 309,337 | 38,219 | 20,675 | 5,037 | 6.9 |
 
-(in units of 10⁶ x/s; SCORE9 is 6.7×10⁶ x/s, a filter whose survivor density
+(in units of 10⁶ x/s; SCORE9 is ~7×10⁶ x/s, a filter whose survivor density
 is four orders higher.)
+
+Round 2 moved two engine constants ( 2^35 → 2^37 and
+ 0.5 → 0.7) and one campaign-loop cost that the benchmark
+cannot see at all:  went from 34 ms per launch to 2.5 µs, or
+about 60% of a launch to 0.01% of one. The shapes pin , so the SCORE
+row moves only by the tail-round change; the campaign gets the rest.
 
 ## The shapes
 

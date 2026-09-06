@@ -142,22 +142,143 @@ openings now costs **0.15 s** in total, against ~40 s.
 
 ---
 
+## Round 2 (2026-09-06) — the phase split, and the thing it was hiding
+
+### Measurement 5 — the phase split, and why the instrumented one lies here
+
+CUDA events between eagerly-issued kernels, at three openings:
+
+| | n = 15 | n = 16 | n = 17 |
+|---|---|---|---|
+| sieve kernel (window + in-block rounds + extraction) | 84.3% | 87.6% | 90.2% |
+| all tail rounds | 15.7% | 12.4% | 9.8% |
+| device / wall | 100% | 100% | 100% |
+
+So the sieve kernel is the phase. **But the split cannot be used to choose a
+constant**, and that is worth recording because it nearly cost an afternoon.
+Instrumenting removes the overlap between a launch's sieve kernel and the
+previous launch's tail rounds, so it over-weights the sieve. Sweeping the
+window depth `lit` on the INSTRUMENTED path says 40 is 1.116× better than
+31; sweeping the same knob on the PRODUCTION path says 31 is the peak and 38
+is 0.96×. OPTIMIZATION.md Rule 7's corollary, in this project's own numbers:
+**an instrumented path is not the production path.** Every verdict below is
+from the production path.
+
+### Measurement 6 — the constants, re-swept at n = 15 (production path)
+
+All at pb = 192, q2 = 131072, three interleaved rounds of 8-10 launches:
+
+| knob | values | best | verdict |
+|---|---|---|---|
+| `BIT_SURV` (window depth) | .02 / .012 / .0085 / **.007** / .005 / .0035 | .007 | inherited value confirmed; 0.02 is a 15× cliff |
+| `lit` directly, k2 fixed | 28 / **31** / 34 / 38 / 42 | 31 | agrees with BIT_SURV |
+| `K2_SURV4` (in-block depth) | .003 / .001 / **.0003** / .0001 / 3e-5 | .0003 | inherited confirmed |
+| `spb` | 2 / 4 / **8** / 16 / 32 | 8 | 0.83 / 0.95 / 1.00 / 0.12 / 0.08 |
+| `tpb` | 64 / **128** / 256 | 128 | 0.76 / 1.00 / 0.14 |
+| `R2_DROP` | .7 / **.5** / .35 / .2 | 0.5 | 0.11 / 1.00 / 0.96 / 0.83 |
+| `BIT_GROUP_MAX` | **1** / 120 / 600 / 3000 / 15000 | 1 (single primes) | 1.00 / .99 / 1.00 / .94 / .87 |
+| `K2_GROUP_MAX4` | **1** / 200 / 2000 | flat | keep 1 |
+| `X0_SHARED` | **False** / True | False | 1.00 / 0.79 |
+| `PAT_SHARED` | **True** / False | True | 1.00 / 0.94 |
+| `EXTRACT_EVERY` at nw = 6 | **1** / 2 / 4 | 1 | 1.00 / 0.95 / 0.83 |
+| `QCAP_SIGMA` | 3 / **6** / 10 / 16 | 6 | flat within 1% |
+| `ROUND_ILP` | **1** / 2 / 4 | flat | keep 1 |
+| `TAIL_TPB` | 128 / **256** / 512 | flat | keep 256 |
+| `TAIL_FILL` | 2^17 / **2^19** / 2^21 / 2^23 | flat | keep 2^19 |
+| `CARVEOUT_PCT` | 25 / 50 / 75 / **100** | flat within 1.1% | keep pinned |
+
+Two moved, and both are recorded at their constant: **`CAND_PER_LAUNCH4`
+2^35 → 2^37** (1.034× at n = 15, 1.082× at n = 17, 1.048× at n = 16) and
+**`TAIL_ROUND_DROP` 0.5 → 0.7** (1.014× at n = 15, 1.000× at n = 17).
+
+### Measurement 7 — the deeper wheel, measured at last: **0.646×, declined**
+
+The one candidate the first round left priced but unmeasured. Wheel to 47 at
+n = 15 cuts candidates 1.47× — and drops the window from 192 periods to 29,
+because `(PV + 1)·W' + q2 < 2^63` and W' goes 6.5e15 → 3.1e17. Measured
+paired against the planned (19,31,43): **0.646×**. That is OPTIMIZATION.md
+§2.8's second limit exactly — the wheel's benefit and its cost are both
+proportional to the same factor, and here they invert. A third split of the
+same primes, (23,31,43), reads 0.993×, so the level boundaries themselves
+are worth nothing; it is the prime set that matters.
+
+### Measurement 8 — the kernel is NOT occupancy-limited
+
+Both rooflines put the sieve kernel at ~26% (shared-memory bandwidth: 8.2
+lane-loads per SM-cycle against ~32; issue: ~25 lane-instructions against
+128), so it is latency-bound, and the obvious remedy is more warps. Shared
+memory caps it at 5 blocks/SM (19.3 KB × 5 = 96.6 KB of 100) where the 79
+registers would allow 6.
+
+**The remedy is measured and it is not there.** `spb = 4` already compiles
+to **6** blocks/SM (24 warps against 20) and `spb = 2` also to 6 — and they
+measure **0.948× and 0.832×**. More warps with less work each is worse: what
+`spb` buys is amortisation of the per-thread x0 loads and the per-block `ne`
+across more second-level residues, and that outweighs occupancy over the
+whole range. So the 3.2 KB of shared memory a three-byte queue entry would
+save (u16 index + u8 period instead of u32) is **not worth building**: it
+buys the block per SM that spb = 4 already proves is not the constraint.
+
+### Measurement 9 — THE ONE THAT MATTERED: 34 ms per launch off-device
+
+CONVENTIONS.md's "measure WALL CLOCK per unit of line alongside device and
+host, in the segment loop" — the measurement a benchmark and a gate both
+structurally cannot make. Timing the campaign's own per-launch methods
+against a scratch checkpoint:
+
+| | before | after |
+|---|---|---|
+| `check_rungs` (per launch) | 2.9 µs | 2.7 µs |
+| `ladder()` | 0.9 µs | 0.9 µs |
+| `state()` | **33,214 µs** | 3.4 µs |
+| `mark_boundary` (per launch) | **34,105 µs** | 2.5 µs |
+| `save()` (rate-limited) | 34,316 µs | 914 µs |
+| one launch of device | 56 ms | 56 ms |
+| **per-launch off-device work** | **~60% of a launch** | **0.01%** |
+
+`x_floor` called `plan_for`, which enumerates every admissible three-level
+wheel split and walks the sieve primes: 33 ms, a pure function of (family,
+filter), called from `k_min` every segment and from `state` every launch.
+The tell is the one shift-ladders left — an absolute per-launch constant
+that does not scale with the work — and the fix is the same one:
+`functools.lru_cache` on `plan_for` and `x_floor` (and on `wheel_plan` and
+`plan_q2` inside the engine, which also cheapens every gate that builds an
+engine). **13,600× on that call, and it would never have appeared in a SCORE
+or a gate.** This is why Rule 1's third paragraph is in the process.
+
+### Round 2 result
+
+44/44 green. SCORE 52,652 → **53,408**; SCORE16 305,119 → **309,337**;
+SCORE9 6.46 → **6.95** — the benchmark sees only the tail-round change,
+because the shapes pin `nu` (score.py says why). The campaign sees all of
+it: the off-device work per launch went from ~60% of a launch to 0.01%.
+
+---
+
 ## Open, priced, unbuilt
 
 Written down so the next pass starts from evidence (OPTIMIZATION.md Rule 6):
 
-1. **The wheel to 47 at unit 2**, with the window narrowed to 29 periods.
-   The candidate saving is exact (1.47×); the window cost is not measured.
-   §2.8's second limit says fit `a + b/T` first.
-2. **n = 16's occupancy.** G18 reports 4 blocks/SM at n = 16 against 5 at
-   the other filters, and 19 KB of shared memory — the queue budget rise
-   cost it a block. Worth a paired sweep of `QUEUE_BYTES_MAX` *at that
-   filter*, since the optimum need not be shared.
-3. **`SURV_TARGET`.** Chosen to land near one core; the device rate is flat
-   either side of it, so the real question is what the pipeline does, not
-   what the device does. Measure the campaign loop's wall clock per unit of
-   line against its device time (OPTIMIZATION.md Rule 1's third paragraph).
-4. **The segment-loop wall clock, which nobody has timed.** The benchmark
-   measures the engine and the gates measure correctness; neither runs a
-   segment. `shift-ladders` lost four fifths of a campaign to exactly that
-   blind spot.
+1. **A 64-bit pattern word.** At pb = 192 the window is NW = 6 32-bit words:
+   7 shared loads and 6 funnel shifts per prime per 192 candidates. In
+   64-bit it would be 4 loads and 3 (two-instruction) funnel shifts. The
+   linear ladders measured 32-bit better, but at NW = 2, where the trade is
+   3 loads against 2; at NW = 6 the arithmetic is different. Priced at
+   ~1.1× best case on a phase worth 85%, unbuilt: it is a source change to
+   the dominant kernel and would need G9, G14 and every fingerprint again.
+2. **More independent accumulator chains per thread.** The kernel is
+   latency-bound and not occupancy-bound (Measurement 8), so the lever is
+   ILP inside a thread rather than more threads. The natural axis is
+   processing two second-level residues in one pass over the groups; the
+   nearest existing knob, `EXTRACT_EVERY`, reads 0.95× at 2, but it also
+   costs a block per SM, so the two effects are confounded and the
+   experiment has not actually been run.
+3. **n = 16's occupancy.** 4 blocks/SM against 5 elsewhere, at 19 KB. Given
+   Measurement 8 this is probably not worth anything, but it has not been
+   swept *at that filter*.
+4. **`SURV_TARGET`.** Chosen so the host need lands near one core. The
+   device rate is flat either side, so the question is what the PIPELINE
+   does; that needs the campaign's own rate, which needs a hunt.
+5. **The host classifier.** 12.4 µs per survivor, and the campaign is
+   device-bound at every filter with a pool of 3, so this is worth nothing
+   today. It becomes the binding side if the device ever gets 4× faster.

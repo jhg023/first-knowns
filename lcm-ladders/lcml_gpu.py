@@ -100,6 +100,7 @@ spills, the carveout pinned and the window tables inside their cap).
 
 import pathlib as _pathlib
 import sys as _sys
+from functools import lru_cache as _lru_cache
 
 import numpy as np
 from sympy import primerange
@@ -187,6 +188,7 @@ SURV_TARGET = 5e-8
 Q2_LADDER = tuple(1 << e for e in range(12, 25))
 
 
+@_lru_cache(maxsize=None)
 def plan_q2(n, fam, unit, wheel_top, target=SURV_TARGET, ladder=Q2_LADDER):
     """The smallest depth in `ladder` whose analytic survivors-per-candidate
     is at or under `target`; the deepest rung if none reaches it.
@@ -219,6 +221,7 @@ def plan_q2(n, fam, unit, wheel_top, target=SURV_TARGET, ladder=Q2_LADDER):
     return ladder[-1]
 
 
+@_lru_cache(maxsize=None)
 def wheel_plan(n, fam, unit, pv_min=PV_MIN, r1_max=R1_MAX, top=53):
     """(p1, p2, p3): the best three-level split of the primes up to `top`
     that no forced prime already covers, at filter n of family F.
@@ -321,7 +324,13 @@ Q3_MAX = 1 << 28
 # survivors are compacted into the next queue.  Each round is one kernel
 # launch over a global queue with one item per thread and ONE global
 # atomic per block for the push.
-TAIL_ROUND_DROP = 0.5
+# 0.7, not the linear ladders' 0.5.  Swept paired: at n = 15 of A078502
+# 0.9/0.8/0.7/0.6/0.5 read 1.000/1.034/1.041/1.037/1.027 and at n = 17 of
+# A074200 1.000/1.070/1.079/1.089/1.079 -- a broad plateau over 0.6-0.8 whose
+# far side (0.9, one round for the whole tail) is a real loss.  Against the
+# inherited 0.5 it is 1.014x at n = 15 and 1.000x at n = 17: small, and taken
+# because it is free.
+TAIL_ROUND_DROP = 0.7
 TAIL_TPB = 256
 # LANES PER ITEM in a tail round.  The deep rounds hold a few thousand
 # items against thousands of primes each: one thread per item is a serial
@@ -744,10 +753,23 @@ K2_SURV4 = 0.0003
 R2_DROP = 0.5
 # Second-level residues per block in v4 (one first-level residue per thread).
 SPB4 = 8
-# Candidate budget per launch: sets the first-level chunk and the third-
-# level residues per launch.  ~15 ms of device at the design rate; the
-# tail rounds' fixed latency is amortised over it.
-CAND_PER_LAUNCH4 = 1 << 35
+# Candidate budget per launch: sets the first-level chunk and the third-level
+# residues per launch, and with them how much of the tail rounds' fixed
+# latency each launch has to amortise (OPTIMIZATION.md 2.4).
+#
+# 2^37, not the linear ladders' 2^35.  Swept paired at three openings:
+#
+#   cand/launch   2^35    2^36    2^37    2^38    2^40    2^41
+#   n = 15        1.000   1.024   1.034   1.042   0.650   0.350
+#   n = 17        1.000     --    1.082   1.077     --      --
+#   n = 16        1.000     --    1.048   1.053     --      --
+#
+# monotone to 2^38 and then a cliff: past there the analytic size of the
+# GLOBAL tail queue passes Q3_MAX and every launch takes the in-block
+# fallback (the documented 0.67x, worth 0.35x when it is the rule).  2^37
+# and 2^38 tie inside the noise at every opening, so this takes the one that
+# asks for less machine: 500 MB of device buffers against 1 GB.
+CAND_PER_LAUNCH4 = 1 << 37
 # Groups in the window sieve are SINGLE primes by default: a pair's pattern
 # table is 1-9 KB and its gather touches every sector, where a single's
 # fits in two to five sectors and costs the L1 one wavefront.

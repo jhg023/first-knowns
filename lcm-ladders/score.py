@@ -87,7 +87,19 @@ import lcml_search                                              # noqa: E402
 from lcml_gpu import GpuEngine                                  # noqa: E402
 
 # label, family, n, p1, p2, p3, q2, j0, blocks, residues, expected count,
-# xor, unit
+# xor, unit, nu
+#
+# `nu` -- third-level residues per launch -- is PINNED per shape, and that is
+# deliberate.  A shape denominated in third-level residues needs the count to
+# be a multiple of nu for a whole number of launches to cover exactly that
+# set, and nu is derived from CAND_PER_LAUNCH4, which is a tuning constant.
+# Leaving it free would mean every launch-size sweep moved the benchmark's
+# own window -- OPTIMIZATION.md 2.13, the benchmark shape becoming the
+# blocker.  Pinning it makes the shape a fixed SET OF CANDIDATES for the life
+# of the project (G15 proves the survivor stream does not depend on the
+# decomposition anyway).  The price is that the score cannot see the third
+# level of the launch size; the first level (tchunk) still moves with it, and
+# the campaign's own rate is measured in the log.
 #
 # `blocks` sweeps whole wheel periods from period j0.  `residues` is for the
 # segment-denominated shapes: the first `residues` third-level residues
@@ -95,23 +107,23 @@ from lcml_gpu import GpuEngine                                  # noqa: E402
 # starts at period j0.
 SHAPES = [
     ("SCORE",   "A078502", 15, 19,   31,   43, 131072,     1, None,  500,
-     154760, 1717515042281197424, 2),
+     154760, 1717515042281197424, 2, 5),
     ("SCOREP",  "A074200", 15, 19,   31,   43, 131072,     1, None,  500,
-     154612, 2377031453654844854, 2),
+     154612, 2377031453654844854, 2, 5),
     ("SCORE16", "A078502", 16, 23,   37,   47, 131072,     1, None,  128,
-     111412, 112270611949917918142, 34),
+     111412, 112270611949917918142, 34, 1),
     ("SCORE17", "A074200", 17, 19,   31,   43,  32768,     1, None,  384,
-     213382, 1379323101368620150, 2),
+     213382, 1379323101368620150, 2, 2),
     ("SCORE2L", "A078502", 15, 23,   37, None,  65536, 94334,  240, None,
-     8691, 702330747726546914, 1),
+     8691, 702330747726546914, 1, None),
     # the SAME absolute window as SCORE2L: W(2L) = W(1L) * 33263 exactly, so
     # both j0 and the block count scale by that factor (written as the
     # product rather than the number, because a hand-multiplied constant was
     # once off by 200 periods in prime-ladders) -- and the SAME fingerprint
     ("SCORE1L", "A078502", 15, 23, None, None,  65536, 94334 * 33263,
-     240 * 33263, None, 8691, 702330747726546914, 1),
+     240 * 33263, None, 8691, 702330747726546914, 1, None),
     ("SCORE9",  "A074200",  9, 13, None, None,   4096, 3330003, 400000000,
-     None, 5537992, 1223908228450, 1),
+     None, 5537992, 1223908228450, 1, None),
 ]
 
 
@@ -160,8 +172,8 @@ def main():
 
     ok_all = True
     for (label, fam, n, p1, p2, p3, q2, j0, blocks, residues,
-         count, xor, unit) in SHAPES:
-        eng = GpuEngine(n, fam, p1=p1, p2=p2, p3=p3, q2=q2, unit=unit)
+         count, xor, unit, nu) in SHAPES:
+        eng = GpuEngine(n, fam, p1=p1, p2=p2, p3=p3, q2=q2, unit=unit, nu=nu)
         work, line, units, per_unit = work_for(eng, j0, blocks, residues)
         work()                                          # warm on the window
         runs = 3 if units * per_unit > 10 ** 10 else 5
