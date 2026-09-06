@@ -101,7 +101,8 @@ minutes to the crossing at `n = 17`, found
     a(16) = 43,263,866,546,732,976,414,270
 
 which is also `A202779(16)`, every certificate the deterministic test,
-re-verified from disk; then **`a(17) > 1.942×10²³`**.
+re-verified from disk; then **`a(17) > 1.942×10²³`** — a bound its own
+resume superseded the next day, below.
 
 **Two more terms of A164326, past the old ceiling, and a bound (v3).**
 The eighth campaign — the first under the 10⁴⁰ ceiling below — resumed
@@ -142,15 +143,49 @@ survivors bit for bit, and every k-space fingerprint reproduces — and
 every v2/v3 cursor carries over. The coverage unit is now a segment of
 64–128 periods.
 
-**Status: ACTIVE.** Twenty-two new terms across all seven families,
-found and verified 2026-09-03/04 by eight campaigns totalling under
-twelve hours of device, and a searched-empty bound on the next term of
-each. Every campaign resumes from its cursor under the 10⁴⁰ ceiling at
-6–10 times the rate it stopped at; the model puts A125839's `a(19)` and
-A088651's `a(17)` at 93% within a night's sweep each, A164326's `a(19)`
-and the +1 families' next terms at medians of `10²⁶` and above
-([RESULTS.md](RESULTS.md), "What is open now"). 44 gates and drills green,
-six benchmark shapes reproduced, every resumed filter priced.
+**One new term of A088651 under the v3 ceiling.** The ninth campaign
+resumed A088651 from its v2 cursor and ran through 2026-09-04, finding
+
+    a(17) = 1,834,211,334,301,046,929,508,280
+
+9.4× above the bound its own v2 run had left — also `A202779(17)`, every
+value but one past the deterministic bound and proved by BLS75
+Theorem 15 — and then swept on at `n = 18` to `1.388×10²⁶`.
+
+**Five more terms on the window sieve — 2026-09-05.** All seven
+campaigns were resumed on v4 in turn, each from its own cursor with no
+flags, for about six and a half hours of device between them. Four paid:
+
+    A088651  a(18) = 152,058,443,198,637,095,680,139,580   (also A202779(18))
+    A088250  a(18) = 11,260,441,017,037,317,719,293,680    (also A202778/A071576)
+    A125838  a(19) = 112,258,928,035,903,409,184,283,860
+    A125839  a(19) = 2,894,601,427,937,540,670,809,460
+    A125839  a(20) = 19,653,405,164,609,436,282,292,230
+
+Every value of all five lies past the deterministic bound, so all 89 of
+their certificates are BLS75 — Theorem 1 on `N − 1` for A088250,
+Theorem 15 on `N + 1` for the three −1 families — and each was
+re-verified from disk. A088250's `a(18)` came nine minutes into its leg,
+`3.4×` above the ceiling its v2 campaign had stopped at; A125839 took
+three filters in 78 minutes. The three legs that found nothing
+(A173750, A164325, A164326) each moved their bound by the few segments
+they swept.
+
+**Status: PAUSED — open to others.** Twenty-eight new terms across all
+seven families, found and verified 2026-09-03/05 by sixteen campaign
+legs totalling about 44 hours of device, and a searched-empty bound on
+the next term of each — the first bounds of any kind on any of these
+seven sequences at an open index. Every campaign resumes from its
+checkpoint at `1.8–2.9×10²² k/s` with `python launch.py --family <name>`
+and nothing is in its way: the ceiling is `10⁴⁰`, fourteen orders of
+magnitude above the deepest bound, and both certificate routes work. It
+is the odds that stopped it. The seven open terms have medians between
+`8×10²⁷` and `1.4×10²⁸` — about five days of device each — so the model
+gives every one of them 9–11% under a nine-hour sweep, against the 93%
+that A125839, A088651 and A164326 were carrying two days ago and paid
+out on ([RESULTS.md](RESULTS.md), "What is open now"). 44 gates and
+drills green, six benchmark shapes reproduced, every resumed filter
+priced.
 
 ## The problem
 
@@ -473,12 +508,15 @@ python launch.py --family A125838    # any of the seven; A202778/A202779 alias A
 ```
 
 Each family keeps its own checkpoint under its own config key, and no
-campaign will read another's cursor. **Every family's v2 checkpoint is
-in the tree and v3 resumes it**: the v3 key accepts the v2 key (the
-identical line — same wheel, unit, sieve depth and period `W`, every
-fingerprint reproduced), so `python launch.py --family <name>` continues
-at the filter after that family's frontier, from its v2 ceiling, with
-its census and finds intact (drilled on all seven real checkpoints).
+campaign will read another's cursor. **Every family's checkpoint is now
+v4-keyed and resumes as its own**: the v4 key still accepts the v2 and
+v3 keys (the identical line — same wheel, unit, sieve depth and period
+`W`, every fingerprint reproduced), which is how the seven campaigns
+carried over on 2026-09-05, but since those legs ran there is nothing
+left to migrate. `python launch.py --family <name>` continues at the
+filter after that family's frontier, from where the last leg stopped,
+with its census and finds intact (drilled on all seven real
+checkpoints, under every key each policy declares).
 A fresh campaign (`--fresh`, only ever deliberately) opens at period 0,
 clipped at `k = 10⁶`, with the filter at the next open term, a
 classification pool sized from a measurement at that filter and ramped
@@ -496,44 +534,47 @@ against a 5 ms launch is about 17% of the rate), and `--gentle` is the
 preset of one worker and a 2 ms yield, about a third of the rate.
 
 **What the first lines of a RESUMED campaign should say** (v4; every
-number below was measured on 2026-09-05 by loading each family's REAL
-checkpoint into a campaign on a scratch copy and calibrating its own
-next launches for one second — nothing swept for real, CLAUDE.md 0a).
-For `--family A088651`: a `[STAGE]` line `checkpoint MIGRATED from
-a088651-v3-... to a088651-v4-...: the configurations cover the same line,
-so the cursor carries over`, then — because that checkpoint was written
-mid-period — `inherited cursor: u = 945 was a third-level residue index
-of period 72178; v4 re-sweeps that period from its start (at most one
-period of device)`, then `resume at period 72178, launch 0 (k =
-138,780,996,553,430,759,862,794,460)`, the `a(18)` quantiles, a
-`[MILESTONE]` saying the sweep is past the proof crossing with the
-Theorem 15 route named, and a pool line `classification pool: 1 workers
-(measured on ~80 launches, 1.01 s of device at 1.39e+22 k/s: ~33,000
-survivors/s x ~13 us = 0.42 core-s per s, x2 margin)`. The first
-`[STATUS]` at 30 s: `swept to 1.38781e+26` (a segment is 128 periods,
-`2.46×10²³` of line, about 18 s at this filter, so the claim has moved
-once or twice), `periods [72306, 72434) [...) 60%` or thereabouts,
-`A088651 filter n = 18`, a rate near `1.4e+22 k/s`, `census ... 17:2`,
-`finds 2`, `pool 1`, and `next a(18) median 2.2e+26 (ETA ~1.7 h)`. The
-line-per-second, the pool and the rung named are the three things to
+number below was measured on 2026-09-05, after the campaigns stopped, by
+loading each family's REAL checkpoint into a campaign on a scratch copy
+and calibrating its own next launches for one second — nothing swept for
+real, CLAUDE.md 0a). Every checkpoint is v4's own now, so there is no
+migration line and no inherited cursor to floor: `--family A088651`
+prints a pool line `classification pool: 1 workers (measured on 87
+launches, 1.01 s of device at 3.11e+22 k/s: 14,111 survivors/s x 12.5 us
+= 0.18 core-s per s, x2 margin)` and then, at the first heartbeat,
+
+    [STATUS] swept to 2.13107e+26  periods [110834, 110962)
+    [2.1311e+26, 2.1335e+26) 0%  A088651 filter n = 19  census 8:42051
+    ... 17:2 18:1  finds 3  survivors 443,352,040  pool 1
+    next a(19) Q1 3.96e+27 (ETA ?)  P(a(19) under the claim) = 1%
+
+The line-per-second, the pool and the rung named are the three things to
 check; a `HOST-BOUND` fragment or a rate under 90% of the table's is a
 defaults bug. All seven, from their checkpoints as they stand:
 
-| family | resumes at | filter | window | first `[STATUS]` rate | survivors/s | host need | pool | P(next term) in 9 h |
+| family | resumes at | filter | window | calibrated rate | survivors/s | host need | pool | P(next term) in 9 h |
 |---|---|---|---|---|---|---|---|---|
-| A088250 | period 1725, `3.317×10²⁴` | n = 18 | 128 periods, 1,435 launches | `1.39×10²² k/s` | 33,900 | 0.41 core-s/s | 1 | a(18) 68% |
-| A173750 | period 1725 | n = 20 | 128, 680 | `2.86×10²²` | 13,100 | 0.16 | 1 | a(20) 10% |
-| A125838 | period 90, `1.73×10²³` | n = 19 | 128, 2,870 | `6.97×10²¹` | 33,500 | 0.39 | 1 | a(19) 75% |
-| A125839 | period 90 | n = 19 | 128, 7,560 | `2.29×10²¹` | 83,100 | 1.12 | 3 | a(19) ~100% |
-| A164325 | period 1725 | n = 19 | 128, 1,360 | `1.82×10²²` | 12,900 | 0.16 | 1 | a(19) 10% |
-| A164326 | period 8347, `1.605×10²⁵` | n = 19 | 128, 1,360 | `1.81×10²²` | 13,100 | 0.19 | 1 | a(19) 10% |
-| A088651 | period 72178, `1.388×10²⁶` (u = 945 floored to 0) | n = 18 | 128, 1,435 | `1.39×10²²` | 33,400 | 0.42 | 1 | a(18) 60% |
+| A088250 | period 5949, `1.1438×10²⁵` | n = 19 | 128 periods, 680 launches | `2.88×10²² k/s` | 13,300 | 0.16 core-s/s | 1 | a(19) 11% |
+| A173750 | period 2365, `4.5473×10²⁴` | n = 20 | 128, 680 | `2.90×10²²` | 13,400 | 0.17 | 1 | a(20) 10% |
+| A125838 | period 58458, `1.1240×10²⁶` | n = 20 | 128, 680 | `2.90×10²²` | 13,100 | 0.16 | 1 | a(20) 9% |
+| A125839 | period 30938, `5.9486×10²⁵` | n = 21 | 128, 680 | `2.89×10²²` | 13,200 | 0.16 | 1 | a(21) 9% |
+| A164325 | period 2237, `4.3012×10²⁴` | n = 19 | 128, 1,360 | `1.84×10²²` | 13,100 | 0.16 | 1 | a(19) 10% |
+| A164326 | period 8603, `1.6541×10²⁵` | n = 19 | 128, 1,360 | `1.83×10²²` | 13,100 | 0.15 | 1 | a(19) 10% |
+| A088651 | period 110834, `2.1310×10²⁶` | n = 19 | 128, 680 | `2.91×10²²` | 13,100 | 0.16 | 1 | a(19) 9% |
 
-The last column is the model's probability that the open term lies
-under nine hours of sweep from the current bound at the resumed filter's
-rate (a floor: a find promotes the filter and the rate with it;
-[RESULTS.md](RESULTS.md), "What is open now"). A125839 and A088651 are
-the nights that pay, then A125838 and A088250.
+Read the absolute rates with the usual ±10%: a second calibration an
+hour later returned `3.13×10²²`, `3.11×10²²` and `2.41×10²²` for
+A088250, A088651 and A125839 — ambient load moves the rate, and what is
+stable is the ratio (OPTIMIZATION.md rule 3). The shape of the table is
+the point: after the 2026-09-05 legs all seven families sit at
+**`c = 19` forms**, the same ~13,100 survivors a second
+and a pool of **1** — the host is idle and the device is the whole cost,
+the exact inverse of a fresh opening below. The last column is the
+model's probability that the open term lies under nine hours of sweep
+from the current bound at that rate (a floor: a find promotes the filter
+and the rate with it; [RESULTS.md](RESULTS.md), "What is open now").
+They are all the same now, and all small: that is why the project is
+paused rather than pointed at one of them.
 
 **What the first lines of a FRESH campaign should say** (v4, measured
 the same way on a scratch checkpoint at period 0; the v2 acceptance test

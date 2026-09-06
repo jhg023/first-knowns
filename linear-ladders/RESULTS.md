@@ -492,28 +492,211 @@ lengthen a run, never hide one, so the bound stands. The model, from
 `a(18)`, had given `a(19)` 0.3% under this cursor and puts its
 median at `8.01e+27`; the campaign resumes from here.
 
+## A088651 under the v3 ceiling: a(17) — 2026-09-04
+
+The ninth campaign, `--family A088651` with no flags, resumed from the
+family's v2 cursor (period 101, `k = 1.942×10²³` — the crossing at
+`n = 17` its twelve-minute v2 run had stopped at) and was left running
+through 2026-09-04. It found `a(17)` at 10:29 and then swept on at
+`n = 18` to `1.388×10²⁶`, where the v4 engine took the cursor over the
+next day. The find is past the deterministic bound on every value but
+one, so it is proved by the **N+1 route**, and it was re-verified from
+disk exactly as the earlier files were.
+
+### A088651 a(17) = 1,834,211,334,301,046,929,508,280 — 2026-09-04, 10:29
+
+- **run 17**: `r·k − 1` prime for `r = 1..17`; the 17th value is
+  `17·k − 1 = 31,181,592,683,117,797,801,640,759`.
+- **stopper**: `18·k − 1 = 33,015,804,017,418,844,731,149,039 = 19 ×
+  1,737,673,895,653,623,406,902,581`.
+- **certificates**: `k` is 9.4× past the proof crossing `k_proof(17) =
+  1.951×10²³` (the v2 ceiling this family stopped at). One value under
+  the bound (`r = 1`) by `deterministic-mr`; the other sixteen by
+  **BLS75 Theorem 15** on `N + 1 = r·k` factored completely, each with
+  its own Lucas sequence and one shared discriminant. All 17 re-verified
+  from scratch by the launcher and again from disk.
+- **also settles**: `A202779(17) = 1,834,211,334,301,046,929,508,280`
+  (the run is exact).
+- **model**: from `a(16)`, median `1.86×10²⁴`; `k / median = 0.99`,
+  `E = 0.69`. From the v2 bound it is `k / median = 0.83`, `E = 0.59`;
+  the pre-run model had given `a(17)` 9.6% of sitting under the old
+  ceiling, and it landed 9.4× above it.
+- `k = 2³ · 3 · 5 · 7 · 11 · 13 · 17 · 331,213 · 2,711,925,492,389`.
+- evidence: `evidence/A088651_a17_1834211334301046929508280.json`
+
+## The v4 legs: five more terms, and every bound moved — 2026-09-05
+
+The window sieve went into service on 2026-09-05 (README.md, "The
+mathematics of the engine"; [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)
+v4) and all seven campaigns were resumed on it in turn, each from its own
+cursor with no flags, for about six and a half hours of device between
+them. Four of the seven paid: A088651 and A088250 one term each,
+A125838 one and A125839 two. The three that did not — A173750, A164325
+and A164326 — were each given a handful of segments (25 to 70 seconds)
+and moved their bounds a little. Every value of all five finds lies past
+the deterministic bound, so all 89 certificates are BLS75 — Theorem 1 on
+`N − 1` for A088250, Theorem 15 on `N + 1` for the three −1 families —
+and each file was re-verified from disk before this page was written.
+
+### A088651 a(18) = 152,058,443,198,637,095,680,139,580 — 14:38
+
+- **run 18**: `r·k − 1` prime for `r = 1..18`; the 18th value is
+  `18·k − 1 = 2,737,051,977,575,467,722,242,512,439`, the largest
+  integer this project has certified.
+- **stopper**: `19·k − 1 = 2,889,110,420,774,104,817,922,652,019 = 29 ×
+  99,624,497,268,072,579,928,367,311`.
+- **certificates**: every value past the bound; all 18 by **BLS75
+  Theorem 15**, all re-verified. No factor of `k` needed a subproof.
+- **also settles**: `A202779(18) = 152,058,443,198,637,095,680,139,580`.
+- **model**: from `a(17)`, median `2.21×10²⁶`; `k / median = 0.69`,
+  `E = 0.53`.
+- **when**: the leg picked the cursor up at `1.388×10²⁶`, where the v3
+  campaign had left it, and ran about 51 minutes — the 32 from the
+  `a(18)` banner to the checkpoint are on the clock at
+  `3.13×10²² k/s` over the `n = 19` phase, against `2.91×10²²`
+  calibrated.
+- `k = 2² · 3 · 5 · 7 · 11 · 13 · 17 · 19 · 6,579,899 · 1,191,251,504,809`.
+- evidence: `evidence/A088651_a18_152058443198637095680139580.json`
+
+### A088250 a(18) = 11,260,441,017,037,317,719,293,680 — 15:20
+
+- **run 18**: `r·k + 1` prime for `r = 1..18`; the 18th value is
+  `18·k + 1 = 202,687,938,306,671,718,947,286,241`.
+- **stopper**: `19·k + 1 = 213,948,379,323,709,036,666,579,921 = 29 ×
+  7,377,530,321,507,208,160,916,549`.
+- **certificates**: every value past the bound (`k_proof(18) =
+  1.84×10²³`); all 18 by **BLS75 Theorem 1** on `N − 1 = r·k`, `k`
+  factored once, every prime factor under the bound, all re-verified.
+  The first A088250 find with no deterministic certificate in it.
+- **also settles**: `A202778(18) = k` and `A071576(18) =
+  5,630,220,508,518,658,859,646,840`.
+- **model**: from `a(17)`, median `2.18×10²⁶`; `k / median = 0.052`,
+  `E = 0.07` — the earliest draw in the project. The pre-run model had
+  given `a(18)` 4% of lying under the v2 ceiling; it lies 3.4× above it,
+  which is nine minutes of v4 sweep.
+- **when**: 9.2 minutes into the leg, which swept `3.3168×10²⁴` to
+  `1.1438×10²⁵` at `1.44×10²² k/s` over the `n = 18` phase against
+  `1.385×10²²` calibrated.
+- `k = 2⁴ · 3 · 5 · 7 · 11 · 13² · 17 · 19 · 37 · 16,729 · 41,579 ·
+  433,729`.
+- evidence: `evidence/A088250_a18_11260441017037317719293680.json`
+
+### A125838 a(19) = 112,258,928,035,903,409,184,283,860 — 19:44
+
+- **run 19**: `r·k − 1` prime for `r = 2..19`; the 19th value is
+  `19·k − 1 = 2,132,919,632,682,164,774,501,393,339`.
+- **stopper**: `20·k − 1 = 2,245,178,560,718,068,183,685,677,199 = 19 ×
+  118,167,292,669,372,009,667,667,221`.
+- **certificates**: every value past the bound; all 18 by BLS75
+  Theorem 15, all re-verified — the family's first non-deterministic
+  file.
+- **model**: from `a(18)`, median `8.52×10²⁵`; `k / median = 1.32`,
+  `E = 0.84`.
+- **when**: 4.16 h into the leg, the longest of the seven, which swept
+  `1.7305×10²³` to `1.1240×10²⁶` at `7.5×10²¹ k/s` over the `n = 19`
+  phase against `6.97×10²¹` calibrated.
+- **it bounds A125839 at the same index**, as every A125838 term does:
+  `A125839(19) ≤ 1.1226×10²⁶`, and the value found three hours later
+  came in 39× under it.
+- `k = 2² · 3 · 5 · 7² · 11 · 13 · 17 · 23 · 29 · 23,548,473,925,778,447`.
+- evidence: `evidence/A125838_a19_112258928035903409184283860.json`
+
+### A125839 a(19) = 2,894,601,427,937,540,670,809,460 — 22:06
+
+- **run 19**: `r·k − 1` prime for `r = 3..19`; the 19th value is
+  `19·k − 1 = 54,997,427,130,813,272,745,379,739`.
+- **stopper**: `20·k − 1 = 57,892,028,558,750,813,416,189,199 = 19 ×
+  3,046,948,871,513,200,706,115,221`.
+- 17 BLS75 Theorem 15 certificates, all past the bound, all re-verified.
+- **model**: from `a(18)`, median `1.11×10²⁴`; `k / median = 2.6`,
+  `E = 1.38`. Bound from A125838's `a(19)`: `≤ 1.12×10²⁶`.
+- **when**: 20 minutes into the leg, over an `n = 19` phase at
+  `2.24×10²¹ k/s` against `2.286×10²¹` calibrated.
+- `k = 2² · 3 · 5 · 7 · 11² · 13 · 17 · 421 · 9,743 · 62,832,890,531`.
+- evidence: `evidence/A125839_a19_2894601427937540670809460.json`
+
+### A125839 a(20) = 19,653,405,164,609,436,282,292,230 — 22:43
+
+- **run 20**: `20·k − 1 = 393,068,103,292,188,725,645,844,599`.
+- **stopper**: `21·k − 1 = 412,721,508,456,798,161,928,136,829 = 193 ×
+  2,138,453,411,693,254,725,016,253`.
+- 18 BLS75 Theorem 15 certificates, all re-verified.
+- **model**: from `a(19)`, median `1.01×10²⁶`; `k / median = 0.20`,
+  `E = 0.18` — early, only 6.8× `a(19)`.
+- **when**: 37 minutes after `a(19)`, over an `n = 20` phase at
+  `7.6×10²¹ k/s`. The filter then promoted to `n = 21`, where the prime
+  19 is forced for a `3..n` family (the closed-form thresholds in
+  [README.md](README.md#the-mathematics-of-the-engine)) and the rate
+  jumped 4× to `3.2×10²²`.
+- `k = 2 · 3 · 5 · 7 · 11 · 13 · 17 · 19 · 29 · 103,567 · 674,622,091,469`.
+- evidence: `evidence/A125839_a20_19653405164609436282292230.json`
+
+Across the five v4 finds `E` averages 0.60 and `k / median` runs 0.69,
+0.052, 1.32, 2.6, 0.20 — the same one-draw-at-a-time scatter, with a
+draw at a twentieth of its median (A088250's `a(18)`) and one at 2.6
+times it (A125839's `a(19)`) landing seven hours apart on the same
+engine.
+
+### The bounds after the v4 legs
+
+Each leg stopped at a segment boundary, so each family's coverage claim
+is the last whole segment it swept. Every classification above each
+family's proof crossing is a seven-base strong probable-prime chain, and
+the searched-empty claim is sound there for the reason every section
+above gives: a composite that passes the chain can only *lengthen* a
+run, never hide one, so a true run of `n` would have passed every test,
+been claimed, and then been proved by certificate.
+
+| family | open next | searched empty below | at filter | the term it follows |
+|---|---|---|---|---|
+| A088250 | a(19) | **`1.1438×10²⁵`** | n = 19 | a(18), found 9 min earlier |
+| A173750 | a(20) | **`4.5473×10²⁴`** | n = 20 | a(18) = a(19) |
+| A125838 | a(20) | **`1.1240×10²⁶`** | n = 20 | a(19) |
+| A125839 | a(21) | **`5.9486×10²⁵`** | n = 21 | a(20) |
+| A164325 | a(19) | **`4.3012×10²⁴`** | n = 19 | a(18) |
+| A164326 | a(19) | **`1.6541×10²⁵`** | n = 19 | a(18) |
+| A088651 | a(19) | **`2.1310×10²⁶`** | n = 19 | a(18) |
+
+In full: no `k < 11,438,501,323,067,410,989,827,430` has `r·k + 1` prime
+for all `r = 1..19`; none under `4,547,328,228,114,712,891,400,550` for
+`r = 2..20`; none under `112,400,724,549,314,962,454,754,060` has
+`r·k − 1` prime for all `r = 2..20`, none under
+`59,486,359,713,071,030,627,547,660` for `r = 3..21`, and none under
+`213,107,220,648,992,003,638,684,380` for `r = 1..19`; and no
+`k < 4,301,214,903,294,973,673,599,590` (respectively
+`16,541,507,292,376,691,333,919,210`) has `(2r−1)·k + 1` (respectively
+`(2r−1)·k − 1`) prime for all `r = 1..19`.
+
 ## The census
 
 Counts per run length from each checkpoint, as printed in every
 `[STATUS]` line (the finds themselves are included at their run lengths):
 
-    A088250   8: 9269   9: 3424   10: 1251   11: 443   12: 146   13: 70
-              14: 26   15: 4   16: 1   17: 1      near 8    survivors 47,258,905
-    A125838   8: 41999  9: 16395  10: 6236  11: 2483  12: 976  13: 370
-              14: 137  15: 75  16: 7  17: 1  18: 1   near 40   survivors 48,139,929
-    A125839   8: 90682  9: 35465  10: 13724  11: 5392  12: 2182  13: 822
-              14: 298  15: 155  16: 73  17: 6  18: 1   near 40   survivors 39,888,590
-    A173750   8: 19573  9: 7222  10: 2754  11: 1081  12: 353  13: 131
-              14: 45  15: 18  16: 5  17: 1  19: 1     near 5    survivors 30,123,710
-    A164326   8: 25188  9: 8840  10: 3055  11: 1106  12: 361  13: 116
-              14: 50  15: 10  16: 5  17: 1  18: 1     near 7    survivors 171,594,458
-    A164325   8: 3679  9: 1312  10: 465  11: 170  12: 61  13: 23
-              14: 8  15: 4  16: 2  17: 1  18: 1       near 1    survivors 20,005,808
-    A088651   8: 2714  9: 1002  10: 381  11: 134  12: 38  13: 17
-              14: 6  15: 3  16: 1                     near 2    survivors 11,126,630
+    A088250   8: 11478  9: 4124  10: 1512  11: 528  12: 177  13: 79
+              14: 30  15: 4  16: 1  17: 1  18: 1     near 8    survivors 66,977,219
+    A125838   8: 189204  9: 64256  10: 21508  11: 7337  12: 2565  13: 872
+              14: 300  15: 118  16: 21  17: 7  18: 3  19: 1
+                                                     near 42   survivors 593,087,062
+    A125839   8: 299717  9: 105746  10: 37490  11: 13232  12: 4890  13: 1717
+              14: 570  15: 242  16: 106  17: 13  18: 5  19: 1  20: 1
+                                                     near 43   survivors 245,943,799
+    A173750   8: 19737  9: 7284  10: 2777  11: 1089  12: 356  13: 132
+              14: 45  15: 18  16: 5  17: 1  19: 1     near 5    survivors 30,702,076
+    A164326   8: 25218  9: 8849  10: 3063  11: 1109  12: 361  13: 116
+              14: 50  15: 10  16: 6  17: 1  18: 1     near 7    survivors 172,082,499
+    A164325   8: 3760  9: 1334  10: 474  11: 170  12: 61  13: 23
+              14: 8  15: 4  16: 2  17: 1  18: 1       near 1    survivors 20,804,547
+    A088651   8: 42051  9: 13643  10: 4600  11: 1504  12: 444  13: 165
+              14: 47  15: 15  16: 4  17: 2  18: 1     near 5    survivors 443,352,040
 
 A value that reached the settled frontier and no further while a term was
 open is a `[NEAR]` line; everything shorter is a count and nothing else.
+1.57 billion survivors were classified across the seven campaigns, and
+every one of them is in exactly one of these counts. Within a family the
+shape is the model's — each extra rung costs a factor of about 2.7–3.0
+at these heights, on every one of the seven — which is the check the
+census exists for: the intensity is right even where a first occurrence
+lands early or late.
 
 ## The campaigns against their benchmarks (the rule 5g acceptance test)
 
@@ -591,8 +774,33 @@ phases from the evidence timestamps and the checkpoint):
 | n = 18 | `7.54×10²⁴` | 3.88 h | `5.4×10²⁰` | `4.9–5.3×10²⁰` (A164325's n = 18, paired) |
 | n = 19 | `6.44×10²⁴` | 56 min | `1.9×10²¹` | `1.8×10²¹` (A164325's n = 19, paired) |
 
-Every phase of all eight campaigns ran at the engine's rate for its
-filter. The rates on the `2..n` and `3..n` families' later filters are **not** the
+And the **v4 legs of 2026-09-05**, each from its own cursor with no
+flags, against the rate the same checkpoint calibrated to before the leg
+ran (OPTIMIZATION_LOG.md v4, Measurement 5 — the acceptance test of
+CLAUDE.md 5g, now run on a resumed campaign that went on to find
+something):
+
+| family, filter | line swept | wall clock | campaign rate | calibrated beforehand |
+|---|---|---|---|---|
+| A088651 n = 19 (after `a(18)`) | `6.105×10²⁵` | 32.5 min | `3.13×10²² k/s` | `2.91×10²²` (measured after the leg) |
+| A088250 n = 18 | `7.94×10²⁴` | 9.2 min | `1.44×10²²` | `1.385×10²²` |
+| A125838 n = 19 | `1.1209×10²⁶` | 4.16 h | `7.49×10²¹` | `6.97×10²¹` |
+| A125839 n = 19 | `2.72×10²⁴` | 20.3 min | `2.24×10²¹` | `2.286×10²¹` |
+| A125839 n = 20 | `1.676×10²⁵` | 36.8 min | `7.58×10²¹` | — (one filter on from the calibration) |
+| A125839 n = 21 | `3.983×10²⁵` | 21.0 min | `3.15×10²²` | `2.89×10²²` (measured after the leg) |
+
+Every one is inside 10% of the engine's rate for its filter, on both
+sides of the line — the calibration is a one-second sample and the
+campaign figure a whole phase. The three legs that found nothing
+(A173750, A164325, A164326) were 25 to 70 seconds each, two to five
+segments, and are too short for a rate to mean anything; their bounds
+moved by exactly the segments they swept. A125839's leg is the one to
+read for the promotion behaviour: three filters in 78 minutes, the rate
+rising 2.24×10²¹ → 7.6×10²¹ → 3.16×10²² as `a(19)` and `a(20)` landed
+and the prime 19 became forced at `n = 21`.
+
+Every phase of all eight v2/v3 campaigns and all seven v4 legs ran at
+the engine's rate for its filter. The rates on the `2..n` and `3..n` families' later filters are **not** the
 A088250 rates at the same form count, and reading them as such first
 looked like a 0.5× slowdown; a paired engine check
 ([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md), "What the campaigns
@@ -615,65 +823,89 @@ state, and BENCHMARKS.md's sibling table now says so.
 
 ## What is open now
 
-Every family was swept to its v2 ceiling; the frontier of each is now
-this project's, and the next term of each is open above a searched-empty
-bound. **v3 (2026-09-04) raised every ceiling to `10⁴⁰`** — one number
-for all seven families, from the measured cost of a certificate rather
-than from where a test stops being a proof — and each campaign resumes
-from its v2 cursor at the filter after its frontier:
+**The cluster has been swept to a common frontier, and the project is
+PAUSED there.** Sixteen campaign legs over three days took all seven
+families from the 2017 literature to a frontier of this project's own,
+28 terms in all, and every one of the next terms now sits above a
+searched-empty bound that this project put there. What changed at the
+end is not the engine but the *price*: the seven open terms have medians
+between `8×10²⁷` and `1.4×10²⁸`, five days of device each at the v4
+rates below, and none of them is worth a night any more.
 
-| family | frontier | open next | bound (swept empty) | resumes at | rate | median from the bound |
+| family | frontier (all this project's) | open next | searched empty below | resumes at | rate there | median from the bound |
 |---|---|---|---|---|---|---|
-| A088250 | **a(17) = 1,048,124,771,278,912,649,231,910 (this project, 2026-09-03)** | a(18) | > `3.3168×10²⁴` | n = 18 | `1.45×10²¹ k/s` | `2.2×10²⁶` |
-| A125838 | **a(18) = 74,882,388,347,598,051,560,340 (this project, 2026-09-03)** | a(19) | > `1.7305×10²³` | n = 19 | `7.2×10²⁰` | `8.6×10²⁵` |
-| A125839 | **a(18) = 6,530,891,065,478,723,143,200 (this project, 2026-09-03)** | a(19) | > `1.7305×10²³` | n = 19 | `2.4×10²⁰` | `1.5×10²⁴` |
-| A173750 | **a(18) = a(19) = 147,316,106,448,079,863,444,150 (this project, 2026-09-03)** | a(20) | > `3.3168×10²⁴` | n = 20 | `3.0×10²¹` | `1.3×10²⁸` |
-| A164326 | **a(18) = 9,606,289,803,039,023,735,440,800 (this project, 2026-09-04, v3)** | a(19) | > `1.6049×10²⁵` | n = 19 | `1.9×10²¹` | `8e+27` |
-| A164325 | **a(18) = 511,721,589,397,871,969,516,400 (this project, 2026-09-03)** | a(19) | > `3.3168×10²⁴` | n = 19 | `1.8×10²¹` | `7.9×10²⁷` |
-| A088651 | **a(16) = 43,263,866,546,732,976,414,270 (this project, 2026-09-04)** | a(17) | > `1.942×10²³` | n = 17 | `3.75×10²⁰` | `2.2×10²⁴` |
+| A088250 | **a(18) = 11,260,441,017,037,317,719,293,680** | a(19) | `1.1438×10²⁵` | n = 19 | `2.88×10²² k/s` | `1.2×10²⁸` |
+| A173750 | **a(18) = a(19) = 147,316,106,448,079,863,444,150** | a(20) | `4.5473×10²⁴` | n = 20 | `2.90×10²²` | `1.3×10²⁸` |
+| A125838 | **a(19) = 112,258,928,035,903,409,184,283,860** | a(20) | `1.1240×10²⁶` | n = 20 | `2.90×10²²` | `1.3×10²⁸` |
+| A125839 | **a(20) = 19,653,405,164,609,436,282,292,230** | a(21) | `5.9486×10²⁵` | n = 21 | `2.89×10²²` | `1.4×10²⁸` |
+| A164325 | **a(18) = 511,721,589,397,871,969,516,400** | a(19) | `4.3012×10²⁴` | n = 19 | `1.84×10²²` | `8.0×10²⁷` |
+| A164326 | **a(18) = 9,606,289,803,039,023,735,440,800** | a(19) | `1.6541×10²⁵` | n = 19 | `1.83×10²²` | `8.1×10²⁷` |
+| A088651 | **a(18) = 152,058,443,198,637,095,680,139,580** | a(19) | `2.1310×10²⁶` | n = 19 | `2.91×10²²` | `1.3×10²⁸` |
 
-**Where a night's sweep pays.** From each family's bound, at the
-measured rate of its resumed filter and of the filters it promotes into
-(the rates above; [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v3 for the
-c = 20 ones), the model's expected number of terms in nine hours of
-sweep was **1.1 for each of A164326, A125839 and A088651** — `P(a(17))
-= 94%`, `P(a(19)) = 93%`, `P(a(17)) = 93%` respectively, with about a
-one-in-five chance of the term after it landing in the same night — and
-0.24 for A125838, 0.20 for A088250, 0.02 each for A173750 and A164325.
-A164326 ran first (2026-09-04) and delivered both of its: `a(17)` at
-1.97× its median and `a(18)` at 0.14×. From its new bound its `a(19)`
-is worth 0.02 terms a night, so A125839 and A088651 are the next
-two.
+The rates are each family's own next launches, calibrated on its real
+checkpoint after the campaigns stopped (about a second of device each,
+nothing recorded; OPTIMIZATION_LOG.md v4, Measurement 6). Every one is a
+pool of 1 and about 13,100 survivors a second: the filters are deep
+enough now that the host is idle and the device is the whole cost.
 
-**v4 (2026-09-05) multiplies every rate in the table above by 6–10**
-([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v4; the resumed filters
-calibrated on the real checkpoints run at `1.39×10²²`, `2.86×10²²`,
-`6.97×10²¹`, `2.29×10²¹`, `1.82×10²²`, `1.81×10²²` and `1.39×10²²` k/s
-for A088250, A173750, A125838, A125839, A164325, A164326 and A088651).
-Nine hours at those rates from each family's current bound puts the
-open term under the sweep with probability **68% for A088250's a(18),
-75% for A125838's a(19), ~100% for A125839's a(19), 60% for A088651's
-a(18)** (from the `1.388×10²⁶` its own campaign reached on 2026-09-05)
-and 10% each for A173750's a(20), A164325's a(19) and A164326's a(19)
-— floors, since a find promotes the filter and the rate with it, and
-the P90 of the +1 families' next terms is now a night or two of sweep
-rather than a week.
-Read every figure as a floor: the twenty finds here landed anywhere from
-0.01× to 7.9× their medians, with the model's `E` averaging 1.2 over the
-eighteen searched terms. Where each campaign stands is read with
-`python launch.py --status --family <name>`.
+**Why the cluster stops here rather than at a wall.** Nothing is in the
+way. The ceiling is `10⁴⁰` and the deepest bound is `2.1×10²⁶`, fourteen
+orders of magnitude under it; the certificate route works on both signs
+and every one of the last five finds used it; the engine is at 2.2–2.5
+`×10¹²` candidates a second and its own bottleneck is load latency, not
+arithmetic. What has changed is the odds. From each bound, at the rate
+of the filter it resumes at, the model puts the next term under a
+nine-hour sweep with probability **9–11% for every one of the seven** —
+0.09 to 0.11 expected terms a night, against the 1.1 a night that
+A164326, A125839 and A088651 were worth two days ago and delivered on.
+The cheap terms are gone; the next one anywhere in the cluster is a
+five-day run at the median, and about three weeks of device would be a
+fair budget for one term (read the medians as floors: this project's own
+finds landed at 0.01× to 7.9× them).
 
-**The bounds hold above the crossing, on both signs.** Every −1
-family's v2 sweep stayed under its crossing, so those bounds rest on
-proofs alone; from here every family sweeps past its crossing, where the
-classification is a seven-base strong probable-prime chain. The
-searched-empty claim is sound there for the reason the +1 sections
-already give: a composite that passes the chain can only *lengthen* a
-run, never hide one, so a true run of `n` would have passed every test
-and been claimed — and then proved by certificate (BLS75 Theorem 1 on
-`N − 1 = m·k` for the +1 families, Theorem 15 on `N + 1 = m·k` for the
-−1 ones, `k` factored once, subproofs for any factor past the bound,
-every proof re-verified before the evidence file is written). The
-census above the crossing is a count of probable-prime runs; the
-`[NEAR]` line is a health check on the cheap legs; only a discovery is
-certified.
+**What a resumed campaign would need.** Nothing new to be correct — every
+campaign resumes from its checkpoint with `python launch.py --family
+<name>` and continues under the same ceiling, at the rates above, with
+its census and finds intact. To be *worth* resuming it would want
+another engine factor of the size v4 delivered, and the log prices the
+leftovers ([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v4): the load
+chain the sieve is bound by, and the tail rounds that are now the
+larger share at these filters. A 10× would put a term a night back on
+the table.
+
+**The bounds hold above the crossing, on both signs.** Every family now
+sweeps past its proof crossing, where the classification is a seven-base
+strong probable-prime chain. The searched-empty claim is sound there for
+the reason the sections above give: a composite that passes the chain
+can only *lengthen* a run, never hide one, so a true run of `n` would
+have passed every test and been claimed — and then proved by certificate
+(BLS75 Theorem 1 on `N − 1 = m·k` for the +1 families, Theorem 15 on
+`N + 1 = m·k` for the −1 ones, `k` factored once, subproofs for any
+factor past the bound, every proof re-verified before the evidence file
+is written). The census above the crossing is a count of probable-prime
+runs; the `[NEAR]` line is a health check on the cheap legs; only a
+discovery is certified. Where each campaign stands is read with
+`python launch.py --status --family <name>`, which touches nothing.
+
+## What the twenty-eight terms cost, and what they scored
+
+| | v2 (2026-09-03/04) | v3 (2026-09-04) | v4 (2026-09-05) | all |
+|---|---|---|---|---|
+| campaigns | 7 | 2 | 7 | 16 legs |
+| device | 3.8 h | ~34 h | ~6.5 h | ~44 h |
+| terms | 20 | 3 | 5 | **28** (on 27 files) |
+| certificates | 302 (261 `deterministic-mr`, 41 BLS75 thm 1) | 52 (2, 50 thm 15) | 89 (0; 18 thm 1, 71 thm 15) | 443 |
+
+The v3 figure is the two overnight resumes (A164326's 7.54 h, timed, and
+A088651's, inferred from its checkpoint's cumulative 27.5 h less the legs
+that are timed). Every term above was scored against the frontier it
+followed, and over the 27 searched ones (the A173750 rider is not scored:
+it was never searched for) `E` averages **1.08**, against the `Exp(1)`
+mean of 1 the model would have if its intensity were exactly right — the
+same answer G11 gets on the 46 published terms (0.86), from a completely
+disjoint set of draws. `k / median` over the same 27 runs **0.008 to
+7.9**, geometric mean 0.75: the intensity is right and the individual
+draws are noisy over three orders of magnitude, exactly as the census
+says. That is the whole claim the odds model makes, and it is the reason
+the nine-hour probabilities above are worth acting on — and the reason
+each is a floor, not a schedule.

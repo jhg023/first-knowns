@@ -1065,6 +1065,59 @@ sized from the measurement is what makes both defaults right. Every
 `swept to` equalled the file's k; every next segment sat under the
 ceiling.
 
+### Measurement 6 -- the same seven, re-calibrated AFTER the legs ran (5g)
+
+The seven v4 legs of 2026-09-05 (RESULTS.md, "The v4 legs") moved four
+of the seven cursors past a find and the other three by a few segments.
+The identical harness on the checkpoints as they now stand:
+
+| family | filter (c) | launches in 1 s | k/s | survivors/s | us each | core-s/s | pool |
+|---|---|---|---|---|---|---|---|
+| A088250 | n = 19 (19) | 80 | `2.875e22` | 13,309 | 12.3 | 0.16 | 1 |
+| A173750 | n = 20 (19) | 81 | `2.902e22` | 13,396 | 12.5 | 0.17 | 1 |
+| A125838 | n = 20 (19) | 81 | `2.901e22` | 13,129 | 11.9 | 0.16 | 1 |
+| A125839 | n = 21 (19) | 80 | `2.893e22` | 13,170 | 12.2 | 0.16 | 1 |
+| A164325 | n = 19 (19) | 102 | `1.838e22` | 13,077 | 12.3 | 0.16 | 1 |
+| A164326 | n = 19 (19) | 102 | `1.832e22` | 13,067 | 11.8 | 0.15 | 1 |
+| A088651 | n = 19 (19) | 81 | `2.906e22` | 13,145 | 12.5 | 0.16 | 1 |
+
+**The cluster has converged on one configuration.** Every family is now
+at `c = 19` forms, and the rates fall into exactly two values: `2.9e22`
+for the five consecutive-multiplier families and `1.83e22` (0.63x) for
+the odd-multiplier pair, whose first wheel level is denser for the
+reason the v1 log's sibling section gives. The survivor rate is 13,100/s
+everywhere and the pool is 1 everywhere: at these filters the host is
+idle and the device is the entire cost, the inverse of the fresh
+openings in Measurement 5 (10-20 workers, 4.6-9.9 core-s/s). The three
+families whose legs found nothing calibrate within 2% of Measurement 5,
+which is the noise floor of a one-second sample; A125839 moved 12.6x
+across two promotions, A088250 and A088651 2.1x across one, A125838
+4.2x.
+
+Ambient variation, measured because CLAUDE.md 5g's acceptance test rests
+on it: the same three checkpoints re-calibrated an hour later returned
+`3.13e22` (A088250, +8.9%), `3.11e22` (A088651, +7.0%) and `2.41e22`
+(A125839, -16.7%). So a single absolute rate is worth +-10-15% and only
+a paired ratio is worth quoting to three figures (OPTIMIZATION.md
+rule 3). The campaign phases in RESULTS.md's v4 table -- whole phases of
+real sweeping, not one-second samples -- came in at 1.04x (A088250
+n = 18), 1.08x (A125838 n = 19), 0.98x (A125839 n = 19), 1.08x (A088651
+n = 19) and 1.09x (A125839 n = 21) of the corresponding calibration,
+which is the same band.
+
+**What this measurement decided.** The seven open terms have medians of
+`8e27`-`1.4e28`; at `1.8-2.9e22 k/s` that is about five days of device
+each, and the model gives every one of them 9-11% under a nine-hour
+sweep, against the 93% three of them carried before the legs ran. There
+is no configuration bug left to find -- the defaults are the fastest
+correct ones at every opening the launcher has, the pool is right at
+both ends of the range, and the ceiling is fourteen orders of magnitude
+away. What the next term costs is engine, not campaign: another factor
+of v4's size would put a term a night back on the table, and the
+leftovers priced in this section (the load chain, the tail rounds that
+are now the larger share at c >= 19) are where it would come from. The
+project is paused here rather than pointed at any one family, because
+after this measurement they are all the same bet.
 
 ### What the gates caught during the build
 

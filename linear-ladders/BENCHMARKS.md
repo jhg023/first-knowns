@@ -191,12 +191,38 @@ same; OPTIMIZATION_LOG.md v4, Measurement 4):
 | A088651 | n = 18 | `2.18e12` | `1.29e22` | `(not run; A088250's n = 18 wheel, 2.35e11) candidates/s` |
 
 Calibrated on each family's REAL checkpoint (its own next launches, one
-second, nothing recorded) the resumed campaigns run at `1.39×10²²`
+second, nothing recorded) the campaigns resumed at `1.39×10²²`
 (A088250 n = 18), `2.86×10²²` (A173750 n = 20), `6.97×10²¹` (A125838
 n = 19), `2.29×10²¹` (A125839 n = 19), `1.82×10²²` (A164325 n = 19),
 `1.81×10²²` (A164326 n = 19) and `1.39×10²²` k/s (A088651 n = 18), with
-pools of 1 (A125839: 3); the table in README.md "Running it" has the
-survivor rates and host needs. The rates at the two OPENING filters the
+pools of 1 (A125839: 3).
+
+**After the legs of 2026-09-05 they are all one filter or more deeper**,
+and the same calibration on the checkpoints as they now stand
+(OPTIMIZATION_LOG.md v4, Measurement 6) returns:
+
+| family | filter now | calibrated | was, before the leg | survivors/s | pool |
+|---|---|---|---|---|---|
+| A088250 | n = 19 | `2.88×10²² k/s` | `1.39×10²²` (n = 18) | 13,300 | 1 |
+| A173750 | n = 20 | `2.90×10²²` | `2.86×10²²` (same filter) | 13,400 | 1 |
+| A125838 | n = 20 | `2.90×10²²` | `6.97×10²¹` (n = 19) | 13,100 | 1 |
+| A125839 | n = 21 | `2.89×10²²` | `2.29×10²¹` (n = 19) | 13,200 | 1 |
+| A164325 | n = 19 | `1.84×10²²` | `1.82×10²²` (same filter) | 13,100 | 1 |
+| A164326 | n = 19 | `1.83×10²²` | `1.81×10²²` (same filter) | 13,100 | 1 |
+| A088651 | n = 19 | `2.91×10²²` | `1.39×10²²` (n = 18) | 13,100 | 1 |
+
+The three families whose legs found nothing are within 2% of what they
+calibrated at before, which is the noise band; the four that found
+something moved with their filter, A125839 by 12.6× across two
+promotions (the prime 19 becomes forced for a `3..n` family at n = 21).
+The cluster has converged: every family now runs at `1.8–2.9×10²²` with
+about 13,100 survivors a second and a pool of one — the odd-multiplier
+pair at 0.63× of the rest for the reason the sibling table below gives.
+Read the absolute numbers with ±10%: a second calibration an hour later
+gave `3.13×10²²`, `3.11×10²²` and `2.41×10²²` for A088250, A088651 and
+A125839 (OPTIMIZATION.md rule 3 — the ratio is the stable quantity).
+The table in README.md "Running it" has the host needs and the odds.
+The rates at the two OPENING filters the
 shapes measure (`SCORE`, `SCOREM`) are 6-7x, at c = 17 8-9x and at
 c >= 18 -- where every campaign now runs -- 9x: the window sieve's cost per candidate is the number of
 window groups (24 at c = 20, 51 at c = 14) and the tail's fixed latency

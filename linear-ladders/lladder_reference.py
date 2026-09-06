@@ -202,26 +202,33 @@ KNOWN_ALSO = {
 # and a fresh campaign starts from; these are the project's own claim,
 # which the campaign carries in its checkpoint (`found`) and promotes its
 # frontier from at runtime.  G1b re-checks whatever lands here from the
-# bare definition.  A088250's three were found 2026-09-03 by the one
-# campaign that ran from k = 1e6 to the family's ceiling (RESULTS.md); each
-# also settles A202778 at its index (the runs are exact) and A071576 at
-# half its value.
+# bare definition.  A088250's first three were found 2026-09-03 by the one
+# campaign that ran from k = 1e6 to the family's v2 ceiling (RESULTS.md),
+# and a(18) by the v4 leg of 2026-09-05 that resumed there; each also
+# settles A202778 at its index (the runs are exact) and A071576 at half
+# its value.
 FOUND = {fam: {} for fam in FAMILIES}
 FOUND["A088250"] = {15: 1555360041314493173760,
                     16: 87117680854368555070680,
-                    17: 1048124771278912649231910}
-# A125838's four, the same day, 17 minutes from k = 1e6 to its ceiling;
-# a(15) is the integer the literature holds as A125839's a(15), and every
-# term is an upper bound on A125839's at the same index (fewer conditions).
+                    17: 1048124771278912649231910,
+                    18: 11260441017037317719293680}
+# A125838's four, the same day, 17 minutes from k = 1e6 to its ceiling,
+# and a(19) from the 4.2-hour v4 leg of 2026-09-05; a(15) is the integer
+# the literature holds as A125839's a(15), and every term is an upper
+# bound on A125839's at the same index (fewer conditions).
 FOUND["A125838"] = {15: 45187548280664790,
                     16: 436409209028729276340,
                     17: 44387933133290055609300,
-                    18: 74882388347598051560340}
-# A125839's three, 15 minutes to its ceiling; each under A125838's term at
-# the same index, as the subset of conditions requires.
+                    18: 74882388347598051560340,
+                    19: 112258928035903409184283860}
+# A125839's three, 15 minutes to its ceiling, and a(19) and a(20) from the
+# 1.3-hour v4 leg of 2026-09-05; each under A125838's term at the same
+# index, as the subset of conditions requires.
 FOUND["A125839"] = {16: 14423013361403116470,
                     17: 771355748787892768500,
-                    18: 6530891065478723143200}
+                    18: 6530891065478723143200,
+                    19: 2894601427937540670809460,
+                    20: 19653405164609436282292230}
 # A173750's four in 37 minutes to the +1 ceiling: a(18) = a(19) is a RIDER
 # -- one k with a run of 19 found while a(18) was open, like the family's
 # published a(12) = a(13) = a(14) -- evidenced once under a(18).
@@ -244,9 +251,14 @@ FOUND["A164326"] = {15: 392547927582515694990,
 FOUND["A164325"] = {16: 1284243585711408422100,
                     17: 317674273854740299136640,
                     18: 511721589397871969516400}
-# A088651's one, 12 minutes to its ceiling (the crossing at n = 17); the
-# run is exact, so A202779(16) is the same integer.
-FOUND["A088651"] = {16: 43263866546732976414270}
+# A088651's a(16), 12 minutes to its v2 ceiling (the crossing at n = 17);
+# then a(17) in the v3 resume of 2026-09-04 and a(18) in the v4 leg of
+# 2026-09-05, both past the deterministic bound and proved by BLS75
+# Theorem 15 on N + 1 = r*k.  Every run is exact, so A202779(n) is the
+# same integer at each index.
+FOUND["A088651"] = {16: 43263866546732976414270,
+                    17: 1834211334301046929508280,
+                    18: 152058443198637095680139580}
 
 # No family carries a published bound of any kind -- no upper bound at any
 # open n, and no searched-empty lower bound beyond the last term.  The floor

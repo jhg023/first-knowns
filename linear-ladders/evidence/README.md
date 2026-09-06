@@ -8,33 +8,37 @@ later value that reaches the frontier) is counted in the checkpoint and
 shown in each 30-second `[STATUS]` line, never written here
 (CONVENTIONS.md, "The census is counted, not narrated").
 
-**Present:** A088250's `a(15)`, `a(16)` and `a(17)` — one file each, all
-three found by the single A088250 campaign of 2026-09-03 (from `k = 10⁶`
-to the family's ceiling in 1.26 h) — A125838's `a(15)` to `a(18)`, from
-its 17-minute campaign the same evening, A125839's `a(16)` to `a(18)`,
-from its 15-minute one, and A173750's `a(16)`, `a(17)` and the one file
-that settles `a(18)` and `a(19)` together (a run of 19 found while
-`a(18)` was open, `settles = [18, 19]`), from its 37-minute one,
-A164326's `a(15)` and `a(16)` from its 14-minute one, A164325's `a(16)`
-to `a(18)` from its one-hour one, and A088651's `a(16)` (also
-`A202779(16)`) from its 12-minute one, and — under v3's `10⁴⁰` ceiling,
-from a 7.5-hour overnight resume on 2026-09-04 — A164326's `a(17)` and
-`a(18)`, the first two files whose certificates are all `bls75-thm15`
-(every one of their 35 values is past the deterministic bound) — twenty-two
-terms on twenty files, with a ledger per family. Every other family still
-sits at its v2 cursor and resumes from there.
-Each A088250 run is exact (the stopper at the next multiplier is
-composite), so each of those files also settles A202778 at its own index
-and A071576 at half its value; A088250's `a(17)` and A164325's `a(17)`
-and `a(18)` are the ones past the proof crossing, with 14, 12 and 15 of
-their values carrying BLS75 Theorem 1 certificates and the rest the
-deterministic test. A125838, A125839, A164326 and A088651
-are −1 families whose values never leave the deterministic zone, so all
-154 of their certificates are the seven-base test, and A173750's 49
-values all stayed under the bound too (its largest, `2.8×10²⁴`, just
-under). Every
-file was re-verified from disk before [RESULTS.md](../RESULTS.md) was
-written.
+**Present: 28 terms on 27 files**, with a ledger per family — the whole
+of what this project found between 2026-09-03 and 2026-09-05, and the
+frontier of all seven families.
+
+| family | files | terms | found by |
+|---|---|---|---|
+| A088250 | 4 | `a(15)`–`a(18)` | the v2 campaign of 2026-09-03 (three) and its v4 leg of 2026-09-05 |
+| A173750 | 3 | `a(16)`–`a(19)` | the 37-minute v2 campaign; one file settles `a(18)` and `a(19)` together (`settles = [18, 19]`) |
+| A125838 | 5 | `a(15)`–`a(19)` | the 17-minute v2 campaign (four) and the 4.2-hour v4 leg |
+| A125839 | 5 | `a(16)`–`a(20)` | the 15-minute v2 campaign (three) and the 1.3-hour v4 leg (two) |
+| A164325 | 3 | `a(16)`–`a(18)` | the one-hour v2 campaign |
+| A164326 | 4 | `a(15)`–`a(18)` | the 14-minute v2 campaign (two) and the 7.5-hour v3 resume of 2026-09-04 |
+| A088651 | 3 | `a(16)`–`a(18)` | the 12-minute v2 campaign, the v3 resume of 2026-09-04, the v4 leg of 2026-09-05 |
+
+Every A088250 and A088651 run is exact (the stopper at the next
+multiplier is composite), so each of those files also settles A202778 or
+A202779 at its own index, and A088250's settle A071576 at half their
+value.
+
+The 443 certificates in these files divide by where the value sits
+against huntlib's deterministic Miller–Rabin bound: **263** are the
+seven-base test itself (`deterministic-mr`), **59** are BLS75 Theorem 1
+on `N − 1` (A088250's `a(17)` and `a(18)`, A164325's `a(17)` and
+`a(18)`), and **121** are BLS75 Theorem 15 on `N + 1` — the −1 route,
+which arrived with v3 on 2026-09-04 and carried A164326's `a(17)` and
+`a(18)`, A088651's `a(17)` and `a(18)`, A125838's `a(19)` and A125839's
+`a(19)` and `a(20)`. Six files (A088250 `a(18)`, A164326 `a(18)`,
+A088651 `a(18)`, A125838 `a(19)`, A125839 `a(19)` and `a(20)`) have no
+deterministic certificate in them at all: every value is past the bound.
+No factor of any `k` here needed a subproof. Every file was re-verified
+from disk before [RESULTS.md](../RESULTS.md) was written.
 
 Because the conditions of every family nest, one `k` can settle several
 terms at once. A find is evidenced **once**, under the first term it
