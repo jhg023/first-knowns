@@ -428,34 +428,37 @@ Device rate at the four campaign openings against the untuned engine:
 
 Written down so the next pass starts from evidence (OPTIMIZATION.md Rule 6):
 
-1. **A three-byte queue entry** (u16 residue index + u8 period, against one
-   u32). Saves 3.2 KB of shared, which is the 6th block per SM at n = 15-18,
-   priced by the padding ablation at **~8%**. Unlike the `sal` attempt
-   (Measurement 12) it never touches the inner loop's register allocation.
-   The cost is one extra shared access per queue push and pop; the push was
-   ~10% of the kernel in the engine this one came from. Net maybe 1.05×.
-   **This is the best-priced unbuilt item.**
-2. **Lifting the 2^63 reduction bound**, which is what caps the wheel. The
-   tail reduces `off + j·W'`, bounded by (PV+1)·W'; reducing `off` and
-   `j·(W' mod q)` separately would bound it by W' alone and let the wheel
-   reach 47 at n = 17 (1.567× fewer candidates) and 53 at n = 18, with the
-   window still 192 periods. Costs one more load (a `W' mod q` table) and
-   one more reduction per prime per candidate in the tail, on a phase worth
-   10-16%. Net perhaps 1.35× **at n = 17 and n = 18 only** — n = 15 and 16
-   would not take it, because there the period would approach the search
-   itself (the square-ladders trade: a find costs at most one period of
-   over-sweep, and at n = 15 one wheel-47 period is 6.15e17 against a
-   modelled median of 1.18e17).
-3. **A period-vs-search term in `wheel_plan`.** It currently maximises
-   density subject to the reduction bound and does not know that a period
-   comparable to the search costs an over-sweep. It happens to pick well at
-   every filter here (checked: the worst is n = 15, where the median is 9
-   periods in), but it is luck, not design.
-4. **More ILP inside a thread.** The kernel is latency-bound (both rooflines
-   at ~26%) and occupancy is now maxed at the shared-memory limit, so the
-   next axis is independent work per thread — two first-level residues per
-   thread, doubling the accumulator chains. Measurement 12 is a warning
-   about what the register allocator will do with it.
-5. **`SURV_TARGET`.** Chosen so the host need lands near one core; the
-   device rate is flat either side. The real question is what the PIPELINE
-   does, and that needs a hunt.
+1. **A wider survivor record**, which is what actually caps the wheel
+   (Measurement 14). The emitted offset is a u64 within the launch, so the
+   launch span is bounded by 2^64 whatever the reduction does; a `uint2` or
+   a per-period record would lift that, and only then does splitting the
+   Barrett input buy the wheel-47 that is worth ~1.35x at n = 17 and n = 18.
+   Scope: the survivor buffer, the pinned readback, PRE_COPY, `_collect`,
+   and what G9 and G15 expect of the stream's units. **The biggest single
+   number still on the table, and the biggest change.** n = 15 and 16 would
+   not take that wheel in any case: there one wheel-47 period (6.15e17) is
+   five times the modelled median (1.18e17), so the over-sweep a find costs
+   would exceed the search.
+2. **More ILP inside a thread.** The kernel is latency-bound (both rooflines
+   at ~26%) and occupancy is now at the shared-memory limit with 6 blocks
+   per SM, so the next axis is independent work per thread -- two
+   first-level residues per thread, doubling the accumulator chains.
+   Measurement 12 is the warning about what the register allocator does when
+   asked to keep more live across the group chain.
+3. **`SURV_TARGET`.** Chosen so the host need lands near one core; the
+   device rate is flat either side of it. The real question is what the
+   PIPELINE does rather than what the device does, and that needs a hunt --
+   the first `[STATUS]` lines of a real campaign will answer it, and the
+   waited-fraction field is there to be read.
+4. **A 64-bit pattern word.** At pb = 192 the window is NW = 6 32-bit words:
+   7 shared loads and 6 funnel shifts per prime per 192 candidates. In
+   64-bit it would be 4 loads and 3 two-instruction funnel shifts. The
+   engine this came from measured 32-bit better, but at NW = 2, where the
+   trade is 3 loads against 2. Priced at ~1.1x best case on a phase worth
+   85%; unbuilt because it is a rewrite of the dominant kernel's inner loop
+   and the information-efficiency argument says the loads cannot fall much:
+   217 loads carry 6,944 bits to produce 5,952 bits of kill information per
+   (t, s), which is 94% efficient.
+5. **The host classifier.** 12.4 us per survivor, and the campaign is
+   device-bound at every filter with a pool of 3, so this is worth nothing
+   today. It becomes the binding side only if the device gets ~4x faster.
