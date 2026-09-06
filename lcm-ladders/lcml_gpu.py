@@ -918,7 +918,16 @@ _SRC4 = r"""
 /* WHAT THE QUEUES HOLD: the candidate's INDEX in the block -- (ss, tid)
    and the period j inside the segment -- packed as ((ss*TPB + tid) << LOGP)
    | j.  Shared memory is what this kernel is short of. */
-#define QIDX(SS) ((QTYPE)((((SS) * TPB) + threadIdx.x) << LOGP))
+/* THE QUEUE ENTRY IS THREE BYTES, not four.  It is (ss*TPB + tid) << LOGP
+   | j -- 18 bits at spb = 8, tpb = 128, pb = 192 -- so a u32 held it and the
+   queues were two thirds of this kernel's shared memory.  Split into a u16
+   index and a u8 period it is three bytes, which frees ~3.1 KB: the 6th
+   block per SM, priced at about a twelfth by the padding ablation
+   (OPTIMIZATION_LOG.md round 4).  The PACKED form is rebuilt on read, so
+   off_of and every round test are untouched. */
+#define QIDX(SS) ((unsigned short)(((SS) * TPB) + threadIdx.x))
+#define QGET(QI, QJ, P) ((((unsigned int)(QI)[P]) << LOGP) \
+                         | (unsigned int)(QJ)[P])
 
 /* One test against prime IDX (unchanged from v3): the uint4 record
    (magic_lo, magic_hi, q, base mod q), the prime's MASK_BITS-bit mask and,
@@ -1151,16 +1160,19 @@ extern "C" __global__ void sieve(
                 unsigned int a = sal[((ss - s1) * NW + i) * TPB + threadIdx.x];
                 /* the hot loop: the fallback for a full queue is rare and
                    lives outside it (1.10x, OPTIMIZATION_LOG.md v4) */
-                const QTYPE qb = QIDX(ss) | (QTYPE)(32u * i);
+                const unsigned short qb = QIDX(ss);
                 if (fits) {
-                    while (a) { qk0[p++] = qb | (QTYPE)(__ffs(a) - 1); a &= a - 1u; }
+                    while (a) { qi0[p] = qb;
+                                qj0[p] = (unsigned char)(32u * i + __ffs(a) - 1);
+                                ++p; a &= a - 1u; }
                     continue;
                 }
                 while (a) {
                     const int b = __ffs(a) - 1;
                     a &= a - 1u;
                     const unsigned int j = 32u * i + b;
-                    if (p < Q0CAP) qk0[p] = QIDX(ss) | (QTYPE)j;
+                    if (p < Q0CAP) { qi0[p] = QIDX(ss);
+                                     qj0[p] = (unsigned char)j; }
                     else {
                         unsigned long long off = base + e1.x
                                                + (unsigned long long)j * WC;
@@ -1186,7 +1198,8 @@ extern "C" __global__ void sieve(
     if (threadIdx.x == 0) q3b = (nqR > 0) ? atomicAdd(n3, nqR) : 0;
     __syncthreads();
     for (int idx = threadIdx.x; idx < nqR; idx += TPB) {
-        const unsigned long long off = off_of(qkR[idx], base, t_lo, res1x, d2);
+        const unsigned long long off = off_of(
+            QGET(qiR, qjR, idx), base, t_lo, res1x, d2);
         const int p = q3b + idx;
         if (p < q3cap) q3[p] = off;
         else if (tail_survives(off, np_, K2, pk, pmask, pres)) EMIT(off)
@@ -1504,7 +1517,8 @@ class GpuEngine:
         # (the candidate runs its tail on the spot), so the cap costs a
         # shallow gate configuration speed and production nothing (its
         # queues are a few hundred entries).
-        qbytes = 2 if self.tile <= 65536 else 4
+        # three bytes per entry: a u16 index array and a u8 period array
+        qbytes = 3
 
         def _caps(sig):
             caps = [_qcap(self.tile, self.surv[b], sig) for b in self.bounds2]
@@ -1624,7 +1638,8 @@ class GpuEngine:
         R = len(self.rounds2) if self.groups2 else 0
         qcaps_src = "\n".join(f"#define Q{i}CAP {c}"
                                for i, c in enumerate(self.qcaps))
-        qdecl = "\n".join(f"    __shared__ QTYPE qk{i}[Q{i}CAP];\n"
+        qdecl = "\n".join(f"    __shared__ unsigned short qi{i}[Q{i}CAP];\n"
+                           f"    __shared__ unsigned char qj{i}[Q{i}CAP];\n"
                            f"    __shared__ int qn{i};"
                            for i in range(len(self.qcaps)))
         qzero = " ".join(f"qn{i} = 0;" for i in range(len(self.qcaps)))
@@ -1651,7 +1666,8 @@ class GpuEngine:
         for (int z = 0; z < MAXIT; ++z) {{
             const int idx = z * TPB + (int)threadIdx.x;
             if (idx < nq{r-1}) {{
-                const unsigned long long oz = off_of(qk{r-1}[idx], base, t_lo, res1x, d2);
+                const unsigned long long oz = off_of(
+                    QGET(qi{r-1}, qj{r-1}, idx), base, t_lo, res1x, d2);
                 unsigned int kl;
                 ROUND{r}(oz, kl)
                 alive_z |= kl ? 0u : (1u << z);
@@ -1663,8 +1679,10 @@ class GpuEngine:
 #pragma unroll
             for (int z = 0; z < MAXIT; ++z) {{
                 if ((alive_z >> z) & 1u) {{
-                    const unsigned int qi = qk{r-1}[z * TPB + (int)threadIdx.x];
-                    if (p < Q{r}CAP) qk{r}[p] = (QTYPE)qi;
+                    const int _z = z * TPB + (int)threadIdx.x;
+                    const unsigned int qi = QGET(qi{r-1}, qj{r-1}, _z);
+                    if (p < Q{r}CAP) {{ qi{r}[p] = qi{r-1}[_z];
+                                     qj{r}[p] = qj{r-1}[_z]; }}
                     else {{
                         const unsigned long long oz = off_of(qi, base, t_lo, res1x, d2);
                         if (tail_survives(oz, np_, {kend}, pk, pmask, pres)) EMIT(oz)
@@ -1678,7 +1696,8 @@ class GpuEngine:
     const int nq{r} = min(qn{r}, Q{r}CAP);""")
             g0 = g1
         rounds_src.append(f"    const int nqR = nq{R};\n"
-                          f"    QTYPE* const qkR = qk{R};")
+                          f"    unsigned short* const qiR = qi{R};\n"
+                          f"    unsigned char* const qjR = qj{R};")
         gparams = "".join(f",\n        const unsigned long long g2p{i}"
                           for i in range(len(self.gdesc2)))
         # The kernel source depends on the family only through the killed
