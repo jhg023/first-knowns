@@ -646,21 +646,84 @@ SCORE17 62,494 -> **63,391**.
 
 ---
 
+## Round 9 (2026-09-06) - the termination table
+
+OPTIMIZATION.md Part 3: this is the table that says what is accounted for
+and what is not. Everything below was re-measured at the campaign's own
+configuration AFTER the subset wheel, because a constant tuned before a
+structural change is stale after it.
+
+### 3.1 - every phase, with a verdict
+
+| phase | share | verdict |
+|---|---|---|
+| the sieve kernel (window + extraction + in-block rounds) | 84-90% | **bound by the latency of its load chain**, established three ways: both rooflines sit at ~26% (shared-memory bandwidth 8.2 lane-loads per SM-cycle against ~32; issue ~25 lane-instructions against 128), the ALU dependency chain is NOT it (splitting the 31-deep accumulator OR chain into 2, 3 or 4 independent chains at EQUAL occupancy reads 0.998 / 0.990 / 0.976), and occupancy is now at its shared-memory limit (a padding ablation prices a block at ~8% at 4-5 and near nothing at 5-6). Its own information efficiency bounds what is left: 217 shared loads carry 6,944 bits to produce 5,952 bits of kill information per (t, s), which is **94%**, so the load count -- the thing it is bound by -- cannot fall much without changing the mathematics |
+| all tail rounds | 10-16% | compaction rounds already (2.2), their drop point re-swept (0.7), their block size and lane count flat, and the ordering of the primes they walk fixed in round 8 |
+| host classification | 0.6-0.8 core-seconds per second | 12.4 us per survivor, and the sieve depth is *planned* so this lands near one core at every filter. The device binds everywhere with a pool of 3 |
+| the campaign loop, off-device | **0.01% of a launch** | was 60% (round 2). `check_rungs` 2.7 us, `mark_boundary` 2.5 us, `state()` 3.4 us, the save rate-limited and 914 us |
+
+### 3.2 - the catalogue, swept
+
+Every entry of OPTIMIZATION.md Part 2 has been applied to the dominant
+phase and has a number: 2.1 (already inverted), 2.2 (rounds, re-swept),
+2.4 (launch size, 2^37), 2.5 (already literals), 2.6 (analytic queues,
+which then chose their own margin), 2.8 (the wheel -- **this is where the
+project's largest win came from, and it is a SUBSET rather than a deeper
+prefix**), 2.11 (a budget setting a shape parameter, found three times:
+window/queue, spb/queue, margin/occupancy), 2.12 (three negatives spent for
+information: NACC, sal, the deeper prefix wheel), 2.13 (the benchmark shape
+re-frozen once, deliberately, with the anchors left alone).
+
+### 3.3 - the ablations that were run
+
+The padding ablation (occupancy, one variable), the equal-occupancy NACC
+re-run (which corrected round 2's wrong conclusion), the instrumented-vs-
+production `lit` sweep (which showed the instrumented path cannot choose a
+constant here), and the queue-budget sweeps that turned three apparent
+cliffs into capacity limits.
+
+### 3.4 - the constants are fresh
+
+Re-swept after the last structural change (round 6's subset wheel):
+`pb` moved 192 -> 224; `q2` is now FLAT across a factor of eight at both
+filters (it was 0.706x at the deep end before the wheel changed), so the
+planner's choice sits in the flat region with two workers; `BIT_SURV`
+(0.007), `spb` (8), `TAIL_ROUND_DROP` (0.7 and 0.8 tie), `CAND_PER_LAUNCH4`
+(2^37) all unchanged. The two new planner knobs are **insensitive**:
+`WHEEL_TOP` gives an identical plan from 61 to 113 (the greedy stops before
+those primes), and `CAMPAIGN_PERIOD_MARGIN` gives an identical plan from 2
+to 10, because the wheel's next prime would multiply the period by 53 or 59
+and no intermediate exists.
+
+### 3.5 - and one more round found something
+
+Round 8 found 1.013x that rounds 1-7 had not, which is the rule working as
+intended. **This report is therefore not "done"** -- it is the table above
+plus the priced items below, which is what Part 3 actually asks for.
+
+---
+
 ## Open, priced, unbuilt
 
 Written down so the next pass starts from evidence (OPTIMIZATION.md Rule 6):
 
-1. **A wider survivor record**, which is what actually caps the wheel
-   (Measurement 14). The emitted offset is a u64 within the launch, so the
-   launch span is bounded by 2^64 whatever the reduction does; a `uint2` or
-   a per-period record would lift that, and only then does splitting the
-   Barrett input buy the wheel-47 that is worth ~1.35x at n = 17 and n = 18.
-   Scope: the survivor buffer, the pinned readback, PRE_COPY, `_collect`,
-   and what G9 and G15 expect of the stream's units. **The biggest single
-   number still on the table, and the biggest change.** n = 15 and 16 would
-   not take that wheel in any case: there one wheel-47 period (6.15e17) is
-   five times the modelled median (1.18e17), so the over-sweep a find costs
-   would exceed the search.
+1. **A wider survivor record**, which is what caps the wheel -- and round 9
+   sharpened the price. The emitted offset is a u64 within the launch, so
+   the launch span is bounded by 2^64 whatever the reduction does, and the
+   Barrett tail adds a 2^63 bound of its own. Together they stop the subset
+   wheel one prime short: at n = 17 the greedy would take **59** next
+   (keep 0.712, so **1.40x fewer candidates**) and the period would still be
+   117 times the modelled median, comfortably inside the over-sweep margin;
+   at n = 18 it would take 59 for 1.44x with 619 periods to spare. n = 15
+   gains nothing (its next prime is 53, and the period would exceed the
+   over-sweep margin). So this is worth **~1.4x at n = 17 and n = 18** --
+   the two filters that cost the night's time and the week's.
+   Scope: emit the within-period offset and the period index separately
+   (the shared queues already carry them apart since round 4, so only the
+   survivor buffer, the global tail queue, the pinned readback, PRE_COPY and
+   `_collect` change), and split the Barrett input the same way, which needs
+   a `W' mod q` table the engine already computes (`_wmod`). **The biggest
+   single number still on the table, and the biggest change.**
 2. **More ILP inside a thread.** The kernel is latency-bound (both rooflines
    at ~26%) and occupancy is now at the shared-memory limit with 6 blocks
    per SM, so the next axis is independent work per thread -- two
