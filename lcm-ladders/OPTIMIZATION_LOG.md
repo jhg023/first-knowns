@@ -572,6 +572,51 @@ worth more than all of it at the openings and appears in no benchmark.
 
 ---
 
+## Round 7 (2026-09-06) - the constants, re-swept after the wheel changed
+
+Rule 1's corollary, applied on purpose: **round 6's subset wheel is a
+structural change, so every constant tuned before it is stale after it.**
+Re-swept at the campaign's own new configuration.
+
+| knob | n = 15 | n = 16 | n = 17 | verdict |
+|---|---|---|---|---|
+| `pb` 128 | -- | -- | 1.000 | |
+| `pb` 160 | -- | -- | 1.061 | |
+| `pb` 192 | 1.000 | 1.000 | 1.102 | the old optimum |
+| **`pb` 224** | **1.008** | **1.013** | **1.125** | **moved here** |
+| `pb` 256 | 0.976 | 0.881 | 1.123 | falls off at two filters |
+| `BIT_SURV` .012 / .007 / .004 / .002 | -- | -- | 0.87 / **1.00** / 0.96 / 0.84 | unchanged |
+| `CAND_PER_LAUNCH4` 2^35 / 2^37 / 2^38 | -- | -- | 1.000 / 1.044 / 1.051 | 2^37 kept: 2^38 is +0.7% for +500 MB |
+
+So one constant moved, `pb` 192 -> 224, worth 1.008x / 1.013x / 1.021x. It
+costs the 6th block per SM (a wider window is more shared memory), and the
+measurements above are net of that -- which is the honest way to read it,
+and consistent with round 5's finding that the 6th block is worth little.
+
+**And the score shapes now pin `pb` as well as `nu`.** They already had to
+pin `nu` because a shape denominated in third-level residues moves when the
+launch decomposition does; `pb` sets the segment width and does exactly the
+same thing, and this sweep would have taken all seven fingerprints with it.
+Pinned at 192, where they were frozen; the campaign runs the planner's 224.
+`score.py` says so.
+
+### The project's final state against the engine it started from
+
+| filter | untuned | now | ratio | median | device to the median |
+|---|---|---|---|---|---|
+| n = 15 | 4.179e16 | **5.934e16** | 1.420x | 1.18e17 | 2.0 s |
+| n = 16 | 3.131e17 | **3.848e17** | 1.229x | 2.13e19 | 55 s |
+| n = 17 | 3.740e16 | **6.561e16** | **1.754x** | 9.28e19 | 23.6 min |
+| n = 18 | 3.885e17 | **6.745e17** | **1.736x** | 2.89e22 | 11.9 h |
+
+Both families to a(17) is about 51 minutes of device at the medians and
+about 2.1 hours at the 2.5x the repo's optimism factor suggests budgeting
+-- against 3.6 hours for the same work on the engine as inherited, and
+that is before the 34 ms per launch round 2 took off the segment loop,
+which no benchmark here can see.
+
+---
+
 ## Open, priced, unbuilt
 
 Written down so the next pass starts from evidence (OPTIMIZATION.md Rule 6):

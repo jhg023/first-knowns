@@ -870,7 +870,15 @@ def _qcap(tile, surv, sigma=QCAP_SIGMA):
 # Measured paired at n = 15, A078502, three interleaved rounds:
 #   pb    64: 4.170e16 x/s    128: 5.037e16    192: 5.371e16    256: 4.996e16
 # 1.288x over the inherited (64, 12 KB) pair.
-PB_DEFAULT = 192
+# 224 SINCE ROUND 7, and the move is Rule 1's corollary rather than a new
+# idea: the subset wheel of round 6 is a structural change, so every constant
+# tuned before it was stale after it.  Re-swept at three filters:
+#   pb        128     160     192     224     256
+#   n = 15     --      --    1.000   1.008   0.976
+#   n = 16     --      --    1.000   1.013   0.881
+#   n = 17    1.000   1.061  1.102   1.125   1.123
+# 224 wins at all three and 256 falls off at two of them.
+PB_DEFAULT = 224
 PB_BY_C = {}
 
 

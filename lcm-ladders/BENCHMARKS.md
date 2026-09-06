@@ -23,6 +23,7 @@ nothing about the next.
 | 2026-09-06 | v1 round 3 | 53,664 | 53,534 | 336,231 | 38,135 | 20,632 | 5,096 | 6.4 |
 | 2026-09-06 | v1 round 4 | 54,030 | 54,054 | 337,058 | 40,679 | 21,093 | 4,858 | 6.8 |
 | 2026-09-06 | v1 round 6 | 55,995 | 55,891 | 364,682 | 62,510 | 21,152 | 4,865 | 6.8 |
+| 2026-09-06 | v1 round 7 | 55,989 | 55,991 | 365,117 | 62,494 | 21,111 | 4,851 | 6.7 |
 
 (in units of 10⁶ x/s; SCORE9 is ~7×10⁶ x/s, a filter whose survivor density
 is four orders higher.)
@@ -49,7 +50,7 @@ SCORE2L and SCORE1L cover the identical absolute window with different
 arithmetic and must return the identical fingerprint — a CRT-lift bug shows
 up inside the benchmark rather than as a wrong answer months later.
 
-The four campaign shapes name their wheel (a SUBSET of the primes, not a prefix -- 11 and 13 are sieved rather than wheeled at n = 15, and 17 as well from n = 17) and their depth explicitly rather than
+The seven shapes pin `pb` and `nu` -- the segment width and the launch decomposition -- so that a tuning sweep of either cannot move the benchmark's own window (round 7 moved pb 192 to 224 and would otherwise have taken every fingerprint with it). The four campaign shapes name their wheel (a SUBSET of the primes, not a prefix -- 11 and 13 are sieved rather than wheeled at n = 15, and 17 as well from n = 17) and their depth explicitly rather than
 asking the planner: the planner's answer is a default optimization is
 expected to move, and a benchmark whose window moves with it is not an
 anchor. G18 checks the planner still produces exactly these.
@@ -61,14 +62,14 @@ rate is the pipeline's — device and host — and is what `[STATUS]` prints.
 
 | filter | x/s | N/s | median x | to the median | at 2.5× |
 |---|---|---|---|---|---|
-| n = 15 | 5.77e16 | 2.08e22 | 1.18e17 | 2.0 s | 5.1 s |
-| n = 16 | 3.73e17 | 2.69e23 | 2.13e19 | 57 s | 2.4 min |
-| n = 17 | 6.35e16 | 7.78e23 | 9.28e19 | **24 min** | 1.0 h |
-| n = 18 | 6.45e17 | 7.90e24 | 2.89e22 | 12.4 h | 31 h |
+| n = 15 | 5.93e16 | 2.14e22 | 1.18e17 | 2.0 s | 5.0 s |
+| n = 16 | 3.85e17 | 2.77e23 | 2.13e19 | 55 s | 2.3 min |
+| n = 17 | 6.56e16 | 8.04e23 | 9.28e19 | **23.6 min** | 59 min |
+| n = 18 | 6.75e17 | 8.27e24 | 2.89e22 | 11.9 h | 30 h |
 
 (measured at the campaign's own planned configuration, three rounds
 interleaved; against the untuned engine this project started from these are
-1.381× / 1.191× / 1.697× / 1.660×.)
+1.420× / 1.229× / 1.754× / 1.736×.)
 
 n = 16 is eight times the line rate of n = 15 and n = 17 because 17 is
 forced there: the unit is 34 rather than 2, and the wheel reaches 47 under
