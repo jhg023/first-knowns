@@ -193,8 +193,9 @@ def plan_for(fam, n):
     """
     fam = ref.family(fam)
     unit = cpu.forced_unit(n, fam)
-    p1, p2, p3 = gpu.wheel_plan(n, fam, unit)
-    q2 = gpu.plan_q2(n, fam, unit, max(x for x in (p1, p2, p3) if x))
+    p1, p2, p3 = gpu.wheel_plan(n, fam, unit,
+                                max_period=gpu.search_period_cap(n, fam))
+    q2 = gpu.plan_q2(n, fam, unit, gpu._wheel_primes(p1, p2, p3))
     return unit, p1, p2, p3, q2
 
 
@@ -2133,7 +2134,7 @@ def _families_stay_apart():
         for n in range(open_n(f), open_n(f) + 6):
             unit, p1, p2, p3, q2 = plan_for(f, n)
             W = unit
-            for q in gpu.primerange(2, (p3 or p2 or p1) + 1):
+            for q in gpu._wheel_primes(p1, p2, p3):
                 if unit % q:
                     W *= q
             med = model.quantile(f, n, model.floor_for(f, n, c_front(f)), 0.5)

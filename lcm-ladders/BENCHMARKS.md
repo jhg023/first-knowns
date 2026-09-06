@@ -22,6 +22,7 @@ nothing about the next.
 | 2026-09-06 | v1 round 2 | 53,408 | 53,340 | 309,337 | 38,219 | 20,675 | 5,037 | 6.9 |
 | 2026-09-06 | v1 round 3 | 53,664 | 53,534 | 336,231 | 38,135 | 20,632 | 5,096 | 6.4 |
 | 2026-09-06 | v1 round 4 | 54,030 | 54,054 | 337,058 | 40,679 | 21,093 | 4,858 | 6.8 |
+| 2026-09-06 | v1 round 6 | 55,995 | 55,891 | 364,682 | 62,510 | 21,152 | 4,865 | 6.8 |
 
 (in units of 10⁶ x/s; SCORE9 is ~7×10⁶ x/s, a filter whose survivor density
 is four orders higher.)
@@ -36,10 +37,10 @@ row moves only by the tail-round change; the campaign gets the rest.
 
 | shape | family | n | wheel | unit | sieve | window | fingerprint |
 |---|---|---|---|---|---|---|---|
-| SCORE | A078502 | 15 | (..19],(19,31],(31,43] | 2 | 131072 | 500 third-level residues of the segment at period 1 | 154760 / 1717515042281197424 |
-| SCOREP | A074200 | 15 | same | 2 | 131072 | same | 154612 / 2377031453654844854 |
-| SCORE16 | A078502 | 16 | (..23],(23,37],(37,47] | 34 | 131072 | 128 residues | 111412 / 112270611949917918142 |
-| SCORE17 | A074200 | 17 | (..19],(19,31],(31,43] | 2 | 32768 | 384 residues | 213382 / 1379323101368620150 |
+| SCORE | A078502 | 15 | {3,5,7,17,19,23,29,31,37,41,43,47} | 2 | 262144 | 96 third-level residues of the segment at period 1 | 74297 / 849661955738965598 |
+| SCOREP | A074200 | 15 | same | 2 | 262144 | same | 74590 / 962011421661791124 |
+| SCORE16 | A078502 | 16 | {3,5,7,19,23,29,31,37,41,43,47,53} | 34 | 131072 | 20 residues | 118075 / 21369117790222865260 |
+| SCORE17 | A074200 | 17 | {3,5,7,19,23,29,31,37,41,43,47,53} | 2 | 65536 | 54 residues | 119087 / 2410739981118000456 |
 | SCORE2L | A078502 | 15 | (23],(37] | 1 | 65536 | 240 periods from 94334 | 8691 / 702330747726546914 |
 | SCORE1L | A078502 | 15 | ≤ 23 | 1 | 65536 | the SAME absolute window, 33263× as many periods | 8691 / 702330747726546914 |
 | SCORE9 | A074200 | 9 | ≤ 13 | 1 | 4096 | 4e8 periods from 3330003 | 5537992 / 1223908228450 |
@@ -48,7 +49,7 @@ SCORE2L and SCORE1L cover the identical absolute window with different
 arithmetic and must return the identical fingerprint — a CRT-lift bug shows
 up inside the benchmark rather than as a wrong answer months later.
 
-The four campaign shapes name their wheel and depth explicitly rather than
+The four campaign shapes name their wheel (a SUBSET of the primes, not a prefix -- 11 and 13 are sieved rather than wheeled at n = 15, and 17 as well from n = 17) and their depth explicitly rather than
 asking the planner: the planner's answer is a default optimization is
 expected to move, and a benchmark whose window moves with it is not an
 anchor. G18 checks the planner still produces exactly these.
@@ -60,14 +61,14 @@ rate is the pipeline's — device and host — and is what `[STATUS]` prints.
 
 | filter | x/s | N/s | median x | to the median | at 2.5× |
 |---|---|---|---|---|---|
-| n = 15 | 5.62e16 | 2.03e22 | 1.18e17 | 2.1 s | 5.3 s |
-| n = 16 | 3.51e17 | 2.53e23 | 2.13e19 | 61 s | 2.5 min |
-| n = 17 | 4.26e16 | 5.22e23 | 9.28e19 | 36 min | 1.5 h |
-| n = 18 | 4.46e17 | 5.46e24 | 2.89e22 | 18.0 h | 45 h |
+| n = 15 | 5.77e16 | 2.08e22 | 1.18e17 | 2.0 s | 5.1 s |
+| n = 16 | 3.73e17 | 2.69e23 | 2.13e19 | 57 s | 2.4 min |
+| n = 17 | 6.35e16 | 7.78e23 | 9.28e19 | **24 min** | 1.0 h |
+| n = 18 | 6.45e17 | 7.90e24 | 2.89e22 | 12.4 h | 31 h |
 
 (measured at the campaign's own planned configuration, three rounds
 interleaved; against the untuned engine this project started from these are
-1.345× / 1.122× / 1.139× / 1.147×.)
+1.381× / 1.191× / 1.697× / 1.660×.)
 
 n = 16 is eight times the line rate of n = 15 and n = 17 because 17 is
 forced there: the unit is 34 rather than 2, and the wheel reaches 47 under

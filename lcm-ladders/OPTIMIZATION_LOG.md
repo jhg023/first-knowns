@@ -490,6 +490,88 @@ row are round 4's.
 
 ---
 
+## Round 6 (2026-09-06) - THE WHEEL IS A SUBSET, NOT A PREFIX
+
+### Measurement 18 - the biggest win of the project: **1.49x at n = 17**
+
+Every prime in the wheel multiplies the PERIOD by q and the candidate
+density by keep(q) = (q - w(q,n))/q. In every other ladder in this
+repository those two move together, because w(q,n) = min(n, q-1) makes the
+small primes maximal killers. **Here they are wildly out of step**, because
+w(q,n) = floor(n/q^e) makes them nearly blind. At n = 17:
+
+| q | 11 | 13 | 17 | 19 | 47 | 53 |
+|---|---|---|---|---|---|---|
+| keep(q) | 0.909 | 0.923 | 0.941 | **0.105** | 0.638 | 0.679 |
+
+11, 13 and 17 kill under a tenth of the line between them and cost a factor
+of **2,431** in period; 47 and 53 kill a third each for a factor of 2,491.
+A PREFIX wheel cannot make that trade -- to reach 19 it must take 11, 13 and
+17, and the period bound then stops it before 47. So the planner now chooses
+a **SUBSET** by value density, -log(keep(q)) / log(q), taken greedily while
+the period fits every bound; the sieve primes are the COMPLEMENT rather than
+a tail, which is the one place this could have silently thinned the line and
+is why `self.primes` is now a set difference.
+
+Candidates per unit of line, planned subset against the prefix it replaced:
+
+| filter | 15 | 16 | 17 | 18 |
+|---|---|---|---|---|
+| prefix | 4.212e-5 | 7.023e-6 | 7.385e-5 | 7.073e-6 |
+| subset | 3.417e-5 | 5.843e-6 | **4.054e-5** | **4.110e-6** |
+| fewer candidates | 1.23x | 1.20x | **1.82x** | **1.72x** |
+
+and end to end, measured paired at the campaign's own configuration:
+
+| filter | before | after | ratio |
+|---|---|---|---|
+| n = 15 | 5.621e16 | 5.771e16 | 1.027x |
+| n = 16 | 3.513e17 | 3.730e17 | 1.062x |
+| n = 17 | 4.259e16 | **6.348e16** | **1.490x** |
+| n = 18 | 4.456e17 | **6.449e17** | **1.447x** |
+
+The candidate rate falls (2.57e12 against 3.15e12 at n = 17, 0.82x: bigger
+wheel tables, more first-level residues) and the density gain more than
+pays for it. n = 15 gains least because its period cap binds: the modelled
+median there is only nine periods into the old wheel, so the planner is not
+allowed to take the long one (Measurement 17), and `search_period_cap`
+enforces exactly that -- the model's median for the term, divided by the
+4x margin, passed into the plan.
+
+This is rule 5c in one measurement: **the biggest lever was never the
+kernel.** Six rounds of kernel tuning bought 1.35x at n = 15 and 1.14x at
+n = 17 between them; one change to which primes the sieve asks for bought
+1.49x at n = 17 by itself.
+
+### The benchmark shapes were re-frozen, deliberately
+
+The four CAMPAIGN shapes named prefix wheels the campaign no longer runs, so
+a score against them had stopped measuring the hunt (OPTIMIZATION.md 2.13:
+the benchmark shape becoming the blocker). They were re-frozen at the
+planned subset wheels, and `score.py` says so. **SCORE2L, SCORE1L and
+SCORE9 were NOT touched** -- they are x-space shapes over whole wheel
+periods, the same candidates whatever sweeps them, and they are the anchor
+across this change. They read 21,152 / 4,865 / 6.8 before and after.
+
+SCORE 54,288 -> **55,995**; SCORE16 336,674 -> **364,682**; SCORE17
+40,688 -> **62,510**.
+
+### Round 6 result: the project against the engine it started from
+
+| filter | untuned | now | ratio |
+|---|---|---|---|
+| n = 15 | 4.179e16 | 5.771e16 | **1.381x** |
+| n = 16 | 3.131e17 | 3.730e17 | 1.191x |
+| n = 17 | 3.740e16 | 6.348e16 | **1.697x** |
+| n = 18 | 3.885e17 | 6.449e17 | **1.660x** |
+
+plus the 34 ms per launch that round 2 took off the segment loop, which is
+worth more than all of it at the openings and appears in no benchmark.
+
+44/44 green in 195 s.
+
+---
+
 ## Open, priced, unbuilt
 
 Written down so the next pass starts from evidence (OPTIMIZATION.md Rule 6):

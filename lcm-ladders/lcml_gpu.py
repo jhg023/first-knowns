@@ -102,6 +102,8 @@ import pathlib as _pathlib
 import sys as _sys
 from functools import lru_cache as _lru_cache
 
+import math
+
 import numpy as np
 from sympy import primerange
 
@@ -154,6 +156,9 @@ PV_MIN = 32
 # groups; the plan will take a denser wheel over a bigger table only when it
 # actually buys candidates.
 R1_MAX = 1 << 21
+# The largest prime the wheel will consider.  Above this the value density is
+# far below what is already in and the enumeration gets slower for nothing.
+WHEEL_TOP = 89
 
 # THE SIEVE DEPTH IS PLANNED TOO, AND IT IS A LOAD DECISION.
 #
@@ -189,7 +194,7 @@ Q2_LADDER = tuple(1 << e for e in range(12, 25))
 
 
 @_lru_cache(maxsize=None)
-def plan_q2(n, fam, unit, wheel_top, target=SURV_TARGET, ladder=Q2_LADDER):
+def plan_q2(n, fam, unit, wheel, target=SURV_TARGET, ladder=Q2_LADDER):
     """The smallest depth in `ladder` whose analytic survivors-per-candidate
     is at or under `target`; the deepest rung if none reaches it.
 
@@ -207,13 +212,14 @@ def plan_q2(n, fam, unit, wheel_top, target=SURV_TARGET, ladder=Q2_LADDER):
     # where the other is n modular inversions.  And primerange is walked
     # LAZILY, rung by rung -- materialising the primes to the top of the
     # ladder is 1.07 million of them, three seconds, on every engine build.
+    wset = frozenset(int(q) for q in wheel)
     surv = 1.0
-    prev = int(wheel_top)
+    prev = 1
     for d in ladder:
         if d <= prev:
             continue
         for q in primerange(prev + 1, d + 1):
-            if unit % q:
+            if unit % q and q not in wset:
                 surv *= 1.0 - w_closed(q, n) / q
         prev = d
         if surv <= target:
@@ -221,64 +227,169 @@ def plan_q2(n, fam, unit, wheel_top, target=SURV_TARGET, ladder=Q2_LADDER):
     return ladder[-1]
 
 
-@_lru_cache(maxsize=None)
-def wheel_plan(n, fam, unit, pv_min=PV_MIN, r1_max=R1_MAX, top=53):
-    """(p1, p2, p3): the best three-level split of the primes up to `top`
-    that no forced prime already covers, at filter n of family F.
+# HOW LONG A PERIOD MAY BE AGAINST THE SEARCH IT IS PART OF.
+#
+# A period's candidates come out in (t, s, u, j) order, so the x line is
+# contiguous only at a period boundary and a find is only known to be the
+# LEAST once its period closes (CONVENTIONS.md "Two cursors").  A find
+# therefore costs up to one period of over-sweep.  The wheel plan wants the
+# longest period it can have -- a denser wheel IS a longer period -- so
+# something has to say when that stops paying, and the honest answer is the
+# length of the search: four periods to the modelled median keeps the
+# over-sweep under a quarter of the hunt at the tightest filter.
+#
+# This is what square-ladders' v2 log rejected a wheel for and re-priced two
+# terms later, when the same period had become 0.13% of the remaining hunt.
+# It is a per-filter quantity for the same reason everything else here is.
+CAMPAIGN_PERIOD_MARGIN = 4.0
 
-    Enumerated rather than tuned: the feasible splits number in the hundreds,
-    every constraint above is cheap to evaluate exactly, and the objective --
-    candidates per unit of line -- is exact too, so there is nothing to sweep.
-    What IS swept (OPTIMIZATION_LOG.md) is the choice of `top` and `pv_min`,
-    because those trade candidate density against window width, and that
-    trade is measured, not modelled.
+
+@_lru_cache(maxsize=None)
+def search_period_cap(n, fam, margin=CAMPAIGN_PERIOD_MARGIN):
+    """The longest period (in x) a plan at filter n may have, or None.
+
+    Derived from the odds model's median for that term, measured from the
+    PUBLISHED frontier -- which is stable (it does not move as the campaign
+    finds terms) and conservative (a find above the median raises the next
+    term's floor and so its median, making a longer period MORE affordable,
+    never less).  Cached, because a `quantile` is ~90 numerical integrals
+    and the answer changes only with the filter (OPTIMIZATION.md 2.14).
     """
-    from lcml_search import killed_residues
+    import lcml_model as _model
+    from lcml_reference import KNOWN
     fam = family(fam)
+    front = KNOWN[fam][max(KNOWN[fam])]
+    med = _model.quantile(fam, n, _model.floor_for(fam, n, front), 0.5)
+    return None if med is None else med / float(margin)
+
+
+def _wheel_primes(p1, p2, p3):
+    """The wheel's prime SET from three levels, each an int bound or a list."""
+    out = []
+    lo = 1
+    for lv in (p1, p2, p3):
+        if lv is None:
+            continue
+        if isinstance(lv, int):
+            out += [q for q in primerange(lo + 1, lv + 1)]
+            lo = lv
+        else:
+            out += [int(q) for q in lv]
+    return tuple(sorted(set(out)))
+
+
+@_lru_cache(maxsize=None)
+def _wheel_value(n, fam, unit, top=WHEEL_TOP):
+    """[(q, keep(q))] for every prime the wheel could take, where
+    keep(q) = (q - w(q,n))/q is the fraction of x that prime lets through."""
+    from lcml_reference import w_closed
     unit = int(unit)
-    qs = [q for q in primerange(2, top + 1) if unit % q]
-    keep = {q: q - len(killed_residues(q, n, fam, unit)) for q in qs}
+    return tuple((q, (q - w_closed(q, n)) / q)
+                 for q in primerange(2, top + 1) if unit % q)
+
+
+def _split_levels(qs, r1_max):
+    """Partition the sorted primes `qs` into three CRT levels satisfying every
+    bound the kernel's arithmetic rests on, or None.
+
+    The levels are contiguous in the sorted subset -- that is what the CRT
+    lifting builds -- so this is a search over two cut points.  It takes the
+    split with the largest first level inside R1_MAX: the first level is one
+    thread per residue, so a small R1 starves the launch's x dimension.
+    """
+    m = len(qs)
     best = None
-    for i in range(1, len(qs) + 1):                     # p1 = qs[i-1]
+    for i in range(1, m + 1):
         W1 = R1 = 1
-        for q in qs[:i]:
+        for q, k in qs[:i]:
             W1 *= q
-            R1 *= keep[q]
+            R1 *= q - int(round(q * (1 - k)))
         if W1 >= 1 << 32 or R1 > r1_max:
             break
-        for j in range(i, len(qs) + 1):                 # p2 = qs[j-1]
+        for j in range(i, m + 1):
             W2a = R2 = 1
-            for q in qs[i:j]:
+            for q, k in qs[i:j]:
                 W2a *= q
-                R2 *= keep[q]
+                R2 *= q - int(round(q * (1 - k)))
             if R2 > 65535 or W2a >= 1 << 32:
                 break
-            for k in range(j, len(qs) + 1):             # p3 = qs[k-1]
-                W2b = R3 = 1
-                for q in qs[j:k]:
-                    W2b *= q
-                    R3 *= keep[q]
-                if R3 > 65535 or W2b >= 1 << 32:
-                    break
-                W2 = W2a * W2b
-                if W2 >= 1 << 32 or W1 * W2 >= 1 << 63:
-                    continue
-                Wp = W1 * W2
-                if (REDUCE_MAX - Q2_DEFAULT) // Wp - 1 < pv_min:
-                    continue
-                dens = (R1 * R2 * R3) / Wp
-                cand = (dens, -Wp, i, j, k)
-                if best is None or cand < best:
-                    best = cand
+            W2b = R3 = 1
+            for q, k in qs[j:]:
+                W2b *= q
+                R3 *= q - int(round(q * (1 - k)))
+            if R3 > 65535 or W2b >= 1 << 32:
+                continue
+            if W2a * W2b >= 1 << 32 or W1 * W2a * W2b >= 1 << 63:
+                continue
+            cand = (R1, -abs(R2 - R3))
+            if best is None or cand > best[0]:
+                best = (cand, i, j)
     if best is None:
-        raise ValueError(f"no admissible wheel at n = {n} of {fam} with "
-                         f"unit {unit}: PV_MIN = {pv_min} and the 2^63 "
-                         f"reduction bound leave nothing")
-    _, _, i, j, k = best
-    p1 = qs[i - 1]
-    p2 = qs[j - 1] if j > i else None
-    p3 = qs[k - 1] if k > j else None
-    return p1, p2, p3
+        return None
+    i, j = best[1], best[2]
+    return (tuple(q for q, _ in qs[:i]), tuple(q for q, _ in qs[i:j]),
+            tuple(q for q, _ in qs[j:]))
+
+
+@_lru_cache(maxsize=None)
+def wheel_plan(n, fam, unit, pv_min=PV_MIN, r1_max=R1_MAX, top=WHEEL_TOP,
+               max_period=None):
+    """([level 1], [level 2], [level 3]): the wheel at filter n of family F.
+
+    THE WHEEL IS A SUBSET OF THE PRIMES, NOT A PREFIX OF THEM, and in this
+    project that is worth between 1.2x and 1.8x.  Every prime in the wheel
+    multiplies the PERIOD by q and the candidate density by
+    keep(q) = (q - w(q,n))/q, and here those two are wildly out of step,
+    because w(q,n) = floor(n/q^e) makes the small primes nearly blind.  At
+    n = 17 the primes 11, 13 and 17 keep 0.909, 0.923 and 0.941 of the line
+    -- they kill almost nothing -- while costing a factor of 2,431 in
+    period; 47 and 53 keep 0.638 and 0.679 for a factor of 2,491.  A PREFIX
+    wheel cannot make that trade: to reach 19 it must take 11, 13 and 17,
+    and then the period bound stops it before 47.
+
+    So the subset is chosen by VALUE DENSITY, -log(keep(q)) / log(q), taken
+    greedily while the period still fits every bound.  Measured against the
+    prefix wheel this replaced, in candidates per unit of line: 1.36x at
+    n = 15, 1.20x at 16, 1.82x at 17, 1.72x at 18 and 19.
+
+    The bounds, all enforced:
+      * W1 < 2^32, W2 < 2^32, W1*W2 < 2^63 (the kernel's arithmetic);
+      * R2, R3 <= 65535 (they ride gridDim.y and .z), R1 <= r1_max;
+      * (pv_min + 1) W' + q2 < 2^63 (the Barrett tail's one conditional
+        subtraction);
+      * `max_period`, the caller's statement of how long a period may be
+        against the search it is part of.  A find is only known to be the
+        LEAST once its period closes, so it costs up to one period of
+        over-sweep -- and at n = 15 the modelled median is only nine
+        periods in, which is why that filter takes a shorter wheel than
+        n = 17 does.
+    """
+    fam = family(fam)
+    unit = int(unit)
+    vals = _wheel_value(n, fam, unit, top)
+    cap = (REDUCE_MAX - Q2_DEFAULT) // (int(pv_min) + 1)
+    if max_period is not None:
+        cap = min(cap, max(1, int(max_period) // unit))
+    order = sorted(vals, key=lambda z: math.log(z[1]) / math.log(z[0]))
+    best = None
+    for k in range(1, len(order) + 1):
+        sel = sorted(order[:k])
+        W, dens = 1, 1.0
+        for q, keep in sel:
+            W *= q
+            dens *= keep
+        if W > cap:
+            continue
+        lv = _split_levels(sel, r1_max)
+        if lv is None:
+            continue
+        if best is None or (dens, -W) < best[0]:
+            best = ((dens, -W), lv)
+    if best is None:
+        raise ValueError(f"no admissible wheel at n = {n} of {fam} with unit "
+                         f"{unit}: PV_MIN = {pv_min}, the 2^63 reduction "
+                         f"bound and max_period = {max_period} leave nothing")
+    return best[1]
 TPB_DEFAULT = 128            # threads per block
 # Independent Barrett chains in the queue tail.
 UNROLL = 4
@@ -414,7 +525,12 @@ def wheel(n, fam, p1, lo=1, unit=1):
     # harnesses, and the sporadic forcing here (unit 34 at n = 16, 2 either
     # side) makes an off-by-one filter the easiest mistake in the project.
     assert_unit(n, fam, unit)
-    qs = [q for q in primerange(lo + 1, p1 + 1) if unit % q]
+    # `p1` may be an explicit SEQUENCE of primes rather than an upper bound:
+    # the wheel here is a SUBSET of the primes, not a prefix (wheel_plan says
+    # why), so a level is a list.  An int keeps the old meaning, which is what
+    # the gates and the x-space benchmark shapes use.
+    qs = ([q for q in p1 if unit % q] if not isinstance(p1, int)
+          else [q for q in primerange(lo + 1, p1 + 1) if unit % q])
     W, count = 1, 1
     for q in qs:
         count *= q - len(killed_residues(q, n, fam, unit))
@@ -1245,13 +1361,16 @@ class GpuEngine:
         # changes the answer: 47 fits under the 2^63 reduction bound at
         # n = 16 (unit 34) and does not at n = 15 (unit 2).
         if p1 is None:
-            p1, p2, p3 = wheel_plan(self.n, fam, self.unit)
+            p1, p2, p3 = wheel_plan(
+                self.n, fam, self.unit,
+                max_period=search_period_cap(self.n, fam))
         # ... and so is the sieve depth, from the survivor rate the host can
         # absorb.  Planned AFTER the wheel, because what the sieve has left
-        # to kill is what the wheel did not.
+        # to kill is what the wheel did not -- and the wheel is a SUBSET of
+        # the primes, so "what it did not" is a set difference and not a
+        # threshold.
         if q2 is None:
-            q2 = plan_q2(self.n, fam, self.unit,
-                         max(x for x in (p1, p2, p3) if x))
+            q2 = plan_q2(self.n, fam, self.unit, _wheel_primes(p1, p2, p3))
         self.p1, self.p2, self.p3 = p1, p2, p3
         self.q2, self.tpb = q2, tpb
         self.pb = int(pb if pb is not None else pb_for(self.nforms))
@@ -1355,8 +1474,15 @@ class GpuEngine:
             self.d_res2d = cp.zeros(1, dtype=np.uint32)
         self.d_res1x = cp.asarray(res1x.ravel())
 
-        self.primes = [q for q in primerange(wheel_top + 1, q2 + 1)
-                       if self.unit % q]
+        # THE SIEVE PRIMES ARE THE COMPLEMENT, not a tail.  The wheel is a
+        # SUBSET of the primes (wheel_plan), so a prime it declined -- 11, 13
+        # and 17 at n = 17, which kill under a tenth of the line each -- is
+        # sieved here instead.  Taking "everything above the wheel's largest
+        # prime" would silently drop them and thin the line.
+        _wset = set(int(q) for q in _wheel_primes(p1, p2, p3))
+        self.wheel_set = tuple(sorted(_wset))
+        self.primes = [q for q in primerange(2, q2 + 1)
+                       if self.unit % q and q not in _wset]
         if not self.primes:
             raise ValueError("no sieve primes above the wheel")
         surv, self.surv = 1.0, []
@@ -2062,15 +2188,14 @@ def g8_wheel_partitions_the_period():
         n0 = max(KNOWN[fam]) + 1
         for n in range(n0, n0 + 6):
             unit = forced_unit(n, fam)
-            p1, p2, p3 = wheel_plan(n, fam, unit)
-            cases += [(fam, n, p1, 1, unit)]
-            if p2:
-                cases.append((fam, n, p2, p1, unit))
-            if p3:
-                cases.append((fam, n, p3, p2, unit))
+            for lv in wheel_plan(n, fam, unit,
+                                 max_period=search_period_cap(n, fam)):
+                if lv:
+                    cases.append((fam, n, lv, 1, unit))
     for fam, n, p1, lo, unit in cases:
         W, res = wheel(n, fam, p1, lo=lo, unit=unit)
-        qs = [q for q in primerange(lo + 1, p1 + 1) if unit % q]
+        qs = ([q for q in p1 if unit % q] if not isinstance(p1, int)
+              else [q for q in primerange(lo + 1, p1 + 1) if unit % q])
         want = 1
         for q in qs:
             want *= q - w_formula(q, n, fam)
@@ -2199,14 +2324,16 @@ def g13_production_wheel_constants():
         n0 = max(KNOWN[fam]) + 1
         for n in range(n0, n0 + 6):
             unit = forced_unit(n, fam)
-            p1, p2, p3 = wheel_plan(n, fam, unit)
+            p1, p2, p3 = wheel_plan(n, fam, unit,
+                                    max_period=search_period_cap(n, fam))
             cases.append((fam, n, p1, p2, p3, unit))
-            # and one alternative split at the same filter, so the gate is
-            # not merely re-checking the planner's own arithmetic
+            # and one alternative -- a PREFIX split of the same filter, so
+            # the gate is not merely re-checking the planner's own
+            # arithmetic and the two wheel shapes are both exercised
             cases.append((fam, n, 19 if unit % 19 else 17, 31, 43, unit))
     for fam, n, p1, p2, p3, unit in cases:
         W1, r1 = wheel(n, fam, p1, unit=unit)
-        if p2 is None:
+        if not p2:
             p2 = p1
         W2a, r2 = wheel(n, fam, p2, lo=p1, unit=unit)
         if p3:
@@ -2223,8 +2350,9 @@ def g13_production_wheel_constants():
         inv = pow(W1 % W2, -1, W2)
         if W1 % W2 * inv % W2 != 1:
             return False, f"G13 FAIL: {fam} n={n} ({p1},{p2}]: W1^-1 is wrong"
-        top = p3 or p2
-        qs = [q for q in primerange(2, top + 1) if unit % q]
+        qs = ([q for q in _wheel_primes(p1, p2, p3) if unit % q]
+              if not isinstance(p1, int) else
+              [q for q in primerange(2, (p3 or p2) + 1) if unit % q])
         want = 1
         for q in qs:
             want *= q - w_formula(q, n, fam)
@@ -2234,11 +2362,12 @@ def g13_production_wheel_constants():
         # the kill check is in K SPACE, on k = unit*x, against the k-space
         # killed set: the unit's own primes included, which must never
         # kill a multiple of the unit
-        killed = {q: set(killed_residues(q, n, fam))
-                  for q in primerange(2, top + 1)}
+        top = max(qs)
+        killed = {q: set(killed_residues(q, n, fam)) for q in qs}
         forced = 1
         for q in forced_primes(fam, n, upto=top + 1):
-            forced *= q
+            if q in qs or unit % q == 0:
+                forced *= q
         ts = rng.integers(0, r1.size, 3000)
         ss = rng.integers(0, r2.size, 3000)
         us = rng.integers(0, r3.size, 3000)
