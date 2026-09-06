@@ -2290,6 +2290,14 @@ def g9_gpu_matches_cpu():
         # this campaign passes early: both engines are Python ints there.
         ("A074200", 17, 13, 19, 23, 32, ceil_17 + 10 ** 12, 2 * 10 ** 7, 2),
         ("A078502", 15, 13, 19, None, 32, 10 ** 21, 10 ** 7, 2),
+        # SUBSET WHEELS -- the shape the campaign actually runs since the
+        # planner stopped taking a prefix.  A prime the wheel declines (11
+        # and 13 here) must be sieved instead, and the survivor stream must
+        # be the same as a dense CPU sieve that knows nothing about either.
+        ("A078502", 15, [3, 5, 7, 17, 19], [23, 29], None, 32,
+         10 ** 12, 10 ** 7, 1),
+        ("A074200", 17, [3, 5, 7, 19], [23, 29], [31], 32,
+         10 ** 15, 2 * 10 ** 7, 2),
         # HARD AGAINST THE 1e40 CEILING, on both signs and both units: the
         # base is a 133-bit Python int on both engines
         ("A078502", 15, 13, 19, 23, 32, ceil - 10 ** 9, 10 ** 7, 2),
@@ -2315,7 +2323,8 @@ def g9_gpu_matches_cpu():
     return True, (f"G9 ok: GPU stream == CPU stream on {len(cases)} populated "
                   f"windows ({total} survivors) -- one-, two- and three-level "
                   f"wheels in x space AND in unit space at every campaign "
-                  f"unit (2, 34, 114, 6), both families, filters n = 9 to 19, "
+                  f"unit (2, 34, 114, 6), SUBSET wheels that decline 11 and "
+                  f"13 to the sieve, both families, filters n = 9 to 19, "
                   f"heights 2e9 -> {ceil:.3g} with windows ABOVE 2^64 and "
                   f"past the n = 17 proof crossing ({ceil_17:.3g}), two hard "
                   f"against the 1e40 ceiling on both signs; and period 0 "
