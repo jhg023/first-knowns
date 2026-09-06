@@ -346,6 +346,84 @@ took off the segment loop.
 
 ---
 
+## Round 4 (2026-09-06) - the three-byte queue entry, and a bound that is not the one you think
+
+### Measurement 13 - the queue entry: 4 bytes to 3, **6 blocks per SM everywhere**
+
+Round 3's best-priced unbuilt item, built. The entry packs
+`(ss*TPB + tid) << LOGP | j` -- 18 bits at spb = 8, tpb = 128, pb = 192 --
+so it had been a u32, and the queues were two thirds of this kernel's shared
+memory. Split across an `unsigned short` index array and an `unsigned char`
+period array it is three bytes; the PACKED form is rebuilt on read, so
+`off_of`, the round tests and everything downstream are untouched, and only
+the declaration, the two pushes and the reads change.
+
+| | before | after |
+|---|---|---|
+| shared, n = 15 | 18,944 | **15,520** |
+| blocks/SM, n = 15..18 | 5 | **6** |
+| registers | 79 | 79 (no spills) |
+
+| filter | before | after | ratio |
+|---|---|---|---|
+| n = 15 | 5.632e16 | 5.621e16 | 0.998x |
+| n = 16 | 3.451e17 | 3.513e17 | 1.018x |
+| n = 17 | 4.082e16 | 4.259e16 | **1.043x** |
+| n = 18 | 4.338e17 | 4.456e17 | 1.027x |
+
+Less than the ~8% the padding ablation put on a block, and that is the
+honest reading: the marginal block returns less than the ones below it, and
+the extra shared access per push and pop eats some of what is left. Kept
+anyway -- it is 1.043x at the filter that costs the night's time, free at
+the others, and it leaves 3.4 KB of headroom for anything later that wants
+shared memory. **SCORE17 38,135 to 40,679 (1.067x).**
+
+### Measurement 14 - lifting the 2^63 reduction bound: **declined, and not for the reason expected**
+
+The wheel is capped by `(PV + 1)*W' + q2 < 2^63`, the bound on the offset the
+Barrett tail reduces. Reducing `off_p` (within a period, < W') and
+`p*(W' mod q)` (< 192*q < 2.5e7) separately would bound it by W' alone, and
+the wheel could reach 47 at n = 17 -- 1.567x fewer candidates -- with the
+window still 192 periods. The engine even already carries the `W' mod q`
+table (`_wmod`), and the absolute launch base is already folded per prime.
+
+**There is a second bound, and it binds first.** The survivor buffer holds
+the offset within the launch as a **u64**, and `_collect` adds the launch
+base on the host. With wheel-47 at unit 2, W' = 3.07e17 and a 192-period
+segment, that offset reaches 5.9e19 -- past 2^64, never mind 2^63. So the
+reduction bound is not what caps the wheel here; the emitted offset is, and
+lifting it means changing the survivor format, the pinned readback,
+PRE_COPY and `_collect` as well. Priced at ~1.35x **at n = 17 and 18 only**
+(n = 15 and 16 would not take the wheel anyway -- there one wheel-47 period
+is 6.15e17 against a modelled median of 1.18e17, so the over-sweep would
+exceed the search), and declined against that scope.
+
+Worth writing down precisely because the first bound is the one the code
+documents and the second is the one that decides.
+
+### Measurement 15 - the constants re-swept at n = 17 (rule 5g)
+
+`pb`: 128/160/192/224/256 read 1.000/1.012/**1.041**/0.976/0.968 -- 192
+confirmed at the expensive filter as well as at the opening. `BIT_SURV`:
+0.012 is a 6.8x cliff, 0.007 and 0.004 tie, 0.002 is 0.87x. `spb`: 4/8/16
+read 1.000/**1.026**/0.175. No constant moves.
+
+### Round 4 result
+
+44/44 green in 222 s. SCORE **54,030**; SCOREP 54,054; SCORE16 **337,058**;
+SCORE17 **40,679**; SCORE2L 21,093; SCORE1L 4,858; SCORE9 6.8.
+
+Device rate at the four campaign openings against the untuned engine:
+
+| filter | start | now | ratio |
+|---|---|---|---|
+| n = 15 | 4.179e16 | 5.621e16 | **1.345x** |
+| n = 16 | 3.131e17 | 3.513e17 | 1.122x |
+| n = 17 | 3.740e16 | 4.259e16 | **1.139x** |
+| n = 18 | 3.885e17 | 4.456e17 | 1.147x |
+
+---
+
 ## Open, priced, unbuilt
 
 Written down so the next pass starts from evidence (OPTIMIZATION.md Rule 6):
