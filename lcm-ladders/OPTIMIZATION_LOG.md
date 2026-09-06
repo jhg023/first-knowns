@@ -617,6 +617,35 @@ which no benchmark here can see.
 
 ---
 
+## Round 8 (2026-09-06) - the sieve primes ordered by killing power
+
+A consequence of round 6 that only shows up once the wheel is a subset. The
+primes the wheel DECLINES go into the sieve, and they are its weakest
+members: at n = 17, 11, 13 and 17 keep 0.909, 0.923 and 0.941 of the line
+each. In increasing order they were the first three the window sieve tested
+-- and the window costs the same per prime whatever that prime kills.
+
+Sorting the sieve primes by keep(q) ascending puts the strongest first. The
+survivor SET does not depend on the order (every prime is tested either way),
+so the fingerprints are untouched and this is free. Measured paired, four
+interleaved rounds:
+
+| | n = 15 | n = 17 |
+|---|---|---|
+| increasing q | 1.000 | 1.000 |
+| **by killing power** | 1.001 | **1.013** |
+
+Small, and larger where it matters. `lit` itself did not fall -- only two or
+three primes move, out of the thirty-odd the window takes -- so what this
+buys is the same number of window groups killing more, which thins the
+in-block rounds behind them. Kept: 1.013x at the filter that costs the
+night's time, nothing anywhere else, three lines, and it is the right order
+for any future re-tuning of `BIT_SURV`.
+
+SCORE17 62,494 -> **63,391**.
+
+---
+
 ## Open, priced, unbuilt
 
 Written down so the next pass starts from evidence (OPTIMIZATION.md Rule 6):

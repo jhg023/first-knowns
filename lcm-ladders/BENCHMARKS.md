@@ -24,6 +24,7 @@ nothing about the next.
 | 2026-09-06 | v1 round 4 | 54,030 | 54,054 | 337,058 | 40,679 | 21,093 | 4,858 | 6.8 |
 | 2026-09-06 | v1 round 6 | 55,995 | 55,891 | 364,682 | 62,510 | 21,152 | 4,865 | 6.8 |
 | 2026-09-06 | v1 round 7 | 55,989 | 55,991 | 365,117 | 62,494 | 21,111 | 4,851 | 6.7 |
+| 2026-09-06 | v1 round 8 | 56,025 | 55,924 | 365,398 | 63,391 | 20,904 | 4,895 | 6.2 |
 
 (in units of 10⁶ x/s; SCORE9 is ~7×10⁶ x/s, a filter whose survivor density
 is four orders higher.)
@@ -64,7 +65,7 @@ rate is the pipeline's — device and host — and is what `[STATUS]` prints.
 |---|---|---|---|---|---|
 | n = 15 | 5.93e16 | 2.14e22 | 1.18e17 | 2.0 s | 5.0 s |
 | n = 16 | 3.85e17 | 2.77e23 | 2.13e19 | 55 s | 2.3 min |
-| n = 17 | 6.56e16 | 8.04e23 | 9.28e19 | **23.6 min** | 59 min |
+| n = 17 | 6.63e16 | 8.12e23 | 9.28e19 | **23.3 min** | 58 min |
 | n = 18 | 6.75e17 | 8.27e24 | 2.89e22 | 11.9 h | 30 h |
 
 (measured at the campaign's own planned configuration, three rounds

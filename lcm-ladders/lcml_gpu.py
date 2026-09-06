@@ -1489,8 +1489,19 @@ class GpuEngine:
         # prime" would silently drop them and thin the line.
         _wset = set(int(q) for q in _wheel_primes(p1, p2, p3))
         self.wheel_set = tuple(sorted(_wset))
-        self.primes = [q for q in primerange(2, q2 + 1)
-                       if self.unit % q and q not in _wset]
+        _sv = [q for q in primerange(2, q2 + 1)
+               if self.unit % q and q not in _wset]
+        # ORDERED BY KILLING POWER, strongest first -- not by size.  Since
+        # the wheel became a SUBSET, the primes it declined (11, 13 and 17)
+        # are in this list and are its WEAKEST members: each keeps over nine
+        # tenths of the line.  In increasing order they would be the first
+        # three the window sieve tests, and the window costs the same per
+        # prime whatever it kills, so the survival target would be reached
+        # several primes later than it needs to be.  The survivor SET does
+        # not depend on the order (every prime is tested), so this is free.
+        _sv.sort(key=lambda q: ((q - len(killed_residues(q, n, fam,
+                                                         self.unit))) / q, q))
+        self.primes = _sv
         if not self.primes:
             raise ValueError("no sieve primes above the wheel")
         surv, self.surv = 1.0, []
