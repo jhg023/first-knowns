@@ -294,10 +294,35 @@ LIT_INLINE_Q = 64            # below this, a group's kill set is a u64 literal
 LIT_GROUP_MAX = 1 << 19
 K2_GROUP_MAX = 1 << 14
 # How much margin the shared queues carry over their ANALYTIC occupancy.
-# Overflow is HARMLESS, not impossible -- a candidate that does not fit
-# runs its tail on the spot -- so this is a tuning constant and G14 proves
-# the fallback by forcing it.
+# Overflow is HARMLESS, not impossible -- a candidate that does not fit runs
+# its tail on the spot -- so this is a tuning constant and G14 proves the
+# fallback by forcing it.
+#
+# IT IS ALSO SPENDING BLOCKS PER SM, WHICH IS WHY IT CHOOSES ITSELF.  The
+# queues are two thirds of this kernel's shared memory, shared memory is what
+# caps its occupancy, and a padding ablation (a dummy shared array, nothing
+# else changed) measured the rate tracking blocks per SM almost linearly:
+# 5 / 4 / 3 / 2 blocks read 1.000 / 0.920 / 0.820 / 0.589.  So a margin that
+# costs a block costs about 8%, and at n = 16 of A078502 the inherited 6.0
+# did exactly that -- 20,044 bytes and 4 blocks against 18,508 and 5, worth
+# a measured 1.073x.
+#
+# `_pick_sigma` therefore takes the LARGEST margin in QCAP_SIGMA_LADDER that
+# still reaches the best blocks-per-SM any of them reaches.  Never smaller
+# than it has to be: 1.5 at n = 16 reads 0.825x of 3.0, because then the
+# queues really do overflow and the in-block fallback becomes the rule.
+# This is OPTIMIZATION.md 2.11 once more -- a budget that binds on one axis
+# was silently setting a shape parameter -- caught this time on purpose.
 QCAP_SIGMA = 6.0
+QCAP_SIGMA_LADDER = (6.0, 5.0, 4.0, 3.0, 2.5)
+# Shared memory the device gives an SM, and what the driver reserves per
+# block on top of a kernel's static request.  Queried where possible.
+SMEM_PER_SM_DEFAULT = 100 << 10
+SMEM_BLOCK_RESERVE = 1 << 10
+# The analytic footprint below is within ~70 bytes of what the compiler
+# reports (checked at four filters); this is the slack that keeps a
+# borderline case on the safe side.
+SMEM_SLACK = 256
 # THE SHARED/L1 CARVEOUT OF THE SIEVE KERNEL, PINNED at 100% shared.  v2
 # pinned 50% because the v3 kernel's group tables lived in L1 and the
 # driver's occupancy heuristic moved the split under them (0.2-0.3x).  The
@@ -790,7 +815,11 @@ QUEUE_BYTES_MAX = 20 << 10
 # to local memory and ran 0.93x (OPTIMIZATION_LOG.md v4).  What G18 must
 # catch is a configuration that falls off that plateau -- 3 blocks, or a
 # spill -- not one that fails to reach a v3 number.
-OCC_MIN_BLOCKS4 = 4
+# Raised from 4 to 5 once the queue margin began choosing itself: every
+# campaign configuration now reaches 5 blocks per SM (n = 19 reaches 7,
+# register-limited), and the padding ablation prices a lost block at about
+# 8%, so a regression to 4 is worth catching.
+OCC_MIN_BLOCKS4 = 5
 # The window tables of one block (shared memory), bytes.
 PAT_BYTES_MAX = 16 << 10
 # Largest modulus of a CRT-combined group in the in-block rounds (1: single
@@ -1475,14 +1504,50 @@ class GpuEngine:
         # (the candidate runs its tail on the spot), so the cap costs a
         # shallow gate configuration speed and production nothing (its
         # queues are a few hundred entries).
-        self.qcaps = [_qcap(self.tile, self.surv[b], qcap_sigma)
-                      for b in self.bounds2]
         qbytes = 2 if self.tile <= 65536 else 4
-        while sum(self.qcaps) * qbytes > QUEUE_BYTES_MAX:
-            self.qcaps = [max(32, ((c // 2 + 31) // 32) * 32)
-                          for c in self.qcaps]
-            if all(c == 32 for c in self.qcaps):
-                break
+
+        def _caps(sig):
+            caps = [_qcap(self.tile, self.surv[b], sig) for b in self.bounds2]
+            while sum(caps) * qbytes > QUEUE_BYTES_MAX:
+                caps = [max(32, ((c // 2 + 31) // 32) * 32) for c in caps]
+                if all(c == 32 for c in caps):
+                    break
+            return caps
+
+        # everything in shared that is NOT the queues, analytically (the
+        # kernel is not compiled yet, and compiling once per candidate
+        # margin would cost more than the margin is worth)
+        ng_ = max(len(self.groups), 1)
+        ng4_ = ((ng_ + 3) // 4) * 4
+        xe_ = min(EXTRACT_EVERY_BY_NW.get(self.nw, 1), self.spb)
+        nonq = (xe_ * self.nw * tpb * 4                      # sal
+                + self.spb * ng4_ * 4                        # ne
+                + self.spb * 4                               # d2
+                + (int(self._pat.size) * 4 if PAT_SHARED else 0)
+                + (ng_ * tpb * (2 if self.x0_dtype == np.uint16 else 4)
+                   if X0_SHARED else 0)
+                + (len(self.bounds2) + 2) * 4                # queue counters
+                + SMEM_SLACK)
+        try:
+            import cupy as _cp
+            per_sm = int(_cp.cuda.Device().attributes[
+                "MaxSharedMemoryPerMultiprocessor"])
+        except Exception:                       # noqa: BLE001
+            per_sm = SMEM_PER_SM_DEFAULT
+        best = None
+        for sig in QCAP_SIGMA_LADDER:
+            if sig > qcap_sigma:
+                continue                        # never above what was asked
+            caps = _caps(sig)
+            tot = nonq + sum(caps) * qbytes
+            blocks = per_sm // (tot + SMEM_BLOCK_RESERVE)
+            cand = (blocks, sig)
+            if best is None or cand > best[0]:
+                best = (cand, caps, sig, tot, blocks)
+        self.qcaps = best[1] if best else _caps(qcap_sigma)
+        self.qcap_sigma_used = best[2] if best else qcap_sigma
+        self.smem_predicted = best[3] if best else 0
+        self.blocks_predicted = best[4] if best else 0
         self.q1cap = self.qcaps[0]
         self.q2cap = self.qcaps[-1] if len(self.qcaps) > 1 else 1
         cand = self.tchunk * self.R2 * self.nu * self.seg_periods
@@ -1708,7 +1773,10 @@ class GpuEngine:
                 "num_regs": self.occupancy["num_regs"],
                 "smem_bytes": self.occupancy["smem_bytes"],
                 "blocks_per_sm": self.occupancy["blocks_per_sm"],
-                "carveout": self.occupancy["carveout"]}
+                "carveout": self.occupancy["carveout"],
+                "qcap_sigma": self.qcap_sigma_used,
+                "smem_predicted": self.smem_predicted,
+                "blocks_predicted": self.blocks_predicted}
 
     # ---------------------------------------------------------------- sieve
     def _launch_base(self, base):

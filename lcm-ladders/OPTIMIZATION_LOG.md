@@ -255,30 +255,129 @@ it: the off-device work per launch went from ~60% of a launch to 0.01%.
 
 ---
 
+## Round 3 (2026-09-06) — occupancy, correctly this time
+
+### Measurement 10 — the padding ablation: occupancy DOES matter
+
+Round 2 concluded from the `spb` sweep that the kernel is not
+occupancy-limited. **That conclusion was wrong**, and it was wrong for the
+reason OPTIMIZATION.md 3.3 warns about: `spb` changes two things at once
+(blocks per SM *and* how much per-thread setup is amortised), so it is not
+an ablation.
+
+The ablation that changes one thing is a **dummy shared array**, written and
+read so the compiler cannot remove it, whose only effect is to lower blocks
+per SM. Identical instruction mix, identical work, identical results:
+
+| pad (words) | 0 | 1024 | 2048 | 3072 | 4096 | 6144 |
+|---|---|---|---|---|---|---|
+| shared | 19,328 | 23,424 | 27,520 | 31,616 | 35,712 | 43,904 |
+| blocks/SM | 5 | 4 | 3 | 3 | 2 | 2 |
+| ratio | **1.000** | 0.920 | 0.820 | 0.815 | 0.589 | 0.589 |
+
+The rate tracks blocks per SM almost linearly. **A block is worth about
+8%.** Both facts stand together: occupancy matters, *and* `spb = 4` is still
+slower than `spb = 8` despite having one more block, because the
+amortisation it loses is worth more than the block it gains.
+
+### Measurement 11 — the queue margin was spending a block, at n = 16
+
+The queues are two thirds of this kernel's shared memory, and `QCAP_SIGMA`
+sets them. At n = 16 the inherited 6.0 put the footprint at 20,044 bytes —
+just over the line — for **4** blocks per SM where 5 were available:
+
+| `qcap_sigma` at n = 16 | 1.5 | 2.0 | 2.5 | 3.0 | 6.0 |
+|---|---|---|---|---|---|
+| shared / blocks per SM | 17,740 / 5 | 18,124 / 5 | 18,380 / 5 | 18,508 / 5 | 20,044 / 4 |
+| x/s | 2.86e17 | 3.23e17 | 3.46e17 | **3.46e17** | 3.23e17 |
+| ratio | 0.825 | 0.933 | 0.999 | **1.000** | 0.933 |
+
+Both ends are real: 6.0 costs the block, and 1.5 costs more than the block
+is worth because the queues then genuinely overflow and the in-block
+fallback becomes the rule rather than the exception.
+
+**Kept: the margin chooses itself.** `_pick_sigma` computes the analytic
+shared footprint (accurate to ~70 bytes against what the compiler reports,
+checked at four filters) for each margin in a ladder and takes the LARGEST
+margin that still reaches the best blocks-per-SM any of them reaches. It
+picks 5.0 at n = 15 and 16, 6.0 at n = 17 and 18, 3.0 at n = 19 — and every
+campaign configuration now compiles to 5 blocks per SM (7 at n = 19, where
+registers cap it), which is why `OCC_MIN_BLOCKS4` went from 4 to 5. This is
+OPTIMIZATION.md 2.11 for the third time in this project: a budget that binds
+on one axis was silently setting a shape parameter.
+
+### Measurement 12 — `sal` in registers: 16.3 KB of shared, 242 registers, **declined**
+
+The other three kilobytes of shared are `sal`, the per-thread buffer of live
+window words between the sieve loop and the extraction loop. Every access is
+the thread's OWN slot, so with `EXTRACT_EVERY == 1` it does not need to be
+shared at all — and reusing `acc` for it (dead by then) costs no extra
+registers in principle.
+
+In practice the compiler responds by keeping the whole 31-group load chain
+live: **242 registers, 2 blocks per SM**, against 79 and 5. Shared did fall
+to 16,256 bytes as predicted, which would have been the 6th block. Variants
+tried: a separate local array (same 242), hoisting `acc` out of the residue
+loop (same), `#pragma unroll 1` on the residue loop (same),
+`__launch_bounds__` (168 registers and 368 bytes spilled to local). Reverted.
+
+The lesson for the next attempt: the 3 KB is worth a block and the block is
+worth 8%, but it has to come out of the QUEUES (a three-byte entry — u16
+index plus u8 period — would save 3.2 KB and never touches the inner loop's
+register allocation), not out of `sal`.
+
+### Round 3 result
+
+44/44 green. SCORE 53,408 → **53,664**; **SCORE16 309,337 → 336,231
+(1.087×)**, which is the n = 16 block; SCORE17 38,219 → 38,135.
+
+Device rate at the four campaign openings, against the untuned engine this
+project started from:
+
+| filter | start | now | ratio |
+|---|---|---|---|
+| n = 15 | 4.179e16 | 5.632e16 | **1.348×** |
+| n = 16 | 3.131e17 | 3.451e17 | 1.102× |
+| n = 17 | 3.740e16 | 4.082e16 | 1.091× |
+| n = 18 | 3.885e17 | 4.338e17 | 1.117× |
+
+and the campaign gets, on top of that, the 34 ms per launch that round 2
+took off the segment loop.
+
+---
+
 ## Open, priced, unbuilt
 
 Written down so the next pass starts from evidence (OPTIMIZATION.md Rule 6):
 
-1. **A 64-bit pattern word.** At pb = 192 the window is NW = 6 32-bit words:
-   7 shared loads and 6 funnel shifts per prime per 192 candidates. In
-   64-bit it would be 4 loads and 3 (two-instruction) funnel shifts. The
-   linear ladders measured 32-bit better, but at NW = 2, where the trade is
-   3 loads against 2; at NW = 6 the arithmetic is different. Priced at
-   ~1.1× best case on a phase worth 85%, unbuilt: it is a source change to
-   the dominant kernel and would need G9, G14 and every fingerprint again.
-2. **More independent accumulator chains per thread.** The kernel is
-   latency-bound and not occupancy-bound (Measurement 8), so the lever is
-   ILP inside a thread rather than more threads. The natural axis is
-   processing two second-level residues in one pass over the groups; the
-   nearest existing knob, `EXTRACT_EVERY`, reads 0.95× at 2, but it also
-   costs a block per SM, so the two effects are confounded and the
-   experiment has not actually been run.
-3. **n = 16's occupancy.** 4 blocks/SM against 5 elsewhere, at 19 KB. Given
-   Measurement 8 this is probably not worth anything, but it has not been
-   swept *at that filter*.
-4. **`SURV_TARGET`.** Chosen so the host need lands near one core. The
-   device rate is flat either side, so the question is what the PIPELINE
-   does; that needs the campaign's own rate, which needs a hunt.
-5. **The host classifier.** 12.4 µs per survivor, and the campaign is
-   device-bound at every filter with a pool of 3, so this is worth nothing
-   today. It becomes the binding side if the device ever gets 4× faster.
+1. **A three-byte queue entry** (u16 residue index + u8 period, against one
+   u32). Saves 3.2 KB of shared, which is the 6th block per SM at n = 15-18,
+   priced by the padding ablation at **~8%**. Unlike the `sal` attempt
+   (Measurement 12) it never touches the inner loop's register allocation.
+   The cost is one extra shared access per queue push and pop; the push was
+   ~10% of the kernel in the engine this one came from. Net maybe 1.05×.
+   **This is the best-priced unbuilt item.**
+2. **Lifting the 2^63 reduction bound**, which is what caps the wheel. The
+   tail reduces `off + j·W'`, bounded by (PV+1)·W'; reducing `off` and
+   `j·(W' mod q)` separately would bound it by W' alone and let the wheel
+   reach 47 at n = 17 (1.567× fewer candidates) and 53 at n = 18, with the
+   window still 192 periods. Costs one more load (a `W' mod q` table) and
+   one more reduction per prime per candidate in the tail, on a phase worth
+   10-16%. Net perhaps 1.35× **at n = 17 and n = 18 only** — n = 15 and 16
+   would not take it, because there the period would approach the search
+   itself (the square-ladders trade: a find costs at most one period of
+   over-sweep, and at n = 15 one wheel-47 period is 6.15e17 against a
+   modelled median of 1.18e17).
+3. **A period-vs-search term in `wheel_plan`.** It currently maximises
+   density subject to the reduction bound and does not know that a period
+   comparable to the search costs an over-sweep. It happens to pick well at
+   every filter here (checked: the worst is n = 15, where the median is 9
+   periods in), but it is luck, not design.
+4. **More ILP inside a thread.** The kernel is latency-bound (both rooflines
+   at ~26%) and occupancy is now maxed at the shared-memory limit, so the
+   next axis is independent work per thread — two first-level residues per
+   thread, doubling the accumulator chains. Measurement 12 is a warning
+   about what the register allocator will do with it.
+5. **`SURV_TARGET`.** Chosen so the host need lands near one core; the
+   device rate is flat either side. The real question is what the PIPELINE
+   does, and that needs a hunt.

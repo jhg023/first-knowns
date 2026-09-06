@@ -20,6 +20,7 @@ nothing about the next.
 |---|---|---|---|---|---|---|---|---|
 | 2026-09-06 | v1 | 52,833 | 52,698 | 301,058 | 38,295 | 20,331 | 4,955 | 6.7 |
 | 2026-09-06 | v1 round 2 | 53,408 | 53,340 | 309,337 | 38,219 | 20,675 | 5,037 | 6.9 |
+| 2026-09-06 | v1 round 3 | 53,664 | 53,534 | 336,231 | 38,135 | 20,632 | 5,096 | 6.4 |
 
 (in units of 10⁶ x/s; SCORE9 is ~7×10⁶ x/s, a filter whose survivor density
 is four orders higher.)
@@ -58,10 +59,14 @@ rate is the pipeline's — device and host — and is what `[STATUS]` prints.
 
 | filter | x/s | N/s | median x | to the median | at 2.5× |
 |---|---|---|---|---|---|
-| n = 15 | 5.28e16 | 1.90e22 | 1.18e17 | 2.2 s | 5.6 s |
-| n = 16 | 3.01e17 | 2.17e23 | 2.13e19 | 71 s | 3.0 min |
-| n = 17 | 3.83e16 | 4.69e23 | 9.28e19 | 40 min | 1.7 h |
-| n = 18 | ~4.1e17 | ~5.0e24 | 2.89e22 | 20 h | 49 h |
+| n = 15 | 5.63e16 | 2.03e22 | 1.18e17 | 2.1 s | 5.2 s |
+| n = 16 | 3.45e17 | 2.49e23 | 2.13e19 | 62 s | 2.6 min |
+| n = 17 | 4.08e16 | 5.00e23 | 9.28e19 | 38 min | 1.6 h |
+| n = 18 | 4.34e17 | 5.32e24 | 2.89e22 | 18.5 h | 46 h |
+
+(measured at the campaign's own planned configuration, three rounds
+interleaved; against the untuned engine this project started from these are
+1.348× / 1.102× / 1.091× / 1.117×.)
 
 n = 16 is eight times the line rate of n = 15 and n = 17 because 17 is
 forced there: the unit is 34 rather than 2, and the wheel reaches 47 under
