@@ -6,7 +6,9 @@
 ## Verified finds
 
 None yet. The engine, the gate battery, the odds model and the campaign are
-built and green (44/44, 2026-09-06); no hunt has been run.
+built and green (44/44, 2026-09-06); no hunt has been run. The engine was
+then tuned through seven measured rounds to 1.42× / 1.23× / 1.75× / 1.74×
+of what it started at, at n = 15 / 16 / 17 / 18 (OPTIMIZATION_LOG.md).
 
 Every find will be recorded here in discovery order with the exact integer,
 the three-way verification, the factor witness for the value that stops the
@@ -32,11 +34,11 @@ filter; the published term is N = L(n)·x.
 
 | term | median x | median N | device time to the median | P(found) at 2.5× the median |
 |---|---|---|---|---|
-| a(15) A078502 | 1.18e17 | 4.24e22 | 2.2 s | 92% |
-| a(15) A074200 | 1.46e17 | 5.25e22 | 2.8 s | 92% |
-| a(16) either | 2.13e19 | 1.53e25 | 71 s | 92% |
-| a(17) either | 9.28e19 | 1.14e27 | 40 min | 92% |
-| a(18) either | 2.89e22 | 3.54e29 | 20 h | 92% |
+| a(15) A078502 | 1.18e17 | 4.24e22 | 2.0 s | 92% |
+| a(15) A074200 | 1.46e17 | 5.25e22 | 2.5 s | 92% |
+| a(16) either | 2.13e19 | 1.53e25 | 55 s | 92% |
+| a(17) either | 9.28e19 | 1.14e27 | 23.6 min | 92% |
+| a(18) either | 2.89e22 | 3.54e29 | 11.9 h | 92% |
 
 The times are the frozen benchmark's rates for that filter
 (BENCHMARKS.md) against the modelled median, device only; the campaign's

@@ -82,6 +82,18 @@ is no constant to carry: `plan_for` derives the whole configuration per
 filter and the launcher stores none of it (G8, G13, G18 check the planned
 configuration at every filter n = 15..20 of both families).
 
+**The wheel is a SUBSET of the primes, not a prefix.** This follows from the
+same fact and is worth more than everything else in the engine put together.
+Each prime in the wheel multiplies the *period* by q and the candidate
+density by keep(q) = (q − w(q,n))/q — and here those two are wildly out of
+step. At n = 17, 11, 13 and 17 keep 0.909, 0.923 and 0.941 of the line
+between them (they kill almost nothing) while costing a factor of 2,431 in
+period, where 47 and 53 keep 0.638 and 0.679 for a factor of 2,491. A prefix
+wheel must take the useless three to reach 19, and then the period bound
+stops it before 47. Choosing the subset by value density is **1.82× fewer
+candidates per unit of line at n = 17, and 1.49× end to end**; the primes
+the wheel declines are sieved instead, so the coverage claim is unchanged.
+
 **And every filter is a different line.** N = L(n)·x, so an x at filter n
 and an x at filter n + 1 are not the same number. When a find moves the
 frontier the campaign rebuilds the engine *and restarts the line* at the new
@@ -91,7 +103,7 @@ project here, and `_promotion_drill` is the gate for it.
 
 **The engine.** Candidates are carried as (x, off) pairs, so no machine word
 bounds the search. The GPU never materialises the x line: it generates the
-residues of a three-level wheel and sieves them a SEGMENT of 192 wheel
+residues of a three-level wheel and sieves them a SEGMENT of 224 wheel
 periods at a time, testing each sieve prime against a periodic bit pattern
 (one window is a handful of shared loads and funnel shifts for 192
 candidates), then compacts the survivors through in-block rounds and global
@@ -135,10 +147,12 @@ intensity right to a percent or two.
 | a(17) both | 2.68e19 | **9.28e19** | 2.45e20 | 4.97e20 | 12252240 | 2 |
 | a(18) both | 8.49e21 | **2.89e22** | 7.52e22 | 1.51e23 | 12252240 | 114 |
 
-At the measured rates (BENCHMARKS.md) the median for a(15) is **2–3 seconds**
-of device, a(16) about **70 seconds**, a(17) about **40 minutes** and a(18)
-about **20 hours** — per family. So a night reaches a(15), a(16) and a(17) on
-both, with a(18) a multi-day proposition.
+At the measured rates (BENCHMARKS.md) the median for a(15) is **2 seconds**
+of device, a(16) about **55 seconds**, a(17) about **24 minutes** and a(18)
+about **12 hours** — per family. So a night reaches a(15), a(16) and a(17) on
+both — about 51 minutes of device at the medians, about 2 hours at the 2.5×
+this repository's optimism factor suggests budgeting — with a(18) a
+multi-day proposition.
 
 The singular series is **not monotone in n**, and G12 asserts the mechanism
 rather than the numbers: it jumps ×44.8 at n = 17 and ×67.0 at n = 19 (when
