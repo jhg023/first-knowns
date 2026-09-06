@@ -233,6 +233,19 @@ def open_n(fam):
 # fires throughout, rate-limited by CKPT_MIN_S.
 CKPT_LAUNCHES = 32
 CENSUS_FLOOR = 8                  # runs shorter than this are not even counted
+# How many wheel PERIODS the modelled median must be, at least, for a plan to
+# be admissible.  A find is only known to be the least once its period closes,
+# so it costs up to one period of over-sweep; four periods keeps that under a
+# quarter of the search at the worst filter.  Checked, not enforced: a plan
+# that failed it would be a decision for a human, not something for the
+# planner to route around silently.
+PERIOD_MARGIN = 4.0
+
+
+def c_front(fam):
+    """The frontier term a fresh campaign of `fam` starts from."""
+    fam = ref.family(fam)
+    return ref.KNOWN[fam][max(ref.KNOWN[fam])]
 # THE ENGINE IS THIS PROJECT'S OWN v1: the linear ladders' v4 window sieve
 # with the multiplier list swapped from i to L(n)/i, and every tuning
 # constant re-swept for a regime whose wheel is 2,400x weaker
@@ -2105,6 +2118,35 @@ def _families_stay_apart():
         return False, (f"FAMILY FAIL: the per-filter units came out "
                        f"{[units[n] for n in range(15, 21)]}, not "
                        f"[2, 34, 2, 114, 6, 30]")
+    # THE PERIOD MUST BE SMALL AGAINST THE SEARCH, and that is a property of
+    # the plan nothing else checks.  The wheel plan maximises candidate
+    # density, and a denser wheel is a LONGER period -- but the candidates of
+    # a period come out in (t, s, u, j) order, so a find is only known to be
+    # the LEAST once its period closes (CONVENTIONS.md "Two cursors").  A
+    # find therefore costs up to one period of over-sweep, and a plan whose
+    # period approached the search would spend more on that than the density
+    # ever bought.  square-ladders rejected a wheel for exactly this reason
+    # and re-priced it two terms later, when the same period had become 0.13%
+    # of the hunt; the ratio is what matters, so it is checked per filter.
+    tight = []
+    for f in fams:
+        for n in range(open_n(f), open_n(f) + 6):
+            unit, p1, p2, p3, q2 = plan_for(f, n)
+            W = unit
+            for q in gpu.primerange(2, (p3 or p2 or p1) + 1):
+                if unit % q:
+                    W *= q
+            med = model.quantile(f, n, model.floor_for(f, n, c_front(f)), 0.5)
+            if med is None:
+                continue
+            if med < PERIOD_MARGIN * W:
+                return False, (f"FAMILY FAIL: {f} n = {n} plans a period of "
+                               f"{W:.4g} against a modelled median of "
+                               f"{med:.4g} -- only {med / W:.1f} periods, "
+                               f"under the {PERIOD_MARGIN}x margin a find's "
+                               f"over-sweep needs")
+            tight.append((med / W, f, n))
+    tight.sort()
     # each of these contains a prime that is NOT forced at that filter --
     # 17 is forced only at n = 16, 3 only from n = 18 -- so each must RAISE
     for n, wrong in ((15, 34), (17, 34), (18, 34), (16, 6), (17, 114)):
@@ -2116,10 +2158,14 @@ def _families_stay_apart():
             pass
     return True, ("families stay apart: two distinct config keys, checkpoint "
                   "files and ledgers, no policy reads the other's cursor, the "
-                  "rider aliases resolve, and the PER-FILTER plan is "
-                  "admissible at every filter n = 15..20 with the units "
-                  "coming out 2, 34, 2, 114, 6, 30 -- not monotone, so a "
-                  "carried-forward unit is refused")
+                  "rider aliases resolve, the PER-FILTER plan is admissible at "
+                  "every filter n = 15..20 with the units coming out 2, 34, 2, "
+                  "114, 6, 30 -- not monotone, so a carried-forward unit is "
+                  "refused -- and every planned period is small against its "
+                  "own search: the tightest is %s n = %d at %.1f periods to "
+                  "the modelled median, against a %gx margin (a find costs at "
+                  "most one period of over-sweep)"
+                  % (tight[0][1], tight[0][2], tight[0][0], PERIOD_MARGIN))
 
 
 def _campaign_wiring_drill(fam="A078502"):

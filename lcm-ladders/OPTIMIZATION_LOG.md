@@ -424,6 +424,72 @@ Device rate at the four campaign openings against the untuned engine:
 
 ---
 
+## Round 5 (2026-09-06) - two negatives and one property made explicit
+
+### Measurement 16 - splitting the accumulator chain: **0.998x, declined**
+
+Every window group ORs into `acc[i]`, so `acc[i]` carries a dependency chain
+as long as the group count -- 31 at n = 15, six of them, one per window word.
+Interleaving them into NACC independent chains and combining once at the end
+shortens that critical path by NACC, at (NACC - 1) * NW more registers.
+
+First read, without a register budget: NACC = 1/2/3/4 gives 1.000 / 0.998 /
+0.980 / 0.924, and NACC = 2 costs a block per SM (79 registers to 82, which
+rounds to 88 and loses the 6th block). That looked like "the ILP gained ~8%
+and the block lost ~8%", so the experiment was repeated **at equal
+occupancy** with `__launch_bounds__(TPB, 6)`, which fits NACC = 2 in 80
+registers with no spills and 6 blocks per SM:
+
+| NACC | 1 | 2 | 3 | 4 |
+|---|---|---|---|---|
+| at 6 blocks/SM | **1.000** | 0.998 | 0.990 | 0.976 |
+
+So the accumulator chain is **not** the critical path, the first reading was
+a coincidence, and there is nothing here. Reverted, including the
+`__launch_bounds__` knob it needed -- a dead knob in the tree is worse than
+a line in this file.
+
+It also prices the 6th block honestly: NACC = 2 measured the same at 5
+blocks and at 6. The padding ablation's ~8% per block is the slope at 4-5,
+not at 5-6, and Measurement 13 (0.998x to 1.043x for the block) is the
+truth at the top.
+
+### Measurement 17 - the period against the search, now asserted
+
+The wheel plan maximises candidate density, and a denser wheel is a LONGER
+period. But a period's candidates come out in (t, s, u, j) order, so a find
+is only known to be the LEAST once its period closes (CONVENTIONS.md "Two
+cursors"): a find costs up to one period of over-sweep. A plan whose period
+approached the search would spend more on that than the density bought --
+which is the trade square-ladders rejected a wheel for, and re-priced two
+terms later when the same period had become 0.13% of the hunt.
+
+Measured at every filter both families can run:
+
+| filter | 15 | 16 | 17 | 18 | 19 | 20 |
+|---|---|---|---|---|---|---|
+| period (x) | 1.31e16 | 6.15e17 | 1.31e16 | 6.15e17 | 6.15e17 | 6.15e17 |
+| periods to the modelled median | **9.0** | 34.6 | 7,093 | 46,939 | 141,938 | 2.4e7 |
+
+The tightest is n = 15 at 9.0 (11.1 for A074200), so the plan is safe
+everywhere -- but it was safe by luck, not by design, and nothing checked
+it. `_families_stay_apart` now asserts a **4x margin** at every filter of
+both families and names the tightest one in its message. Checked and not
+enforced on purpose: a plan that failed it is a decision for a human, not
+something for the planner to route around silently.
+
+This is also the honest reason wheel-47 is wrong at n = 15 -- one such
+period is 6.15e17 against a median of 1.18e17, so the over-sweep would
+exceed the search -- independent of the two numeric bounds that also
+forbid it (Measurement 14).
+
+### Round 5 result
+
+44/44 green in 185 s. No engine change, so the fingerprints and the SCORE
+row are round 4's.
+
+---
+
 ## Open, priced, unbuilt
 
 Written down so the next pass starts from evidence (OPTIMIZATION.md Rule 6):
