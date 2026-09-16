@@ -77,14 +77,20 @@ CEILINGS, stated and enforced (CONVENTIONS.md "Numeric hygiene"):
     both signs (fladder_search, G10): a discovery is proved by a BLS75
     certificate on V - s = k!*x, and the ceiling is where that
     certificate's worst case was measured to cost seconds.
-  * (seg_periods + 1) * W' + q2 < 2^64 = REDUCE_MAX on the DEVICE period
-    W' (x' units): the largest offset the Barrett tail reduces is a
-    segment plus one period wide, it is carried as a u64, and one
-    conditional subtraction is exact for EVERY u64 (the bound is 2^64, not
-    the 2^63 the engine shipped with: OPTIMIZATION_LOG.md round 2, with
-    the paper bound, the bit-exact emulation and the tripwire in G19).
-    That is what caps the window width on the full wheel to 47
-    (W' = 1.0e17: 179 periods).
+  * THE SURVIVOR RECORD, in one of two forms the engine chooses at build
+    time from the wheel and window it is handed (v3).  NARROW: the u64
+    offset within the launch, exact while (seg_periods + 1) * W' + q2 <
+    2^64 = REDUCE_MAX -- one conditional subtraction after the Barrett
+    step is exact for EVERY u64 (the bound is 2^64, not the 2^63 the
+    engine shipped with: OPTIMIZATION_LOG.md round 2, the paper bound, the
+    bit-exact emulation and the tripwire in G19), which admits 179
+    periods on the wheel to 47 (W' = 1.0e17).  WIDE: (within-period
+    offset, period), bounded by W' + q2 < 2^64 alone, so the wheel may be
+    longer than any u64 window admits -- the wheel to 53 (W' = 5.4e18)
+    from n = 18.  The wide record costs 5-6% where the narrow one would do
+    (round 3), so it is taken only where the wheel demands it (`wide`,
+    WIDE_MIN_PV); G19 pins the two records to each other on one wheel and
+    G20 the wide 53-wheel to the narrow 47-wheel over one 53-period.
   * W1 < 2^32, so the first-level table is u32; W2 < 2^32 and
     W1*W2 < 2^63.
   * the unit is forced at the filter (assert_unit), or the engine
@@ -107,7 +113,9 @@ residue lists, and the folded scalars), G16 (the third level: the global
 tail queue's overflow, chunking, and the power-of-two queue index), G19
 (the 2^64 reduction bound: a bit-exact host emulation with a tripwire past
 2^64, the stream identical across window widths where offsets pass 2^63,
-and the clamp exactly at the bound), G17
+and the clamp exactly at the bound), G20 (the planned wheel to 53 on the
+wide record == the wheel to 47 on the narrow one over a whole 53-period),
+G17
 (the production unit wheel, a differently split one, a coarser one and an
 x-space wheel return identical survivors over the same absolute windows),
 G18 (every campaign configuration compiles to the occupancy the engine was
@@ -168,6 +176,10 @@ P3_DEFAULT = 47
 # and what it optimizes is candidates per unit of line, which is
 # prod(w-kept)/W' -- lower is better.
 PV_MIN = 32
+# The narrow record is kept whenever it admits this many periods: past it
+# the window is worth under 2% (179 -> 224 measured 1.00-1.02x) while the
+# wide record costs 5-6% (OPTIMIZATION_LOG.md round 3).
+WIDE_MIN_PV = 128
 # The first-level table is R1 entries and the x0 table is R1 per window
 # group, so R1 is the memory the plan spends.  2^21 is ~50 MB of x0 at 12
 # groups; the plan will take a denser wheel over a bigger table only when it
@@ -234,26 +246,29 @@ def plan_q2(n, fam, unit, wheel, target=SURV_TARGET, ladder=Q2_LADDER):
     return ladder[-1]
 
 
-# HOW LONG A PERIOD MAY BE AGAINST THE SEARCH IT IS PART OF.
+# HOW LONG A SEGMENT MAY BE AGAINST THE SEARCH IT IS PART OF.
 #
-# A period's candidates come out in (t, s, u, j) order, so the x line is
-# contiguous only at a period boundary and a find is only known to be the
-# LEAST once its period closes (CONVENTIONS.md "Two cursors").  A find
-# therefore costs up to one period of over-sweep.  The wheel plan wants the
-# longest period it can have -- a denser wheel IS a longer period -- so
-# something has to say when that stops paying, and the honest answer is the
-# length of the search: four periods to the modelled median keeps the
-# over-sweep under a quarter of the hunt at the tightest filter.
-#
-# This is what square-ladders' v2 log rejected a wheel for and re-priced two
-# terms later, when the same period had become 0.13% of the remaining hunt.
-# It is a per-filter quantity for the same reason everything else here is.
-CAMPAIGN_PERIOD_MARGIN = 4.0
+# A segment's candidates come out in (t, s, u, j) order, so the x line is
+# contiguous only at a SEGMENT boundary and a find is only known to be the
+# LEAST once its segment closes (CONVENTIONS.md "Two cursors").  A find
+# therefore costs up to one segment of over-sweep -- v1 and v2 capped the
+# PERIOD at a quarter of the median and let the window multiply it by up to
+# 224, which at n = 16 made the first segment twelve medians long.  Since
+# round 2 the launcher carries the classified line across a promotion, so
+# an over-sweep is the next filter's work done at this filter's rate (60-75%
+# as fast) rather than work thrown away; the expected over-sweep is half a
+# segment, so a segment as long as the median costs ~15% of a median-time,
+# against window gains of 1.2-1.5x and a wheel prime worth 1.2x.  The cap
+# is therefore ONE median on the segment, and the wheel may be as long as
+# admits a PV_MIN-period segment under it.  Per filter, like everything
+# else here (n = 17: the wheel to 47 at 179 periods; n = 18: the wheel to
+# 53 at 160; OPTIMIZATION_LOG.md round 3).
+SEGMENT_MARGIN = 1.0
 
 
 @_lru_cache(maxsize=None)
-def search_period_cap(n, fam, margin=CAMPAIGN_PERIOD_MARGIN):
-    """The longest period (in x) a plan at filter n may have, or None.
+def search_segment_cap(n, fam, margin=SEGMENT_MARGIN):
+    """The longest segment (in x) a plan at filter n may sweep, or None.
 
     Derived from the odds model's median for that term, measured from the
     PUBLISHED frontier -- which is stable (it does not move as the campaign
@@ -294,14 +309,48 @@ def _wheel_value(n, fam, unit, top=WHEEL_TOP):
                  for q in primerange(2, top + 1) if unit % q)
 
 
+def _split_rest(rest, W1, R1):
+    """The best contiguous (level 2, level 3) cut of the sorted `rest`
+    behind a first level of modulus W1 and R1 residues, as
+    ((R1, -|R2 - R3|), level2, level3), or None."""
+    m = len(rest)
+    best = None
+    for j in range(0, m + 1):
+        W2a = R2 = 1
+        for q, k in rest[:j]:
+            W2a *= q
+            R2 *= q - int(round(q * (1 - k)))
+        if R2 > 65535 or W2a >= 1 << 32:
+            break
+        W2b = R3 = 1
+        for q, k in rest[j:]:
+            W2b *= q
+            R3 *= q - int(round(q * (1 - k)))
+        if R3 > 65535 or W2b >= 1 << 32:
+            continue
+        if W2a * W2b >= 1 << 32 or W1 * W2a * W2b >= 1 << 63:
+            continue
+        cand = (R1, -abs(R2 - R3))
+        if best is None or cand > best[0]:
+            best = (cand, tuple(q for q, _ in rest[:j]),
+                    tuple(q for q, _ in rest[j:]))
+    return best
+
+
 def _split_levels(qs, r1_max):
     """Partition the sorted primes `qs` into three CRT levels satisfying every
     bound the kernel's arithmetic rests on, or None.
 
-    The levels are contiguous in the sorted subset -- that is what the CRT
-    lifting builds -- so this is a search over two cut points.  It takes the
-    split with the largest first level inside R1_MAX: the first level is one
-    thread per residue, so a small R1 starves the launch's x dimension.
+    The levels are CONTIGUOUS in the sorted subset when a contiguous split
+    satisfies the bounds -- a search over two cut points, taking the split
+    with the largest first level inside R1_MAX (the first level is one
+    thread per residue, so a small R1 starves the launch's x dimension).
+    When no contiguous split does, the first level may be ANY subset (the
+    CRT lift only needs coprime moduli; contiguity was a convention): the
+    wheel to 53 at unit 6 has W' = 5.4e18, and the only way to hold both
+    W1 and W2 under 2^32 is {5..23, 37} x {29, 31, 41} x {43, 47, 53}
+    (OPTIMIZATION_LOG.md round 3).  Contiguous first, so the splits of the
+    wheels the campaign measured do not move.
     """
     m = len(qs)
     best = None
@@ -312,26 +361,37 @@ def _split_levels(qs, r1_max):
             R1 *= q - int(round(q * (1 - k)))
         if W1 >= 1 << 32 or R1 > r1_max:
             break
-        for j in range(i, m + 1):
-            W2a = R2 = 1
-            for q, k in qs[i:j]:
-                W2a *= q
-                R2 *= q - int(round(q * (1 - k)))
-            if R2 > 65535 or W2a >= 1 << 32:
-                break
-            W2b = R3 = 1
-            for q, k in qs[j:]:
-                W2b *= q
-                R3 *= q - int(round(q * (1 - k)))
-            if R3 > 65535 or W2b >= 1 << 32:
-                continue
-            if W2a * W2b >= 1 << 32 or W1 * W2a * W2b >= 1 << 63:
-                continue
-            cand = (R1, -abs(R2 - R3))
-            if best is None or cand > best[0]:
-                best = (cand, i, j)
+        got = _split_rest(qs[i:], W1, R1)
+        if got is not None and (best is None or got[0] > best[0]):
+            best = (got[0], i, len(qs[:i]) + len(got[1]))
     if best is None:
-        return None
+        # the subset search: a DFS over first-level subsets under 2^32
+        # (pruned on the product, so a few thousand of the 2^m), each with
+        # the contiguous cut of what it leaves
+        found = None
+
+        def dfs(idx, chosen, W1, R1):
+            nonlocal found
+            if chosen:
+                rest = [qk for t, qk in enumerate(qs) if t not in chosen]
+                got = _split_rest(rest, W1, R1)
+                if got is not None and (found is None or got[0] > found[0]):
+                    found = (got[0], tuple(qs[t][0] for t in sorted(chosen)),
+                             got[1], got[2])
+            for t in range(idx, m):
+                q, k = qs[t]
+                W1n = W1 * q
+                R1n = R1 * (q - int(round(q * (1 - k))))
+                if W1n >= 1 << 32 or R1n > r1_max:
+                    continue
+                dfs(t + 1, chosen + [t], W1n, R1n)
+        dfs(0, [], 1, 1)
+        if found is None:
+            return None
+        _c, l1, l2, l3 = found
+        if not l2 and l3:
+            l2, l3 = l3, ()
+        return (l1, l2, l3)
     i, j = best[1], best[2]
     # An EMPTY MIDDLE LEVEL with a non-empty third is the same wheel as a
     # two-level split, and GpuEngine builds levels in order -- a third level
@@ -349,7 +409,7 @@ def _split_levels(qs, r1_max):
 
 @_lru_cache(maxsize=None)
 def wheel_plan(n, fam, unit, pv_min=PV_MIN, r1_max=R1_MAX, top=WHEEL_TOP,
-               max_period=None):
+               max_segment=None):
     """([level 1], [level 2], [level 3]): the wheel at filter n of family F.
 
     THE WHEEL IS A SUBSET OF THE PRIMES, NOT A PREFIX OF THEM (inherited
@@ -368,19 +428,22 @@ def wheel_plan(n, fam, unit, pv_min=PV_MIN, r1_max=R1_MAX, top=WHEEL_TOP,
       * R2, R3 <= 65535 (they ride gridDim.y and .z), R1 <= r1_max;
       * (pv_min + 1) W' + q2 < 2^64 (the offset is a u64 and the Barrett
         tail's one conditional subtraction is exact to 2^64);
-      * `max_period`, the caller's statement of how long a period may be
-        against the search it is part of.  A find is only known to be the
-        LEAST once its period closes, so it costs up to one period of
-        over-sweep -- and at n = 15 the modelled median is only nine
-        periods in, which is why that filter takes a shorter wheel than
-        n = 17 does.
+      * `max_segment`, the caller's statement of how long a SEGMENT may be
+        against the search it is part of (search_segment_cap): the period
+        may be at most max_segment / pv_min, so that a window of at least
+        pv_min periods fits under the cap.  A find is only known to be the
+        LEAST once its segment closes, so it costs up to one segment of
+        over-sweep -- which is why n = 17 takes the wheel to 47 and n = 18
+        the wheel to 53.
     """
     fam = family(fam)
     unit = int(unit)
     vals = _wheel_value(n, fam, unit, top)
-    cap = (REDUCE_MAX - Q2_DEFAULT) // (int(pv_min) + 1)
-    if max_period is not None:
-        cap = min(cap, max(1, int(max_period) // unit))
+    # the record bounds the PERIOD alone (v3): W' + q2 < 2^64, and the
+    # kernel's arithmetic already needs W' < 2^63
+    cap = (1 << 63) - 1
+    if max_segment is not None:
+        cap = min(cap, max(1, int(max_segment) // (unit * int(pv_min))))
     order = sorted(vals, key=lambda z: math.log(z[1]) / math.log(z[0]))
     best = None
     for k in range(1, len(order) + 1):
@@ -398,9 +461,38 @@ def wheel_plan(n, fam, unit, pv_min=PV_MIN, r1_max=R1_MAX, top=WHEEL_TOP,
             best = ((dens, -W), lv)
     if best is None:
         raise ValueError(f"no admissible wheel at n = {n} of {fam} with unit "
-                         f"{unit}: PV_MIN = {pv_min}, the 2^63 reduction "
-                         f"bound and max_period = {max_period} leave nothing")
+                         f"{unit}: PV_MIN = {pv_min}, the 2^63 period bound "
+                         f"and max_segment = {max_segment} leave nothing")
     return best[1]
+
+
+@_lru_cache(maxsize=None)
+def plan_pb(n, fam, unit, wheel, q2, max_segment=None, pb_max=None):
+    """The window width (periods per segment) at filter n on `wheel`: the
+    widest multiple of 32 up to PB_DEFAULT whose segment fits under
+    `max_segment`, and -- where the narrow record admits at least
+    WIDE_MIN_PV periods -- no wider than the narrow record admits, because
+    past that the window is worth under 2% and the wide record costs 5-6%
+    (OPTIMIZATION_LOG.md round 3).  At least PV_MIN."""
+    unit = int(unit)
+    Wp = 1
+    for q in wheel:
+        if unit % q:
+            Wp *= int(q)
+    pv = int(pb_max if pb_max is not None else PB_DEFAULT)
+    if max_segment is not None:
+        pv = min(pv, int(max_segment) // (unit * Wp))
+    maxp = (REDUCE_MAX - int(q2)) // Wp - 1
+    if maxp >= WIDE_MIN_PV and maxp < pv:
+        # the narrow record clamps the live periods to what the u64 admits
+        # (179 on the wheel to 47) inside a whole-word window, and a partial
+        # last word is worth having (179 against 160 read 1.050 at n = 17,
+        # round 2) -- so the word is rounded UP here: the engine's pv is
+        # maxp, under the cap
+        return max(PV_MIN, ((maxp + 31) // 32) * 32)
+    # otherwise the cap (or PB_DEFAULT) binds and every period of the window
+    # is live, so the window is rounded DOWN to keep the segment under it
+    return max(PV_MIN, (pv // 32) * 32)
 TPB_DEFAULT = 128            # threads per block
 # Independent Barrett chains in the queue tail.
 UNROLL = 4
@@ -608,7 +700,7 @@ def lit_groups(primes, nlit, budget=LIT_GROUP_MAX, start=0, cap_bytes=None,
 
 
 def lit_prefix(n, fam, primes, groups, table="gbits", indent=12, pname="gp",
-               hoist=None, unit=1):
+               hoist=None, unit=1, wide=False):
     """(CUDA source, packed table, group descriptors) for CRT-combined tests.
 
     With `hoist = (W1, W)` the group tests are emitted in the DECOMPOSED
@@ -655,9 +747,17 @@ def lit_prefix(n, fam, primes, groups, table="gbits", indent=12, pname="gp",
                f"(unsigned int)__umul64hi(xx, {mg}ULL) * {Q}u; "
                f"if (r >= {Q}u) r -= {Q}u; ")
         if hoist is None:
-            head = (" " * indent + "{ unsigned int r = (unsigned int)off - "
-                    f"(unsigned int)__umul64hi(off, {mg}ULL) * {Q}u; "
-                    f"if (r >= {Q}u) r -= {Q}u; ")
+            # the in-block rounds.  WIDE: the candidate is (offp, jj), and
+            # the group's per-launch table jb2[gi*PV + jj] = (jj*W' + base)
+            # mod Q is added after the Barrett step -- the base and the
+            # period both leave the per-candidate arithmetic, and the
+            # doubled table (or a conditional subtraction for an inline
+            # mask) absorbs the sum, which is below 2Q.  Narrow: v2's form,
+            # the base folded on the host into the scalar parameter.
+            head = (" " * indent + "{ unsigned int r = (unsigned int)offp - "
+                    f"(unsigned int)__umul64hi(offp, {mg}ULL) * {Q}u; "
+                    f"if (r >= {Q}u) r -= {Q}u; "
+                    + (f"r += jb2[{gi} * PV + jj]; " if wide else ""))
         else:
             W1, W = hoist
             decl.append(f"    __shared__ unsigned int pd{gi}[SPB]; "
@@ -683,8 +783,13 @@ def lit_prefix(n, fam, primes, groups, table="gbits", indent=12, pname="gp",
             mask = 0
             for u in killed_residues(qs[0], n, fam, unit):
                 mask |= 1 << u
-            lines.append(head + f"kill |= (unsigned int)(({pname}{gi} >> r) "
-                                f"& 1ULL); }}")
+            if hoist is None and wide:
+                lines.append(head + f"if (r >= {Q}u) r -= {Q}u; "
+                                    f"kill |= (unsigned int)(({mask}ULL >> r) "
+                                    f"& 1ULL); }}")
+            else:
+                lines.append(head + f"kill |= (unsigned int)(({pname}{gi} >> r) "
+                                    f"& 1ULL); }}")
             descs.append(("inline", Q, mask))
             continue
         single = hoist is not None
@@ -698,7 +803,12 @@ def lit_prefix(n, fam, primes, groups, table="gbits", indent=12, pname="gp",
                 br = b + rep
                 np.bitwise_or.at(tab, br >> 5,
                                  (np.uint32(1) << (br & 31)).astype(np.uint32))
-        if hoist is None:
+        if hoist is None and wide:
+            lines.append(head + f"const unsigned int b = {off_bits}u + r; "
+                                f"kill |= ({table}[b >> 5] >> (b & 31)) "
+                                f"& 1u; }}")
+            descs.append(("table", Q, off_bits))
+        elif hoist is None:
             lines.append(head + f"const unsigned int b = "
                                 f"(unsigned int){pname}{gi} + r; "
                                 f"kill |= ({table}[b >> 5] >> (b & 31)) "
@@ -750,15 +860,19 @@ def group_params(descs, base):
 _TAILROUND = r"""
 extern "C" __global__ void tailround%(lpi)d(
         const unsigned long long* __restrict__ qin,
+        const unsigned char* __restrict__ qinj,
         const int* __restrict__ nin, const int incap,
-        unsigned long long* __restrict__ qout, int* nqout, const int outcap,
+        unsigned long long* __restrict__ qout,
+        unsigned char* __restrict__ qoutj, int* nqout, const int outcap,
         const int from, const int to, const int np_,
-        unsigned long long* out, int* nout, const int cap,
+        unsigned long long* out, unsigned char* outj, int* nout,
+        const int cap,
         const uint4* __restrict__ pk, const unsigned int* __restrict__ pmask,
-        const uint4* __restrict__ pres)
+        const uint4* __restrict__ pres, const unsigned int* __restrict__ jb)
 {
     enum { LPI = %(lpi)d, IPB = TTPB / %(lpi)d };
     __shared__ unsigned long long sq[IPB];
+    __shared__ unsigned char sqj[IPB];
     __shared__ int sn;
     __shared__ int sbase;
     const int n = min(*nin, incap);
@@ -773,7 +887,12 @@ extern "C" __global__ void tailround%(lpi)d(
     const unsigned int gm = (LPI == 32) ? 0xFFFFFFFFu
         : (((1u << LPI) - 1u) << ((threadIdx.x & 31u) & ~(unsigned)(LPI - 1)));
     if (i < n) {
-        const unsigned long long off = qin[i];
+        const unsigned long long offp = qin[i];
+#if WIDE
+        const unsigned int jj = qinj[i];
+#else
+        const unsigned int jj = 0u;
+#endif
         bool alive = true;
         for (int b0 = from; b0 < to; b0 += LPI * UNROLL) {
             unsigned int kill = 0u;
@@ -786,8 +905,12 @@ extern "C" __global__ void tailround%(lpi)d(
                 alive = false; break; }
         }
         if (alive && l == 0) {
-            if (last) EMIT(off)
-            else { const int p = atomicAdd(&sn, 1); sq[p] = off; }
+            if (last) EMIT(offp, jj)
+            else { const int p = atomicAdd(&sn, 1); sq[p] = offp;
+#if WIDE
+                   sqj[p] = (unsigned char)jj;
+#endif
+            }
         }
     }
     if (last) return;
@@ -796,10 +919,40 @@ extern "C" __global__ void tailround%(lpi)d(
     __syncthreads();
     for (int j = threadIdx.x; j < sn; j += TTPB) {
         const int p = sbase + j;
-        const unsigned long long off = sq[j];
-        if (p < outcap) qout[p] = off;
-        else if (tail_survives(off, np_, to, pk, pmask, pres)) EMIT(off)
+        const unsigned long long offp = sq[j];
+#if WIDE
+        const unsigned int jj = sqj[j];
+        if (p < outcap) { qout[p] = offp; qoutj[p] = (unsigned char)jj; }
+#else
+        const unsigned int jj = 0u;
+        if (p < outcap) qout[p] = offp;
+#endif
+        else if (tail_survives(offp, jj, np_, to, pk, pmask, pres, jb))
+            EMIT(offp, jj)
     }
+}
+"""
+
+# THE PERIOD TABLES, built on the device once per launch (v3): row i of
+# `out` is (j * wmod[i] + bmod[i]) mod q[i] for j < pv -- what a test adds
+# after its Barrett step to turn "offp mod q" into "(offp + j*W' + base)
+# mod q".  For the tail primes wmod is W' mod q and bmod is base mod q; for
+# the in-block round groups the same with the group modulus Q.  A 64-bit
+# modulo per entry, a few million entries, microseconds.
+_JBUILD = r"""
+extern "C" __global__ void jbuild(
+        const int rows, const int pv,
+        const unsigned int* __restrict__ q,
+        const unsigned int* __restrict__ wmod,
+        const unsigned int* __restrict__ bmod,
+        unsigned int* __restrict__ out)
+{
+    const int idx = blockIdx.x * blockDim.x + (int)threadIdx.x;
+    if (idx >= rows * pv) return;
+    const int i = idx / pv;
+    const int j = idx - i * pv;
+    const unsigned long long v = (unsigned long long)j * wmod[i] + bmod[i];
+    out[idx] = (unsigned int)(v % q[i]);
 }
 """
 
@@ -942,6 +1095,14 @@ SPB4 = 8
 # and 2^38 tie inside the noise at every opening, so this takes the one that
 # asks for less machine: 500 MB of device buffers against 1 GB.
 CAND_PER_LAUNCH4 = 1 << 37
+# ... and 2^38 on the WIDE record, where a launch also pays for its period
+# tables (two device builds and their host inputs) and the tail rounds cost
+# a third more: measured 1.109x at n = 18 on the wheel to 53 (three
+# interleaved rounds, intervals [2.696, 2.709] against [2.989, 2.993]e17),
+# against 1.055 / 1.014 with straddling intervals on the narrow record at
+# n = 17 / 18, where 2^37 stays (OPTIMIZATION_LOG.md round 3).  The price
+# is ~500 MB more of device queues and a checkpoint interval of ~5 s.
+CAND_PER_LAUNCH_WIDE = 1 << 38
 # Groups in the window sieve are SINGLE primes by default: a pair's pattern
 # table is 1-9 KB and its gather touches every sector, where a single's
 # fits in two to five sectors and costs the L1 one wavefront.
@@ -1061,6 +1222,33 @@ _SRC4 = r"""
 #define MASK_WORDS (MASK_BITS / 32)
 #define NRES %(nres)d
 #define TTPB %(ttpb)d
+#define WIDE %(wide)d
+
+/* THE RECORD DISPATCHES (engine v3).  WIDE = 0: a candidate past the window
+   sieve is its u64 offset within the LAUNCH -- the segment's first period,
+   the period and the residue folded together, the launch base folded on
+   the host into base-mod-q per prime and into the round tables' scalars --
+   which is exact while (segments*PB + 1)*W' + q2 < 2^64.  WIDE = 1: the
+   candidate is (offp, jj), its WITHIN-PERIOD offset (< W' < 2^63) and its
+   period inside the window, and every test adds the per-launch table entry
+   (jj*W' + base) mod q after its Barrett step -- no u64 ever holds jj*W',
+   so the wheel is not bounded by the window.  The wide record costs 5-6%%
+   where the narrow one would do (the per-candidate route pays one more
+   dependent term per test, OPTIMIZATION_LOG.md round 3), so the engine
+   takes it only where the wheel demands it: 1.19x at n = 18 and 1.24x at
+   n = 19 on the wheel to 53. */
+#if WIDE
+#define WITHJ(P, J) (P)
+#define PERIOD_TERM(IDX) jb[(IDX) * PV + (jj)]
+#define EMIT(P, J) { const int _p = atomicAdd(nout, 1); \
+                     if (_p < cap) { out[_p] = (P); \
+                                     outj[_p] = (unsigned char)(J); } }
+#else
+#define WITHJ(P, J) ((P) + base + (unsigned long long)(J) * WC)
+#define PERIOD_TERM(IDX) e.w
+#define EMIT(P, J) { const int _p = atomicAdd(nout, 1); \
+                     if (_p < cap) out[_p] = (P); }
+#endif
 
 /* WHAT THE QUEUES HOLD: the candidate's INDEX in the block -- (ss, tid)
    and the period j inside the segment -- packed as ((ss*TPB + tid) << LOGP)
@@ -1076,19 +1264,22 @@ _SRC4 = r"""
 #define QGET(QI, QJ, P) ((((unsigned int)(QI)[P]) << LOGP) \
                          | (unsigned int)(QJ)[P])
 
-/* One test against prime IDX (unchanged from v3): the uint4 record
-   (magic_lo, magic_hi, q, base mod q), the prime's MASK_BITS-bit mask and,
-   rarely, its residue list.  ONE conditional subtraction is exact for
-   every u64 (REDUCE_MAX = 2^64; the reduced quantity is the offset within
-   the launch, bounded by the engine to keep (segments*PB + 1)*Wp + q2
-   under it). */
+/* One test against prime IDX: the uint4 record (magic_lo, magic_hi, q,
+   base mod q -- the last is what the host folds and jb is built from), the
+   per-launch table jb[IDX*PV + jj] = (jj*W' + base) mod q, the prime's
+   MASK_BITS-bit mask and, rarely, its residue list.  THE CANDIDATE IS
+   (offp, jj) -- engine v3: its within-period offset offp = r1 + W1*M
+   (< W' < 2^63, a u64 the one-conditional-subtraction Barrett step reduces
+   exactly, G19) and its period jj inside the window -- so no u64 ever holds
+   jj*W', the window is not bounded by the word and the wheel is not bounded
+   by the window (OPTIMIZATION_LOG.md round 3). */
 #define TEST(IDX, DST) { \
     const uint4 e = pk[IDX]; \
     const unsigned long long mg = ((unsigned long long)e.y << 32) | e.x; \
-    unsigned int r = (unsigned int)off \
-                   - (unsigned int)__umul64hi(off, mg) * e.z; \
+    unsigned int r = (unsigned int)offp \
+                   - (unsigned int)__umul64hi(offp, mg) * e.z; \
     if (r >= e.z) r -= e.z; \
-    r += e.w; \
+    r += PERIOD_TERM(IDX); \
     if (r >= e.z) r -= e.z; \
     const unsigned int mword = pmask[(IDX) * MASK_WORDS \
                                      + ((r >> 5) & (MASK_WORDS - 1))]; \
@@ -1104,9 +1295,10 @@ _SRC4 = r"""
             DST |= hit; } } }
 
 __device__ __forceinline__ bool tail_survives(
-        const unsigned long long off, const int np_, const int from,
+        const unsigned long long offp, const unsigned int jj, const int np_,
+        const int from,
         const uint4* __restrict__ pk, const unsigned int* __restrict__ pmask,
-        const uint4* __restrict__ pres)
+        const uint4* __restrict__ pres, const unsigned int* __restrict__ jb)
 {
     int i = from;
     for (; i + UNROLL <= np_; i += UNROLL) {
@@ -1122,9 +1314,6 @@ __device__ __forceinline__ bool tail_survives(
     }
     return true;
 }
-
-#define EMIT(K) { const int _p = atomicAdd(nout, 1); \
-                  if (_p < cap) out[_p] = (K); }
 
 #define M_OF(A, D) (((A) >= (D)) ? ((A) - (D)) : ((A) - (D) + W2C))
 
@@ -1153,10 +1342,12 @@ __device__ __forceinline__ int warp_reserve(int* counter, const int cnt,
     return total;
 }
 
-/* Rebuild a candidate from its queue entry.  The thread that dequeues is
-   not the thread that queued, so D lives in shared. */
-__device__ __forceinline__ unsigned long long off_of(
-        const unsigned int qi, const unsigned long long base, const int t_lo,
+/* Rebuild a candidate's WITHIN-PERIOD offset from its queue entry; the
+   period is JOF(qi).  The thread that dequeues is not the thread that
+   queued, so D lives in shared. */
+#define JOF(QI) ((QI) & ((1u << LOGP) - 1u))
+__device__ __forceinline__ unsigned long long offp_of(
+        const unsigned int qi, const int t_lo,
         const uint2* __restrict__ res1x, const unsigned int* d2)
 {
     /* LOGP bits, not PB - 1: the queue entry packs the period index into
@@ -1164,15 +1355,11 @@ __device__ __forceinline__ unsigned long long off_of(
        PB - 1 is only the right mask when PB is a POWER OF TWO.  At PB = 192
        it is 0b10111111, which clears bit 6 of every period index above 63 --
        the candidate is rebuilt at the wrong period, survives, and the stream
-       gains entries.  The linear ladders never saw it because 32/64/128 were
-       the only widths they ran; here the measured optimum is 192.  G9 caught
-       it as +18 survivors in 2e6 of line at n = 9. */
-    const unsigned int j = qi & ((1u << LOGP) - 1u);
+       gains entries.  G9 caught it as +18 survivors in 2e6 of line at n = 9. */
     const unsigned int rest = qi >> LOGP;
     const int tid = rest & (TPB - 1);
     const uint2 e1 = res1x[t_lo + blockIdx.y * TPB + tid];
-    unsigned long long off = base + (unsigned long long)e1.x
-                           + (unsigned long long)j * WC;
+    unsigned long long off = (unsigned long long)e1.x;
 #if TWOLEVEL
     const int ss = rest >> LOGTPB;
     off += (unsigned long long)W1C * M_OF(e1.y, d2[ss]);
@@ -1184,8 +1371,9 @@ extern "C" __global__ void sieve(
         const int R1, const int R2, const int np_,
         const unsigned int* __restrict__ pmask,
         const uint4* __restrict__ pres,
-        unsigned long long* out, int* nout, const int cap,
-        unsigned long long* q3, int* n3, const int q3cap,
+        unsigned long long* out, unsigned char* outj, int* nout,
+        const int cap,
+        unsigned long long* q3, unsigned char* q3j, int* n3, const int q3cap,
         const uint4* __restrict__ pk,
         const uint2* __restrict__ res1x,
         const X0TYPE* __restrict__ x0tab,
@@ -1194,7 +1382,9 @@ extern "C" __global__ void sieve(
         const int t_lo, const int nper,
         const unsigned int* __restrict__ jmod,
         const unsigned int* __restrict__ gpat,
-        const unsigned int* __restrict__ g2bits%(gparams)s)
+        const unsigned int* __restrict__ g2bits,
+        const unsigned int* __restrict__ jb,
+        const unsigned int* __restrict__ jb2%(gparams)s)
 {
 %(qdecl)s
     __shared__ int q3b;
@@ -1213,13 +1403,18 @@ extern "C" __global__ void sieve(
 #endif
     if (threadIdx.x == 0) { %(qzero)s }
 
-    /* gridDim.z = segment * NU + u.  The segment's first period is
-       sg * PV after the launch base (PV <= PB live periods per window);
-       `nper` periods are live in the launch, so the last segment may be
-       partial. */
+    /* gridDim.z = segment * NU + u (WIDE: one window per launch, so
+       gridDim.z = u and sg is 0).  The segment's first period is sg * PV
+       after the launch base; `nper` periods are live in the launch, so the
+       last segment may be partial. */
+#if WIDE
+    const int sg = 0;
+#else
     const int sg = blockIdx.z / NU;
+#endif
     const unsigned long long base = WC * (unsigned long long)(sg * PV);
     const int nv = min(PV, nper - sg * PV);
+    (void)base;
     /* s-blocks ride gridDim.x and t-blocks gridDim.y: consecutive blocks
        then share their first-level chunk, so an SM's successive blocks find
        the chunk's x0 rows and res1x in its L1 */
@@ -1322,13 +1517,14 @@ extern "C" __global__ void sieve(
                     if (p < Q0CAP) { qi0[p] = QIDX(ss);
                                      qj0[p] = (unsigned char)j; }
                     else {
-                        unsigned long long off = base + e1.x
-                                               + (unsigned long long)j * WC;
+                        unsigned long long offp = e1.x;
 #if TWOLEVEL
-                        off += (unsigned long long)W1C * M_OF(e1.y, dd);
+                        offp += (unsigned long long)W1C * M_OF(e1.y, dd);
 #endif
-                        if (tail_survives(off, np_, LITN, pk, pmask, pres))
-                            EMIT(off)
+                        offp = WITHJ(offp, j);
+                        if (tail_survives(offp, j, np_, LITN, pk, pmask,
+                                          pres, jb))
+                            EMIT(offp, j)
                     }
                     ++p;
                 }
@@ -1346,11 +1542,17 @@ extern "C" __global__ void sieve(
     if (threadIdx.x == 0) q3b = (nqR > 0) ? atomicAdd(n3, nqR) : 0;
     __syncthreads();
     for (int idx = threadIdx.x; idx < nqR; idx += TPB) {
-        const unsigned long long off = off_of(
-            QGET(qiR, qjR, idx), base, t_lo, res1x, d2);
+        const unsigned int qv = QGET(qiR, qjR, idx);
+        const unsigned int jj = JOF(qv);
+        const unsigned long long offp = WITHJ(offp_of(qv, t_lo, res1x, d2), jj);
         const int p = q3b + idx;
-        if (p < q3cap) q3[p] = off;
-        else if (tail_survives(off, np_, K2, pk, pmask, pres)) EMIT(off)
+        if (p < q3cap) { q3[p] = offp;
+#if WIDE
+                         q3j[p] = (unsigned char)jj;
+#endif
+        }
+        else if (tail_survives(offp, jj, np_, K2, pk, pmask, pres, jb))
+            EMIT(offp, jj)
     }
 }
 %(tailrounds)s
@@ -1365,7 +1567,8 @@ class GpuEngine:
     def __init__(self, n, fam, p1=None, p2=None, p3=None,
                  q2=None, tpb=TPB_DEFAULT, cpt=None, spb=None,
                  jpt=None, lit=None, k2=None, qcap_sigma=QCAP_SIGMA,
-                 nu=None, unit=1, pb=None, tchunk=None, bit_group_max=None):
+                 nu=None, unit=1, pb=None, tchunk=None, bit_group_max=None,
+                 wide=None, seg_cap=None):
         import cupy as cp
         self.cp = cp
         self.n = int(n)
@@ -1392,10 +1595,11 @@ class GpuEngine:
         # a wheel that happened to suit a different one.  The unit alone
         # changes the answer: 47 fits under the 2^63 reduction bound at
         # n = 16 (unit 34) and does not at n = 15 (unit 2).
-        if p1 is None:
+        planned = p1 is None
+        if planned:
             p1, p2, p3 = wheel_plan(
                 self.n, fam, self.unit,
-                max_period=search_period_cap(self.n, fam))
+                max_segment=search_segment_cap(self.n, fam))
         # ... and so is the sieve depth, from the survivor rate the host can
         # absorb.  Planned AFTER the wheel, because what the sieve has left
         # to kill is what the wheel did not -- and the wheel is a SUBSET of
@@ -1403,6 +1607,10 @@ class GpuEngine:
         # threshold.
         if q2 is None:
             q2 = plan_q2(self.n, fam, self.unit, _wheel_primes(p1, p2, p3))
+        # ... and the WINDOW, from the segment cap and the record's reach
+        if pb is None and planned:
+            pb = plan_pb(self.n, fam, self.unit, _wheel_primes(p1, p2, p3),
+                         q2, max_segment=search_segment_cap(self.n, fam))
         self.p1, self.p2, self.p3 = p1, p2, p3
         self.q2, self.tpb = q2, tpb
         self.pb = int(pb if pb is not None else pb_for(self.nforms))
@@ -1456,35 +1664,36 @@ class GpuEngine:
             self.inv = 0
             self.Wp, self.R = self.W1, self.R1
         self.W = self.unit * self.Wp
-        # THE PERIODS A SEGMENT HOLDS, PV <= PB.  The Barrett tail reduces
-        # off + j*W' for j below the segment's live periods, the offset is
-        # a u64 and one conditional subtraction is exact for every u64, so
-        # (PV + 1) W' + q2 < 2^64 bounds PV: 179 on the full unit wheel to
-        # 47 (W' = 1.0e17), 28 on the k-space wheel to 47 (W' = 6.2e17) the
-        # gates run.  Bits past PV in the window are masked off; the word
-        # count follows PV, so a wheel that admits few periods gets a
-        # 32-bit window rather than an idle 224-bit one.
-        maxp = (REDUCE_MAX - self.q2) // self.Wp - 1
-        if maxp < 1:
+        # THE RECORD, AND THE PERIODS A SEGMENT HOLDS.  Narrow (v2): the
+        # candidate past the window sieve is a u64 offset within the launch,
+        # exact while (PV + 1) W' + q2 < 2^64 -- 179 periods on the full
+        # wheel to 47.  Wide (v3): (offp, jj), the within-period offset and
+        # the period index, bounded by W' + q2 < 2^64 alone, so the window
+        # is free and the wheel may be longer than a u64 window admits.  The
+        # wide record costs 5-6% where the narrow one would do (round 3),
+        # so: narrow whenever it admits at least WIDE_MIN_PV periods (the
+        # window past that is worth under 2%), clamping the window to what
+        # it admits; wide only where the wheel demands it.  `wide` forces
+        # either (the gates and the A/Bs do).
+        if self.Wp + self.q2 >= REDUCE_MAX:
             raise ValueError(
-                f"one wheel period is W' = {self.Wp}, and 2 W' + q2 is not "
-                f"below 2^63: the kernel's single conditional subtraction is "
-                f"only exact there, so this wheel needs a new reduction "
-                f"(CONVENTIONS.md numeric hygiene)")
-        self.pv = int(min(self.pb, maxp))
-        if pb is None:
-            # A WINDOW CUT BY THE REDUCTION BOUND IS TAKEN IN FULL, with its
-            # last word partial.  v1 rounded it down to a whole word on a
-            # measured tie between 89 and 64 periods under the 2^63 bound;
-            # under the 2^64 bound the full wheel to 47 admits 179, and 179
-            # against 160 read 1.050 at n = 17 (five interleaved rounds),
-            # 0.992 at n = 18 and 1.012 at n = 16 (OPTIMIZATION_LOG.md round
-            # 2).  The segment is the coverage unit, so a find costs up to
-            # one of them in over-sweep -- but since round 2 the launcher
-            # carries the classified line across a promotion, so that
-            # over-sweep is the next filter's work done early rather than
-            # work thrown away.
-            self.pb = max(32, ((self.pv + 31) // 32) * 32)
+                f"one wheel period is W' = {self.Wp}, and W' + q2 is not "
+                f"below 2^64: the within-period offset would not fit the "
+                f"record (CONVENTIONS.md numeric hygiene)")
+        maxp = (REDUCE_MAX - self.q2) // self.Wp - 1
+        if wide is None:
+            wide = self.pb > maxp and maxp < WIDE_MIN_PV
+        self.wide = bool(wide)
+        if self.wide:
+            self.pv = int(self.pb)
+        else:
+            if maxp < 1:
+                raise ValueError(
+                    f"the narrow record needs 2 W' + q2 < 2^64 and W' = "
+                    f"{self.Wp}: this wheel needs the wide record")
+            self.pv = int(min(self.pb, maxp))
+            if pb is None:
+                self.pb = max(32, ((self.pv + 31) // 32) * 32)
         self.nw = self.pb // 32
         self.logp = (self.pb - 1).bit_length()
 
@@ -1612,16 +1821,25 @@ class GpuEngine:
         self.d_pmask = cp.asarray(pmask.ravel())
         self.d_pk = cp.asarray(pk.ravel())
         self.d_out = [cp.empty(HIT_CAP, dtype=np.uint64) for _ in range(2)]
+        self.d_outj = [cp.empty(HIT_CAP if self.wide else 1, dtype=np.uint8)
+                       for _ in range(2)]
         self.d_n = [cp.zeros(1, dtype=np.int32) for _ in range(2)]
         self._pre = min(PRE_COPY, HIT_CAP)
-        self._h_n, self._h_out, self._ev = [], [], []
+        self._h_n, self._h_out, self._h_outj, self._ev = [], [], [], []
         for _ in range(2):
             pn = cp.cuda.alloc_pinned_memory(4)
             po = cp.cuda.alloc_pinned_memory(8 * self._pre)
+            pj = cp.cuda.alloc_pinned_memory(self._pre)
             self._h_n.append(np.frombuffer(pn, dtype=np.int32, count=1))
             self._h_out.append(np.frombuffer(po, dtype=np.uint64,
                                              count=self._pre))
+            self._h_outj.append(np.frombuffer(pj, dtype=np.uint8,
+                                              count=self._pre))
             self._ev.append(cp.cuda.Event(block=False, disable_timing=True))
+        # the period tables' static inputs: q and W' mod q per tail prime
+        self.d_q = cp.asarray(self._qs.astype(np.uint32))
+        self.d_wmod = cp.asarray(self._wmod.astype(np.uint32))
+        self.d_bmod = cp.zeros(len(self.primes), dtype=np.uint32)
         self._buf = 0
         self._flush = cp.cuda.Stream.null
 
@@ -1661,7 +1879,7 @@ class GpuEngine:
         # first-level chunk, under the candidate budget and the 2^63
         # reduction bound
         per_u_seg = self.R1 * self.R2 * self.pv
-        budget = CAND_PER_LAUNCH4
+        budget = CAND_PER_LAUNCH_WIDE if self.wide else CAND_PER_LAUNCH4
         if nu is not None:
             self.nu = max(1, min(int(nu), self.R3))
         else:
@@ -1674,15 +1892,29 @@ class GpuEngine:
         else:
             self.tchunk = self.R1
         self.tchunk = ((self.tchunk + self.tpb - 1) // self.tpb) * self.tpb
-        if self.nu < self.R3 or self.tchunk < self.R1:
+        if self.wide:
+            # ONE window per launch: the period index rides the record as a
+            # u8 inside the window, so a wide launch never batches windows
+            self.nseg = 1
+        elif self.nu < self.R3 or self.tchunk < self.R1:
             self.nseg = 1
         else:
             self.nseg = max(1, min(65535 // self.nu,
                                    budget // max(self.R * self.pv, 1)))
-        while ((self.nseg * self.pv + 1) * self.Wp + self.q2 >= REDUCE_MAX
-               and self.nseg > 1):
-            self.nseg //= 2
-        assert (self.nseg * self.pv + 1) * self.Wp + self.q2 < REDUCE_MAX
+        # THE PLANNED SEGMENT IS THE WINDOW: a campaign engine is built with
+        # seg_cap = its planned window, so a launch never batches several
+        # windows into one segment (v2 swept 514,080 periods per segment at
+        # n = 11 -- 3,400 medians -- because the batching multiplied the
+        # capped window by 65535/nu).  A gate or an x-space benchmark that
+        # names its own wheel keeps the batching: its launches would be
+        # microseconds otherwise.
+        if seg_cap is not None:
+            self.nseg = max(1, min(self.nseg, int(seg_cap) // self.pv))
+            while ((self.nseg * self.pv + 1) * self.Wp + self.q2 >= REDUCE_MAX
+                   and self.nseg > 1):
+                self.nseg //= 2
+        if not self.wide:
+            assert (self.nseg * self.pv + 1) * self.Wp + self.q2 < REDUCE_MAX
         self.seg_periods = self.nseg * self.pv
         self.n_tchunks = -(-self.R1 // self.tchunk)
         self.n_uchunks = -(-self.R3 // self.nu)
@@ -1774,6 +2006,11 @@ class GpuEngine:
         self.q3caps = [self.q3cap,
                        self.round_cap[1] if len(self.rounds) > 1 else 1]
         self.d_q3 = [cp.empty(c, dtype=np.uint64) for c in self.q3caps]
+        self.d_q3j = [cp.empty(c if self.wide else 1, dtype=np.uint8)
+                      for c in self.q3caps]
+        # the period tables (v3): one row of pv entries per tail prime and
+        # per in-block-round group, rebuilt on the device every launch
+        self.d_jb = cp.empty(len(self.primes) * self.pv, dtype=np.uint32)
         self.d_n3 = cp.zeros(len(self.rounds) + 1, dtype=np.int32)
 
         # ---- the generated source
@@ -1814,8 +2051,15 @@ class GpuEngine:
             glines.append("".join(body))
         r2_src, g2table, self.gdesc2 = lit_prefix(
             n, fam, self.primes, self.groups2, table="g2bits", indent=8,
-            pname="g2p", unit=self.unit)
+            pname="g2p", unit=self.unit, wide=self.wide)
         self.d_g2bits = cp.asarray(g2table)
+        self._g2q = np.array([Q for _k, Q, _p in self.gdesc2] or [1],
+                             dtype=np.uint32)
+        self.d_g2q = cp.asarray(self._g2q)
+        self.d_g2w = cp.asarray(np.array([self.Wp % int(Q) for Q in self._g2q],
+                                         dtype=np.uint32))
+        self.d_g2b = cp.zeros(len(self._g2q), dtype=np.uint32)
+        self.d_jb2 = cp.empty(len(self._g2q) * self.pv, dtype=np.uint32)
         self.gdesc = []
         r2_lines = r2_src.split("\n") if self.groups2 else []
         assert len(r2_lines) == len(self.groups2)
@@ -1842,7 +2086,8 @@ class GpuEngine:
                 # queue's capacity over TPB), keeps the survivors in registers,
                 # and the warp reserves ONCE per round
                 maxit = -(-self.qcaps[r - 1] // self.tpb)
-                rounds_src.append(f"""#define ROUND{r}(OFF, KILL) {{ const unsigned long long off = (OFF); \\
+                rounds_src.append(f"""#define ROUND{r}(OFF, JJ, KILL) {{ const unsigned long long offp = (OFF); \\
+            const unsigned int jj = (JJ); \\
             unsigned int kill = 0u; \\
             {body} \\
             (KILL) = kill; }}
@@ -1853,10 +2098,10 @@ class GpuEngine:
             for (int z = 0; z < MAXIT; ++z) {{
                 const int idx = z * TPB + (int)threadIdx.x;
                 if (idx < nq{r-1}) {{
-                    const unsigned long long oz = off_of(
-                        QGET(qi{r-1}, qj{r-1}, idx), base, t_lo, res1x, d2);
+                    const unsigned int qv = QGET(qi{r-1}, qj{r-1}, idx);
+                    const unsigned long long oz = WITHJ(offp_of(qv, t_lo, res1x, d2), JOF(qv));
                     unsigned int kl;
-                    ROUND{r}(oz, kl)
+                    ROUND{r}(oz, JOF(qv), kl)
                     alive_z |= kl ? 0u : (1u << z);
                 }}
             }}
@@ -1871,8 +2116,9 @@ class GpuEngine:
                         if (p < Q{r}CAP) {{ qi{r}[p] = qi{r-1}[_z];
                                          qj{r}[p] = qj{r-1}[_z]; }}
                         else {{
-                            const unsigned long long oz = off_of(qi, base, t_lo, res1x, d2);
-                            if (tail_survives(oz, np_, {kend}, pk, pmask, pres)) EMIT(oz)
+                            const unsigned long long oz = WITHJ(offp_of(qi, t_lo, res1x, d2), JOF(qi));
+                            if (tail_survives(oz, JOF(qi), np_, {kend}, pk, pmask, pres, jb))
+                                EMIT(oz, JOF(qi))
                         }}
                         ++p;
                     }}
@@ -1885,12 +2131,10 @@ class GpuEngine:
             rounds_src.append(f"    const int nqR = nq{R};\n"
                               f"    unsigned short* const qiR = qi{R};\n"
                               f"    unsigned char* const qjR = qj{R};")
-            gparams = "".join(f",\n        const unsigned long long g2p{i}"
-                              for i in range(len(self.gdesc2)))
             # The kernel source depends on the family only through the killed
             # sets, and those depend on (n, sign) -- both families share every
             # w(q,n), so the SIGN is the whole of the family in this key.
-            key = ("v4", n, self.s,
+            key = ("v5", self.wide, n, self.s,
                    self.unit, self.W1, self.W2, q2, tpb, self.spb, self.pb, self.pv,
                    self.lit, self.k2, self.R3, self.nu, MASK_BITS, self.nres,
                    tuple(self.round_lpi), TAIL_TPB, tuple(self.qcaps),
@@ -1898,7 +2142,11 @@ class GpuEngine:
                    tuple(map(tuple, self.groups2)), str(self.x0_dtype),
                    PAT_SHARED, int(self._pat.size),
                    EXTRACT_EVERY_BY_NW.get(self.nw, 1), X0_SHARED)
+            gparams = ("" if self.wide else
+                       "".join(f",\n        const unsigned long long g2p{i}"
+                               for i in range(len(self.gdesc2))))
             fill = {"w1": self.W1, "w2": self.W2, "w": self.Wp,
+                    "wide": 1 if self.wide else 0, "gparams": gparams,
                     "two": 1 if self.R2 > 1 else 0, "lit": self.lit,
                     "three": 1 if self.R3 > 1 else 0, "nu": self.nu,
                     "k2": self.k2, "tpb": tpb, "spb": self.spb, "pb": self.pb,
@@ -1918,12 +2166,11 @@ class GpuEngine:
                     "rounds2": "\n".join(rounds_src),
                     "groups": "\n".join(glines),
                     "blockpre": "\n".join(blockpre),
-                    "gparams": gparams,
-                    "mask_bits": MASK_BITS, "nres": self.nres,
+                        "mask_bits": MASK_BITS, "nres": self.nres,
                     "ttpb": TAIL_TPB,
                     "tailrounds": "".join(
                         _TAILROUND % {"lpi": l}
-                        for l in sorted(set(self.round_lpi)))}
+                        for l in sorted(set(self.round_lpi))) + _JBUILD}
             if key not in _MODCACHE:
                 src = _SRC4 % fill
                 mod = cp.RawModule(code=src, options=("-std=c++14",),
@@ -1941,6 +2188,7 @@ class GpuEngine:
             self.k_tails = {l: mod.get_function(f"tailround{l}")
                             for l in set(self.round_lpi)}
             self.k_tail = self.k_tails[self.round_lpi[0]]
+            self.k_jbuild = mod.get_function("jbuild")
 
         _compile()
         # THE SHARED-MEMORY PREDICTION IS NOT THE OCCUPANCY when something
@@ -1978,7 +2226,9 @@ class GpuEngine:
              + self.d_pmask.nbytes + sum(b.nbytes for b in self.d_out)
              + self.d_res2c.nbytes + self.d_res2d.nbytes + self.d_pat.nbytes
              + self.d_x0.nbytes + self.d_g2bits.nbytes
-             + sum(q.nbytes for q in self.d_q3))
+             + sum(q.nbytes for q in self.d_q3) + sum(q.nbytes for q in self.d_q3j)
+             + self.d_jb.nbytes + self.d_jb2.nbytes
+             + sum(b.nbytes for b in self.d_outj))
         return int(n)
 
     def config(self):
@@ -1988,6 +2238,7 @@ class GpuEngine:
                 "R": int(self.R), "R1": self.R1, "R2": self.R2,
                 "R3": self.R3, "nu": self.nu, "per_launch": self.per_launch,
                 "pb": self.pb, "pv": self.pv, "nseg": self.nseg,
+                "wide": self.wide,
                 "tchunk": self.tchunk,
                 "seg_periods": self.seg_periods,
                 "launches_per_segment": self.launches_per_segment,
@@ -2012,7 +2263,8 @@ class GpuEngine:
     def _launch_base(self, base):
         """Fold an absolute launch base (k', a Python int) into the tables:
         base mod q per tail prime, base mod Q per round-2 group, and
-        j0 mod Q per window group (j0 = base / Wp: Wp*Dinv == 1 mod Q)."""
+        j0 mod Q per window group (j0 = base / Wp: Wp*Dinv == 1 mod Q);
+        then build the period tables jb / jb2 on the device (v3)."""
         j = int(base) // self.Wp
         if j < (1 << 64):
             bmod = (self._wmod * (np.uint64(j) % self._qs)) % self._qs
@@ -2022,10 +2274,30 @@ class GpuEngine:
                             dtype=np.uint64)
         self._pk[:, 3] = bmod.astype(np.uint32)
         self.d_pk.set(self._pk.ravel())
+        self.d_bmod.set(bmod.astype(np.uint32))
         for gi, Q in enumerate(self.gmods):
             self._jmod[gi] = j % Q
         self.d_jmod.set(self._jmod)
-        return group_params(self.gdesc2, base)
+        if not self.wide:
+            return group_params(self.gdesc2, base)
+        g2b = np.array([int(base) % int(Q) for Q in self._g2q], dtype=np.uint32)
+        self.d_g2b.set(g2b)
+        self._build_jtables()
+        return ()
+
+    def _build_jtables(self):
+        """jb[i][j] = (j*W' + base) mod q_i for every tail prime, jb2 the
+        same per in-block-round group, for j below the window (device)."""
+        rows = len(self.primes)
+        tot = rows * self.pv
+        self.k_jbuild((-(-tot // 256),), (256,),
+                      (np.int32(rows), np.int32(self.pv), self.d_q,
+                       self.d_wmod, self.d_bmod, self.d_jb))
+        rows2 = len(self._g2q)
+        tot2 = rows2 * self.pv
+        self.k_jbuild((-(-tot2 // 256),), (256,),
+                      (np.int32(rows2), np.int32(self.pv), self.d_g2q,
+                       self.d_g2w, self.d_g2b, self.d_jb2))
 
     def _check_window(self, j0, j1, k_min):
         ceil = k_ceil(self.n, self.fam)
@@ -2117,27 +2389,35 @@ class GpuEngine:
         self.k_sieve((gy, gx, gz), (self.tpb,),
                      (np.int32(self.R1), np.int32(self.R2), np_,
                       self.d_pmask, self.d_pres,
-                      self.d_out[b], self.d_n[b], np.int32(HIT_CAP),
-                      self.d_q3[0], self.d_n3, np.int32(self.q3cap),
+                      self.d_out[b], self.d_outj[b], self.d_n[b],
+                      np.int32(HIT_CAP),
+                      self.d_q3[0], self.d_q3j[0], self.d_n3,
+                      np.int32(self.q3cap),
                       self.d_pk, self.d_res1x, self.d_x0, self.d_res2c,
                       self.d_res2d, np.int32(u0), np.int32(t_lo),
                       np.int32(nper), self.d_jmod, self.d_pat,
-                      self.d_g2bits, *gps))
+                      self.d_g2bits, self.d_jb, self.d_jb2, *gps))
         R = len(self.rounds)
         for r, (fr, to) in enumerate(self.rounds):
             qi, qo = self.d_q3[r & 1], self.d_q3[(r + 1) & 1]
+            qij, qoj = self.d_q3j[r & 1], self.d_q3j[(r + 1) & 1]
             ci = self.round_cap[r] if r else min(self.round_cap[0], self.q3cap)
             co = self.round_cap[r + 1] if r + 1 < R else 1
             lpi = self.round_lpi[r]
             grid = max(1, -(-ci // (self.tail_tpb // lpi)))
             self.k_tails[lpi]((grid,), (self.tail_tpb,),
-                              (qi, self.d_n3[r:r + 1], np.int32(ci),
-                               qo, self.d_n3[r + 1:r + 2], np.int32(co),
+                              (qi, qij, self.d_n3[r:r + 1], np.int32(ci),
+                               qo, qoj, self.d_n3[r + 1:r + 2], np.int32(co),
                                np.int32(fr), np.int32(to), np_,
-                               self.d_out[b], self.d_n[b], np.int32(HIT_CAP),
-                               self.d_pk, self.d_pmask, self.d_pres))
+                               self.d_out[b], self.d_outj[b], self.d_n[b],
+                               np.int32(HIT_CAP),
+                               self.d_pk, self.d_pmask, self.d_pres,
+                               self.d_jb))
         self.d_n[b].get(out=self._h_n[b], blocking=False)
         self.d_out[b][:self._pre].get(out=self._h_out[b], blocking=False)
+        if self.wide:
+            self.d_outj[b][:self._pre].get(out=self._h_outj[b],
+                                           blocking=False)
         self._ev[b].record()
         self._flush.done
 
@@ -2157,9 +2437,21 @@ class GpuEngine:
                 offs = self._h_out[b][:cnt]
             else:
                 offs = self.cp.asnumpy(self.d_out[b][:cnt])
-            surv = sorted(v for v in (self.unit * (base + int(o))
-                                      for o in offs.tolist())
-                          if v >= clip)
+            if self.wide:
+                js = (self._h_outj[b][:cnt] if cnt <= self._pre
+                      else self.cp.asnumpy(self.d_outj[b][:cnt]))
+                Wp = self.Wp
+                # the record is (within-period offset, period): the value
+                # is rebuilt here, in Python ints, the one place it exists
+                surv = sorted(v for v in (self.unit * (base + int(o)
+                                                       + int(j) * Wp)
+                                          for o, j in zip(offs.tolist(),
+                                                          js.tolist()))
+                              if v >= clip)
+            else:
+                surv = sorted(v for v in (self.unit * (base + int(o))
+                                          for o in offs.tolist())
+                              if v >= clip)
         return jn, un, surv
 
     def survivors_k(self, k_lo, k_hi):
@@ -2272,7 +2564,7 @@ def g8_wheel_partitions_the_period():
         for n in range(n0, n0 + 8):
             unit = forced_unit(n, fam)
             for lv in wheel_plan(n, fam, unit,
-                                 max_period=search_period_cap(n, fam)):
+                                 max_segment=search_segment_cap(n, fam)):
                 if lv:
                     cases.append((fam, n, lv, 1, unit))
     for fam, n, p1, lo, unit in cases:
@@ -2413,7 +2705,7 @@ def g13_production_wheel_constants():
         for n in range(n0, n0 + 8):
             unit = forced_unit(n, fam)
             p1, p2, p3 = wheel_plan(n, fam, unit,
-                                    max_period=search_period_cap(n, fam))
+                                    max_segment=search_segment_cap(n, fam))
             cases.append((fam, n, p1, p2, p3, unit))
             # and one alternative -- a PREFIX split of the same filter, so
             # the gate is not merely re-checking the planner's own
@@ -2593,7 +2885,7 @@ def g14_engine_mechanisms():
                     return False, (f"G14 FAIL: {fam} n={n}: {tag} group {qs} "
                                    f"has modulus {Q} over the {budget} budget")
                 if f"* {Q}u;" not in src or \
-                        f"__umul64hi(off, {(1 << 64) // Q}ULL)" not in src:
+                        f"__umul64hi(offp, {(1 << 64) // Q}ULL)" not in src:
                     return False, (f"G14 FAIL: {fam} n={n}: modulus {Q} or "
                                    f"its magic is not baked into the {tag} "
                                    f"source")
@@ -2742,14 +3034,20 @@ def g15_k_off_representation():
     # segments batched into launches against 32-period segments cut into
     # first-level chunks of one block -- and split at a period that is not
     # a segment boundary, so the partial-segment mask is exercised
+    # the segment-batched narrow engine, a wide engine of one-block
+    # launches, and a narrow one of one-block launches: one stream
     eng = GpuEngine(15, "A177013", p1=13, p2=23, p3=None, q2=512)
     engb = GpuEngine(15, "A177013", p1=13, p2=23, p3=None, q2=512, pb=32,
-                     tchunk=TPB_DEFAULT, nu=1)
+                     tchunk=TPB_DEFAULT, nu=1, wide=True)
+    engn = GpuEngine(15, "A177013", p1=13, p2=23, p3=None, q2=512, pb=32,
+                     tchunk=TPB_DEFAULT, nu=1, wide=False)
+    if eng.wide or not engb.wide or engn.wide:
+        return False, "G15 FAIL: the record modes are not what was asked"
     j0 = eng.j_of(10 ** 12)
     one = eng.survivors_j(j0, j0 + 600)
     many = engb.survivors_j(j0, j0 + 600)
     parts = (engb.survivors_j(j0, j0 + 250)
-             + engb.survivors_j(j0 + 250, j0 + 600))
+             + engn.survivors_j(j0 + 250, j0 + 600))
     if not one:
         return False, "G15 FAIL: the base-shift window is empty -- vacuous"
     if one != many or one != sorted(parts):
@@ -2812,10 +3110,11 @@ def g15_k_off_representation():
             return False, (f"G15 FAIL: prime {q} <= MASK_BITS but its mask "
                            f"is not exact")
 
+    eng = engb                     # the wide engine carries the tables
     for base in (0, eng.W, 10 ** 12, 2 ** 64 + 12345,
                  k_ceil(15, "A177013") - eng.W, 10 ** 30):
         base -= base % eng.W
-        gps = eng._launch_base(base)
+        eng._launch_base(base)
         got = eng._pk[:, 3].astype(np.int64)
         want = np.array([base % q for q in eng.primes], dtype=np.int64)
         if not np.array_equal(got, want):
@@ -2829,29 +3128,42 @@ def g15_k_off_representation():
                 return False, (f"G15 FAIL: window group {gi} (modulus {Q}) at "
                                f"base {base:.4g}: the folded period is "
                                f"{int(jm[gi])}, not j0 mod Q")
-        descs = list(eng.gdesc2)
-        gtab = (eng.cp.asnumpy(eng.d_g2bits), eng.cp.asnumpy(eng.d_g2bits))
-        for gi, ((kind, Q, payload), gp) in enumerate(zip(descs, gps)):
-            tab = gtab[1]
-            if kind == "modq":
-                if int(gp) != base % Q:
-                    return False, (f"G15 FAIL: hoisted group {gi} (modulus "
-                                   f"{Q}) at base {base:.4g}: scalar "
-                                   f"{int(gp)} is not base mod Q")
+        # THE PERIOD TABLES (v3, wide record): every entry the device built
+        # for this launch must be (j*W' + base) mod modulus, per tail prime
+        # and per round group -- the base above 2^64 and at 1e30 included,
+        # so the fold is a Python int on the host and a u32 on the device
+        if not eng.wide:
+            raise AssertionError("G15's fold engine must use the wide record")
+        jb = eng.cp.asnumpy(eng.d_jb).reshape(len(eng.primes), eng.pv)
+        jb2 = eng.cp.asnumpy(eng.d_jb2).reshape(len(eng._g2q), eng.pv)
+        for i in rng.integers(0, len(eng.primes), 25).tolist():
+            q = eng.primes[i]
+            for j in (0, 1, eng.pv - 1, int(rng.integers(0, eng.pv))):
+                if int(jb[i, j]) != (j * eng.Wp + base) % q:
+                    return False, (f"G15 FAIL: at base {base:.4g} the period "
+                                   f"table for prime {q}, period {j}, is "
+                                   f"{int(jb[i, j])}, not (j W' + base) mod q")
+        for gi, Q in enumerate(eng._g2q.tolist()):
+            for j in (0, eng.pv - 1, int(rng.integers(0, eng.pv))):
+                if int(jb2[gi, j]) != (j * eng.Wp + base) % Q:
+                    return False, (f"G15 FAIL: at base {base:.4g} the period "
+                                   f"table for round group {gi} (modulus {Q}), "
+                                   f"period {j}, is {int(jb2[gi, j])}")
+        # and a round group's table still answers for every residue of
+        # its modulus (the doubled copy is what absorbs table + r < 2Q)
+        tab = eng.cp.asnumpy(eng.d_g2bits)
+        for gi, (kind, Q, payload) in enumerate(eng.gdesc2):
+            if kind != "table":
                 continue
             for r in range(Q):
-                if kind == "inline":
-                    hit = bool((int(gp) >> r) & 1)
-                else:
-                    b = int(gp) + r
+                for j in (0, eng.pv - 1):
+                    b = int(payload) + int(jb2[gi, j]) + r
                     hit = bool((tab[b >> 5] >> (b & 31)) & 1)
-                if hit != bool((int(payload) >> ((r + base) % Q)) & 1
-                               if kind == "inline"
-                               else _tab_bit(tab, payload, (r + base) % Q)):
-                    return False, (f"G15 FAIL: group {gi} (modulus {Q}) at "
-                                   f"base {base:.4g}, r={r}: the folded "
-                                   f"scalar does not answer for "
-                                   f"(off + base) mod Q")
+                    if hit != _tab_bit(tab, payload, (r + j * eng.Wp + base) % Q):
+                        return False, (f"G15 FAIL: group {gi} (modulus {Q}) "
+                                       f"at base {base:.4g}, r={r}, j={j}: "
+                                       f"the doubled table does not answer "
+                                       f"for (offp + j W' + base) mod Q")
     return True, (f"G15 ok: the survivor stream is INVARIANT under the launch "
                   f"decomposition ({len(one)} survivors over 600 periods in "
                   f"{eng.seg_periods}-period segments, in 32-period segments "
@@ -2861,9 +3173,10 @@ def g15_k_off_representation():
                   f"killed sets); the tail's residue lists and {MASK_BITS}-bit "
                   f"masks are exactly killed_residues (mod MASK_BITS) on 40 "
                   f"sampled primes, exact below MASK_BITS; and every "
-                  f"per-prime and per-group fold is exactly (base mod "
-                  f"modulus) at six bases up to 1e30 -- so nothing on the "
-                  f"device is bounded by x")
+                  f"per-prime fold is exactly base mod q and every period "
+                  f"table entry exactly (j W' + base) mod modulus, per tail "
+                  f"prime and per round group, at six bases up to 1e30 -- so "
+                  f"nothing on the device is bounded by x")
 
 
 def _tab_bit(tab, off_bits, u):
@@ -3078,13 +3391,13 @@ def g19_reduction_bound_is_the_word():
       2. THE TRIPWIRE: at 2^64 + x the same computation is WRONG.  A bound
          that nothing trips is a bound nobody has tested (INNOVATION.md 1.2).
       3. Device: the planned full wheel at n = 17, the first launch (a
-         t-chunk of one block, u = 0) over the SAME 179 absolute periods
-         swept at pb = 64 (three segments) and at pb = 192 (one segment of
-         pv = 179): identical, non-empty, and the segment provably puts
-         offsets above 2^63 (179 W' > 2^63).
-      4. An engine asked for more than the bound admits clamps pv to
-         exactly floor((2^64 - q2) / W') - 1: one more period would break
-         the invariant the assert in __init__ states.
+         t-chunk of one block, u = 0) over the SAME 256 absolute periods
+         swept at pb = 64 (four segments) and at pb = 256 (one segment):
+         identical, non-empty, and the segment's line provably passes
+         2^64 (256 W' > 2^64) -- which the v3 record (offp, jj) carries
+         and a u64 offset could not.
+      4. The bound the record leaves is on the PERIOD: W' + q2 < 2^64, and
+         an engine whose period breaks it is refused.
     """
     rng = np.random.default_rng(19)
     qs = [int(q) for q in primerange(5, Q2_LADDER[-1] + 1)]
@@ -3125,10 +3438,11 @@ def g19_reduction_bound_is_the_word():
     # 3. device parity across widths where offsets pass 2^63
     W47 = ([5, 7, 11, 13, 17, 19, 23, 29], [31, 37, 41], [43, 47])
     sets, pvs = {}, {}
-    span = 179
-    for pb in (64, 192):
+    span = 256
+    for pb in (64, 256):
         eng = GpuEngine(17, "A177013", p1=W47[0], p2=W47[1], p3=W47[2],
-                        q2=1024, unit=6, pb=pb, tchunk=TPB_DEFAULT, nu=1)
+                        q2=1024, unit=6, pb=pb, tchunk=TPB_DEFAULT, nu=1,
+                        wide=(pb == 256))
         pvs[pb] = eng.pv
         got, j = [], 1
         while j < 1 + span:
@@ -3140,35 +3454,109 @@ def g19_reduction_bound_is_the_word():
             it.close()
             j += seg
         sets[pb] = sorted(got)
-    if pvs[192] != 179 or 179 * eng.Wp <= (1 << 63):
-        return False, (f"G19 FAIL: the full wheel admits pv = {pvs[192]} at "
-                       f"pb = 192 (expected 179), or 179 periods of W' = "
-                       f"{eng.Wp} do not pass 2^63 -- the window does not "
-                       f"exercise the lifted bound")
+    if pvs[256] != 256 or pvs[64] != 64 or 256 * eng.Wp <= (1 << 64):
+        return False, (f"G19 FAIL: the full wheel took pv = {pvs[256]} at "
+                       f"pb = 256 (expected 256), or 256 periods of W' = "
+                       f"{eng.Wp} do not pass 2^64 -- the window does not "
+                       f"exercise the split record")
     if not sets[64]:
         return False, "G19 FAIL: the cross-width window is empty -- vacuous"
-    if sets[64] != sets[192]:
-        a, b = set(sets[64]), set(sets[192])
-        return False, (f"G19 FAIL: pb = 64 ({len(a)} survivors) and pb = 192 "
-                       f"({len(b)}) disagree over the same 179 periods: diff "
+    if sets[64] != sets[256]:
+        a, b = set(sets[64]), set(sets[256])
+        return False, (f"G19 FAIL: pb = 64 ({len(a)} survivors) and pb = 256 "
+                       f"({len(b)}) disagree over the same 256 periods: diff "
                        f"{sorted(a ^ b)[:4]}")
-    # 4. the clamp is exactly the bound
-    eng = GpuEngine(17, "A177013", p1=W47[0], p2=W47[1], p3=W47[2],
-                    q2=1024, unit=6, pb=256, tchunk=TPB_DEFAULT, nu=1)
-    want = (REDUCE_MAX - eng.q2) // eng.Wp - 1
-    if (eng.pv != want or (eng.pv + 1) * eng.Wp + eng.q2 >= REDUCE_MAX
-            or (eng.pv + 2) * eng.Wp + eng.q2 < REDUCE_MAX):
-        return False, (f"G19 FAIL: asked for 256 periods the engine took "
-                       f"pv = {eng.pv}, not the bound's own {want}")
+    # 4. the record's own bound: a period that does not fit it is refused
+    class _Fake:
+        pass
+    try:
+        _saved = globals()["REDUCE_MAX"]
+        globals()["REDUCE_MAX"] = eng.Wp          # W' + q2 >= this
+        try:
+            GpuEngine(17, "A177013", p1=W47[0], p2=W47[1], p3=W47[2],
+                      q2=1024, unit=6, pb=64, tchunk=TPB_DEFAULT, nu=1,
+                      wide=True)
+            return False, ("G19 FAIL: a period past the record's bound was "
+                           "not refused")
+        except ValueError:
+            pass
+    finally:
+        globals()["REDUCE_MAX"] = _saved
     return True, (f"G19 ok: the u64 Barrett reduction with one conditional "
                   f"subtraction is bit-exact on {len(qs)} primes x 68 offsets "
                   f"in [2^63, 2^64) (edges included, base fold included), "
                   f"WRONG at 2^64 + 12345 mod 65521 ({tripped} for "
                   f"{off % q}: the bound is 2^64 and it is real), the full "
-                  f"wheel's first launch over 179 periods (offsets to "
-                  f"{179 * eng.Wp:.3e} > 2^63) is identical at pb = 64 and "
-                  f"pb = 192 ({len(sets[64])} survivors), and an engine asked "
-                  f"for 256 periods clamps to exactly the bound's {want}")
+                  f"wheel's first launch over 256 periods is identical "
+                  f"with the NARROW record at pb = 64 (four u64 launches) "
+                  f"and the WIDE record at pb = 256 (a line of "
+                  f"{256 * eng.Wp:.3e} > 2^64, carried as (offset, period)): "
+                  f"{len(sets[64])} survivors; and a period past the wide "
+                  f"record's own bound (W' + q2 >= 2^64) is refused")
+
+
+def g20_wide_wheel_matches_narrow_wheel():
+    """A NON-CONTIGUOUS level split, on both records, == the CPU engine; and
+    the planned wheel to 53 comes up wide and non-contiguous by itself.
+
+    The two things engine v3 added for the wheel to 53 -- the split record
+    and a first level that is a subset rather than a prefix -- cannot be
+    pinned on the 53-wheel itself (a period is 3.3e19 of line, and a sweep
+    of ANY number of periods through a 160-wide window costs a whole
+    segment: ten minutes a side; run once by hand on 2026-09-16 against the
+    47-wheel and identical, OPTIMIZATION_LOG.md round 3).  So the split is
+    pinned where a dense CPU sieve can follow: a small wheel in the shape of
+    the 53-wheel's split -- first level a subset, not a prefix -- in unit
+    space at n = 18, on the narrow record and on the wide record (forced:
+    this period admits a u64 window), against the CPU engine over a
+    populated window.  The 53-wheel's own tables are pinned by G8, G13 and
+    G14 on the planned configuration, and its record by the promotion
+    drill through the campaign's own build path.
+    """
+    n, fam, unit = 18, "A177014", 6
+    NC = ([5, 11, 17, 23], [7, 13], [19])          # a subset first level
+    x_lo, span = 10 ** 15, 3 * 10 ** 7
+    cpu = CpuEngine(n, fam, q2=32)
+    want = [k for c in cpu.survivors(x_lo, x_lo + span) for k in c]
+    if not want:
+        return False, "G20 FAIL: the CPU window is empty -- vacuous"
+    got = {}
+    for wide in (False, True):
+        eng = GpuEngine(n, fam, p1=NC[0], p2=NC[1], p3=NC[2], q2=32, unit=unit,
+                        wide=wide)
+        if eng.wide != wide:
+            return False, f"G20 FAIL: the record came up {eng.wide}, asked {wide}"
+        if sorted(NC[0])[-1] < min(NC[1] + NC[2]) or eng.W1 != 5 * 11 * 17 * 23:
+            return False, "G20 FAIL: the split under test is not non-contiguous"
+        got[wide] = eng.survivors_k(x_lo, x_lo + span)
+        if got[wide] != want:
+            a, b = set(got[wide]), set(want)
+            return False, (f"G20 FAIL: the non-contiguous split on the "
+                           f"{'wide' if wide else 'narrow'} record gives "
+                           f"{len(got[wide])} survivors, the CPU engine "
+                           f"{len(want)}: diff {sorted(a ^ b)[:4]}")
+    # the planned 53-wheel: non-contiguous, and wide by the engine's choice
+    cap = search_segment_cap(n, fam)
+    lv = wheel_plan(n, fam, unit, max_segment=cap)
+    top = max(_wheel_primes(*lv))
+    if top != 53 or sorted(lv[0])[-1] < min(lv[1] + lv[2]):
+        return False, (f"G20 FAIL: the plan at n = {n} is {lv} -- expected "
+                       f"the wheel to 53 in a non-contiguous split")
+    q2 = plan_q2(n, fam, unit, _wheel_primes(*lv))
+    pb = plan_pb(n, fam, unit, _wheel_primes(*lv), q2, max_segment=cap)
+    e53 = GpuEngine(n, fam, p1=lv[0], p2=lv[1], p3=lv[2], q2=q2, unit=unit,
+                    pb=pb, seg_cap=pb)
+    if not e53.wide or e53.seg_periods != pb or (pb + 1) * e53.Wp < 1 << 64:
+        return False, (f"G20 FAIL: the planned 53-wheel came up "
+                       f"{'wide' if e53.wide else 'narrow'} with "
+                       f"{e53.seg_periods}-period segments (pb {pb})")
+    return True, (f"G20 ok: the non-contiguous split {NC} at unit 6, n = {n}, "
+                  f"returns the CPU engine's {len(want)} survivors over "
+                  f"[{x_lo:.3g}, +{span:.3g}) on the narrow record AND on the "
+                  f"wide record; the planned wheel to 53 at n = {n} is {lv} "
+                  f"(non-contiguous, W' = {e53.Wp:.4g}: no u64 window admits "
+                  f"it) at {pb} periods and comes up on the wide record by "
+                  f"itself")
 
 
 GATES = [g7_wheel_matches_oracle, g8_wheel_partitions_the_period,
@@ -3176,7 +3564,8 @@ GATES = [g7_wheel_matches_oracle, g8_wheel_partitions_the_period,
          g9_gpu_matches_cpu, g15_k_off_representation,
          g16_third_level_mechanisms, g17_unit_wheel_matches_k_wheel,
          g18_every_opening_compiles_to_occupancy,
-         g19_reduction_bound_is_the_word]
+         g19_reduction_bound_is_the_word,
+         g20_wide_wheel_matches_narrow_wheel]
 
 # Ctrl+C is a normal exit everywhere in this repo (CONVENTIONS.md
 # "Stopping a run"): one path out, no traceback, exit 130.

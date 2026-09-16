@@ -323,12 +323,142 @@ was 34 ms per launch before it).
 
 ---
 
+## v3 / Round 3 (2026-09-16) — the record that frees the wheel, and where not to use it
+
+### Measurement 12 — three cheap experiments on the window kernel
+
+Paired at n = 17, the 179-period window, five rounds:
+
+| experiment | result | verdict |
+|---|---|---|
+| `--maxrregcount` 80 / 72 / 64 (buy a 7th block per SM) | 0.951 / 0.945 / 0.906, 40–72 bytes spilled, **still 6 blocks** | registers are not the cap: 15.5 KB of shared is (6 × 16.5 KB of 100). Declined |
+| `#pragma unroll 2` on the residue loop with XE = 2; unroll 4 with XE = 4 | 0.990 / 0.779 (XE 4 costs two blocks) | no ILP to buy there. Declined |
+| **the wheel to 53 at n = 19**, timing-only (offsets wrap past 2^64, kills random but statistically identical) | **1.331x** over the wheel to 47: 1.43x fewer candidates | the biggest number on the table, and the one that needed an engine change |
+
+### Measurement 13 — the split record, built, and what it costs where it is not needed
+
+The candidate past the window sieve became (within-period offset, period)
+— `offp` < W' < 2^63 and `jj` < 224 — with per-launch device tables
+`jb[q][j] = (j·W' + base) mod q` for every tail prime and every in-block
+round group, added after each test's Barrett step in place of the folded
+base. Bit-identical to v2 on every parity case (G9's windows, G15's
+decompositions, the full wheel at pb 64 against pb 256 where the line
+passes 2^64). And at n = 17 on the wheel to 47, where a u64 window
+suffices, paired five rounds:
+
+| | ratio to v2 | instrumented |
+|---|---|---|
+| v3, tables | **0.915** | sieve kernel 49.6 → 53.5 ms (+8%), tail rounds 5.1 → 6.7 ms (+33%) |
+| round-table gather made uniform (ablation) | 0.939 | |
+| tail-table gather made uniform (ablation) | 0.929 | |
+| both uniform | 0.962 | |
+| the round term by arithmetic, `(jj·(W′ mod Q) + base mod Q) % Q` on literals (exact) | 0.923 | |
+| the same with a 32-bit Barrett (exact) | 0.922 | |
+| the tail term by arithmetic (timing) | 0.912 | |
+
+So the cost is not the gathers' divergence and not their form: the
+per-candidate route pays one more dependent term per test, whatever it
+looks like, and the rounds and the tail are ~15% of the kernel at this
+filter. **The record therefore DISPATCHES**: `WIDE` is a literal in the
+generated kernel, 0 wherever `(PV + 1)·W′ + q2 < 2^64` admits at least
+`WIDE_MIN_PV` = 128 periods (v2's u64 offset, base folded on the host,
+launch batching, scalar round parameters), 1 where the wheel demands it —
+decided in `GpuEngine.__init__` from the wheel and window it is handed, so
+the campaign's own build path chooses it at every promotion with no flag
+(the owner's requirement; `_promotion_drill` promotes a campaign from
+n = 17 into n = 18 through `follow_frontier` and asserts the engine comes
+up narrow then wide, `_families_stay_apart` asserts it at every filter's
+plan).
+
+### Measurement 14 — the wheel to 53, exact, against the wheel to 47
+
+Paired, five rounds, both sides exact (the candidate sets differ, so the
+survivor counts do):
+
+| filter | v2, wheel 47, 179 periods | v3, wheel 53 | ratio |
+|---|---|---|---|
+| n = 19 | 3.08e17 | 3.83e17 at 192 periods (3.75e17 at 224, 3.54e17 at 128) | **1.243** |
+| n = 18 | 2.25e17 | 2.68e17 at 160 periods (2.65e17 at 96) | **1.194** |
+| n = 19, wheel 47 on the wide record (forced) | | 2.93e17 | 0.950 — why the dispatch |
+
+The 53-wheel's level split is NON-CONTIGUOUS — the only way to hold both
+CRT moduli under 2^32 with W′ = 5.4e18 — and `_split_levels` now searches
+first-level subsets when no contiguous cut satisfies the bounds
+(contiguous first, so the measured wheels' splits do not move). 59 is
+dead: its period overflows the within-period offset itself.
+
+### The planner: the segment is capped, not the period
+
+v1 and v2 capped the PERIOD at a quarter of the modelled median and let
+the window multiply it by up to 224 — at n = 16 the first segment was
+twelve medians long. Since the launcher carries the classified line across
+a promotion (round 2), an over-sweep is the next filter's work done at
+this filter's rate, 60–75% as fast, so a segment as long as the median
+costs about 15% of a median-time in expectation, against window gains of
+1.2–1.5x and a wheel prime worth 1.2x. **The cap is now one median on the
+SEGMENT** (`SEGMENT_MARGIN`); the wheel may be as long as admits a
+32-period segment under it, and the window (`plan_pb`) is the widest the
+cap and the record admit, rounded up to the word on the narrow record
+(179 in a six-word window at n = 17) and down on the wide one. The plan
+at every filter of both families (the record is the engine's, not the
+planner's):
+
+| n | wheel | q2 | window | record | segment / median |
+|---|---|---|---|---|---|
+| 11 | {5..23} | 2^20 | 160 (128 for A177014) | narrow | 0.85 |
+| 12 | {5..23, 31} | 2^20 | 160 | narrow | 0.87 |
+| 13 | to 31 | 2^20 | 224 | narrow | 0.91 |
+| 14 | to 37 | 262144 | 224 | narrow | 0.86 |
+| 15 | to 41 | 131072 | 192 | narrow | 0.95 |
+| 16 | to 43 | 131072 | 224 | narrow | 0.94 |
+| 17 | to 47 | 65536 | 179 | narrow | 0.69 |
+| 18 | to 53, split {5,7,11,13,17,23,29,31} × {19,37,41} × {43,47,53} | 65536 | 160 | **wide** | 0.87 |
+| 19 | to 53 | 32768 | 224 | **wide** | 0.03 |
+
+At n = 16 the wheel to 43 replaces the wheel to 47: measured paired, five rounds, the wheel to 43 at 224 periods reads **0.780** of the wheel to 47 at 179 in rate (8.2e16 against 1.05e17 x/s) — and wins on the clock, because a(16)'s search is a fraction of one 47-wheel segment. The 43-wheel closes its 2.9e18 segment in 38 s; the 47-wheel's first segment is 1.1e20 and 17 minutes, of which the next filter inherits the line at its own rate (11 minutes of n = 17 work done at 60% efficiency). The plan optimises the hunt's clock, not the benchmark's rate, and this is the row where the two disagree.
+
+### Constants re-swept on the wide record (n = 18)
+
+Rule 1's corollary once more: the wide record is a structural change for the filters that run it. Paired, three rounds, the wheel to 53 at 160 periods (**bold** shipped):
+
+| knob | values | ratios | verdict |
+|---|---|---|---|
+| `BIT_SURV` | .012 / **.007** / .004 | 0.902 / 1.000 / 0.989 | unchanged |
+| `K2_SURV4` | **.0003** / .0001 | 1.000 / 0.993 | unchanged |
+| `TAIL_ROUND_DROP` | **.7** / .5 | 1.000 / 0.995 | flat |
+| launch budget | 2^37 / **2^38** | 1.000 / **1.109** (intervals [2.696, 2.709] against [2.989, 2.993]e17) | **moved, on the wide record only** (`CAND_PER_LAUNCH_WIDE`): a wide launch also pays for its period tables and its dearer tail, so a bigger launch amortises more. On the narrow record 2^38 read 1.055 / 1.014 with straddling intervals (round 2) and 2^37 stays. Price: ~500 MB more of device queues (1.4 GB held at n = 18) and a checkpoint interval of ~5 s |
+
+### Round 3 result
+
+46/46 green in 151 s (the battery is faster than v2's 252 s: the opening filters plan smaller wheels). SCORE 163,157 (v2 164,784: the same shape, noise), SCOREP 163,829, **SCORE16 82,419** on its new shape (the wheel to 43 at 224 periods, 16 residues), **SCORE18 257,634** on its new shape (the wheel to 53 on the wide record, 160 periods) against 227,223 for v2's 47-wheel shape; SCORE11 723; the anchors SCORE2L / SCORE1L / SCORE9 read 19,126 / 7,109 / 5.41 in the scored run and **0.997 / 0.988** for v3 against v2 when paired five rounds (the scored readings are session noise: this session's absolute rates moved 10% between runs of the same shape). The v2 shapes SCORE16 and SCORE18 were 315001 / 4287120428541611542 and 242137 / 8189509089178047674.
+
+Device rate at the campaign's own configuration, v3 against the engine this project started from (v1, 64-period windows):
+
+| filter | v1 | v3 | ratio | to the median |
+|---|---|---|---|---|
+| n = 16 | 9.5e16 (wheel 47, 64) | 8.2e16 (wheel 43, 224) | 0.86 in rate; the segment is 38 s instead of 7 min | 38 s |
+| n = 17 | 1.38e17 | 1.65e17 | **1.19** | 14 min |
+| n = 18 | 2.09e17 | 2.99e17 (wheel 53, wide, 2^38 launches) | **1.43** | 5.6 h |
+| n = 19 | ~2.3e17 | ~3.8e17 | **~1.65** | ~8.5 days |
+
+### Termination table (OPTIMIZATION.md Part 3), as it stands
+
+| phase | share | verdict |
+|---|---|---|
+| the window kernel (window + extraction + in-block rounds) | 91–94% | still **unsearched at the instruction level**: three cheap levers priced this round (occupancy through registers: shared binds; residue-loop ILP: none; the wheel: 1.19–1.24x, taken). The verdict on the load chain is inherited from lcm-ladders round 9; INNOVATION.md's SASS pass is owed |
+| all tail rounds | 6–9% (narrow), ~10% (wide) | compaction rounds; on the wide record each test carries one more term, priced at +33% of this phase and accepted only where the wheel pays for it |
+| host classification | 0.7–1.0 core-s per s | unchanged |
+| the campaign loop, off-device | 0.03% of a launch | Measurement 11 |
+
+---
+
 ## Open, priced, unbuilt
 
 Written down so the next pass starts from evidence (OPTIMIZATION.md Rule 6):
 
 1. **INNOVATION.md's two passes on the window loop** — the phase is 92% and
-   its verdict is inherited. The representation hunt: the window is NW
+   its verdict is inherited (round 3 closed three cheap levers on it:
+   registers, unrolling, and the wheel). The representation hunt: the window is NW
    words of a periodic bit pattern per prime, gathered by `r >> 5` and
    funnel-shifted by `r & 31` (7 shared loads + 6 funnel shifts + 6 ORs per
    prime per 179 candidates, 31 primes); the instruction-level pass wants
@@ -337,19 +467,12 @@ Written down so the next pass starts from evidence (OPTIMIZATION.md Rule 6):
    two-instruction shifts per prime: ~1.1x best case on the phase), and two
    first-level residues per thread for ILP (register pressure is the
    warning, lcm-ladders Measurement 12).
-2. **The wheel to 53 at n ≥ 19**, through the split survivor record. keep(53)
-   is ~0.72 at n = 18, so 1.39x fewer candidates; the period ×53 is 3.2e19,
-   which the over-sweep margin admits only from n = 19 (median 2.8e23: 8,750
-   periods) — at n = 18 a 64-period segment would be a third of the median
-   and the density gain would be spent on over-sweep. It needs W′ = 5.4e18,
-   past the u64 offset the record carries (the within-period offset and the
-   period index emitted separately; the in-block rounds and the tail then
-   reduce `off_p mod q + j·(W′ mod q)`, one more multiply-reduce per test on
-   a phase worth 6–9%), and a non-contiguous level split ({5..23, 37} ×
-   {29, 31, 41, 43, 47, 53} is the one that keeps both moduli under 2^32;
-   `_split_levels` searches contiguous cuts only). Priced at ~1.2–1.3x on
-   a(19)'s 17-day leg; not worth it at n = 17 or 18. 59 is dead: its period
-   overflows the u64 within-period offset itself.
+2. **The wide record's own cost** — +33% on the tail phase and +8% on the
+   window kernel where it runs (n ≥ 18). Priced in Measurement 13: neither
+   the gathers' divergence nor their form; a dependent term per test. The
+   lever left is structural — sort the block's queue by period so a warp's
+   items share `jj` and the term becomes a broadcast — priced at ~5% of a
+   block's life for the sort against ~4% to recover. Not built.
 3. **`CAND_PER_LAUNCH4` = 2^38**: 1.055 / 1.014 at n = 17 / 18 for +500 MB
    and a checkpoint interval twice as coarse (Measurement 10). Re-price after
    the next structural change; ship it if it clears 3% at both filters.

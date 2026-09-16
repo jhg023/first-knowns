@@ -30,11 +30,17 @@ first night:
             candidate count -- and NOT the survivors.  The two fingerprints
             differ, which is the cheapest check that the sign reaches the
             kill tables at all.
-  SCORE16   A177013, n = 16: the same wheel, sieve 131072 -- the filter the
-            campaign reaches within minutes and the first that takes the
-            full wheel.
-  SCORE18   A177014, n = 18: the same wheel, sieve 32768 -- the filter that
-            costs the day after the night.
+  SCORE16   A177013, n = 16: the PLANNED wheel there, {5..29},{31,37},{41,43}
+            at 224 periods (the segment cap keeps the wheel to 47 out: its
+            window would be twelve medians long), sieve 131072 -- the filter
+            the campaign reaches within minutes.  Sixteen residues, because
+            a segment of this wheel is short.
+  SCORE18   A177014, n = 18: the PLANNED wheel there, the wheel to 53 in the
+            NON-CONTIGUOUS split {5,7,11,13,17,23,29,31},{19,37,41},{43,47,53}
+            at 160 periods on the WIDE survivor record (the engine's own
+            choice: no u64 window admits a 3.3e19 period), sieve 65536 --
+            the filter that costs the day after the night, and the shape
+            that scores engine v3's reason to exist.
   SCORE11   A177013, n = 11, the OPENING: the short wheel {5..23},{31} the
             period cap allows there (a(11)'s modelled median is 3e10, a few
             periods of even this wheel), sieve 2^20 (the ladder's top: at
@@ -115,6 +121,8 @@ from fladder_gpu import GpuEngine                               # noqa: E402
 # (every first- and second-level residue, every period) of the segment that
 # starts at period j0.
 W47 = ([5, 7, 11, 13, 17, 19, 23, 29], [31, 37, 41], [43, 47])
+W43 = ([5, 7, 11, 13, 17, 19, 23, 29], [31, 37], [41, 43])
+W53 = ([5, 7, 11, 13, 17, 23, 29, 31], [19, 37, 41], [43, 47, 53])
 SHAPES = [
     # pb = 192 names the PLANNER'S window on this wheel: the 2^64 bound
     # admits 179 periods and the engine takes them all in a six-word window
@@ -123,10 +131,13 @@ SHAPES = [
      237557, 2767396319084044674, 6, 1, 192),
     ("SCOREP",  "A177014", 17, *W47, 65536, 1, None, 4,
      236826, 80766670185484481804, 6, 1, 192),
-    ("SCORE16", "A177013", 16, *W47, 131072, 1, None, 4,
-     315001, 4287120428541611542, 6, 1, 192),
-    ("SCORE18", "A177014", 18, *W47, 32768, 1, None, 4,
-     242137, 8189509089178047674, 6, 1, 192),
+    # SCORE16 and SCORE18 follow the v3 plan (2026-09-16): the wheel to 43
+    # at n = 16 and the wheel to 53 on the wide record at n = 18; their v2
+    # shapes (the wheel to 47 at 179 periods) are in OPTIMIZATION_LOG.md
+    ("SCORE16", "A177013", 16, *W43, 131072, 1, None, 16,
+     41918, 3250799516093442686, 6, 1, 224),
+    ("SCORE18", "A177014", 18, *W53, 65536, 1, None, 4,
+     97259, 7392165076669389529082, 6, 1, 160),
     ("SCORE11", "A177013", 11, [5, 7, 11, 13, 17, 19, 23], [31], None,
      1 << 20, 1, 4480, None,
      6008, 28122740176000, 6, None, 224),

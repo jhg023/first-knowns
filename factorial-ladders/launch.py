@@ -28,22 +28,27 @@ for it.
 THE OPENINGS (CLAUDE.md 5g, step 1 -- the test plan for every default
 below).  Both families open at n = 11, and the early filters are minutes:
 
-    n     median x    unit   wheel (planned)              q2         period    window
-    11    3.4e10      6      {5..23, 31} (period cap)     2^20       6.9e9     224
-    12    1.3e12      6      {5..23, 29, 31}              2^20       2.0e11    224
-    13    4.9e13      6      to 37                        2^20       7.4e12    224
-    14    1.9e15      6      to 41                        524288     3.0e14    224
-    15    6.2e16      6      to 43                        262144     1.3e16    224
-    16    3.1e18      6      to 47                        131072     6.1e17    179
-    17    1.4e20      6      to 47                        65536      6.1e17    179
-    18    6.0e21      6      to 47                        32768      6.1e17    179
+    n     median x    unit   wheel (planned)              q2         period    window   record
+    11    3.4e10      6      {5..23} (segment cap)        2^20       2.2e8     160      narrow
+    12    1.3e12      6      {5..23, 31}                  2^20       6.9e9     160      narrow
+    13    4.9e13      6      to 31                        2^20       2.0e11    224      narrow
+    14    1.9e15      6      to 37                        262144     7.4e12    224      narrow
+    15    6.2e16      6      to 41                        131072     3.0e14    192      narrow
+    16    3.1e18      6      to 43                        131072     1.3e16    224      narrow
+    17    1.4e20      6      to 47                        65536      6.1e17    179      narrow
+    18    6.0e21      6      to 53 (non-contiguous split) 65536      3.3e19    160      WIDE
+    19    2.8e23      6      to 53                        32768      3.3e19    224      WIDE
 
-(A177014's a(11) median is 2.4e10, and its opening wheel is {5..23}: the
-period cap is the model's median over four, per family.)  From n = 16 the
-2^64 reduction bound cuts the window to 179 periods (v1 shipped a 2^63
-bound and a 64-period window: 1.19x at n = 17, OPTIMIZATION_LOG.md round
-2), and a segment of that width is a fifth of a(17)'s median -- which is
-why a promotion carries the classified line over (below).
+(A177014's a(11) median is 2.4e10 and its opening window 128 periods.)  The
+SEGMENT is capped at the modelled median (fladder_gpu.SEGMENT_MARGIN; v1
+capped the period at a quarter of it and let the window multiply that by
+224), the window is the widest the cap and the record admit, and THE
+RECORD IS THE ENGINE'S OWN RUNTIME CHOICE from the wheel and window it is
+handed: the wheel to 53 has a period no u64 window admits, so the engine the
+campaign builds at n = 18 comes up on the wide (offset, period) record with
+no flag anywhere in this file, 1.19x at n = 18 and 1.24x at n = 19
+(OPTIMIZATION_LOG.md round 3; _promotion_drill and _families_stay_apart
+assert the choice through the campaign's own build path).
 
 The unit is 6 at every one of them (2 and 3 are forced, and by Wilson no
 prime >= 5 ever is), and what moves from filter to filter is the kill set,
@@ -183,17 +188,25 @@ EVID = str(HERE / "evidence")
 # place a configuration is derived, and `--status`, the campaign and every
 # drill go through it (OPTIMIZATION.md 2.9: derive configuration in exactly
 # one place).
-PLAN_VERSION = "p1"               # bump when plan_for's answer changes
+PLAN_VERSION = "p2"               # bump when plan_for's answer changes
+#   p2 (v3): the SEGMENT is capped against the median (not the period),
+#   the window is planned per filter, and the wheel to 53 enters at n >= 18
 
 
 @functools.lru_cache(maxsize=None)
 def plan_for(fam, n):
-    """(unit, p1, p2, p3, q2) for filter n of family F -- the configuration
-    the campaign runs there, and the fastest correct one it has (CLAUDE.md
-    5g).  Measured, not assumed: the wheel maximises candidates per unit of
-    line subject to the 2^63 reduction bound and a window worth having, and
-    the depth is the smallest whose analytic survivor rate two workers can
-    absorb (fladder_gpu.wheel_plan, fladder_gpu.plan_q2).
+    """(unit, p1, p2, p3, q2, pb) for filter n of family F -- the
+    configuration the campaign runs there, and the fastest correct one it
+    has (CLAUDE.md 5g).  Measured, not assumed: the wheel maximises
+    candidates per unit of line subject to the period bound and a segment
+    no longer than the modelled median, the depth is the smallest whose
+    analytic survivor rate two workers can absorb, and the window is the
+    widest the segment cap and the record admit (fladder_gpu.wheel_plan,
+    plan_q2, plan_pb).  THE RECORD IS NOT PLANNED HERE: the engine chooses
+    the narrow or the wide survivor record from the wheel and window it is
+    handed, at every build -- the campaign's start and every promotion --
+    so the wheel to 53 at n = 18 comes up on the wide record with no flag
+    (fladder_gpu.GpuEngine, `wide`; drilled in _promotion_drill).
 
     CACHED, AND THAT IS NOT AN OPTIMISATION DETAIL.  Planning enumerates
     every admissible three-level split and walks the sieve primes: 33 ms.
@@ -209,10 +222,12 @@ def plan_for(fam, n):
     """
     fam = ref.family(fam)
     unit = cpu.forced_unit(n, fam)
-    p1, p2, p3 = gpu.wheel_plan(n, fam, unit,
-                                max_period=gpu.search_period_cap(n, fam))
+    cap = gpu.search_segment_cap(n, fam)
+    p1, p2, p3 = gpu.wheel_plan(n, fam, unit, max_segment=cap)
     q2 = gpu.plan_q2(n, fam, unit, gpu._wheel_primes(p1, p2, p3))
-    return unit, p1, p2, p3, q2
+    pb = gpu.plan_pb(n, fam, unit, gpu._wheel_primes(p1, p2, p3), q2,
+                     max_segment=cap)
+    return unit, p1, p2, p3, q2, pb
 
 
 @functools.lru_cache(maxsize=None)
@@ -226,7 +241,7 @@ def x_floor(fam, n, frontier_x):
     dividing it: x + s <= q2) is taken as well; it is q2 at every filter
     here, far below any frontier."""
     fam = ref.family(fam)
-    _u, _a, _b, _c, q2 = plan_for(fam, n)
+    _u, _a, _b, _c, q2, _pb = plan_for(fam, n)
     return max(int(frontier_x), cpu.k_floor(q2, n, fam) + 1)
 
 
@@ -245,30 +260,36 @@ def open_n(fam):
 # mid-segment save is rate-limited by CKPT_MIN_S.
 CKPT_LAUNCHES = 32
 CENSUS_FLOOR = 8                  # runs shorter than this are not even counted
-# How many wheel PERIODS the modelled median must be, at least, for a plan to
-# be admissible.  A find is only known to be the least once its period closes,
-# so it costs up to one period of over-sweep; four periods keeps that under a
-# quarter of the search at the worst filter.  Checked, not enforced: a plan
-# that failed it would be a decision for a human, not something for the
-# planner to route around silently.
-PERIOD_MARGIN = 4.0
+# The SEGMENT a plan sweeps may be at most this many modelled medians long.
+# A find is only known to be the least once its segment closes, so it costs
+# up to one segment of over-sweep -- inherited by the next filter since the
+# launcher carries the classified line (follow_frontier), so a segment as
+# long as the median costs ~15% of a median-time in expectation, against
+# window and wheel gains of 1.2-1.5x (fladder_gpu.SEGMENT_MARGIN).  Checked,
+# not enforced: a plan that failed it would be a decision for a human, not
+# something for the planner to route around silently.
+SEGMENT_MARGIN = gpu.SEGMENT_MARGIN
 
 
 def c_front(fam):
     """The frontier term a fresh campaign of `fam` starts from."""
     fam = ref.family(fam)
     return ref.KNOWN[fam][max(ref.KNOWN[fam])]
-# THE ENGINE IS v2: v1 was lcm-ladders' v1 window sieve (the linear
+# THE ENGINE IS v3: v1 was lcm-ladders' v1 window sieve (the linear
 # ladders' v4 with a per-filter subset-wheel plan) with the multiplier list
-# swapped to k!; v2 lifts the reduction bound to 2^64, which the arithmetic
-# always had (a 179-period window on the full wheel instead of 64: 1.19x at
-# n = 17), and re-chooses the queue margin against the actual occupancy.
-# The kernel is unchanged; every constant was re-swept at the new window
-# (OPTIMIZATION_LOG.md round 2).
-ENGINE_VERSION = "v2"
-# No predecessor CURSOR: v1 never opened a campaign, so there is no v1
-# checkpoint to accept or adopt (and a v1 cursor could only be ADOPTED,
-# since the segment width moved).  The list is kept (empty) because
+# swapped to k!; v2 lifted the reduction bound to 2^64, which the
+# arithmetic always had (a 179-period window on the full wheel instead of
+# 64: 1.19x at n = 17), and re-chose the queue margin against the actual
+# occupancy; v3 adds the WIDE survivor record -- (within-period offset,
+# period) instead of a u64 launch offset -- which the engine takes at
+# runtime wherever the wheel's period admits no u64 window, and the plan
+# that uses it: the segment capped at the median, the window per filter,
+# non-contiguous level splits, the wheel to 53 from n = 18 (1.19x there,
+# 1.24x at n = 19; OPTIMIZATION_LOG.md round 3).
+ENGINE_VERSION = "v3"
+# No predecessor CURSOR: neither v1 nor v2 ever opened a campaign, so there
+# is no checkpoint to accept or adopt (and one could only be ADOPTED, since
+# the segment width moved with each version).  The list is kept (empty) because
 # CursorPolicy takes it and because the moment an old key exists it
 # belongs HERE and nowhere else -- a list of old keys given to two of the
 # three readers is a green battery and a campaign that will not start
@@ -291,6 +312,12 @@ POOL_MARGIN = 2.0                 # workers = ceil(core-s per s x this):
 CAL_MIN_SURVIVORS = 500           # the sample the sizing is measured on ...
 CAL_MIN_S = 1.0                   # ... over at least this much device time
 CAL_MAX_S = 4.0                   # and at most this much
+# The calibration sweeps up to this many SEGMENTS: since v3 a segment at an
+# opening filter is one window of a small wheel -- a single launch of a few
+# milliseconds and a handful of survivors -- and a pool sized from one of
+# those is sized from noise (the wiring drill read 3 survivors).  The time
+# and sample floors above still stop it; this only stops it running away.
+CAL_SEGMENTS = 256
 CAL_SAMPLE = 2000                 # survivors timed through sprp_run
 # BACK-PRESSURE: the device may run at most this many launches ahead of
 # the pool.  Past it the loop waits for the oldest launch, so a pool that
@@ -325,7 +352,8 @@ def config_key(fam, engine=None):
     key = (f"{fam.lower()}-{engine or ENGINE_VERSION}-{PLAN_VERSION}"
            f"-seg{CKPT_LAUNCHES}"
            f"-pbd{gpu.PB_DEFAULT}"
-           f"-cpl{gpu.CAND_PER_LAUNCH4.bit_length() - 1}")
+           f"-cpl{gpu.CAND_PER_LAUNCH4.bit_length() - 1}"
+           f"w{gpu.CAND_PER_LAUNCH_WIDE.bit_length() - 1}")
     return key
 
 
@@ -677,9 +705,10 @@ class Campaign:
 
     def _build_engine(self, n):
         """The engine for filter n, PLANNED (never a stored constant)."""
-        unit, p1, p2, p3, q2 = plan_for(self.fam, n)
+        unit, p1, p2, p3, q2, pb = plan_for(self.fam, n)
+        # the RECORD is the engine's own runtime decision from this plan
         return gpu.GpuEngine(n, self.fam, p1=p1, p2=p2, p3=p3, q2=q2,
-                             unit=unit)
+                             unit=unit, pb=pb, seg_cap=pb)
 
     # ------------------------------------------------------------- frontier
     def frontier(self):
@@ -1074,7 +1103,11 @@ class Campaign:
             f"({old.p1},{old.p2},{old.p3}) becomes "
             f"({self.eng.p1},{self.eng.p2},{self.eng.p3}), the depth "
             f"{old.q2} becomes {self.eng.q2}, the period {old.W:.4g} "
-            f"becomes {self.eng.W:.4g} and the unit stays {self.eng.unit}; "
+            f"becomes {self.eng.W:.4g}, the segment {old.seg_periods} -> "
+            f"{self.eng.seg_periods} periods on the "
+            f"{'WIDE' if self.eng.wide else 'narrow'} survivor record "
+            f"(was {'wide' if old.wide else 'narrow'}; the engine chose it "
+            f"from the plan) and the unit stays {self.eng.unit}; "
             f"the claim's floor is x = {self.x_start():,} (the term just "
             f"found -- monotonicity) and the sweep resumes at x = "
             f"{self.j * self.eng.W:,}, the end of the line the old filter "
@@ -1102,13 +1135,15 @@ class Campaign:
         run: device k/s, survivors per second, host cost per survivor.
         Nothing is recorded -- the loop sweeps the same launches again.
 
-        The line is taken off the cursor the sweep yields, so a period
-        shorter than the calibration window (8 launches at n = 18) is
-        measured as exactly the line it is."""
+        The line is taken off the cursor the sweep yields, so a segment
+        shorter than the calibration window (one launch at n = 11, where
+        the sweep runs on into the next segments until the time and sample
+        floors are met) is measured as exactly the line it is."""
         sync = self.eng.cp.cuda.Stream.null.synchronize
         nl = self.eng.launches_per_segment
-        it = self.eng.sweep(self.j, self.segment_end(), u_from=self.u,
-                            k_min=self.k_min())
+        jmax = cpu.k_ceil(self.filter_n(), self.fam) // self.eng.W
+        j_end = min(self.j + self.eng.seg_periods * CAL_SEGMENTS, jmax)
+        it = self.eng.sweep(self.j, j_end, u_from=self.u, k_min=self.k_min())
         surv, launches, u_prev, cov = [], 0, self.u, 0
         sync()
         t0 = time.perf_counter()
@@ -1120,7 +1155,7 @@ class Campaign:
                 surv.extend(int(k) for k in sv)
                 sync()
                 el = time.perf_counter() - t0
-                if (un == 0 or el >= CAL_MAX_S
+                if (el >= CAL_MAX_S
                         or (len(surv) >= CAL_MIN_SURVIVORS and el >= CAL_MIN_S)):
                     break
         finally:
@@ -2032,11 +2067,47 @@ def _promotion_drill():
         rows.append(f"{fam} n = {n0} -> {n0+1}: wheel {before[4]} -> "
                     f"{after[4]}, q2 {before[3]} -> {after[3]}, period "
                     f"{before[2]:.3g} -> {after[2]:.3g}, unit 6 -> 6")
+        # ... AND THE PROMOTION THAT CHANGES THE RECORD: a campaign that has
+        # found a(11)..a(17) promotes into n = 18, where the plan is the
+        # wheel to 53 and no u64 window admits its period, so the engine
+        # the campaign builds there must come up on the WIDE record by
+        # itself -- from the plan, at runtime, with no flag -- and the one
+        # at n = 17 narrow.  This is the detection the owner asked for.
+        for m in range(n0, 17):
+            c.found[str(m)] = int(c.x_start() + 10 * m)
+        c.eng = c._build_engine(c.filter_n())
+        if c.filter_n() != 17 or c.eng.wide:
+            return False, (f"PROMOTION FAIL: {fam} at n = {c.filter_n()} "
+                           f"(wheel to {max(gpu._wheel_primes(c.eng.p1, c.eng.p2, c.eng.p3))}) "
+                           f"came up {'wide' if c.eng.wide else 'narrow'}; "
+                           f"expected narrow at n = 17")
+        c.boundary = c.j = c.floor_period()
+        c.found["17"] = int(c.x_start() + 1000)
+        c.follow_frontier()
+        top = max(gpu._wheel_primes(c.eng.p1, c.eng.p2, c.eng.p3))
+        if c.filter_n() != 18 or top != 53 or not c.eng.wide \
+                or c.eng.seg_periods != plan_for(fam, 18)[5]:
+            return False, (f"PROMOTION FAIL: {fam} promoted into n = 18 on "
+                           f"the wheel to {top}, {c.eng.seg_periods} periods, "
+                           f"{'wide' if c.eng.wide else 'NARROW'} record -- "
+                           f"expected the wheel to 53 on the wide record at "
+                           f"{plan_for(fam, 18)[5]} periods, chosen by the "
+                           f"engine from the plan")
+        if (c.eng.seg_periods + 1) * c.eng.Wp < 1 << 64:
+            return False, (f"PROMOTION FAIL: {fam} n = 18's segment fits a "
+                           f"u64 window -- the drill is not exercising the "
+                           f"record change")
+        rows.append(f"{fam} n = 17 -> 18: wheel to 47 (narrow record) -> "
+                    f"wheel to 53 ({c.eng.seg_periods} periods, WIDE record, "
+                    f"chosen at runtime from the plan)")
         os.remove(path)
         for ext in (".bak",):
             if os.path.exists(path + ext):
                 os.remove(path + ext)
-    return True, ("promotion ok: " + "; ".join(rows) + " -- the cursor lands "
+    return True, ("promotion ok: " + "; ".join(rows) + " -- the record "
+                  "follows the plan at runtime (narrow at n = 17, wide at "
+                  "n = 18, decided in the engine from the wheel and window it "
+                  "is handed, no flag), the cursor lands "
                   "at the end of the line the old filter classified, floored "
                   "onto the new period and never below the new floor (the "
                   "term just found), the clip is gone past the floor, the "
@@ -2111,8 +2182,8 @@ def _families_stay_apart():
     # a unit is a coverage claim
     units = {}
     for f in fams:
-        for n in range(open_n(f), open_n(f) + 8):
-            unit, p1, p2, p3, q2 = plan_for(f, n)
+        for n in range(open_n(f), open_n(f) + 9):
+            unit, p1, p2, p3, q2, pb = plan_for(f, n)
             cpu.assert_unit(n, f, unit)      # raises if not forced there
             units[n] = unit
     if [units[n] for n in range(11, 19)] != [6] * 8:
@@ -2130,9 +2201,10 @@ def _families_stay_apart():
     # and re-priced it two terms later, when the same period had become 0.13%
     # of the hunt; the ratio is what matters, so it is checked per filter.
     tight = []
+    records = {}
     for f in fams:
-        for n in range(open_n(f), open_n(f) + 8):
-            unit, p1, p2, p3, q2 = plan_for(f, n)
+        for n in range(open_n(f), open_n(f) + 9):
+            unit, p1, p2, p3, q2, pb = plan_for(f, n)
             W = unit
             for q in gpu._wheel_primes(p1, p2, p3):
                 if unit % q:
@@ -2140,13 +2212,32 @@ def _families_stay_apart():
             med = model.quantile(f, n, model.floor_for(f, n, c_front(f)), 0.5)
             if med is None:
                 continue
-            if med < PERIOD_MARGIN * W:
-                return False, (f"FAMILY FAIL: {f} n = {n} plans a period of "
-                               f"{W:.4g} against a modelled median of "
-                               f"{med:.4g} -- only {med / W:.1f} periods, "
-                               f"under the {PERIOD_MARGIN}x margin a find's "
-                               f"over-sweep needs")
-            tight.append((med / W, f, n))
+            seg = pb * W
+            if seg > SEGMENT_MARGIN * med:
+                return False, (f"FAMILY FAIL: {f} n = {n} plans a segment of "
+                               f"{pb} periods x {W:.4g} = {seg:.4g} against "
+                               f"a modelled median of {med:.4g} -- over the "
+                               f"{SEGMENT_MARGIN}x margin a find's "
+                               f"over-sweep allows")
+            tight.append((med / seg, f, n))
+            # THE RECORD FOLLOWS THE PLAN AT RUNTIME: the wheel to 53 (n >= 18)
+            # has W' = 5.4e18, which no u64 window admits, so the engine the
+            # campaign builds there must come up WIDE by itself, and the
+            # wheel to 47 narrow -- decided in GpuEngine from (wheel, window),
+            # with no flag anywhere in this file
+            top = max(gpu._wheel_primes(p1, p2, p3))
+            records[(f, n)] = (top, pb)
+    for (f, n), (top, pb) in sorted(records.items()):
+        if n in (17, 18):
+            eng = gpu.GpuEngine(n, f, *plan_for(f, n)[1:4], q2=plan_for(f, n)[4],
+                                unit=plan_for(f, n)[0], pb=pb, seg_cap=pb)
+            want_wide = top >= 53
+            if eng.wide != want_wide or eng.seg_periods > pb:
+                return False, (f"FAMILY FAIL: {f} n = {n} plans the wheel to "
+                               f"{top} at {pb} periods and the engine came up "
+                               f"{'wide' if eng.wide else 'narrow'} with pv "
+                               f"{eng.pv} -- expected "
+                               f"{'wide' if want_wide else 'narrow'} at {pb}")
     tight.sort()
     # each of these contains a prime that is NOT forced here (5, 7, 17) or
     # is not squarefree, so each must RAISE at every filter
@@ -2160,13 +2251,15 @@ def _families_stay_apart():
     return True, ("families stay apart: two distinct config keys, checkpoint "
                   "files and ledgers, no policy reads the other's cursor, the "
                   "rider alias resolves, the PER-FILTER plan is admissible at "
-                  "every filter n = 11..18 with the unit 6 at each (and 30, "
-                  "30030, 10, 42 and the non-squarefree 12 refused), and "
-                  "every planned period is small against its own search: the "
-                  "tightest is %s n = %d at %.1f periods to the modelled "
-                  "median, against a %gx margin (a find costs at most one "
-                  "period of over-sweep)"
-                  % (tight[0][1], tight[0][2], tight[0][0], PERIOD_MARGIN))
+                  "every filter n = 11..19 with the unit 6 at each (and 30, "
+                  "30030, 10, 42 and the non-squarefree 12 refused), every "
+                  "planned SEGMENT fits its own search (the tightest is %s "
+                  "n = %d at %.2f medians per segment, against a %gx margin; "
+                  "a find costs at most one segment of over-sweep, inherited "
+                  "by the next filter), and the engine the campaign builds "
+                  "from the plan comes up narrow at n = 17 (wheel to 47) and "
+                  "WIDE at n = 18 (wheel to 53) on its own"
+                  % (tight[0][1], tight[0][2], 1 / tight[0][0], SEGMENT_MARGIN))
 
 
 def _campaign_wiring_drill(fam="A177013"):
@@ -2205,13 +2298,13 @@ def _campaign_wiring_drill(fam="A177013"):
                            f"{floor}")
         if floor != ref.KNOWN[fam][n0 - 1]:
             return False, (f"WIRING FAIL: the floor {floor} is not a({n0-1})")
-        unit, p1, p2, p3, q2 = plan_for(fam, n0)
-        if (c.eng.n, c.eng.fam, c.eng.unit, c.eng.q2) != (n0, fam, unit, q2) \
+        unit, p1, p2, p3, q2, pb = plan_for(fam, n0)
+        if (c.eng.n, c.eng.fam, c.eng.unit, c.eng.q2, c.eng.pv) != (n0, fam, unit, q2, pb) \
                 or (c.eng.p1, c.eng.p2, c.eng.p3) != (p1, p2, p3):
             return False, ("WIRING FAIL: the engine is not the PLANNED one "
                            "for the campaign filter")
         line = c.status_line()
-        for want in ("swept to", fam, "census", "periods [0,"):
+        for want in ("swept to", fam, "census", f"periods [{c.floor_period()},"):
             if want not in line:
                 return False, f"WIRING FAIL: status line lacks {want!r}"
         if c.handle(floor + 1, 9) is not False or c.census.get(9) != 1:

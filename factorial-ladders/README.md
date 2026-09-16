@@ -77,19 +77,26 @@ survivor of a closed segment was run to n + 8, and the new filter's sieve
 keeps a subset of the old one's survivors, so nothing below that line can
 be the next term without having been found already (`_promotion_drill`).
 
-**The wheel is planned per filter, and it is short at the opening.** Each
-wheel prime multiplies the period by q and the candidate density by
+**The wheel is planned per filter, and so is the window.** Each wheel
+prime multiplies the period by q and the candidate density by
 keep(q) = (q − w)/q; the planner takes primes by value density
 −log(keep)/log(q) while the period fits every bound — including the
 search: a find is only known to be the least once its segment closes, so
-the segment may not exceed a quarter of the modelled median. At n = 11 the
-median is 3e10 and the wheel stops at {5..23, 31}; from n = 16 the full
-wheel {5..47} at unit 6 fits (period 6.1e17), and the reduction bound then
-cuts the window to 179 periods. That bound is 2^64 — the word — and not
-the 2^63 the engine shipped with: the one-conditional-subtraction Barrett
-step is exact for every u64 (a paper bound and a bit-exact emulation with
-a tripwire, G19), and the window it had been hiding is worth 1.19x at
-n = 17 (OPTIMIZATION_LOG.md round 2).
+the SEGMENT (the window times the period) may not exceed the modelled
+median, and the window is the widest that cap and the survivor record
+admit. At n = 11 the median is 3e10 and the wheel is {5..23} at 128
+periods; n = 16 takes the wheel to 43 at 224 (the wheel to 47 would make
+the first segment twelve medians long); n = 17 takes the wheel to 47 at
+179 periods — the most a u64 offset admits, and that bound is 2^64, the
+word, not the 2^63 the engine shipped with (a paper bound and a bit-exact
+emulation with a tripwire, G19; 1.19x at n = 17, OPTIMIZATION_LOG.md
+round 2); and from n = 18 the wheel to 53, whose period 3.3e19 no u64
+window admits at all. There the engine switches, on its own and from the
+plan it is handed, to a WIDE survivor record — the candidate's offset
+within its period and its period index carried separately, with the
+period term added per test from a table the device builds each launch —
+which costs 5–6% where a u64 would do and is therefore taken only where
+the wheel demands it: 1.19x at n = 18 and 1.24x at n = 19 (round 3).
 
 **The engine.** Candidates are carried as (x, off) pairs, so no machine word
 bounds the search. The GPU never materialises the x line: it generates the
@@ -98,11 +105,14 @@ time, testing each sieve prime against a periodic bit pattern, then
 compacts the survivors through in-block rounds and global tail rounds. The
 CPU engine marks arithmetic progressions into a dense array and uses no
 wheel at all; the parity gate (G9) pins the two streams bit for bit on 22
-populated windows from x = 2e9 up to the 1e40 ceiling. The kernel is
-lcm-ladders' v1 unchanged (engine v2 here: the 2^64 bound, the window at
-it, and a queue margin chosen against the occupancy actually reached);
-every constant was re-swept at this project's window in
-OPTIMIZATION_LOG.md round 2 and none moved.
+populated windows from x = 2e9 up to the 1e40 ceiling, G19 pins the two
+survivor records to each other on one wheel where the line passes 2^64,
+and G20 pins a non-contiguous level split on both records to the CPU
+engine. The kernel is lcm-ladders' v1 with two additions (engine v3 here:
+the record that dispatches, and a queue margin chosen against the
+occupancy actually reached); every constant was re-swept at this
+project's windows in OPTIMIZATION_LOG.md rounds 2 and 3, and one moved:
+the launch budget on the wide record.
 
 **The ceiling is 1e40 on x, and certificates are this project's best case.**
 Value k is k!·x + s, so (k!·x + s) − s = k!·x with k! k-smooth: **one
@@ -155,14 +165,12 @@ to a percent or two.
 (From a(12) on the two families' quantiles agree to three figures, the
 floors being negligible against the depths.)
 
-At the measured rates (BENCHMARKS.md, OPTIMIZATION_LOG.md round 2)
-a(11) through a(15) are seconds of device each, a(16) is about **30
-seconds** of line (one segment of 18 minutes, which the next filter
-inherits), a(17) about **14 minutes** and a(18) about **7 hours** at the
-medians — per family. So a night reaches a(17) on both, about 2.5× that at
-the optimism factor the repository's earlier ladders suggest budgeting,
-with a(18) a day each and a(19) (2.8e23 at 2.3e17 x/s: two weeks) the long
-leg.
+At the measured rates (BENCHMARKS.md, OPTIMIZATION_LOG.md rounds 2 and 3)
+a(11) through a(16) are seconds of device each, a(17) about **14
+minutes** and a(18) about **5.6 hours** at the medians — per family. So a
+night reaches a(17) on both, about 2.5× that at the optimism factor the
+repository's earlier ladders suggest budgeting, with a(18) most of a day
+each and a(19) (2.8e23 at 3.8e17 x/s: about nine days) the long leg.
 
 ## Running it
 
