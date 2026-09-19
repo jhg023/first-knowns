@@ -25,6 +25,7 @@ nothing about the next.
 | 2026-09-06 | v1 round 6 | 55,995 | 55,891 | 364,682 | 62,510 | 21,152 | 4,865 | 6.8 |
 | 2026-09-06 | v1 round 7 | 55,989 | 55,991 | 365,117 | 62,494 | 21,111 | 4,851 | 6.7 |
 | 2026-09-06 | v1 round 8 | 56,025 | 55,924 | 365,398 | 63,391 | 20,904 | 4,895 | 6.2 |
+| 2026-09-18 | v1 round 8, at the pause (the seven finds entered in `FOUND`; no engine change; every fingerprint reproduced) | 60,090 | 60,000 | 391,814 | 67,738 | 23,105 | 5,255 | 6.6 |
 
 (in units of 10⁶ x/s; SCORE9 is ~7×10⁶ x/s, a filter whose survivor density
 is four orders higher.)
@@ -71,6 +72,23 @@ rate is the pipeline's — device and host — and is what `[STATUS]` prints.
 (measured at the campaign's own planned configuration, three rounds
 interleaved; against the untuned engine this project started from these are
 1.420× / 1.229× / 1.754× / 1.736×.)
+
+**What the campaigns then measured (2026-09-06, no flags).** Whole phases,
+from the evidence timestamps and the checkpoints, against the rows above:
+
+| filter | A078502 | A074200 | the row above |
+|---|---|---|---|
+| n = 15 | 21 s to the find, pool sizing included | 21 s | 2 s of device |
+| n = 16 | 3.44e17 x/s over 8.3 min | one segment, 132 s with the rebuild | 3.85e17 |
+| n = 17 | 7.05e16 over 17.0 min | 6.93e16 over 47.0 min | 6.63e16 |
+| n = 18 | 6.94e17 over 100.4 min | not reached | 6.75e17 |
+
+Every timed phase is inside 11% of its row, so the pipeline ran at the
+engine's rate at every filter it reached — the rule 5g acceptance test,
+passed on the campaigns that produced the results ([RESULTS.md](RESULTS.md)).
+n = 19 and n = 20 (A078502 promoted straight to 20 on its rider) have no
+row: neither was priced before the campaign reached it, and the n = 20
+sweep was stopped after three minutes.
 
 n = 16 is eight times the line rate of n = 15 and n = 17 because 17 is
 forced there: the unit is 34 rather than 2, and the wheel reaches 47 under

@@ -703,6 +703,67 @@ plus the priced items below, which is what Part 3 actually asks for.
 
 ---
 
+## What the campaigns measured, and the pause (written up 2026-09-18)
+
+Not an optimization: the record of what the round-8 defaults did when the
+owner ran them with no flags on 2026-09-06, which is the measurement every
+round above was aimed at. Seven terms (RESULTS.md); the project sat
+undocumented for twelve days with its evidence untracked, and this entry is
+the catch-up.
+
+**Campaign rate against the engine, per filter** (whole phases, from the
+evidence timestamps, `swept_from_x` and the checkpoints):
+
+| filter | A078502 | A074200 | the engine there |
+|---|---|---|---|
+| n = 15 | 21 s to the find, pool sizing included | 21 s | 2 s of device |
+| n = 16 | 1.71e20 in 8.3 min = 3.44e17 x/s | one segment, 132 s with the rebuild | 3.85e17 |
+| n = 17 | 7.19e19 in 17.0 min = 7.05e16 | 1.95e20 in 47.0 min = 6.93e16 | 6.63e16 |
+| n = 18 | 4.18e21 in 100.4 min = 6.94e17 | — | 6.75e17 |
+
+Every timed phase inside 11% of its benchmark. The n = 16 phase is the one
+under it (0.89): it is eight minutes long and includes a promotion and a
+pool re-size, and nothing here separates those from the sweep.
+
+**What the campaigns taught that no round had priced.**
+
+1. *A rider promotes the campaign into a filter nobody priced.* a(18) came
+   as a run of 19, so the launcher went from n = 18 straight to n = 20
+   (unit 30, q2 16384, 107-period segments) — a configuration with no
+   benchmark shape, no sweep of its constants, and a modelled median of
+   x = 1.5e25. Rule 5g was written three days earlier for exactly this, and
+   G18 only compiles "the resumed filter and the two after it" once `FOUND`
+   is populated — which it was not until 2026-09-18.
+2. *The opening of each campaign is pool sizing and engine builds, not
+   sweep.* Both families took 21 s to an a(15) that is 2 s of device, and
+   A074200's n = 16 phase was 132 s for one segment. Harmless here; it is
+   the fixed cost to remember when a filter's whole yield is seconds long.
+
+**The re-verification harness** (scratchpad, not kept; ten minutes to
+rewrite): for each evidence file in N order — term == L(filter_n)·x; every
+value N/i + s rebuilt, compared with the file and tested with sympy
+`isprime`; `lcml_reference.run_length_N(fam, N, cap=run + 4) == run`; the
+stopper rebuilt (or i ∤ N) and its factor re-multiplied;
+`huntlib.certificate.verify` on each certificate with its N checked; the
+rider's integer = term ± 1; `settles` continuing from the previous file; the
+least-claim floor equal to the previous term; the ledger agreeing with the
+files; then `lcml_model.floor_for` / `quantile` / `expected` at the find's
+own filter for the scoring. 6 files, 98 certificates, ALL OK in 0.5 s.
+
+**The pause.** The finds are entered in `lcml_reference.FOUND` (G1b now
+checks all seven from the bare definition; G18 compiles the resumed filters).
+The evidence files were brought to the repo-wide naming convention the same
+day (CLAUDE.md rule 5i: the term is `N` in an A078502 file and `m` in an
+A074200 file, with `oeis_terms`), and the writer in `launch.py` with them.
+`python launch.py --selftest`: 44/44 ALL GREEN in 199 s, which is also where
+two shared changes of 2026-09-18 were proved on this project
+(`huntlib.certificate._split` returning Python ints, and the naming gate in
+`huntlib.evidence`). `python score.py`: every fingerprint reproduced,
+**SCORE 60,090,054,589** in 202 s — about 7% over round 8's scored row on
+every shape at once, which is a quieter machine, not an engine change.
+
+---
+
 ## Open, priced, unbuilt
 
 Written down so the next pass starts from evidence (OPTIMIZATION.md Rule 6):

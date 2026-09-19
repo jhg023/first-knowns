@@ -13,10 +13,18 @@ makes them tractable is that N must be a multiple of L = lcm(1..n), so
 N = L·x and the conditions become **(L/k)·x ± 1 prime for k = 1..n** — one
 unknown, a list of multipliers, a fixed sign: the linear ladder this
 repository has hunted four times, with a wheel that behaves nothing like the
-others.
+others. **The standing result: a(15) through a(19) of A078502 and a(15),
+a(16) of A074200, found and verified 2026-09-06 — seven terms on six
+integers, each proved prime value by value — and with them a(15)–a(19) of
+A093554 and a(15), a(16) of A093553: fourteen new terms in all**
+([RESULTS.md](RESULTS.md)).
 
-**Status: ACTIVE** — the engine, the gate battery and the campaign are
-built and green; no term has been hunted yet.
+**Status: PAUSED — open to others** — A078502 stands at a(18) = a(19) =
+52,270,101,840,951,834,355,676,160,000 with a(20) open and priced at most of
+a year; A074200 at a(16) = 10,316,338,205,727,668,643,809,280 with no
+a(17) below N = 2.4017e27 and **a(17) about 43 minutes of device away at the
+median** — it was stopped early, not exhausted. Both campaigns resume from
+their checkpoints with no flags.
 
 ## The problem
 
@@ -42,7 +50,9 @@ submit: `{"18": v, "19": v}` reads "a(18) and a(19) are both v". The riders'
 integers (A093554 = A078502 − 1, A093553 = A074200 + 1) are in
 `also_settles` (CONVENTIONS.md "Naming in an evidence file").
 
-a(15) is open on all four. The conditions nest in N — anything satisfying
+a(15) was open on all four when the project started (the table above is the
+frontier as this project found it); a(20) is open on A078502 / A093554 now
+and a(17) on A074200 / A093553. The conditions nest in N — anything satisfying
 filter n satisfies filter n − 1 — so a(n) is non-decreasing and the previous
 term is a free floor; nothing below it has to be swept at all.
 
@@ -164,6 +174,22 @@ both — about 51 minutes of device at the medians, about 2 hours at the 2.5×
 this repository's optimism factor suggests budgeting — with a(18) a
 multi-day proposition.
 
+**How the finds scored.** Everything above this line was written before
+either campaign ran. A078502 then landed a(15) at 21 seconds, a(16) at 8.6
+minutes, a(17) at 25.6 minutes and — the draw the table did not price —
+a(18) at 2.1 hours, a seventh of its median, as a run of **19**, so a(19)
+came with it. A074200 landed a(15) and a(16) inside three minutes and then
+swept 47 minutes at n = 17, past twice the median, without an a(17): a 32%
+event. Over the six searched draws **E averages 1.26** (A078502 1.33 over 4,
+A074200 1.12 over 2) against G11's 1.12 on a disjoint set, and x / median
+runs 0.145 to 7.6, geometric mean 1.32. Every timed phase ran inside 11% of
+its benchmark. Term by term: [RESULTS.md](RESULTS.md).
+
+| open term | searched empty below | median from there | what it costs |
+|---|---|---|---|
+| a(17) A074200 (and A093553) | N = 2.4017e27 | x = 3.73e20 at n = 17 | **43 min** at 6.9e16 x/s; 61% inside an hour, 92% inside three |
+| a(20) A078502 (and A093554) | — (a(19) only) | x = 1.48e25 at n = 20, N = 3.4e33 | most of a year at the n = 18 rate; n = 20 never measured |
+
 The singular series is **not monotone in n**, and G12 asserts the mechanism
 rather than the numbers: it jumps ×44.8 at n = 17 and ×67.0 at n = 19 (when
 n is prime it enters L(n) and q = n's kill count collapses from n − 1 to 1),
@@ -190,6 +216,13 @@ python launch.py --stop-on-discovery    # stop when THIS RUN finds something
 One campaign per family, each with its own checkpoint and ledger. Runs
 indefinitely by default, to the 1e40 ceiling. Requires CuPy and a CUDA GPU;
 sympy and numpy for the oracle and the CPU engine.
+
+The project is paused, so whoever resumes it runs the first two commands
+before anything else (CLAUDE.md rule 2). A campaign started without this
+project's checkpoints begins again from the published a(14); the seven finds
+are in `lcml_reference.FOUND`, re-checked from the bare definition by G1b on
+every battery, and the bound on A074200's a(17) is in
+[RESULTS.md](RESULTS.md).
 
 ## Trust
 

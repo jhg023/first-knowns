@@ -7,12 +7,20 @@ One JSON per verified **first occurrence**, plus a ledger per family. Census
 values are counts in the checkpoint and in the `[STATUS]` line, never files
 (CONVENTIONS.md, "The census is counted, not narrated").
 
-Empty until a hunt has run.
+Six files from the campaigns of 2026-09-06: A078502's a(15), a(16), a(17)
+and a(18) = a(19) (one file, `settles = [18, 19]`), and A074200's a(15) and
+a(16) ([RESULTS.md](../RESULTS.md)).
 
-## What a file will contain
+## What a file contains
 
-* `N` — the published term, and `x`, `filter_n`, `L`: N = L(n)·x, the form
-  the sweep found it in.
+* `sequence`, `forms`, the term, `oeis_terms` — the four fields every
+  evidence file in this repository opens with (CONVENTIONS.md "Naming in an
+  evidence file"). **The term is the field `N` in an A078502 file and the
+  field `m` in an A074200 file**, because that is what each OEIS entry calls
+  it; `oeis_terms` maps every index the find settles to the integer to
+  submit, so `{"18": v, "19": v}` reads "a(18) and a(19) are both v".
+* `x`, `filter_n`, `L` — the form the sweep found it in: term = L(n)·x. `x`
+  is the engine's variable and is never what gets submitted.
 * `run`, `settles` — the largest r with L(r) | N and N/i + s prime for every
   i ≤ r, and the indices this one integer settles. One N can settle several
   consecutive terms; it is evidenced once, under the first.
