@@ -134,6 +134,23 @@ SHAPES = [
     ("SCORE17", "A074200", 17, [3, 5, 7, 19, 23, 29, 31, 37], [41, 43],
      [47, 53], 65536, 1, None, 54,
      119087, 2410739981118000456, 2, 1, 192),
+    # THE TWO ENGINE-v2 SHAPES (frozen 2026-09-19, OPTIMIZATION_LOG.md round
+    # 10), each cross-checked against an engine that does not use what it
+    # pins before it was frozen.  SCORE18 is the campaign's next filter on
+    # the WIDE record: the planned wheel to 61 (a non-contiguous split, W' =
+    # 4.2e17, the u64 admits 42 periods) at 224 periods -- identical, all
+    # 81,261 survivors, to the NARROW record at pb = 32 over the same 224
+    # periods.  SCORE20 is A078502's live filter on the narrow record at the
+    # 216 periods the 2^64 reduction bound admits (offsets to 1.83e19) --
+    # identical, all 264,771, to engine v1 at pb = 64, where every offset
+    # is below the 2^63 it shipped with.  The record is not pinned here: the
+    # engine chooses it from the wheel and window, as the campaign's does.
+    ("SCORE18", "A074200", 18, [5, 7, 23, 47, 53, 59], [29, 31, 37],
+     [41, 43, 61], 65536, 1, None, 4,
+     81261, 17709527276372776322896, 114, 1, 224),
+    ("SCORE20", "A078502", 20, [7, 23, 29, 31, 37, 41], [43, 47, 53],
+     [59, 61], 16384, 1, None, 4,
+     264771, 305348829319366264728, 30, 1, 224),
     ("SCORE2L", "A078502", 15, 23,   37, None,  65536, 94334,  240, None,
      8691, 702330747726546914, 1, None, 192),
     # the SAME absolute window as SCORE2L: W(2L) = W(1L) * 33263 exactly, so

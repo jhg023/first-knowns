@@ -175,8 +175,9 @@ KNOWN_ALSO = {
 # from at runtime.  G1b re-checks whatever lands here from the bare
 # definition.  Values are N, as published.  A078502's five came from the one
 # campaign of 2026-09-06 (RESULTS.md): a(18) = a(19) is one N with run 19, a
-# rider, as the published a(13) = a(14) is.  A074200's two came from the
-# campaign that followed it the same day.
+# rider, as the published a(13) = a(14) is.  A074200's first two came from
+# the campaign that followed it the same day, and its a(17) and a(18) from
+# that campaign resumed on 2026-09-19 -- a(18) on engine v2's wide record.
 FOUND = {fam: {} for fam in FAMILIES}
 FOUND["A078502"] = {15: 143479704870546258614400,
                     16: 123117690451783381321968000,
@@ -184,7 +185,9 @@ FOUND["A078502"] = {15: 143479704870546258614400,
                     18: 52270101840951834355676160000,
                     19: 52270101840951834355676160000}
 FOUND["A074200"] = {15: 174563969955955530350400,
-                    16: 10316338205727668643809280}
+                    16: 10316338205727668643809280,
+                    17: 3806845688410765173753259680,
+                    18: 246823048779050778944771141280}
 
 # Neither entry carries a published bound of any kind -- no upper bound at
 # any open n, and no searched-empty lower bound beyond the last term.  The

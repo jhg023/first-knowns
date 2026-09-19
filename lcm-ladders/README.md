@@ -13,18 +13,17 @@ makes them tractable is that N must be a multiple of L = lcm(1..n), so
 N = L·x and the conditions become **(L/k)·x ± 1 prime for k = 1..n** — one
 unknown, a list of multipliers, a fixed sign: the linear ladder this
 repository has hunted four times, with a wheel that behaves nothing like the
-others. **The standing result: a(15) through a(19) of A078502 and a(15),
-a(16) of A074200, found and verified 2026-09-06 — seven terms on six
-integers, each proved prime value by value — and with them a(15)–a(19) of
-A093554 and a(15), a(16) of A093553: fourteen new terms in all**
-([RESULTS.md](RESULTS.md)).
+others. **The standing result: a(15) through a(19) of A078502 and a(15)
+through a(18) of A074200, found and verified 2026-09-06 and 2026-09-19 —
+nine terms on eight integers, each proved prime value by value — and with
+them a(15)–a(19) of A093554 and a(15)–a(18) of A093553: eighteen new terms
+in all** ([RESULTS.md](RESULTS.md)).
 
 **Status: PAUSED — open to others** — A078502 stands at a(18) = a(19) =
-52,270,101,840,951,834,355,676,160,000 with a(20) open and priced at most of
-a year; A074200 at a(16) = 10,316,338,205,727,668,643,809,280 with no
-a(17) below N = 2.4017e27 and **a(17) about 43 minutes of device away at the
-median** — it was stopped early, not exhausted. Both campaigns resume from
-their checkpoints with no flags.
+52,270,101,840,951,834,355,676,160,000 with a(20) open and priced at about a
+year; A074200 at a(18) = 246,823,048,779,050,778,944,771,141,280 with no
+a(19) below N = 5.1133e29 and a(19) about 11 days of device away at the
+median. Both campaigns resume from their checkpoints with no flags.
 
 ## The problem
 
@@ -52,7 +51,7 @@ integers (A093554 = A078502 − 1, A093553 = A074200 + 1) are in
 
 a(15) was open on all four when the project started (the table above is the
 frontier as this project found it); a(20) is open on A078502 / A093554 now
-and a(17) on A074200 / A093553. The conditions nest in N — anything satisfying
+and a(19) on A074200 / A093553. The conditions nest in N — anything satisfying
 filter n satisfies filter n − 1 — so a(n) is non-decreasing and the previous
 term is a free floor; nothing below it has to be swept at all.
 
@@ -129,7 +128,23 @@ periods at a time, testing each sieve prime against a periodic bit pattern
 candidates), then compacts the survivors through in-block rounds and global
 tail rounds. The CPU engine marks arithmetic progressions into a dense array
 and uses no wheel at all; the parity gate (G9) pins the two streams bit for
-bit on 20 populated windows from x = 2e9 up to the 1e40 ceiling.
+bit on 22 populated windows from x = 2e9 up to the 1e40 ceiling.
+
+**Two survivor records (engine v2, 2026-09-19).** Past the window sieve a
+candidate is either its u64 offset within the launch — exact while a whole
+segment plus a period fits under 2⁶⁴, which is the true bound of the
+one-subtraction Barrett step and not the 2⁶³ the engine shipped with (G19:
+paper bound, bit-exact emulation, a tripwire past 2⁶⁴) — or, on the **wide
+record**, its within-period offset and its period index carried apart, so
+that no machine word bounds the wheel by the window. The engine chooses at
+build time from the wheel and window it is handed. The wide record costs
+about 9% where the narrow one would do, so the plan takes it only where it
+buys a wheel prime whose 128-period segment still fits inside the modelled
+median: the wheel to 61 at n = 18 and 19 (**1.15× and 1.23×** end to end),
+and *not* the wheel to 59 at n = 17, where it reads 1.10× for a segment of
+1.9 medians. At n = 20 the corrected bound alone is **1.27×** (216 live
+periods where 2⁶³ admitted 107). The design is factorial-ladders' v3 record;
+the measurements are in OPTIMIZATION_LOG.md round 10.
 
 **The ceiling is 1e40 on x, and certificates are this project's best case.**
 Value i is N/i + s, so (N/i + s) − s = N/i, and N = L(n)·x with L(n)
@@ -185,10 +200,16 @@ A074200 1.12 over 2) against G11's 1.12 on a disjoint set, and x / median
 runs 0.145 to 7.6, geometric mean 1.32. Every timed phase ran inside 11% of
 its benchmark. Term by term: [RESULTS.md](RESULTS.md).
 
+**And the resumed campaign (2026-09-19).** A074200's a(17) came at 3.18× its
+median (E = 1.62, a 20% event) after 76 minutes at n = 17 over three
+sittings, and a(18) 7.03 hours later at 0.66× its median (E = 0.51), on
+engine v2's wide record at 8.54e17 x/s. Over all eight searched draws **E
+averages 1.21** (A074200 1.09 over 4), geometric mean of x / median 1.35.
+
 | open term | searched empty below | median from there | what it costs |
 |---|---|---|---|
-| a(17) A074200 (and A093553) | N = 2.4017e27 | x = 3.73e20 at n = 17 | **43 min** at 6.9e16 x/s; 61% inside an hour, 92% inside three |
-| a(20) A078502 (and A093554) | — (a(19) only) | x = 1.48e25 at n = 20, N = 3.4e33 | most of a year at the n = 18 rate; n = 20 never measured |
+| a(19) A074200 (and A093553) | N = 5.1133e29 | x ≈ 9.4e22 at n = 19, N ≈ 2.2e31 | **about 11 days** at 9.87e16 x/s; 10% inside a day, 39% inside a week |
+| a(20) A078502 (and A093554) | — (a(19) only) | x = 1.48e25 at n = 20, N = 3.4e33 | about a year at the 4.7e17 x/s engine v2 measured there |
 
 The singular series is **not monotone in n**, and G12 asserts the mechanism
 rather than the numbers: it jumps ×44.8 at n = 17 and ×67.0 at n = 19 (when
@@ -198,8 +219,8 @@ and *falls* ×0.996 at n = 18, where q = 3 becomes forced.
 ## Running it
 
 ```bash
-python launch.py --selftest     # the full battery -- must end ALL GREEN (~3 min)
-python score.py                 # gates x seven fingerprinted benchmarks (~3.5 min)
+python launch.py --selftest     # the full battery -- must end ALL GREEN (~4 min)
+python score.py                 # gates x nine fingerprinted benchmarks (~4 min)
 python launch.py --status       # where the cursor is; reads, never writes
 ```
 
@@ -219,10 +240,12 @@ sympy and numpy for the oracle and the CPU engine.
 
 The project is paused, so whoever resumes it runs the first two commands
 before anything else (CLAUDE.md rule 2). A campaign started without this
-project's checkpoints begins again from the published a(14); the seven finds
+project's checkpoints begins again from the published a(14); the nine finds
 are in `lcml_reference.FOUND`, re-checked from the bare definition by G1b on
-every battery, and the bound on A074200's a(17) is in
-[RESULTS.md](RESULTS.md).
+every battery, and the bound on A074200's a(19) is in
+[RESULTS.md](RESULTS.md). Both checkpoints in the tree's working directory
+resume under engine v2: A074200's is its own, A078502's is a v1 cursor that
+v2 adopts (coverage kept, the open segment re-swept).
 
 ## Trust
 

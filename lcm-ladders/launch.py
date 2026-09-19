@@ -167,17 +167,28 @@ EVID = str(HERE / "evidence")
 # `plan_for` is the ONE place a configuration is derived, and `--status`,
 # the campaign and every drill go through it (OPTIMIZATION.md 2.9: derive
 # configuration in exactly one place).
-PLAN_VERSION = "p1"               # bump when plan_for's answer changes
+PLAN_VERSION = "p2"               # bump when plan_for's answer changes
+#   p2 (engine v2): the wheel to 61 on the WIDE record at n = 18 and 19, the
+#   window planned per filter, and the narrow window at n >= 20 what the
+#   2^64 reduction bound admits (216 periods at n = 20, not 107)
 
 
 @functools.lru_cache(maxsize=None)
 def plan_for(fam, n):
-    """(unit, p1, p2, p3, q2) for filter n of family F -- the configuration
-    the campaign runs there, and the fastest correct one it has (CLAUDE.md
-    5g).  Measured, not assumed: the wheel maximises candidates per unit of
-    line subject to the 2^63 reduction bound and a window worth having, and
-    the depth is the smallest whose analytic survivor rate two workers can
-    absorb (lcml_gpu.wheel_plan, lcml_gpu.plan_q2).
+    """(unit, p1, p2, p3, q2, pb) for filter n of family F -- the
+    configuration the campaign runs there, and the fastest correct one it
+    has (CLAUDE.md 5g).  Measured, not assumed: the wheel maximises
+    candidates per unit of line subject to the period bound, a period no
+    longer than a quarter of the modelled median and -- for a wheel that
+    needs the wide record -- a segment no longer than the median; the depth
+    is the smallest whose analytic survivor rate two workers can absorb;
+    and the window is PB_DEFAULT, or on a wide wheel the widest the segment
+    cap admits (lcml_gpu.wheel_plan, plan_q2, plan_pb).  THE RECORD IS NOT
+    PLANNED HERE: the engine chooses the narrow or the wide survivor record
+    from the wheel and window it is handed, at every build -- the
+    campaign's start and every promotion -- so the wheel to 61 at n = 18
+    comes up on the wide record with no flag (lcml_gpu.GpuEngine, `wide`;
+    drilled in _promotion_drill and _families_stay_apart).
 
     CACHED, AND THAT IS NOT AN OPTIMISATION DETAIL.  Planning enumerates
     every admissible three-level split and walks the sieve primes: 33 ms.
@@ -193,10 +204,12 @@ def plan_for(fam, n):
     """
     fam = ref.family(fam)
     unit = cpu.forced_unit(n, fam)
-    p1, p2, p3 = gpu.wheel_plan(n, fam, unit,
-                                max_period=gpu.search_period_cap(n, fam))
+    caps = gpu.plan_caps(n, fam)
+    p1, p2, p3 = gpu.wheel_plan(n, fam, unit, **caps)
     q2 = gpu.plan_q2(n, fam, unit, gpu._wheel_primes(p1, p2, p3))
-    return unit, p1, p2, p3, q2
+    pb = gpu.plan_pb(n, fam, unit, gpu._wheel_primes(p1, p2, p3), q2,
+                     max_segment=caps["max_segment"])
+    return unit, p1, p2, p3, q2, pb
 
 
 @functools.lru_cache(maxsize=None)
@@ -211,7 +224,7 @@ def x_floor(fam, n, frontier_N):
     exception zone, where a value could BE the prime dividing it) is a
     handful of x here and is taken as well."""
     fam = ref.family(fam)
-    _u, _a, _b, _c, q2 = plan_for(fam, n)
+    _u, _a, _b, _c, q2, _pb = plan_for(fam, n)
     return max(-(-int(frontier_N) // ref.L(n)),
                cpu.k_floor(q2, n, fam) + 1)
 
@@ -241,6 +254,10 @@ CENSUS_FLOOR = 8                  # runs shorter than this are not even counted
 # that failed it would be a decision for a human, not something for the
 # planner to route around silently.
 PERIOD_MARGIN = 4.0
+# ... and a WIDE-record wheel's SEGMENT at most this many medians (the wide
+# record lets the period grow by another wheel prime; lcml_gpu.wheel_plan
+# admits such a wheel only if a WIDE_MIN_PV-period segment of it fits).
+SEGMENT_MARGIN = gpu.SEGMENT_MARGIN
 
 
 def c_front(fam):
@@ -254,14 +271,32 @@ def c_front(fam):
 # together (64 -> 192 and 12 -> 20 KB, 1.288x), the sieve depth became a
 # per-filter plan rather than a constant, and a latent kernel bug that only
 # a non-power-of-two window can reach was fixed.
-ENGINE_VERSION = "v1"
-# No predecessor: this project's engine is its own first version.  The list
-# is kept (empty) because CursorPolicy takes it and because the moment a v2
-# exists it belongs HERE and nowhere else -- a list of old keys given to two
-# of the three readers is a green battery and a campaign that will not start
-# (CONVENTIONS.md "Reading an existing cursor"; it has cost this repo two
-# campaign starts).
-PREVIOUS_ENGINES = ()
+#
+# v2 (2026-09-19, OPTIMIZATION_LOG.md round 10) lifts the reduction bound to
+# 2^64, which the arithmetic always had (216 live periods at n = 20 instead
+# of 107: 1.27x), and adds the WIDE survivor record -- (within-period offset,
+# period) instead of a u64 launch offset -- which the engine takes at runtime
+# wherever the wheel's period admits no u64 window worth having, with the
+# plan that uses it: non-contiguous level splits and the wheel to 61 at
+# n = 18 and 19 (1.14x and 1.20x).  Both are factorial-ladders' v2/v3, built
+# on this engine ten days after it was frozen.  n = 15, 16 and 17 plan, and
+# run, exactly what v1 did: every v1 fingerprint is reproduced.
+ENGINE_VERSION = "v2"
+# THE v1 CURSORS ARE ADOPTED, NOT ACCEPTED (CONVENTIONS.md "Reading an
+# existing cursor").  Both families have a live v1 checkpoint (A074200 at
+# n = 17, A078502 at n = 20).  At n = 17 the plan is unchanged and the line
+# is identical; at n = 20 the wheel is the same but the SEGMENT is not (216
+# periods against 107), so the v1 work cursor -- launches into a 107-period
+# segment -- means nothing to v2.  One class for both, and the conservative
+# one: what carries over is the arithmetic claim "every x below the stored
+# boundary is swept", re-denominated by flooring onto this engine's period;
+# the work cursor and the values held for the open segment are dropped and
+# that segment is re-swept from its start (Campaign._adopt).  The keys live
+# HERE and nowhere else -- a list of old keys given to two of the three
+# readers is a green battery and a campaign that will not start; it has cost
+# this repo two campaign starts.
+PREVIOUS_ENGINES = ()                 # identical line, cursor whole: none
+ADOPTED_KEYS = ("v1-p1",)             # coverage only: (engine, plan) pairs
 # THE HOST POOL IS SIZED FROM A MEASUREMENT AT THE CAMPAIGN'S OWN FILTER
 # (CLAUDE.md 5f and 5g; CONVENTIONS.md "Sizing a hunt"), not from a
 # constant: `Campaign.size_pool` sweeps the launches the loop is about to
@@ -299,7 +334,7 @@ WORKER_RAMP_S = _pool.RAMP_S
 CHUNK = 256                       # survivors per pool task
 
 
-def config_key(fam, engine=None):
+def config_key(fam, engine=None, plan=None):
     fam = ref.family(fam)
     # The wheel is NOT in the key, because it is not fixed for the campaign
     # -- it is planned per filter, and the filter is in the STATE.  What is
@@ -309,7 +344,7 @@ def config_key(fam, engine=None):
     # configuration is then ASSERTED on load (unit, W, q2, seg_periods),
     # which is the check that actually stops a misread cursor
     # (OPTIMIZATION.md 2.9: a key describes, an assertion enforces).
-    key = (f"{fam.lower()}-{engine or ENGINE_VERSION}-{PLAN_VERSION}"
+    key = (f"{fam.lower()}-{engine or ENGINE_VERSION}-{plan or PLAN_VERSION}"
            f"-seg{CKPT_LAUNCHES}"
            f"-pbd{gpu.PB_DEFAULT}"
            f"-cpl{gpu.CAND_PER_LAUNCH4.bit_length() - 1}")
@@ -329,15 +364,15 @@ def ledger_path(fam):
 # load, --status, and the refusal check in main() -- and passing the same
 # list to three places is a thing you can forget at one of them; it cost
 # this repo two campaign starts before the policy existed (CONVENTIONS.md
-# "Reading an existing cursor").  v3 inherits v2's cursor (the identical
-# line: same wheel, unit, sieve and W, every fingerprint reproduced), so
-# every policy ACCEPTS the v2 key; the cursor drills in --selftest put all
-# three readers in front of every declared key, the v2-resume drill builds
-# a campaign on each family's real v2 checkpoint, and a foreign key refuses.
+# "Reading an existing cursor").  v2 ADOPTS v1's cursor (coverage only:
+# ADOPTED_KEYS above says why); the cursor drills in --selftest put all
+# three readers in front of every declared key, the adoption drill builds a
+# campaign on a v1-shaped checkpoint of each kind, and a foreign key refuses.
 _POLICIES = {fam: checkpoint.CursorPolicy(
                  ckpt_path(fam), config_key(fam),
                  accept=tuple(config_key(fam, engine=e) for e in PREVIOUS_ENGINES),
-                 adopt=())
+                 adopt=tuple(config_key(fam, *ep.split("-"))
+                             for ep in ADOPTED_KEYS))
              for fam in ref.FAMILIES}
 
 
@@ -356,8 +391,12 @@ def event_kind(run, frontier):
     return None
 
 
-def verify(N, run, fam):
+def verify(N, run, fam, witness=True):
     """The three independent confirmations plus the bounding witness.
+
+    witness=False is the [NEAR] path: a one-short value is verified but not
+    evidenced, so the stopper is shown composite by the strong test (the leg
+    that bounds the run) and its factor is not searched for (CLAUDE.md 5a).
 
     Everything is stated on N, the published term, because that is what the
     OEIS entry claims and because a RIDER -- a find whose run passes the
@@ -405,7 +444,8 @@ def verify(N, run, fam):
     stop = N // stop_i + s
     legs["stopper_composite"] = not mr_is_prime(stop)
     ok = all(legs.values())
-    wit = stopper_witness(stop) if legs["stopper_composite"] else None
+    wit = (stopper_witness(stop)
+           if witness and legs["stopper_composite"] else None)
     return ok, legs, {"i": stop_i, "value": stop, "factor": wit,
                       "why": "composite"}
 
@@ -639,15 +679,11 @@ class Campaign:
         self._snapshot = None
         self._proof_logged = None      # the filter whose crossing was logged
         self._load_kind = None
+        self._stored_k = 0             # the stored COVERAGE claim, in x
+        self._stored_key = None        # the key the stored cursor was under
+        self.adopt_floor = 0           # x below which an ADOPTED cursor's
+        #                                engine already certified the line
         self.loaded = self.load()
-        if self.loaded and self._load_kind != "own" and self.u:
-            # a v2/v3 work cursor counts third-level residues of one period;
-            # v4's counts launches of a segment.  Resume at the period.
-            log("STAGE", f"inherited cursor: u = {self.u} was a third-level "
-                         f"residue index of period {self.j}; v4 re-sweeps "
-                         f"that period from its start (at most one period "
-                         f"of device)")
-            self.u = 0
         self.eng = self._build_engine(self.filter_n())
         # STORE THE UNIT NEXT TO THE NUMBER AND ASSERT IT ON LOAD
         # (OPTIMIZATION.md 2.9).  The config key DESCRIBES the plan, which is
@@ -660,7 +696,9 @@ class Campaign:
                 f"but this campaign's next open term is a({self.filter_n()}): "
                 f"the stored `found` and the stored filter disagree, so the "
                 f"cursor cannot be read")
-        if self._stored_w and self._stored_w != int(self.eng.W):
+        if self.loaded and self._load_kind == "adopted":
+            self._adopt()
+        elif self._stored_w and self._stored_w != int(self.eng.W):
             raise ValueError(
                 f"{self.ckpt} counts periods of W = {self._stored_w:,} but "
                 f"this engine's period at n = {self.filter_n()} is "
@@ -678,9 +716,55 @@ class Campaign:
 
     def _build_engine(self, n):
         """The engine for filter n, PLANNED (never a stored constant)."""
-        unit, p1, p2, p3, q2 = plan_for(self.fam, n)
+        unit, p1, p2, p3, q2, pb = plan_for(self.fam, n)
+        # the RECORD is the engine's own runtime decision from this plan
         return gpu.GpuEngine(n, self.fam, p1=p1, p2=p2, p3=p3, q2=q2,
-                             unit=unit)
+                             unit=unit, pb=pb, seg_cap=pb)
+
+    def _adopt(self):
+        """Re-denominate a cursor written by a PREVIOUS engine/plan
+        (CONVENTIONS.md "Re-denominating a cursor across a wheel change").
+
+        What survives any correct engine is the arithmetic claim "every x
+        below the stored boundary is swept".  Everything denominated in the
+        old engine's units does not: its period index (if the wheel moved),
+        its work cursor (launches into a segment whose width and launch
+        decomposition may both have moved -- 107 periods against 216 at
+        n = 20) and the values it held for its open segment (they were
+        classified out of x order inside a segment this engine will sweep
+        again from its start, and would be narrated twice).  So:
+
+          * j is the stored boundary FLOORED onto this engine's period --
+            never rounded up, or a gap opens;
+          * u = 0 and `pending` is dropped: the open segment is re-swept;
+          * if flooring moved the boundary DOWN (the period changed), the
+            overlap [j*W, stored boundary) is line the old engine already
+            certified.  The census does not count it twice, and a DISCOVERY
+            inside it is two engines disagreeing about swept line: ALARM
+            (`adopt_floor`, carried in the checkpoint until the sweep is
+            past it).
+        """
+        old_j, old_u, held = self.j, self.u, len(self.pending)
+        old_k = int(self._stored_k) or int(old_j) * int(self._stored_w or 0)
+        W = int(self.eng.W)
+        self.j = old_k // W
+        self.u = 0
+        self.pending = []
+        self.adopt_floor = old_k if self.j * W < old_k else 0
+        log("STAGE",
+            f"ADOPTED a cursor written under {self._stored_key}: its "
+            f"coverage claim (every x below {old_k:,} swept at filter n = "
+            f"{self.filter_n()}) carries over, floored onto this engine's "
+            f"period W = {W:,} -> period {self.j} (it was period {old_j} of "
+            f"W = {int(self._stored_w):,}); its work cursor (u = {old_u}) "
+            f"and the {held} value{'' if held == 1 else 's'} it held for "
+            f"the open segment are dropped, and that segment is re-swept "
+            f"from its start on this engine's {self.eng.seg_periods}-period "
+            f"segments"
+            + (f"; the overlap [{self.j * W:,}, {old_k:,}) is re-swept as a "
+               f"cross-check -- not counted twice, and a discovery inside it "
+               f"is an ALARM" if self.adopt_floor else
+               " (same period: nothing below the boundary is re-swept)"))
 
     # ------------------------------------------------------------- frontier
     def frontier(self):
@@ -796,6 +880,9 @@ class Campaign:
                 # because a part-swept period is not contiguous in k.
                 "k": int(self.swept_k()),
                 "k_start": int(self.x_start()),
+                # an ADOPTED cursor's overlap (see _adopt); 0 once past it
+                "adopt_floor": (int(self.adopt_floor)
+                                if self.swept_k() < self.adopt_floor else 0),
                 # values classified inside the period still in progress.  A
                 # crash must not lose them: they are only narrated once the
                 # period closes and their k order becomes meaningful, so
@@ -842,6 +929,9 @@ class Campaign:
         self._load_kind = kind
         self._stored_w = int(st.get("W", 0))
         self._stored_n = st.get("n")
+        self._stored_k = int(st.get("k", 0))
+        self._stored_key = st.get("key")
+        self.adopt_floor = int(st.get("adopt_floor", 0))
         self.j = int(st["j"])
         self.u = int(st.get("u", 0))
         self.pending = [(int(k), int(r)) for k, r in st.get("pending", [])]
@@ -930,13 +1020,25 @@ class Campaign:
         kind = event_kind(run, frontier)
         if kind is None:
             return False
+        if k < self.adopt_floor:
+            # line an ADOPTED cursor's engine already swept and counted
+            if kind == "DISCOVERY":
+                log("ALARM", f"run {run} at x = {k:,} is a DISCOVERY below "
+                             f"x = {self.adopt_floor:,}, which the adopted "
+                             f"cursor's engine certified as swept: two "
+                             f"engines disagree about covered line")
+                raise SystemExit(2)
+            return False
         self.census[run] = self.census.get(run, 0) + 1
         if kind == "CENSUS":
             return False
         if kind == "NEAR":
             self.near += 1
             N = ref.term(self.eng.n, k)
-            ok, legs, _ = verify(N, run, self.fam)
+            # a [NEAR] records nothing, so it skips the factor witness
+            # (CLAUDE.md 5a): a bounded rho plus ECM on a ~40-digit stopper,
+            # with the device idle, for a factor nobody reads
+            ok, legs, _ = verify(N, run, self.fam, witness=False)
             if not ok:
                 log("ALARM", f"NEAR value N = {N:,} run {run} failed "
                              f"verification: {legs}")
@@ -1068,6 +1170,7 @@ class Campaign:
         self.u = 0
         self.boundary = self.j
         self.pending = []
+        self.adopt_floor = 0           # a new line: no adopted overlap on it
         log("STAGE",
             f"filter follows the frontier: n = {old.n} -> {self.eng.n}, and "
             f"with it the whole line -- L({old.n}) = {ref.L(old.n):,} becomes "
@@ -1075,8 +1178,12 @@ class Campaign:
             f"becomes {self.eng.unit}, the wheel "
             f"({old.p1},{old.p2},{old.p3}) becomes "
             f"({self.eng.p1},{self.eng.p2},{self.eng.p3}), the depth "
-            f"{old.q2} becomes {self.eng.q2} and the period {old.W:.4g} "
-            f"becomes {self.eng.W:.4g}; the sweep restarts at x = "
+            f"{old.q2} becomes {self.eng.q2}, the period {old.W:.4g} "
+            f"becomes {self.eng.W:.4g} and the segment {old.seg_periods} -> "
+            f"{self.eng.seg_periods} periods on the "
+            f"{'WIDE' if self.eng.wide else 'narrow'} survivor record (was "
+            f"{'wide' if old.wide else 'narrow'}; the engine chose it from "
+            f"the plan); the sweep restarts at x = "
             f"{self.x_start():,} (N = {ref.term(self.eng.n, self.x_start()):,}"
             f", the term just found -- monotonicity, so nothing is skipped) "
             f"and the ladder now aims at a({self.filter_n()})")
@@ -2041,16 +2148,174 @@ def _promotion_drill():
                     f"{after[1]}, wheel {before[4]} -> {after[4]}, q2 "
                     f"{before[3]} -> {after[3]}, period {before[2]:.3g} -> "
                     f"{after[2]:.3g}")
+        # ... AND THE PROMOTION THAT CHANGES THE RECORD (engine v2): a
+        # campaign that has found a(15)..a(17) promotes into n = 18, where
+        # the plan is the wheel to 61 and no u64 window worth having admits
+        # its period, so the engine the campaign builds there must come up
+        # on the WIDE record by itself -- from the plan, at runtime, with no
+        # flag -- and the one at n = 17 narrow.
+        while c.filter_n() < 17:
+            m = c.filter_n()
+            c.found[str(m)] = int(ref.term(m, c.x_start() + 10))
+        c.eng = c._build_engine(c.filter_n())
+        top = max(gpu._wheel_primes(c.eng.p1, c.eng.p2, c.eng.p3))
+        if c.filter_n() != 17 or c.eng.wide or top != 53:
+            return False, (f"PROMOTION FAIL: {fam} at n = {c.filter_n()} "
+                           f"(wheel to {top}) came up "
+                           f"{'wide' if c.eng.wide else 'narrow'}; expected "
+                           f"the narrow wheel to 53 at n = 17")
+        c.boundary = c.j = c.floor_period()
+        c.found["17"] = int(ref.term(17, c.x_start() + 1000))
+        c.follow_frontier()
+        top = max(gpu._wheel_primes(c.eng.p1, c.eng.p2, c.eng.p3))
+        if c.filter_n() != 18 or top != 61 or not c.eng.wide \
+                or c.eng.seg_periods != plan_for(fam, 18)[5]:
+            return False, (f"PROMOTION FAIL: {fam} promoted into n = 18 on "
+                           f"the wheel to {top}, {c.eng.seg_periods} periods, "
+                           f"{'wide' if c.eng.wide else 'NARROW'} record -- "
+                           f"expected the wheel to 61 on the wide record at "
+                           f"{plan_for(fam, 18)[5]} periods, chosen by the "
+                           f"engine from the plan")
+        if (c.eng.seg_periods + 1) * c.eng.Wp < 1 << 64:
+            return False, (f"PROMOTION FAIL: {fam} n = 18's segment fits a "
+                           f"u64 window -- the drill is not exercising the "
+                           f"record change")
+        if c.u != 0 or c.j != c.floor_period() or c.pending:
+            return False, (f"PROMOTION FAIL: {fam} kept a cursor across the "
+                           f"promotion into the wide record")
+        rows.append(f"{fam} n = 17 -> 18: wheel to 53 (narrow record) -> "
+                    f"wheel to 61 ({c.eng.seg_periods} periods, WIDE record, "
+                    f"chosen at runtime from the plan)")
         os.remove(path)
         for ext in (".bak",):
             if os.path.exists(path + ext):
                 os.remove(path + ext)
-    return True, ("promotion ok: " + "; ".join(rows) + " -- the cursor resets "
+    return True, ("promotion ok: " + "; ".join(rows) + " -- the record "
+                  "follows the plan at runtime (narrow at n = 17, wide at "
+                  "n = 18, decided in the engine from the wheel and window it "
+                  "is handed, no flag), the cursor resets "
                   "to the new filter's floor (the term just found, so nothing "
                   "is skipped and nothing re-swept), the retired rungs go, the "
                   "checkpoint round-trips at the new filter, and a cursor "
                   "stored at the wrong filter is REFUSED rather than read in "
                   "the wrong units")
+
+
+def _adoption_drill():
+    """A v1 CURSOR IS ADOPTED: coverage carries over, floored; nothing
+    denominated in the old engine's units does.
+
+    Both families have a live v1 checkpoint, and engine v2 changes what a
+    segment is (216 periods against 107 at n = 20) even where the wheel did
+    not move.  drills.standard puts every READER in front of the v1 key; this
+    is what the CAMPAIGN then does with it, on scratch checkpoints shaped
+    like the two real ones:
+
+      * SAME PERIOD (both live cursors): the boundary period is kept exactly,
+        the work cursor and the held values are dropped (the open segment is
+        re-swept from its start -- so nothing held is narrated twice), and
+        no overlap is declared;
+      * A DIFFERENT PERIOD: the boundary is FLOORED onto this engine's
+        period, never rounded up; the overlap below the old boundary is not
+        counted twice, a DISCOVERY inside it is an ALARM (two engines
+        disagreeing about swept line), the floor round-trips through this
+        engine's own checkpoint, and it is gone once the sweep is past it;
+      * finds, census, rungs and the clock carry over untouched either way.
+    """
+    import contextlib
+    import io
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix="lcml-adopt-")
+    path = str(pathlib.Path(tmp) / "c.json")
+    rows = []
+    for fam in ref.FAMILIES:
+        pol = _POLICIES[fam].at(path)
+        old_key = config_key(fam, *ADOPTED_KEYS[0].split("-"))
+        if old_key not in pol.readable() or old_key == config_key(fam):
+            return False, f"ADOPT FAIL: {fam}'s policy does not declare {old_key}"
+        c = Campaign(_args_for(fam), ckpt=path, cursor=pol)
+        W = int(c.eng.W)
+        j0 = c.floor_period() + 5 * c.eng.seg_periods
+        front = c.frontier()
+        # the re-denominating case once (it is the same code for both
+        # families); the same-period case, which is both LIVE cursors, on each
+        cases = (("same period", W),) + (
+            (("other period", 1000003),) if not rows else ())
+        for tag, W_old in cases:
+            st = c.state()
+            k_old = j0 * W + (0 if W_old == W else 12345)
+            k_old -= k_old % W_old              # a boundary of the OLD wheel
+            st.update(key=old_key, engine="v1", plan="p1", W=W_old,
+                      j=k_old // W_old, u=777, k=k_old, seg_periods=107,
+                      pending=[[k_old + 5, front], [k_old + 9, front - 1]],
+                      census={str(front - 1): 40, str(front): 3},
+                      near=3, survivors=123456, elapsed=4321.0)
+            checkpoint.save(path, st)
+            a = Campaign(_args_for(fam), ckpt=path, cursor=pol)
+            if a._load_kind != "adopted":
+                return False, (f"ADOPT FAIL: {fam} read the v1 key as "
+                               f"{a._load_kind!r}")
+            if a.j != k_old // W or a.j * W > k_old or (a.j + 1) * W <= k_old:
+                return False, (f"ADOPT FAIL: {fam} ({tag}) landed on period "
+                               f"{a.j}, not the floor of x = {k_old} on W = {W}")
+            if a.u != 0 or a.pending or a.boundary != a.j:
+                return False, (f"ADOPT FAIL: {fam} ({tag}) kept the old work "
+                               f"cursor or its held values (u = {a.u}, "
+                               f"{len(a.pending)} held)")
+            if a.census != {front - 1: 40, front: 3} or a.near != 3 \
+                    or a.survivors != 123456 or a.elapsed != 4321.0:
+                return False, f"ADOPT FAIL: {fam} ({tag}) lost the counters"
+            want_floor = 0 if a.j * W == k_old else k_old
+            if a.adopt_floor != want_floor:
+                return False, (f"ADOPT FAIL: {fam} ({tag}) declares the "
+                               f"overlap below {a.adopt_floor}, expected "
+                               f"{want_floor}")
+            if not want_floor:
+                rows.append(f"{fam} {tag}: period {a.j} kept, u 777 -> 0, "
+                            f"2 held values dropped")
+                continue
+            # inside the overlap: not counted, and a discovery is an ALARM
+            if a.handle(k_old - 1, front - 1) is not False \
+                    or a.census.get(front - 1) != 40:
+                return False, (f"ADOPT FAIL: {fam} counted a census value "
+                               f"inside the adopted overlap a second time")
+            try:
+                # the expected [ALARM] line stays out of the battery's log
+                with contextlib.redirect_stdout(io.StringIO()):
+                    a.handle(k_old - 1, front + 1)
+                return False, (f"ADOPT FAIL: {fam} accepted a DISCOVERY "
+                               f"inside line the adopted cursor certified")
+            except SystemExit as e:
+                if e.code != 2:
+                    return False, f"ADOPT FAIL: {fam} exited {e.code}, not 2"
+            # above it: counted as usual
+            a.handle(k_old + 1, front - 1)
+            if a.census.get(front - 1) != 41:
+                return False, (f"ADOPT FAIL: {fam} did not count a census "
+                               f"value above the adopted overlap")
+            # the floor survives this engine's own checkpoint, and goes once
+            # the sweep is past it
+            if not a.save():
+                return False, f"ADOPT FAIL: {fam}'s save did not land"
+            b = Campaign(_args_for(fam), ckpt=path, cursor=pol)
+            if b._load_kind != "own" or b.adopt_floor != k_old:
+                return False, (f"ADOPT FAIL: {fam} reloaded its own cursor "
+                               f"as {b._load_kind!r} with overlap floor "
+                               f"{b.adopt_floor}")
+            b.j = b.boundary = b.j + 1
+            if b.state()["adopt_floor"] != 0:
+                return False, (f"ADOPT FAIL: {fam} still declares the overlap "
+                               f"after sweeping past it")
+            rows.append(f"{fam} {tag}: x = {k_old:.6g} floored to period "
+                        f"{a.j}, overlap guarded (census not recounted, "
+                        f"discovery = ALARM), round-trips, retires")
+        for ext in ("", ".bak"):
+            if os.path.exists(path + ext):
+                os.remove(path + ext)
+    return True, ("adoption ok: " + "; ".join(rows) + " -- a v1 cursor's "
+                  "coverage claim carries over floored onto this engine's "
+                  "period, its work cursor and held values never do, and "
+                  "finds, census and clock are untouched")
 
 
 def _other_families_cursor_drill(fam):
@@ -2121,7 +2386,7 @@ def _families_stay_apart():
     units = {}
     for f in fams:
         for n in range(open_n(f), open_n(f) + 6):
-            unit, p1, p2, p3, q2 = plan_for(f, n)
+            unit, p1, p2, p3, q2, pb = plan_for(f, n)
             cpu.assert_unit(n, f, unit)      # raises if not forced there
             units[n] = unit
     if [units[n] for n in range(15, 21)] != [2, 34, 2, 114, 6, 30]:
@@ -2139,9 +2404,10 @@ def _families_stay_apart():
     # and re-priced it two terms later, when the same period had become 0.13%
     # of the hunt; the ratio is what matters, so it is checked per filter.
     tight = []
+    wides = []
     for f in fams:
         for n in range(open_n(f), open_n(f) + 6):
-            unit, p1, p2, p3, q2 = plan_for(f, n)
+            unit, p1, p2, p3, q2, pb = plan_for(f, n)
             W = unit
             for q in gpu._wheel_primes(p1, p2, p3):
                 if unit % q:
@@ -2156,7 +2422,30 @@ def _families_stay_apart():
                                f"under the {PERIOD_MARGIN}x margin a find's "
                                f"over-sweep needs")
             tight.append((med / W, f, n))
+            # ... AND A WIDE WHEEL'S SEGMENT MUST FIT THE SEARCH.  The narrow
+            # record kept a period that passed the check above to a segment
+            # of a few percent of the median; the wide record lets the period
+            # grow by another wheel prime (a factor of ~60), and then it is
+            # the SEGMENT -- the unit a find's over-sweep is paid in -- that
+            # can outlast the search.  The wheel to 59 at n = 17 is declined
+            # for exactly this (1.9 medians at 224 periods).
+            narrow_pv = ((gpu.REDUCE_MAX - q2) // (W // unit)) - 1
+            if narrow_pv < gpu.WIDE_MIN_PV:
+                if pb * W > SEGMENT_MARGIN * med or pb < gpu.WIDE_MIN_PV:
+                    return False, (f"FAMILY FAIL: {f} n = {n} plans a WIDE "
+                                   f"segment of {pb} periods x {W:.4g} = "
+                                   f"{pb * W:.4g} against a modelled median of "
+                                   f"{med:.4g} -- over the {SEGMENT_MARGIN}x "
+                                   f"margin, or under {gpu.WIDE_MIN_PV} periods")
+                wides.append((f, n, pb * W / med))
     tight.sort()
+    # the wide record is PLANNED at n = 18 and 19 and nowhere else (that
+    # the engine then takes it by itself, through the campaign's own build
+    # path, is _promotion_drill's to show -- on both families)
+    if sorted({n for _f, n, _r in wides}) != [18, 19]:
+        return False, (f"FAMILY FAIL: the wide record is planned at "
+                       f"{sorted({n for _f, n, _r in wides})}, not at n = 18 "
+                       f"and 19 only")
     # each of these contains a prime that is NOT forced at that filter --
     # 17 is forced only at n = 16, 3 only from n = 18 -- so each must RAISE
     for n, wrong in ((15, 34), (17, 34), (18, 34), (16, 6), (17, 114)):
@@ -2171,11 +2460,13 @@ def _families_stay_apart():
                   "rider aliases resolve, the PER-FILTER plan is admissible at "
                   "every filter n = 15..20 with the units coming out 2, 34, 2, "
                   "114, 6, 30 -- not monotone, so a carried-forward unit is "
-                  "refused -- and every planned period is small against its "
-                  "own search: the tightest is %s n = %d at %.1f periods to "
-                  "the modelled median, against a %gx margin (a find costs at "
-                  "most one period of over-sweep)"
-                  % (tight[0][1], tight[0][2], tight[0][0], PERIOD_MARGIN))
+                  "refused -- every planned period is small against its "
+                  "own search (the tightest is %s n = %d at %.1f periods to "
+                  "the modelled median, against a %gx margin), every WIDE "
+                  "wheel's segment fits under %gx its median (planned at "
+                  "n = 18 and 19 only, the longest %.2f medians)"
+                  % (tight[0][1], tight[0][2], tight[0][0], PERIOD_MARGIN,
+                     SEGMENT_MARGIN, max(r for _f, _n, r in wides)))
 
 
 def _campaign_wiring_drill(fam="A078502"):
@@ -2216,7 +2507,7 @@ def _campaign_wiring_drill(fam="A078502"):
         if floor != -(-ref.KNOWN[fam][n0 - 1] // ref.L(n0)):
             return False, (f"WIRING FAIL: the floor {floor} is not a({n0-1}) "
                            f"re-denominated into filter {n0}")
-        unit, p1, p2, p3, q2 = plan_for(fam, n0)
+        unit, p1, p2, p3, q2, pb = plan_for(fam, n0)
         if (c.eng.n, c.eng.fam, c.eng.unit, c.eng.q2) != (n0, fam, unit, q2) \
                 or (c.eng.p1, c.eng.p2, c.eng.p3) != (p1, p2, p3):
             return False, ("WIRING FAIL: the engine is not the PLANNED one "
@@ -2407,6 +2698,7 @@ def selftest(fam="A078502"):
     rows.append(_other_families_cursor_drill(fam))
     for d in (_ceiling_drill, _canary_hunt, _protocol_drill,
               _certificate_drill, _resume_drill, _promotion_drill,
+              _adoption_drill,
               _classification_drill, _stop_on_discovery_drill,
               _families_stay_apart):
         rows.append(d())

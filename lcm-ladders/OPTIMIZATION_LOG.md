@@ -764,27 +764,164 @@ every shape at once, which is a quieter machine, not an engine change.
 
 ---
 
+## Round 10 / engine v2 (2026-09-19) - the 2^64 bound and the wide survivor record
+
+Open item 1 of this file, built -- ten days after factorial-ladders built it
+on THIS engine (its v2 and v3). The port is that project's record and
+splitter; the plan, the measurements and the verdicts below are this one's,
+and they differ from its numbers in both directions.
+
+**Method.** Scratchpad harnesses (not kept). The A/B loads engine v1 (the
+tree's file before the change) and v2 side by side, builds each at the named
+(wheel, window), and per round runs every configuration back to back for ~3 s
+of launches on the PRODUCTION path (no sync inside; launch count calibrated
+once), rate = launches x W x seg_periods / launches_per_segment / wall.
+Medians of 3-8 interleaved rounds, A074200. v2 on v1's own plan reads **1.006 /
+1.005 / 1.000** at n = 17 / 18 / 19, so the narrow path did not move.
+
+### Measurement 19 - the reduction bound is 2^64: **1.27x at n = 20**
+
+`REDUCE_MAX` was 2^63, inherited through three projects. The arithmetic's own
+bound is the word (the paper bound is at the constant; G19 emulates it bit
+for bit on 11,117 primes x 68 offsets in [2^63, 2^64), and shows it WRONG at
+2^64 + x). It binds only where the narrow window was cut: n = 20 and 21,
+107 periods -> 216. Paired, v1 at its own campaign window (128 bits, 107
+live) against v2 (224 bits, 216 live): 3.710e17 -> 4.705e17 x/s, **1.268x**;
+192 live periods reads 1.263x. Cross-checked before it was frozen: v2's
+first four third-level residues over 216 periods are IDENTICAL, all 264,771
+survivors, to v1 at pb = 64, where every offset is under 2^63 (SCORE20).
+
+A trap this avoided: lifting the constant ALONE makes the old greedy take 59
+at n = 17 on a 45-period narrow window (PV_MIN was 32). The planner now
+treats a wheel the u64 admits under `WIDE_MIN_PV` = 128 periods as a wide
+wheel, exactly as the engine does.
+
+### Measurement 20 - the wide record and the wheel to 61: **1.15x at n = 18, 1.23x at n = 19**
+
+The candidate past the window sieve becomes (within-period offset, period);
+per-launch device tables add (j*W' + base) mod q after each Barrett step, so
+no u64 holds j*W' and the wheel is bounded by W' < 2^63 alone. `WIDE` is a
+literal in the generated kernel and the ENGINE chooses it from the wheel and
+window it is handed. Candidate density said 1.42x / 1.45x; measured:
+
+| filter | v1 plan | v2 plan | x/s v1 -> v2 | ratio |
+|---|---|---|---|---|
+| n = 17 | wheel to 53, narrow, 224 | unchanged | 6.97e16 -> 7.01e16 | 1.006 |
+| n = 18 | wheel to 59, narrow, 224 | **wheel to 61, WIDE, 224** (split {5,7,23,47,53,59} x {29,31,37} x {41,43,61}, non-contiguous) | 7.17e17 -> 8.22e17 | **1.147** |
+| n = 19 | wheel to 59, narrow, 224 | **wheel to 61, WIDE, 224** | 7.78e16 -> 9.54e16 | **1.226** |
+| n = 20, 21 | wheel to 61, narrow, 107 live | same wheel, narrow, 216 live | 3.71e17 -> 4.71e17 | **1.268** |
+
+The wide record itself costs ~9% where the narrow one would do (the n = 20
+wheel forced wide at 224 reads 4.27e17 against 4.71e17 narrow at 216), which
+is why it dispatches. Cross-checked before SCORE18 was frozen: the planned
+n = 18 wheel on the wide record is IDENTICAL, all 81,261 survivors over 224
+periods, to the same wheel on the NARROW record at pb = 32.
+
+### Measurement 21 - the wheel to 59 at n = 17: **declined, with numbers**
+
+| wheel to 59, wide, at | 224 periods | 128 | 96 |
+|---|---|---|---|
+| ratio to the shipped 53-wheel at 224 | 1.099 | 1.022 | 0.965 |
+| segment / modelled median | 1.9 | 1.09 | 0.82 |
+
+A find is only the least once its SEGMENT closes. At 224 periods that is 45
+minutes of over-sweep against a 24-minute search for 1.10x; at the windows
+that fit under one median it is 1.02x and 0.97x. So `wheel_plan` admits a
+wide wheel only if a 128-period segment of it fits under one modelled median
+(`SEGMENT_MARGIN`), which declines 59 at n = 17 and takes 61 at n = 18
+(0.37 medians) and n = 19 (0.007). **n = 15, 16 and 17 plan exactly what v1
+did**, which is also why the live A074200 cursor's line is unchanged.
+
+### Measurement 22 - the constants, re-swept on the wide record
+
+| knob | n = 18 | n = 19 | verdict |
+|---|---|---|---|
+| launch budget 2^38 vs **2^37** | 0.990 | 0.990 | 2^37 kept (factorial-ladders ships 2^38 wide at 1.109; here a tie, and a tie takes 600 MB less) |
+| `pb` 160 / 192 / **224** / 256 | 0.964 / 1.003 / 1.000 / 0.971 | 0.940 / 1.002 / 1.000 / -- | 224 |
+| `q2` half / **planned** / double | 1.016 / 1.000 / 1.019 | -- | flat: the load rule decides (3.7e4 survivors/s) |
+| `BIT_SURV` .012 / .007 / **.005** / .004 / .0025 | 0.865 / 1.000 / **1.023** / 1.016 / -- | -- / 1.000 / **1.023** / 1.010 / 0.974 | **moved, wide record only** (`BIT_SURV_WIDE` = 0.005; eight rounds, intervals disjoint). The narrow record keeps 0.007 (0.004 read 0.96 at n = 17, round 7) |
+| `K2_SURV4` **.0003** / .0001 | -- | 1.000 / 1.012 | inside the noise; unchanged |
+
+The final table above is measured WITH `BIT_SURV_WIDE`.
+
+### The launcher
+
+* `plan_for` returns the window as well; `ENGINE_VERSION` v2, `PLAN_VERSION`
+  p2. **The v1 cursors are ADOPTED, not accepted** (both families have a live
+  one): the coverage claim carries over floored onto this engine's period,
+  the work cursor and the values held for the open segment are dropped and
+  that segment is re-swept. At n = 20 that is forced -- v1's `u` counts
+  launches into a 107-period segment and v2's segment is 216. A re-denominated
+  overlap is not counted twice and a DISCOVERY inside it is an ALARM.
+  `_adoption_drill` drills both shapes; all three readers were also put in
+  front of scratch copies of the two REAL checkpoints (A074200 n = 17 period
+  20446, A078502 n = 20 period 88: coverage unchanged, <= one segment redone).
+* `[NEAR]` values skip the factor witness (`verify(..., witness=False)`;
+  CLAUDE.md 5a): it was a bounded rho plus ECM with the device idle.
+* `_promotion_drill` promotes a campaign n = 17 -> 18 and asserts the engine
+  comes up narrow then WIDE by itself; `_families_stay_apart` asserts the wide
+  record is planned at n = 18 and 19 only and its segment fits the median.
+
+### Round 10 result
+
+G19 and G20 are new; G15 now checks both records. `python score.py`: every v1
+fingerprint reproduced, **SCORE 60,020,988,032** (59,854,860,101 the same
+session before the change: the narrow path is unchanged), SCOREP 59.8e9,
+SCORE16 391.9e9, SCORE17 67.8e9, **SCORE18 798.3e9** and **SCORE20 467.8e9**
+(new shapes), SCORE2L 21.3e9, SCORE1L 5.30e9, SCORE9 6.69e6; 245 s.
+`python launch.py --selftest`: **47/47 ALL GREEN in 217 s** (199 s before;
+286 s on a cold kernel cache, which is close enough to the five-minute cap
+that the next gate added has to pay for itself -- G17 alone is 86 s).
+
+What it buys the hunt: a(18) at the median 11.2 h -> 9.8 h of device, a(19)
+of A074200 ~13 days -> ~10.6; A078502's a(20) ~1.27x sooner and still out of
+reach.
+
+### What the resumed campaign measured (2026-09-19, engine v2, no flags)
+
+The owner resumed A074200 at 02:02 on the round 10 defaults. The v1 cursor
+was adopted at period 20,446 with coverage unchanged; a(17) landed twelve
+minutes later and a(18) 7.03 hours after that (RESULTS.md).
+
+| filter | campaign | the paired A/B above | v1 beside it |
+|---|---|---|---|
+| n = 17 | 7.0-7.2e16 x/s in `[STATUS]`, as v1 ran it an hour earlier | 7.01e16 | 6.97e16 |
+| n = 18, wide record | **8.54e17** over 7.03 h, 2.16e22 of line | 8.22e17 | 7.17e17 |
+| n = 19, wide record | **9.87e16** over 4.35 h, 1.55e21 of line | 9.54e16 | 7.78e16 |
+
+So the record dispatched by itself at the promotion, the pipeline ran at the
+engine's rate on it (4% above the A/B at both filters, pool of 3), and the
+n = 18 phase took 7.03 h where v1's 6.94e17 campaign rate prices the same
+line at 8.65 h.  **The cost side, stated**: the hunt was stopped for 54
+minutes while v2 was built, on an unmeasured estimate that included n = 17,
+where v2 is worth nothing -- 2.3e20 of n = 17 line not swept, more than that
+term's median.  a(17) then came 12 minutes into the resumed run.  A read-only
+review is a hypothesis list (OPTIMIZATION.md rule 5a); the hunt should have
+kept running until the n = 17 A/B said otherwise.
+
+`python launch.py --selftest` 47/47 ALL GREEN in 225 s and `python score.py`
+**SCORE 60,071,486,951**, every one of the nine fingerprints reproduced, with
+the nine finds in `lcml_reference.FOUND` (G1b checks a(15)-a(18) of A074200
+from the bare definition; G18 compiles A074200's resumed filter n = 19 and
+the two after it).
+
+---
+
 ## Open, priced, unbuilt
 
 Written down so the next pass starts from evidence (OPTIMIZATION.md Rule 6):
 
-1. **A wider survivor record**, which is what caps the wheel -- and round 9
-   sharpened the price. The emitted offset is a u64 within the launch, so
-   the launch span is bounded by 2^64 whatever the reduction does, and the
-   Barrett tail adds a 2^63 bound of its own. Together they stop the subset
-   wheel one prime short: at n = 17 the greedy would take **59** next
-   (keep 0.712, so **1.40x fewer candidates**) and the period would still be
-   117 times the modelled median, comfortably inside the over-sweep margin;
-   at n = 18 it would take 59 for 1.44x with 619 periods to spare. n = 15
-   gains nothing (its next prime is 53, and the period would exceed the
-   over-sweep margin). So this is worth **~1.4x at n = 17 and n = 18** --
-   the two filters that cost the night's time and the week's.
-   Scope: emit the within-period offset and the period index separately
-   (the shared queues already carry them apart since round 4, so only the
-   survivor buffer, the global tail queue, the pinned readback, PRE_COPY and
-   `_collect` change), and split the Barrett input the same way, which needs
-   a `W' mod q` table the engine already computes (`_wmod`). **The biggest
-   single number still on the table, and the biggest change.**
+1. **The wheel to 67 at n = 20 has NO admissible level split** (W1, W2 <
+   2^32 with R1 <= 2^21, R2, R3 <= 65535: exhaustive over first-level
+   subsets, 2026-09-19), so n = 20 stays on the wheel to 61; 1.43x fewer
+   candidates would need R1_MAX raised or a fourth level. n = 21 does find
+   one (wheel to 67, wide, 9 blocks/SM in G18) and **has never been priced**,
+   nor has n = 22 -- rule 5g owes both a sweep before a campaign promotes
+   there, which is after an a(20).
+   **Carrying the classified line across a promotion** (factorial-ladders'
+   v2 launcher) is also unbuilt: a segment's over-sweep is re-swept by the
+   next filter. Worth <= 4 min at 17 -> 18 and <= ~2.6 h at 18 -> 19 (the
+   0.37-median wide segment, re-swept at n = 19's rate: ~1% of that hunt).
 2. **More ILP inside a thread.** The kernel is latency-bound (both rooflines
    at ~26%) and occupancy is now at the shared-memory limit with 6 blocks
    per SM, so the next axis is independent work per thread -- two

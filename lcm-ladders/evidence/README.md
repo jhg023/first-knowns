@@ -7,9 +7,10 @@ One JSON per verified **first occurrence**, plus a ledger per family. Census
 values are counts in the checkpoint and in the `[STATUS]` line, never files
 (CONVENTIONS.md, "The census is counted, not narrated").
 
-Six files from the campaigns of 2026-09-06: A078502's a(15), a(16), a(17)
-and a(18) = a(19) (one file, `settles = [18, 19]`), and A074200's a(15) and
-a(16) ([RESULTS.md](../RESULTS.md)).
+Eight files: six from the campaigns of 2026-09-06 — A078502's a(15), a(16),
+a(17) and a(18) = a(19) (one file, `settles = [18, 19]`) and A074200's a(15)
+and a(16) — and A074200's a(17) and a(18) from that campaign resumed on
+2026-09-19 ([RESULTS.md](../RESULTS.md)).
 
 ## What a file contains
 
