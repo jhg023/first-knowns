@@ -1,5 +1,13 @@
 {
+ "sequence": "A164926",
+ "forms": "x^2 + x + p, x = 0..n-1 (composite at x = n)",
  "p": 348284517256411907,
+ "oeis_terms": {
+  "17": 348284517256411907
+ },
+ "settles": [
+  17
+ ],
  "run": 17,
  "values_prime_x": [
   0,

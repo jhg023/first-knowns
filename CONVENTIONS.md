@@ -136,6 +136,75 @@ function per project (`event_kind`), and each selftest drills it: beyond
 the frontier → DISCOVERY, one short → NEAR, below → CENSUS, under the
 floor → nothing.
 
+### Naming in an evidence file (binding for every project)
+
+**An evidence file is read by the person who types the term into the
+OEIS, not by the engine — so it speaks the OEIS entry's language, and
+says outright which integer to submit.** Every record opens with the same
+four fields, built by `huntlib.evidence.header` and nothing else:
+
+```json
+{
+ "sequence": "A177013",
+ "forms": "k!*m - 1, k = 1..n",
+ "m": 1639203889936938872760,
+ "oeis_terms": {"18": 1639203889936938872760},
+```
+
+1. **`sequence`** — the A-number the integer belongs to.
+2. **`forms`** — the condition, written in the letters the OEIS **name**
+   uses. Read the `%N` line before writing it; do not reuse a sibling's.
+3. **the published integer, under the letter the OEIS name gives the
+   term** — `m` for A177013, `k` for A088250, `p` for A164926, `N` for
+   A078502 — and that letter must stand alone in `forms`. **Never the
+   engine's sweep variable under the engine's name.**
+4. **`oeis_terms`** — `{index: integer}` for every index the find
+   settles: `{"13": v, "14": v, "15": v}` when one integer is three terms.
+   This is the literal answer to "what do I submit, and where", so nobody
+   has to infer it from a filename, a `run`, or the code. Every integer in
+   it equals field 3; `settles` lists the same indices. What a find settles
+   in a *derived* entry goes in `also_settles` as `{sequence, n, value}`
+   with the derived entry's own integer (A226935 is A177014 **plus one**).
+
+An engine whose sweep variable is *not* the published term (lcm-ladders
+sweeps x and publishes N = lcm(1..n)·x) carries it as a second field under
+the letter it has in `forms` — `"(N - k)/k = (L/k)*x - 1"` names both.
+Keys inside `least_claim` that carry a letter carry the OEIS one
+(`swept_to_m`). `stopper.i` is the index of the first form that fails,
+whatever letter the entry uses for its index. The same letter goes in
+every line a person reads — `[DISCOVERY]`, `[NEAR]`, `[STATUS]`, `[STAGE]`,
+`--status` — and in RESULTS.md; where a project's prose keeps a uniform
+notation across siblings whose entries disagree, its README and RESULTS
+open with a table mapping it to each entry's letters. What the engines,
+the checkpoint and the gate messages call their variables is their own
+business.
+
+**Siblings do not share letters, and the clash is not cosmetic.** A088250
+and A088651 read "smallest k such that r·k ± 1 is prime for r = 1..n";
+A173750, A125838, A125839, A164325 and A164326 — the same ladders —
+read "smallest m such that k·m ± 1 is prime for k = 2..n". linear-ladders
+wrote all seven as `k` with `forms` in r and k, so for five families the
+file's `k` was the entry's m and the entry's `k` was the file's r.
+factorial-ladders wrote its sixteen finds under `x` beside a `forms` that
+said `k!*m - 1`, while `--status` printed the same integer as `k`; and
+lcm-ladders carried A074200's term as `N` beside a `forms` that said m.
+The three oldest projects had no `sequence` or `forms` at all. The owner
+found it, at the moment of submitting, by having to ask which field was
+the number. All 156 records in the tree were migrated on 2026-09-18
+(names only — a migration check required every value to be unchanged),
+and every integer the OEIS already lists was confirmed to sit at exactly
+the index its `oeis_terms` gives.
+
+Enforcement: `huntlib.evidence.check_names(ev, letter)` is the rule as
+code, `gate_evidence` drills it in both directions (the shapes that
+shipped wrong are refused), and `huntlib.evidence.gate_names(dirname,
+letter)` reads back every file and ledger row in a project's `evidence/`.
+A new project's selftest builds its writer's header for every family and
+runs `gate_names` on its own directory (factorial-ladders'
+`_evidence_names_drill` is the model). Paused projects had their writers
+and files brought over without their batteries being run (the rule
+above); adding the drill there is an item of resuming them.
+
 **The 30-second heartbeat is mandatory, and it runs on the wall clock
 (repo-wide).** Every launcher logs a `[STATUS]` line every 30 s of wall
 clock by default (`--heartbeat`), and that line carries the census counts

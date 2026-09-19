@@ -317,6 +317,30 @@ each README stays.
    N -+ 1 is structureless: measure `subproof_rate` there). See
    CONVENTIONS.md "Numeric hygiene".
 
+5i. **AN EVIDENCE FILE SPEAKS THE OEIS ENTRY'S LANGUAGE, AND SAYS WHICH
+   INTEGER TO SUBMIT.** The reader of an evidence file is the owner, at the
+   moment of typing a term into the OEIS -- not the engine. Every record
+   opens with `sequence`, `forms` written in the letters the OEIS **name**
+   uses, the published integer under the letter that name gives the term
+   (and that letter must stand alone in `forms`), and `oeis_terms`, the
+   `{index: integer}` map of literally what goes where. Build it with
+   `huntlib.evidence.header`; never write the integer under the engine's
+   sweep variable. **Read the `%N` line of each entry before naming
+   anything, and read it per entry: siblings do not share letters.**
+   A088250 says "smallest k such that r*k + 1"; A173750, the same ladder
+   from 2, says "smallest m such that k*m + 1" -- so linear-ladders' uniform
+   `k` was, for five of its seven families, the entry's m, with the entry's
+   k being the file's index. factorial-ladders wrote `x` beside a `forms`
+   that said `k!*m - 1` while `--status` printed the same integer as `k`,
+   and the owner had to ASK which field was the number to submit
+   (2026-09-18; all 156 records in the tree were migrated that day and
+   checked against the OEIS by index). The same letter goes in every line a
+   person reads (`[DISCOVERY]`, `[NEAR]`, `[STATUS]`, `[STAGE]`,
+   `--status`) and in RESULTS.md; what the engines and the checkpoint call
+   their variables is their own business. `huntlib.evidence.check_names`
+   is the rule as code and `gate_names` reads a whole `evidence/` back.
+   See CONVENTIONS.md "Naming in an evidence file".
+
 6. **New projects** copy the skeleton, import huntlib for
    infrastructure, keep all mathematics in-project, and add a row to the
    top-level README's project table. Only projects with verified
@@ -342,6 +366,14 @@ each README stays.
          factor witnesses) for FIRST OCCURRENCES ONLY -- census is counts
          in the checkpoint and the log, never files; runtime checkpoints
          gitignored
+   - [ ] **every evidence record opens with `huntlib.evidence.header`**
+         (rule 5i): `sequence`, `forms` in the OEIS name's own letters, the
+         integer under the OEIS letter for the term -- read each entry's
+         `%N` line, siblings disagree -- and `oeis_terms` {index: integer};
+         the same letter in every log line a person reads and in
+         RESULTS.md; the selftest builds the writer's header for every
+         family and runs `evidence.gate_names` on the project's own
+         `evidence/` (CONVENTIONS.md "Naming in an evidence file")
    - [ ] campaign configuration priced the way 5c says (device s and
          host core-s per unit k-line, per candidate setting), not just a
          fast kernel

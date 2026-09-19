@@ -872,8 +872,15 @@ class Campaign:
             routes[r] = routes.get(r, 0) + 1
         lo = ref.rungs_from(self.fam)
         also = also_settles(self.fam, k, run, settles)
-        ev = {"sequence": self.oeis, "forms": ref.FAMILIES[self.fam]["forms"],
-              "sign": self.s, "k": int(k),
+        # The record speaks the OEIS entry's language (CONVENTIONS.md
+        # "Naming in an evidence file"): the published integer under the
+        # entry's own letter, a `forms` that uses it, and `oeis_terms`
+        # saying literally what goes into the OEIS.
+        term = ref.FAMILIES[self.fam]["term"]
+        ev = {**evidence.header(self.oeis,
+                                ref.FAMILIES[self.fam]["oeis_forms"],
+                                term, k, settles),
+              "sign": self.s,
               "run": int(run), "settles": settles,
               "values": {str(i): int(ref.value(self.fam, k, i))
                          for i in range(lo, run + 1)},
@@ -902,7 +909,7 @@ class Campaign:
             self.found[str(n)] = int(k)
         path = evidence.record(
             ev, EVID, f"{self.oeis}_a{settles[0]}_{k}.json",
-            ledger_path(self.fam), key="k",
+            ledger_path(self.fam), key=term,
             label="%s a(%s)" % (self.oeis, ",".join(map(str, settles))))
         self.discoveries += 1
         proved = len(certs) - len(unproved)

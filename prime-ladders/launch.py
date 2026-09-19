@@ -785,7 +785,13 @@ class Campaign:
         for c in certs.values():
             r = c.get("proof") if c else "none"
             routes[r] = routes.get(r, 0) + 1
-        ev = {"sequence": self.oeis, "sign": self.s, "k": int(k),
+        # The record speaks the OEIS entry's language (CONVENTIONS.md
+        # "Naming in an evidence file"): the published integer under the
+        # entry's own letter, a `forms` that uses it, and `oeis_terms`
+        # saying literally what goes into the OEIS.
+        forms = "k*prime(i) %s 1, i = 1..n" % ("+" if self.s > 0 else "-")
+        ev = {**evidence.header(self.oeis, forms, "k", k, settles),
+              "sign": self.s,
               "run": int(run), "settles": settles,
               "values": {str(i): int(ref.value(k, i, self.s))
                          for i in range(1, run + 1)},

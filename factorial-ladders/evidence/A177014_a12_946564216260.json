@@ -1,8 +1,11 @@
 {
  "sequence": "A177014",
  "forms": "k!*m + 1, k = 1..n",
+ "m": 946564216260,
+ "oeis_terms": {
+  "12": 946564216260
+ },
  "sign": 1,
- "x": 946564216260,
  "filter_n": 12,
  "run": 12,
  "settles": [
@@ -136,9 +139,9 @@
   }
  ],
  "least_claim": {
-  "swept_from_x": 133493208618,
+  "swept_from_m": 133493208618,
   "covered_by_previous_filter_to": 150141501510,
-  "swept_to_x": 946564216260,
+  "swept_to_m": 946564216260,
   "filter": 12,
   "wheel": 6915878970,
   "sieve_depth": 1048576,

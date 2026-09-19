@@ -2,8 +2,11 @@
  {
   "sequence": "A177014",
   "forms": "k!*m + 1, k = 1..n",
+  "m": 133493208618,
+  "oeis_terms": {
+   "11": 133493208618
+  },
   "sign": 1,
-  "x": 133493208618,
   "filter_n": 11,
   "run": 11,
   "settles": [
@@ -129,9 +132,9 @@
    }
   ],
   "least_claim": {
-   "swept_from_x": 228698250,
+   "swept_from_m": 228698250,
    "covered_by_previous_filter_to": 228698250,
-   "swept_to_x": 133493208618,
+   "swept_to_m": 133493208618,
    "filter": 11,
    "wheel": 223092870,
    "sieve_depth": 1048576,
@@ -145,8 +148,11 @@
  {
   "sequence": "A177014",
   "forms": "k!*m + 1, k = 1..n",
+  "m": 946564216260,
+  "oeis_terms": {
+   "12": 946564216260
+  },
   "sign": 1,
-  "x": 946564216260,
   "filter_n": 12,
   "run": 12,
   "settles": [
@@ -280,9 +286,9 @@
    }
   ],
   "least_claim": {
-   "swept_from_x": 133493208618,
+   "swept_from_m": 133493208618,
    "covered_by_previous_filter_to": 150141501510,
-   "swept_to_x": 946564216260,
+   "swept_to_m": 946564216260,
    "filter": 12,
    "wheel": 6915878970,
    "sieve_depth": 1048576,
@@ -296,8 +302,13 @@
  {
   "sequence": "A177014",
   "forms": "k!*m + 1, k = 1..n",
+  "m": 63877984659108,
+  "oeis_terms": {
+   "13": 63877984659108,
+   "14": 63877984659108,
+   "15": 63877984659108
+  },
   "sign": 1,
-  "x": 63877984659108,
   "filter_n": 13,
   "run": 15,
   "settles": [
@@ -518,9 +529,9 @@
    }
   ],
   "least_claim": {
-   "swept_from_x": 946564216260,
+   "swept_from_m": 946564216260,
    "covered_by_previous_filter_to": 1251774093570,
-   "swept_to_x": 63877984659108,
+   "swept_to_m": 63877984659108,
    "filter": 13,
    "wheel": 200560490130,
    "sieve_depth": 1048576,
@@ -534,8 +545,11 @@
  {
   "sequence": "A177014",
   "forms": "k!*m + 1, k = 1..n",
+  "m": 2356745767044800940,
+  "oeis_terms": {
+   "16": 2356745767044800940
+  },
   "sign": 1,
-  "x": 2356745767044800940,
   "filter_n": 16,
   "run": 16,
   "settles": [
@@ -848,9 +862,9 @@
    }
   ],
   "least_claim": {
-   "swept_from_x": 63877984659108,
+   "swept_from_m": 63877984659108,
    "covered_by_previous_filter_to": 91054462519020,
-   "swept_to_x": 2356745767044800940,
+   "swept_to_m": 2356745767044800940,
    "filter": 16,
    "wheel": 13082761331670030,
    "sieve_depth": 131072,
@@ -864,8 +878,11 @@
  {
   "sequence": "A177014",
   "forms": "k!*m + 1, k = 1..n",
+  "m": 118296999554873123520,
+  "oeis_terms": {
+   "17": 118296999554873123520
+  },
   "sign": 1,
-  "x": 118296999554873123520,
   "filter_n": 17,
   "run": 17,
   "settles": [
@@ -1226,9 +1243,9 @@
    }
   ],
   "least_claim": {
-   "swept_from_x": 2356745767044800940,
+   "swept_from_m": 2356745767044800940,
    "covered_by_previous_filter_to": 2930538538294086720,
-   "swept_to_x": 118296999554873123520,
+   "swept_to_m": 118296999554873123520,
    "filter": 17,
    "wheel": 614889782588491410,
    "sieve_depth": 65536,
@@ -1242,8 +1259,11 @@
  {
   "sequence": "A177014",
   "forms": "k!*m + 1, k = 1..n",
+  "m": 30911690086525348609590,
+  "oeis_terms": {
+   "18": 30911690086525348609590
+  },
   "sign": 1,
-  "x": 30911690086525348609590,
   "filter_n": 18,
   "run": 18,
   "settles": [
@@ -1706,9 +1726,9 @@
    }
   ],
   "least_claim": {
-   "swept_from_x": 118296999554873123520,
+   "swept_from_m": 118296999554873123520,
    "covered_by_previous_filter_to": 222590101297033890420,
-   "swept_to_x": 30911690086525348609590,
+   "swept_to_m": 30911690086525348609590,
    "filter": 18,
    "wheel": 32589158477190044730,
    "sieve_depth": 65536,

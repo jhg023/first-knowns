@@ -552,6 +552,32 @@ by the pause, so `--selftest` was not re-run after the Incident's 46 PASS.
 
 ---
 
+## The evidence named the term `x` (2026-09-18, same day)
+
+Not an optimization. The owner, about to submit, had to ask whether `x` in
+an evidence file was the number for the OEIS: `forms` said `k!*m - 1`, the
+file carried the integer as `x`, and `--status` printed the same quantity
+as `swept to k = ...` — three letters, one of them (k) the entry's *index*.
+It was the right number; nothing in the file said so.
+
+Fixed here and repo-wide (CLAUDE.md rule 5i, CONVENTIONS.md "Naming in an
+evidence file"): every record opens with `huntlib.evidence.header` —
+`sequence`, `forms`, the integer under the OEIS letter **`m`**, and
+`oeis_terms` `{index: integer}`, the literal answer to "what do I submit".
+`least_claim` says `swept_from_m` / `swept_to_m`; the launcher's
+`[DISCOVERY]`, `[NEAR]`, `[STATUS]`, `[STAGE]` and `--status` lines say m
+(`TERM` in launch.py); README, RESULTS and BENCHMARKS say m throughout.
+The engines, the checkpoint (`"k"`) and the gate messages keep `x`.
+
+All 28 records here (14 files, 14 ledger rows) were migrated by a script
+that refused any change of value, then re-verified from disk by the harness
+above (ALL OK) and checked against the OEIS export (a(11)..a(18) are not in
+the OEIS yet on any of the three entries). The selftest gained
+`_evidence_names_drill`: the writer's header for both families through
+`evidence.check_names`, and `evidence.gate_names` over the directory.
+
+---
+
 ## Open, priced, unbuilt
 
 Written down so the next pass starts from evidence (OPTIMIZATION.md Rule 6):

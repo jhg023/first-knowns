@@ -122,13 +122,13 @@ from sympy import isprime, primerange
 # (%I revision stamps A078502 #36, A074200 #24, A093553 #29, A093554 #20).
 FAMILIES = {
     "A078502": {"sign": -1, "first_n": 1,
-                "forms": "(N - k)/k = (L/k)*x - 1, k = 1..n",
+                "forms": "(N - k)/k = (L/k)*x - 1, k = 1..n", "term": "N",
                 "keywords": "nonn,more",
                 "author": "Joseph L. Pe, Jan 05 2003",
                 "frontier_by": "Jens Kruse Andersen, Jan 10 2003",
                 "also": (("A093554", -1),)},
     "A074200": {"sign": +1, "first_n": 1,
-                "forms": "(m + k)/k = (L/k)*x + 1, k = 1..n",
+                "forms": "(m + k)/k = (L/k)*x + 1, k = 1..n", "term": "m",
                 "keywords": "nonn,more",
                 "author": "Jean-Christophe Colin, Sep 17 2002",
                 "frontier_by": "Jens Kruse Andersen, Feb 15 2004",

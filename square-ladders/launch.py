@@ -480,7 +480,13 @@ class Campaign:
         for i in range(1, run + 1):
             v = ref.value(k, i)
             certs[str(i)] = certificate.prove(v)
-        ev = {"sequence": "A089761", "k": int(k), "run": int(run),
+        # The record speaks the OEIS entry's language (CONVENTIONS.md
+        # "Naming in an evidence file"): the published integer under the
+        # entry's own letter, a `forms` that uses it, and `oeis_terms`
+        # saying literally what goes into the OEIS.
+        ev = {**evidence.header("A089761", "k*i^2 + 1, i = 1..n", "k", k,
+                                settles),
+              "run": int(run),
               "settles": settles,
               "values": {str(i): int(ref.value(k, i))
                          for i in range(1, run + 1)},

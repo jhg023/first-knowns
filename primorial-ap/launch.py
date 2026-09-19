@@ -452,6 +452,12 @@ def record_discovery(ev, label):
     Keyed by p, so the segment redone after an interrupt or a crash rewrites
     the same record instead of appending a duplicate.
     """
+    # The record speaks the OEIS entry's language (CONVENTIONS.md "Naming
+    # in an evidence file"): A053647(n) is the FIRST TERM p of the
+    # progression p + j*prime(n)#, and a find settles exactly its n.
+    ev = {**_evid.header("A053647", "p + j*prime(n)#, j = 0..n-1", "p",
+                         ev["p"], [ev["n"]]),
+          "settles": [int(ev["n"])], **ev}
     return _evid.record(ev, "evidence",
                         f"ap_a{ev['n']}_p{ev['p']}.json", DISC,
                         key="p", label=label)

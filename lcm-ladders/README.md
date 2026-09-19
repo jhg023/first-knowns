@@ -32,6 +32,16 @@ one shifted by one, and `lcml_reference`'s G2d re-derives that from the bare
 definition on every published term and on every find. **So a single find
 settles two entries, and the two hunted families settle four.**
 
+**Notation, and which number goes in the OEIS.** A078502 calls its term
+**N** and A074200 calls its term **m**; this project's prose and code write
+both as N, with N = lcm(1..n)·x and x the variable the engine sweeps. An
+evidence file follows its own entry — the term is the field `N` in an
+A078502 file and the field `m` in an A074200 file, `x` is there too and is
+**never** what gets submitted — and `oeis_terms` is literally what to
+submit: `{"18": v, "19": v}` reads "a(18) and a(19) are both v". The riders'
+integers (A093554 = A078502 − 1, A093553 = A074200 + 1) are in
+`also_settles` (CONVENTIONS.md "Naming in an evidence file").
+
 a(15) is open on all four. The conditions nest in N — anything satisfying
 filter n satisfies filter n − 1 — so a(n) is non-decreasing and the previous
 term is a free floor; nothing below it has to be swept at all.

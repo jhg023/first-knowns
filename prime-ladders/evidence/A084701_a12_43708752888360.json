@@ -1,7 +1,11 @@
 {
  "sequence": "A084701",
- "sign": -1,
+ "forms": "k*prime(i) - 1, i = 1..n",
  "k": 43708752888360,
+ "oeis_terms": {
+  "12": 43708752888360
+ },
+ "sign": -1,
  "run": 12,
  "settles": [
   12

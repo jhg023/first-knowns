@@ -977,9 +977,17 @@ class Campaign:
             r = c.get("proof") if c else "none"
             routes[r] = routes.get(r, 0) + 1
         also = also_settles(self.fam, N, run, settles)
-        ev = {"sequence": self.oeis, "forms": ref.FAMILIES[self.fam]["forms"],
+        # The record speaks the OEIS entry's language (CONVENTIONS.md
+        # "Naming in an evidence file"): the published integer under the
+        # entry's own letter, a `forms` that uses it, and `oeis_terms`
+        # saying literally what goes into the OEIS.
+        # A078502 calls its term N and A074200 calls it m; x is the engine's
+        # sweep variable (term = L*x) and keeps its own letter from `forms`.
+        term = ref.FAMILIES[self.fam]["term"]
+        ev = {**evidence.header(self.oeis, ref.FAMILIES[self.fam]["forms"],
+                                term, N, settles),
               "sign": self.s,
-              "N": int(N), "x": int(x), "filter_n": int(n), "L": int(ref.L(n)),
+              "x": int(x), "filter_n": int(n), "L": int(ref.L(n)),
               "run": int(run), "settles": settles,
               "values": {str(i): int(N // i + self.s)
                          for i in range(1, run + 1)},
@@ -996,8 +1004,9 @@ class Campaign:
               "proof_routes": routes,
               "also_settles": also,
               "least_claim": {"swept_from_x": int(self.x_start()),
-                              "swept_from_N": int(ref.term(n, self.x_start())),
-                              "swept_to_N": int(N),
+                              f"swept_from_{term}":
+                                  int(ref.term(n, self.x_start())),
+                              f"swept_to_{term}": int(N),
                               "filter": int(n),
                               "wheel": int(self.eng.W),
                               "sieve_depth": int(self.eng.q2),
@@ -1008,7 +1017,7 @@ class Campaign:
             self.found[str(m)] = int(N)
         path = evidence.record(
             ev, EVID, f"{self.oeis}_a{settles[0]}_{N}.json",
-            ledger_path(self.fam), key="N",
+            ledger_path(self.fam), key=term,
             label="%s a(%s)" % (self.oeis, ",".join(map(str, settles))))
         self.discoveries += 1
         proved = len(certs) - len(unproved)

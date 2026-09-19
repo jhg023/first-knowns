@@ -474,6 +474,13 @@ def record_discovery(ev, label):
     write (an evidence JSON is the whole artefact of a discovery, so it goes
     through the same fsync-and-replace path as a checkpoint); the file NAME
     is this project's."""
+    # The record speaks the OEIS entry's language (CONVENTIONS.md "Naming
+    # in an evidence file"): A164926 calls the term p and the polynomial's
+    # argument x, and a(n) has run EXACTLY n, so a find settles its run.
+    ev = {**_evid.header("A164926",
+                         "x^2 + x + p, x = 0..n-1 (composite at x = n)",
+                         "p", ev["p"], [ev["run"]]),
+          "settles": [int(ev["run"])], **ev}
     _evid.record(ev, "evidence",
                  f"euler_hit_run{ev['run']}_p{ev['p']}.json",
                  DISC, key="p", label=label)

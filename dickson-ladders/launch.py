@@ -634,7 +634,7 @@ def refuse_unreadable_cursor(eng, fresh):
 
 # ------------------------------- discovery ---------------------------------
 
-def record_discovery(ev, label):
+def record_discovery(ev, label, settles):
     """Write the evidence JSON for a FIRST OCCURRENCE and upsert the ledger
     entry for k.  Called for discoveries only: the evidence directory holds
     first occurrences, never census values (CONVENTIONS.md).
@@ -643,6 +643,12 @@ def record_discovery(ev, label):
     a crash is redone on resume) rewrites the same records instead of
     appending duplicates.  huntlib.evidence.record does the keying, the
     upsert and the durable write; the file NAME is this project's."""
+    # The record speaks the OEIS entry's language (CONVENTIONS.md "Naming
+    # in an evidence file"): A247965 calls the term k and the multiplier m.
+    # `settles` is every index this k is a(n) for -- settle()'s own rule.
+    ev = {**_evid.header("A247965", "m*k^2 + 1, m = 1..n", "k", ev["k"],
+                         settles),
+          "settles": [int(n) for n in settles], **ev}
     return _evid.record(ev, "evidence",
                         f"ladder_hit_run{ev['run']}_k{ev['k']}.json",
                         DISC, key="k", label=label)
@@ -924,7 +930,8 @@ def production(args):
                 if ev is None:
                     raise CorruptEngineError(f"verify failed at k={k}: {msg}")
                 label = "A247965(%d) CANDIDATE -- first occurrence" % r
-                path = record_discovery(ev, label)
+                path = record_discovery(
+                    ev, label, list(range(frontier_of(c) + 1, r + 1)))
                 evidenced = True
                 newly = settle(c, r, k)
                 c["hits"] = c.get("hits", 0) + 1

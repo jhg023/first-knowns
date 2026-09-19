@@ -206,6 +206,32 @@ lucky `k` can settle several terms at once — A088250's `a(7) = a(8) =
 | [A164326](https://oeis.org/A164326) | `(2r−1)·k − 1`, `r = 1..n` | 1 | `a(14) = 68,086,992,545,221,650` | Giovanni Resta, Mar 31 2017 | `n = 15` |
 | [A088651](https://oeis.org/A088651) | `r·k − 1`, `r = 1..n` | 1 | `a(15) = 53,792,264,108,455,702,830` | Jens Kruse Andersen, May 02 2008 | `n = 16` |
 
+**Notation, and which number goes in the OEIS.** These documents, the
+engines and the log write all seven families one way — the term is `k`, the
+multiplier's index is `r`. **The OEIS entries do not**: two of them use
+those letters and five call the term `m` and use `k` for the *index*. An
+evidence file speaks its own entry's language, so its letters change with
+the family:
+
+| entry | the OEIS name says | in its evidence files the term is | `forms` in the file |
+|---|---|---|---|
+| A088250 | smallest k such that r·k + 1 is prime, r = 1..n | `k` | `r*k + 1, r = 1..n` |
+| A088651 | smallest k such that r·k − 1 is prime, r = 1..n | `k` | `r*k - 1, r = 1..n` |
+| A173750 | smallest m such that k·m + 1 is prime, k = 2..n | **`m`** | `k*m + 1, k = 2..n` |
+| A125838 | smallest m such that k·m − 1 is prime, k = 2..n | **`m`** | `k*m - 1, k = 2..n` |
+| A125839 | smallest m such that k·m − 1 is prime, k = 3..n | **`m`** | `k*m - 1, k = 3..n` |
+| A164325 | smallest m such that (2k−1)·m + 1 is prime, 0 < k < n+1 | **`m`** | `(2*k-1)*m + 1, k = 1..n` |
+| A164326 | smallest m such that (2k−1)·m − 1 is prime, 0 < k < n+1 | **`m`** | `(2*k-1)*m - 1, k = 1..n` |
+
+Whatever the letter, **`oeis_terms` in the file is literally what to
+submit** — `{"18": v, "19": v}` reads "a(18) and a(19) are both v" — and
+`also_settles` carries the derived entries' own integers (A071576 is
+*half* of A088250's). Every `k` in this README and in RESULTS.md is that
+integer. Until 2026-09-18 the files said `k` for all seven, which for five
+families was the entry's m beside an entry whose k means something else
+(CONVENTIONS.md "Naming in an evidence file"); they were migrated that day,
+names only, and every term was confirmed against the OEIS by index.
+
 Every entry was re-checked on oeis.org on 2026-09-03 before the tables
 were frozen (the `%I` revision stamps match the local export of
 2026-09-01). A125838 and A125839 carry `hard`; none has a b-file bound.

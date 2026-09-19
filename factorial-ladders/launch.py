@@ -178,6 +178,14 @@ import fladder_search as cpu                                    # noqa: E402
 HERE = pathlib.Path(__file__).resolve().parent
 EVID = str(HERE / "evidence")
 
+# THE LETTER THE OEIS USES FOR THE TERM.  A177013 and A177014 both read
+# "the smallest number m such that ... k!*m -+ 1 ... are prime", so every
+# surface a person reads -- the evidence files, the [DISCOVERY] / [NEAR] /
+# [STATUS] / [STAGE] lines, --status -- says m.  The engines call their
+# sweep variable x and the checkpoint stores the cursor as "k"; neither is
+# the owner's problem (CONVENTIONS.md "Naming in an evidence file").
+TERM = "m"
+
 # NOTHING ABOUT THE WHEEL IS A CONSTANT HERE.  The three wheel levels, the
 # sieve depth and the window width are all PLANNED per filter, because the
 # kill sets grow with n (fladder_reference: K(q,n) is a subset of K(q,n+1),
@@ -926,7 +934,7 @@ class Campaign:
                  f"[{lo:.5g}, {lo + seg * self.eng.W:.5g}) {pct:.0f}%",
                  f"{self.oeis} filter n = {self.filter_n()}"]
         if rate:
-            parts.append(f"{rate:.3g} k/s")
+            parts.append(f"{rate:.3g} {TERM}/s")
         parts.append(census_str(self.census, CENSUS_FLOOR, self.frontier()))
         parts.append(f"finds {self.discoveries}")
         parts.append(f"survivors {self.survivors:,}")
@@ -971,10 +979,10 @@ class Campaign:
             self.near += 1
             ok, legs, _ = verify(k, run, self.fam, witness=False)
             if not ok:
-                log("ALARM", f"NEAR value x = {k:,} run {run} failed "
+                log("ALARM", f"NEAR value m = {k:,} run {run} failed "
                              f"verification: {legs}")
                 raise SystemExit(2)
-            log("NEAR", f"run {run} at x = {k:,} (run-{run} "
+            log("NEAR", f"run {run} at m = {k:,} (run-{run} "
                         f"#{self.census[run]} of the campaign; verified) -- "
                         f"ONE condition short of a({frontier + 1})!")
             return False
@@ -989,7 +997,7 @@ class Campaign:
         # and the classification already ran to filter + 8 -- this re-runs
         # it by the oracle's own definition, further, before anything is
         # claimed.  A177014's published a(9) = a(10) is exactly this.
-        self.hb.doing(f"verifying run-{run} x={x}")
+        self.hb.doing(f"verifying run-{run} {TERM}={x}")
         true_run = ref.run_length(self.fam, x, cap=n + 8)
         if true_run < run:
             log("ALARM", f"claimed a({frontier+1}) = {x} has run {true_run} "
@@ -1002,16 +1010,20 @@ class Campaign:
                          f"protocol: {legs}")
             raise SystemExit(2)
         settles = list(range(frontier + 1, run + 1))
-        self.hb.doing(f"certifying run-{run} x={x}")
+        self.hb.doing(f"certifying run-{run} {TERM}={x}")
         certs, unproved = certify_run(x, run, self.fam)
         routes = {}
         for c in certs.values():
             r = c.get("proof") if c else "none"
             routes[r] = routes.get(r, 0) + 1
         also = also_settles(self.fam, x, run, settles)
-        ev = {"sequence": self.oeis, "forms": ref.FAMILIES[self.fam]["forms"],
-              "sign": self.s,
-              "x": int(x), "filter_n": int(n),
+        # The record speaks the OEIS entry's language (CONVENTIONS.md "Naming
+        # in an evidence file"): both entries call the term m, so it is `m`
+        # here and in `forms`, whatever the engine calls its sweep variable,
+        # and `oeis_terms` is literally what goes into the OEIS.
+        ev = {**evidence.header(self.oeis, ref.FAMILIES[self.fam]["forms"],
+                                TERM, x, settles),
+              "sign": self.s, "filter_n": int(n),
               "run": int(run), "settles": settles,
               "values": {str(i): int(math.factorial(i) * x + self.s)
                          for i in range(1, run + 1)},
@@ -1026,14 +1038,14 @@ class Campaign:
               "unproved": unproved,
               "proof_routes": routes,
               "also_settles": also,
-              "least_claim": {"swept_from_x": int(self.x_start()),
+              "least_claim": {"swept_from_m": int(self.x_start()),
                               # up to here the claim rests on the PREVIOUS
                               # filter's classified sweep (follow_frontier):
                               # every survivor there was run to n + 8, so a
                               # run of this length would have been found
                               "covered_by_previous_filter_to":
                                   int(max(self.cover_x, self.x_start())),
-                              "swept_to_x": int(x),
+                              "swept_to_m": int(x),
                               "filter": int(n),
                               "wheel": int(self.eng.W),
                               "sieve_depth": int(self.eng.q2),
@@ -1044,16 +1056,16 @@ class Campaign:
             self.found[str(m)] = int(x)
         path = evidence.record(
             ev, EVID, f"{self.oeis}_a{settles[0]}_{x}.json",
-            ledger_path(self.fam), key="x",
+            ledger_path(self.fam), key=TERM,
             label="%s a(%s)" % (self.oeis, ",".join(map(str, settles))))
         self.discoveries += 1
         proved = len(certs) - len(unproved)
-        stopline = (f"stopped by {stop['i']}!*x {self.s:+d} = "
+        stopline = (f"stopped by {stop['i']}!*m {self.s:+d} = "
                     f"{stop['value']:,} = {stop['factor']} * ...")
         lines = [
             f"{self.oeis} a({settles[0]}) = {x:,}" if len(settles) == 1 else
             f"{self.oeis} a({settles[0]})..a({settles[-1]}) = {x:,}",
-            f"run {run}: k!*x {'+' if self.s > 0 else '-'} 1 is prime for "
+            f"run {run}: k!*m {'+' if self.s > 0 else '-'} 1 is prime for "
             f"every k = 1..{run}",
             stopline,
             f"verified 3 ways, {proved} of {len(certs)} certificates "
@@ -1404,7 +1416,7 @@ class Campaign:
             if self.pool is not None:
                 self.pool.shutdown(wait=False, cancel_futures=True)
         landed = self.save()
-        log("STAGE", f"campaign stopped at k = {self.swept_k():,} "
+        log("STAGE", f"campaign stopped at {TERM} = {self.swept_k():,} "
                      f"({self.discoveries} find(s) this campaign; checkpoint "
                      f"{'written' if landed else 'DEFERRED -- held open'})")
         return 0
@@ -1416,7 +1428,7 @@ class Campaign:
         if self.save_boundary():
             return (f"checkpoint written at the last classified launch: "
                     f"period {int(snap['j'])}, u = {int(snap['u'])}, swept "
-                    f"to k = {int(snap['k']):,} ({self.ckpt})")
+                    f"to {TERM} = {int(snap['k']):,} ({self.ckpt})")
         return (f"{self.ckpt} is held open by another process, so THIS "
                 f"boundary (period {int(snap['j'])}, u = {int(snap['u'])}) "
                 f"was not written; the run resumes from the last save that "
@@ -2491,6 +2503,25 @@ def _campaign_wiring_drill(fam="A177013"):
                   f"included")
 
 
+def _evidence_names_drill():
+    """The writer and the files on disk speak the OEIS entries' language.
+
+    The writer's header is built here exactly as `record_discovery` builds
+    it, for both families, and every record already in evidence/ is read
+    back: the integer is under TERM, TERM stands alone in `forms`, and
+    `oeis_terms` says what to submit.  This project shipped its first
+    sixteen finds under `x` beside a `forms` that said m.
+    """
+    for fam in ref.FAMILIES:
+        top = max(ref.KNOWN[fam])
+        ev = dict(evidence.header(fam, ref.FAMILIES[fam]["forms"], TERM,
+                                  ref.KNOWN[fam][top], [top]), settles=[top])
+        ok, msg = evidence.check_names(ev, TERM)
+        if not ok:
+            return False, f"EVIDENCE NAMES FAIL: {fam} writer: {msg}"
+    return evidence.gate_names(EVID, TERM)
+
+
 def selftest(fam="A177013"):
     t0 = time.time()
     rows = []
@@ -2509,6 +2540,7 @@ def selftest(fam="A177013"):
               _families_stay_apart):
         rows.append(d())
     rows.append(_campaign_wiring_drill(fam))
+    rows.append(_evidence_names_drill())
     bad = 0
     for ok, msg in rows:
         log("GATE" if ok else "ALARM", ("PASS " if ok else "FAIL ") + msg)
@@ -2535,7 +2567,7 @@ def _status(fam):
         front = max(front, int(n))
     log("STATUS", "  ".join([
         f"{fam}",
-        f"swept to k = {int(st['k']):,}",
+        f"swept to {TERM} = {int(st['k']):,}",
         f"work cursor period {int(st['j'])} u = {int(st.get('u', 0))}",
         f"filter n = {front + 1}",
         census_str(cen, CENSUS_FLOOR, front),
@@ -2607,7 +2639,7 @@ def main(argv=None):
     _POLICIES[args.family].refuse_mismatch(
         fresh=args.fresh,
         describe=lambda st: (f"period {st.get('j')}, u = {st.get('u')}, "
-                             f"swept to k = {st.get('k')}"))
+                             f"swept to {TERM} = {st.get('k')}"))
     if args.fresh:
         for p in (ckpt_path(args.family), ckpt_path(args.family) + ".bak"):
             if os.path.exists(p):

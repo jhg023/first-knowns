@@ -3,6 +3,12 @@
 Verified finds, in discovery order, with the exact integers and the
 verification each one survived.
 
+**Notation.** This page writes every family as `r·k ± 1` — term `k`, index
+`r`. A173750, A125838, A125839, A164325 and A164326 call the term **m** in
+the OEIS and use k for the index, and their evidence files follow the OEIS
+(README.md, "Notation"). Either way the integer in each heading below is
+the term, and the file's `oeis_terms` says which index it goes to.
+
 ## Verified finds
 
 All three below come from the single A088250 campaign of 2026-09-03: the

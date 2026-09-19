@@ -101,36 +101,49 @@ from sympy import isprime, primerange
 #              index (a k whose very first form is composite has run
 #              rungs_from - 1).
 # `first_n`    the OEIS offset: the first index the sequence has a term at.
+# `term`, `oeis_forms`  the letter the OEIS NAME uses for the term and the
+#              condition in the entry's own letters.  `forms` is this
+#              project's uniform notation (term k, index r); FIVE of the
+#              seven entries call the term m and use k for the INDEX, so
+#              an evidence file is written in `oeis_forms` under `term`
+#              (CONVENTIONS.md "Naming in an evidence file").
 # Every entry was re-verified against oeis.org on 2026-09-03 (the internal
 # format, %I revision stamps identical to the local export of 2026-09-01).
 FAMILIES = {
     "A088250": {"sign": +1, "kind": "linear", "rungs_from": 1, "first_n": 1,
                 "forms": "r*k + 1, r = 1..n", "keywords": "nonn,more",
+                "term": "k", "oeis_forms": "r*k + 1, r = 1..n",
                 "author": "Amarnath Murthy, Sep 26 2003",
                 "frontier_by": "Giovanni Resta, Mar 31 2017",
                 "also": (("A202778", "exact"), ("A071576", "half"))},
     "A173750": {"sign": +1, "kind": "linear", "rungs_from": 2, "first_n": 1,
                 "forms": "r*k + 1, r = 2..n", "keywords": "nonn,more",
+                "term": "m", "oeis_forms": "k*m + 1, k = 2..n",
                 "author": "Zak Seidov, Nov 26 2010",
                 "frontier_by": "Giovanni Resta, Mar 31 2017", "also": ()},
     "A125838": {"sign": -1, "kind": "linear", "rungs_from": 2, "first_n": 2,
                 "forms": "r*k - 1, r = 2..n", "keywords": "hard,more,nonn",
+                "term": "m", "oeis_forms": "k*m - 1, k = 2..n",
                 "author": "Carlos Rivera, Jan 01 2007",
                 "frontier_by": "Giovanni Resta, Mar 29 2017", "also": ()},
     "A125839": {"sign": -1, "kind": "linear", "rungs_from": 3, "first_n": 3,
                 "forms": "r*k - 1, r = 3..n", "keywords": "hard,more,nonn",
+                "term": "m", "oeis_forms": "k*m - 1, k = 3..n",
                 "author": "Luke Pebody, Jan 02 2007",
                 "frontier_by": "Giovanni Resta, Mar 30 2017", "also": ()},
     "A164325": {"sign": +1, "kind": "odd", "rungs_from": 1, "first_n": 1,
                 "forms": "(2r-1)*k + 1, r = 1..n", "keywords": "more,nonn",
+                "term": "m", "oeis_forms": "(2*k-1)*m + 1, k = 1..n",
                 "author": "Farideh Firoozbakht, Sep 15 2009",
                 "frontier_by": "Giovanni Resta, Apr 01 2017", "also": ()},
     "A164326": {"sign": -1, "kind": "odd", "rungs_from": 1, "first_n": 1,
                 "forms": "(2r-1)*k - 1, r = 1..n", "keywords": "more,nonn",
+                "term": "m", "oeis_forms": "(2*k-1)*m - 1, k = 1..n",
                 "author": "Farideh Firoozbakht, Sep 16 2009",
                 "frontier_by": "Giovanni Resta, Mar 31 2017", "also": ()},
     "A088651": {"sign": -1, "kind": "linear", "rungs_from": 1, "first_n": 1,
                 "forms": "r*k - 1, r = 1..n", "keywords": "nonn",
+                "term": "k", "oeis_forms": "r*k - 1, r = 1..n",
                 "author": "Amarnath Murthy, Sep 26 2003",
                 "frontier_by": "Jens Kruse Andersen, May 02 2008",
                 "also": (("A202779", "exact"),)},

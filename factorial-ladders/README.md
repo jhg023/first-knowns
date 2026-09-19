@@ -20,7 +20,7 @@ a(18) of A226935, twenty-four new terms in all**
 ([RESULTS.md](RESULTS.md)).
 
 **Status: PAUSED — open to others** — A177013 stands at a(18) =
-1,639,203,889,936,938,872,760 with no run of 19 below x = 5.4098e21;
+1,639,203,889,936,938,872,760 with no run of 19 below m = 5.4098e21;
 A177014 at a(18) = 30,911,690,086,525,348,609,590 with none below
 3.1481e22 (A226935 the same integers plus one). a(19) is open on all three,
 about nine and ten days of device at the medians; both campaigns resume from
@@ -48,11 +48,21 @@ all three now. The conditions nest — anything satisfying filter
 n satisfies filter n − 1 — so a(n) is non-decreasing and the previous term
 is a free floor; nothing below it has to be swept at all.
 
+**Notation, and which number goes in the OEIS.** Both entries call the term
+**m** and the factorial's index k, so every document here, every evidence
+file and every line the launcher prints says m. In an evidence file the
+field `m` is the term, `forms` is the entry's own condition, and
+`oeis_terms` is literally what to submit — `{"18": 1639203889936938872760}`
+reads "A177013 a(18) is this integer", and a rider lists every index it
+settles; `also_settles` gives A226935's integers, which are m + 1. Only the
+source code says `x`, the engines' name for their sweep variable, which in
+this project *is* m (CONVENTIONS.md "Naming in an evidence file").
+
 ## The mathematics of the engine
 
 **The killed set.** For a prime q and a multiplier k!: if k ≥ q then q | k!
-and the form k!·x + s ≡ s (mod q) is never divisible by q. For k < q it is
-divisible exactly when x ≡ −s·(k!)⁻¹ (mod q). So q kills
+and the form k!·m + s ≡ s (mod q) is never divisible by q. For k < q it is
+divisible exactly when m ≡ −s·(k!)⁻¹ (mod q). So q kills
 
     K(q,n) = { −s·(k!)⁻¹ mod q : 1 ≤ k ≤ min(n, q−1) }
 
@@ -74,12 +84,12 @@ it per filter and refuse anything else, because a unit is a coverage claim.
 
 **Saturation, and why a shorter sieve finds a longer run.** K(q,n) ⊆
 K(q,n+1), with equality from n = q − 1 on. So the filter-n sieve keeps a
-superset of what the filter-(n+1) sieve keeps, and an x whose run passes
+superset of what the filter-(n+1) sieve keeps, and an m whose run passes
 the filter — a *rider* — is found by the shorter sieve and settles every
 term up to its run at once. The launcher decides riders by running the
 chain on, by the oracle's definition, before anything is claimed.
 
-**One line.** The published term is x, so a find at filter n is the floor
+**One line.** The published term is m, so a find at filter n is the floor
 of filter n + 1 with no re-denomination. What changes at a promotion is the
 plan: a larger kill set, the wheel the period cap admits, the sieve depth.
 The engine is rebuilt; the new filter's claim starts at the find and its
@@ -109,14 +119,14 @@ period term added per test from a table the device builds each launch —
 which costs 5–6% where a u64 would do and is therefore taken only where
 the wheel demands it: 1.19x at n = 18 and 1.24x at n = 19 (round 3).
 
-**The engine.** Candidates are carried as (x, off) pairs, so no machine word
-bounds the search. The GPU never materialises the x line: it generates the
+**The engine.** Candidates are carried as (m, off) pairs, so no machine word
+bounds the search. The GPU never materialises the m line: it generates the
 residues of a three-level wheel and sieves them a segment of periods at a
 time, testing each sieve prime against a periodic bit pattern, then
 compacts the survivors through in-block rounds and global tail rounds. The
 CPU engine marks arithmetic progressions into a dense array and uses no
 wheel at all; the parity gate (G9) pins the two streams bit for bit on 22
-populated windows from x = 2e9 up to the 1e40 ceiling, G19 pins the two
+populated windows from m = 2e9 up to the 1e40 ceiling, G19 pins the two
 survivor records to each other on one wheel where the line passes 2^64,
 and G20 pins a non-contiguous level split on both records to the CPU
 engine. The kernel is lcm-ladders' v1 with two additions (engine v3 here:
@@ -125,13 +135,13 @@ occupancy actually reached); every constant was re-swept at this
 project's windows in OPTIMIZATION_LOG.md rounds 2 and 3, and one moved:
 the launch budget on the wide record.
 
-**The ceiling is 1e40 on x, and certificates are this project's best case.**
-Value k is k!·x + s, so (k!·x + s) − s = k!·x with k! k-smooth: **one
-factorization of x proves the entire run**, by BLS75 Theorem 1 on V − 1 for
+**The ceiling is 1e40 on m, and certificates are this project's best case.**
+Value k is k!·m + s, so (k!·m + s) − s = k!·m with k! k-smooth: **one
+factorization of m proves the entire run**, by BLS75 Theorem 1 on V − 1 for
 A177014 and Theorem 15 (a Lucas sequence per prime) on V + 1 for A177013.
 The proof crossing — where a *classification* stops being a deterministic
-proof — is very low here, x = 8.3e16 at n = 11, 2.5e12 at n = 15, 9.3e9 at
-n = 17 and x = 1 from n = 25 (25! alone exceeds the Miller–Rabin bound), so
+proof — is very low here, m = 8.3e16 at n = 11, 2.5e12 at n = 15, 9.3e9 at
+n = 17 and m = 1 from n = 25 (25! alone exceeds the Miller–Rabin bound), so
 the certificate is the path from the first minutes. The ceiling is where its
 *cost* was measured (`huntlib.ceiling`), not where the arithmetic runs out.
 
@@ -154,7 +164,7 @@ the same primes (a theorem) rather than a band around a number, and the
 growth of S with n by its mechanism (every q ≤ n + 1 keeps its kill set and
 contributes q/(q−1)).
 
-**Predictions, in x = the published term** (`model_results.json`). Read
+**Predictions, in m = the published term** (`model_results.json`). Read
 them as a floor: the ladder projects before this one landed their finds at
 about 1.9–2.5× their medians while every census showed the intensity right
 to a percent or two.
@@ -181,7 +191,7 @@ a(11) through a(16) are seconds of device each, a(17) about **14
 minutes** and a(18) about **5.6 hours** at the medians — per family. So a
 night reaches a(17) on both, about 2.5× that at the optimism factor the
 repository's earlier ladders suggest budgeting, with a(18) most of a day
-each and a(19) (2.8e23 at 3.8e17 x/s: about nine days) the long leg.
+each and a(19) (2.8e23 at 3.8e17 m/s: about nine days) the long leg.
 
 **How the finds scored.** Everything above this line was written before
 either campaign ran. Both then did what the table said: a(11) through a(16)
@@ -191,11 +201,11 @@ a(18) at 5.75 hours on A177013 (0.24× its median) and 32 hours on A177014
 A177014 rider a(13) = a(14) = a(15) is one draw, scored as a(13) — **E
 averages 1.10** (A177013 1.10 over 8, A177014 1.11 over 6), against the
 Exp(1) mean of 1 an exactly-right intensity would give and the 1.20 of G11's
-disjoint validation set; x / median runs 0.21 to 6.5, geometric mean 1.24.
+disjoint validation set; m / median runs 0.21 to 6.5, geometric mean 1.24.
 The intensity is right and the individual draws are noisy, which is the
 whole claim the model makes. Term by term: [RESULTS.md](RESULTS.md).
 
-| open term | searched empty below | median from the bound | P(found) in a day / a week / 30 days at 3.8e17 x/s |
+| open term | searched empty below | median from the bound | P(found) in a day / a week / 30 days at 3.8e17 m/s |
 |---|---|---|---|
 | a(19) A177013 | 5.4098e21 | 3.0e23 | 12% / 44% / 82% |
 | a(19) A177014 (and A226935) | 3.1481e22 | 3.6e23 | 9% / 41% / 80% |
@@ -214,7 +224,7 @@ The hunt itself, which is the owner's command and nobody else's:
 python launch.py                        # A177013, indefinite, resumable
 python launch.py --family A177014       # the other family
 python launch.py --family A226935       # the rider spelling: opens A177014
-python launch.py --to 1e20              # stop at a chosen depth in x
+python launch.py --to 1e20              # stop at a chosen depth in m
 python launch.py --stop-on-discovery    # stop when THIS RUN finds something
 ```
 
@@ -240,12 +250,12 @@ process is [OPTIMIZATION.md](../OPTIMIZATION.md). Specific to this project:
   and 6.
 * **The unit is derived and refused.** `assert_unit` raises on a unit whose
   primes are not forced at the filter *or which is not squarefree* (forcing
-  says 2 | x, never 4 | x); G3, G7 and the ceiling drill require 30, 10, 12
+  says 2 | m, never 4 | m); G3, G7 and the ceiling drill require 30, 10, 12
   and 30030 to be refused at every filter.
 * **Four wheels, one stream.** G17 sweeps one whole period of the unit-6
   wheel to 43 with that wheel, the same primes split at a different level,
   a coarser wheel that covers the window in 43 of its own periods, and an
-  x-space wheel — and requires the identical survivor set.
+  m-space wheel — and requires the identical survivor set.
 * **A hazard the gates caught while this project was being built.** At the
   opening filter the period cap leaves a short wheel, and the level
   splitter returned it as (5..23), (), (31): an empty second level with a
