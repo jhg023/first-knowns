@@ -203,7 +203,14 @@ def _split(v, ecm_curves):
     if f is None and ecm_curves:
         try:
             found = _ecm(v, max_curve=ecm_curves)
-            f = min(found) if found else None
+            # sympy answers in its GROUND TYPE -- a python-flint fmpz or a
+            # gmpy2 mpz wherever one is installed -- and everything past
+            # this line assumes a Python int: f and v // f go back on
+            # factor_partial's stack, and the next _rho seeds
+            # random.Random from one, which takes an int and nothing
+            # else.  That ended a live campaign on the first stopper whose
+            # ECM cofactor was still composite.
+            f = int(min(found)) if found else None
         except Exception:            # ECM declining to split is not an error
             f = None
     return f if (f is not None and 1 < f < v) else None
@@ -835,12 +842,32 @@ def gate_certificates():
         return False, "the N+1 recursive proof does not verify"
     if verify({k: v for k, v in p2.items() if k != "subproofs"})[0]:
         return False, "an N+1 proof stripped of its subproof still verified"
+
+    # THE ECM LEG OF THE BOUNDED CHAIN, with a cofactor left over.  Three
+    # primes past rho's reach: the first split is ECM's, and what it leaves
+    # is still composite, so ECM's answer goes back on the stack and the
+    # NEXT rho is seeded from it.  sympy answers in its ground type (an
+    # fmpz, an mpz), and that is the one road by which a non-int reaches
+    # the rest of this file; nothing above walks it, since every other
+    # sample arrives factored or splits by rho.
+    if _rho(_ECM_SAMPLE) is not None:
+        return False, "the ECM sample split by rho: the ECM leg is not drilled"
+    try:
+        fe, re_ = factor_partial(_ECM_SAMPLE, ecm_curves=200)
+    except TypeError as e:
+        return False, ("factor_partial died on an ECM cofactor (a ground-type "
+                       "integer leaked past _split): %s" % str(e).splitlines()[0])
+    if (fe != dict.fromkeys(_ECM_SAMPLE_PRIMES, 1) or re_ != 1
+            or type(re_) is not int or any(type(p) is not int for p in fe)):
+        return False, f"the ECM sample factored as {fe}, R = {re_!r}"
     return True, ("certificates ok: BLS75 Theorem 1, Theorem 5, Theorem 15 "
                   "(N+1, Lucas) and the subproof recursion on both sides all "
                   "prove and all verify; the constructed composites, a "
                   "tampered (s, r), a tampered Lucas witness, a neighbouring "
                   "N, a truncated factorization, a mislabelled theorem and a "
-                  "stripped subproof are all rejected (thm5 F^3/N = %.3g, "
+                  "stripped subproof are all rejected; the bounded chain "
+                  "splits by ECM twice and stays in Python ints (thm5 "
+                  "F^3/N = %.3g, "
                   "recursion samples %d and %d)" % (_F5**3 / n5, nr, _N15_RECUR))
 
 
@@ -856,6 +883,12 @@ _N15_PRIME = _F15 - 1
 _N15_RECUR_P = 10000000000000000000014229
 _N15_RECUR = 2 * _N15_RECUR_P - 1
 _N15_COMPOSITE = 907745640255718380955238399999999       # (F' - 1)(F' + 1)
+
+# The ECM sample: three 14-15 digit primes, each ~1e7 rho iterations away
+# (the bounded rho gives up at 60,000), so factor_partial splits it by ECM
+# twice and the second split starts from the first one's cofactor.
+_ECM_SAMPLE_PRIMES = (30000000000011, 70000000000009, 110000000000027)
+_ECM_SAMPLE = 30000000000011 * 70000000000009 * 110000000000027
 
 
 # Primes past the deterministic bound whose N-1 has a large prime cofactor,

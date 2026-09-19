@@ -19,6 +19,7 @@ configuration would measure one filter and say nothing about the next.
 | 2026-09-16 | v1 (inherited) | 125,567 | 125,244 | 79,477 | 171,921 | 724 | 19,439 | 8,137 | 5.8 |
 | 2026-09-16 | v2 (2^64 bound: 179-period window; shapes re-frozen) | **164,784** | 150,728 | 104,178 | 227,223 | 485* | 18,996 | 8,091 | 6.05 |
 | 2026-09-16 | v3 (the wide record where the wheel demands it; wheel 53 from n = 18; SCORE16/18 re-frozen at the plan) | **163,157** | 163,829 | 82,419** | **257,634** | 723* | 19,126 | 7,109 | 5.41 |
+| 2026-09-18 | v3, at the pause (the sixteen finds entered in `FOUND`; no engine change; every fingerprint reproduced) | **163,574** | 163,761 | 81,562 | 262,695 | 362* | 18,966 | 8,014 | 6.67 |
 
 (in units of 10¹² x/s: SCORE is 1.648e17 x/s, 2.51e12 candidates/s. The v1 row's campaign shapes were 64-period segments and are not comparable with v2's 179-period shapes; the paired engine ratio at the campaign's own configuration is 1.194x at n = 17, 1.088x at n = 18 and 1.069x at n = 16, OPTIMIZATION_LOG.md round 2. **SCORE16's v3 shape is a different wheel (43, the plan there) and not comparable with the v2 row; SCORE18's is the wheel to 53 on the wide record against v2's wheel to 47, and the paired engine ratio at n = 18 is 1.19x before the launch budget and 1.43x against v1 with it. The x-space anchors read 0.997 / 0.988 for v3 against v2 when paired; the scored readings moved 10% between runs of the same shape this session. *SCORE11 is 0.04 s of device per run and its single runs span 3x; paired it is unchanged.)
 
@@ -73,6 +74,24 @@ segment, so they carry more per-launch overhead than the campaign does).
 n = 12 to 15 lie between the first two rows: each is seconds. So a night
 reaches a(17) on both families, a(18) is most of a day each, and a(19) is
 about nine days on the wheel to 53.
+
+**What the campaigns then measured (2026-09-16/18, no flags).** Whole
+phases, from the evidence timestamps and the checkpoints, against the rows
+above:
+
+| filter | A177013 | A177014 | the row above |
+|---|---|---|---|
+| n = 11..16 | 66 s for all six terms | ~50 s | seconds each |
+| n = 17 | 1.62e17 x/s over 22.6 min | 1.68e17 over 21.9 min | 1.6e17 |
+| n = 18 | 2.69e17 over 5.36 h | 2.73e17 over 31.7 h | 2.6e17 scored, 3.0e17 harness |
+| n = 19 | 4.1e17 over 40 min | not yet swept | ~3.8e17 |
+
+The pipeline ran at the engine's rate at every filter, which is the rule 5g
+acceptance test passed on the campaigns that produced the results. What the
+medians did not price is the draw: A177013's a(18) came at 0.24× its median
+and A177014's at 4.7× ([RESULTS.md](RESULTS.md)). From the bounds the
+project is paused at, a(19) is 9 days (A177013) and 10 days (A177014) to the
+median at the n = 19 rate.
 
 ## The host side
 

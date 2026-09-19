@@ -397,8 +397,13 @@ def event_kind(run, frontier):
     return None
 
 
-def verify(x, run, fam):
+def verify(x, run, fam, witness=True):
     """The three independent confirmations plus the bounding witness.
+
+    witness=False is the [NEAR] path: a one-short value is verified but not
+    evidenced, so nobody reads its stopper's factor, and rho plus 200 ECM
+    curves on a 40-digit stopper is device-idle time bought for nothing.
+    The stopper is still shown composite -- that leg is what bounds the run.
 
     Everything is stated on x, the published term.  Value i is i!*x + s.
 
@@ -432,7 +437,8 @@ def verify(x, run, fam):
     stop = math.factorial(stop_i) * x + s
     legs["stopper_composite"] = not mr_is_prime(stop)
     ok = all(legs.values())
-    wit = stopper_witness(stop) if legs["stopper_composite"] else None
+    wit = (stopper_witness(stop)
+           if witness and legs["stopper_composite"] else None)
     return ok, legs, {"i": stop_i, "value": stop, "factor": wit,
                       "why": "composite"}
 
@@ -963,7 +969,7 @@ class Campaign:
             return False
         if kind == "NEAR":
             self.near += 1
-            ok, legs, _ = verify(k, run, self.fam)
+            ok, legs, _ = verify(k, run, self.fam, witness=False)
             if not ok:
                 log("ALARM", f"NEAR value x = {k:,} run {run} failed "
                              f"verification: {legs}")

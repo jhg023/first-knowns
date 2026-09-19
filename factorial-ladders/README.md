@@ -6,19 +6,29 @@
 
 A GPU hunt for the next terms of three OEIS sequences that ask the same
 question twice, with the sign flipped: **what is the smallest m for which
-every one of k!·m ∓ 1, k = 1..n, is prime?** Both frontiers are the ten
-terms Enoch Haga and Farideh Firoozbakht entered in May 2010; neither carries
+every one of k!·m ∓ 1, k = 1..n, is prime?** Both frontiers were the ten
+terms Enoch Haga and Farideh Firoozbakht entered in May 2010; neither carried
 a bound at any open index, neither has a b-file, and the third entry — the
-chain of primes p(i) = i·p(i−1) − (i−1), which unrolls to i!·(p−1) + 1 — has
+chain of primes p(i) = i·p(i−1) − (i−1), which unrolls to i!·(p−1) + 1 — had
 never been extended. The forms are the linear ladder this repository has
 hunted five times, with the multiplier list swapped to the factorials, and
 the published term is m itself: one line, no substitution, a wheel that
-grows with n.
+grows with n. **The standing result: a(11) through a(18) of both A177013 and
+A177014, found and verified 2026-09-16/18 — sixteen terms on fourteen
+integers, each proved prime value by value — and with them a(11) through
+a(18) of A226935, twenty-four new terms in all**
+([RESULTS.md](RESULTS.md)).
 
-**Status: ACTIVE** — the engine, the gate battery and the campaign are
-built and green; no term has been hunted yet.
+**Status: PAUSED — open to others** — A177013 stands at a(18) =
+1,639,203,889,936,938,872,760 with no run of 19 below x = 5.4098e21;
+A177014 at a(18) = 30,911,690,086,525,348,609,590 with none below
+3.1481e22 (A226935 the same integers plus one). a(19) is open on all three,
+about nine and ten days of device at the medians; both campaigns resume from
+their checkpoints with no flags.
 
 ## The problem
+
+The prior frontier, as this project found it:
 
 | entry | definition | terms | frontier | last moved |
 |---|---|---|---|---|
@@ -33,7 +43,8 @@ by running the recurrence on every published term). **So a find on A177014
 settles two entries.** A177013 has no rider: nobody has entered the chain
 p(i) = i·p(i−1) + (i−1).
 
-a(11) is open on all three. The conditions nest — anything satisfying filter
+a(11) was open on all three when the project started, and a(19) is open on
+all three now. The conditions nest — anything satisfying filter
 n satisfies filter n − 1 — so a(n) is non-decreasing and the previous term
 is a free floor; nothing below it has to be swept at all.
 
@@ -172,6 +183,23 @@ night reaches a(17) on both, about 2.5× that at the optimism factor the
 repository's earlier ladders suggest budgeting, with a(18) most of a day
 each and a(19) (2.8e23 at 3.8e17 x/s: about nine days) the long leg.
 
+**How the finds scored.** Everything above this line was written before
+either campaign ran. Both then did what the table said: a(11) through a(16)
+inside the first minute of each campaign, a(17) at 23 minutes on both, and
+a(18) at 5.75 hours on A177013 (0.24× its median) and 32 hours on A177014
+(4.7× its median, the 89th percentile). Over the 14 searched draws — the
+A177014 rider a(13) = a(14) = a(15) is one draw, scored as a(13) — **E
+averages 1.10** (A177013 1.10 over 8, A177014 1.11 over 6), against the
+Exp(1) mean of 1 an exactly-right intensity would give and the 1.20 of G11's
+disjoint validation set; x / median runs 0.21 to 6.5, geometric mean 1.24.
+The intensity is right and the individual draws are noisy, which is the
+whole claim the model makes. Term by term: [RESULTS.md](RESULTS.md).
+
+| open term | searched empty below | median from the bound | P(found) in a day / a week / 30 days at 3.8e17 x/s |
+|---|---|---|---|
+| a(19) A177013 | 5.4098e21 | 3.0e23 | 12% / 44% / 82% |
+| a(19) A177014 (and A226935) | 3.1481e22 | 3.6e23 | 9% / 41% / 80% |
+
 ## Running it
 
 ```bash
@@ -193,6 +221,13 @@ python launch.py --stop-on-discovery    # stop when THIS RUN finds something
 One campaign per family, each with its own checkpoint and ledger. Runs
 indefinitely by default, to the 1e40 ceiling. Requires CuPy and a CUDA GPU;
 sympy and numpy for the oracle and the CPU engine.
+
+The project is paused, so whoever resumes it runs the first two commands
+before anything else (CLAUDE.md rule 2). A campaign started without this
+project's checkpoints begins again from the published a(10); the sixteen
+finds are in `fladder_reference.FOUND`, re-checked from the bare definition
+by G1b on every battery, and the searched-empty bounds are in
+[RESULTS.md](RESULTS.md).
 
 ## Trust
 

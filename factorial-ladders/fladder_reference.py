@@ -162,8 +162,30 @@ KNOWN_ALSO = {
 # a fresh campaign starts from; these are the project's own claim, which the
 # campaign carries in its checkpoint (`found`) and promotes its frontier
 # from at runtime.  G1b re-checks whatever lands here from the bare
-# definition.
+# definition.  A177013's eight came from the one campaign of 2026-09-16
+# (RESULTS.md): a(11)..a(16) inside its first minute, a(17) at 24 minutes
+# and a(18) at 5.75 hours.
 FOUND = {fam: {} for fam in FAMILIES}
+FOUND["A177013"] = {11: 83398005540,
+                    12: 7740678645990,
+                    13: 476382545091120,
+                    14: 985173408688560,
+                    15: 107596829892570252,
+                    16: 744858063184134930,
+                    17: 159027369950870799240,
+                    18: 1639203889936938872760}
+# A177014's eight on six integers, 2026-09-16/18: a(13) = a(14) = a(15) is
+# one x with run 15 (a rider, as the published a(9) = a(10) is), and a(18)
+# landed 32 campaign hours in, at 4.7x its median.  Each is A226935 at the
+# same index, less one.
+FOUND["A177014"] = {11: 133493208618,
+                    12: 946564216260,
+                    13: 63877984659108,
+                    14: 63877984659108,
+                    15: 63877984659108,
+                    16: 2356745767044800940,
+                    17: 118296999554873123520,
+                    18: 30911690086525348609590}
 
 # Neither entry carries a published bound of any kind -- no upper bound at
 # any open n, and no searched-empty lower bound beyond the last term.  The

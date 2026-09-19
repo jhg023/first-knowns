@@ -452,6 +452,106 @@ Device rate at the campaign's own configuration, v3 against the engine this proj
 
 ---
 
+## Incident (2026-09-18) — a `[NEAR]` value ended the A177014 campaign at 26.8 h
+
+Not an optimization; logged here because it is the file the next person
+reads. The run died with `TypeError: The only supported seed types are
+...` out of `huntlib.certificate._rho`, reached from the `[NEAR]` branch
+of `handle` on a run-17 value at filter n = 18. No coverage was lost: the
+cursor (period 646, launch 191742, `pending` included) was one save
+behind and the resume redoes the tail of one segment.
+
+**Cause.** `sympy.ntheory.ecm` answers in sympy's GROUND TYPE — a
+python-flint `fmpz` on a machine with python-flint installed, a gmpy2
+`mpz` with gmpy2, a Python int with neither. `_split` returned ECM's
+factor as it came, `factor_partial` put it and `v // f` back on its
+stack, and the next `_rho` seeded `random.Random(m & 0xFFFFFFFF)` from
+one. It needs a stopper whose FIRST split is ECM's (no factor inside
+the bounded rho's reach, ~1e9) and whose cofactor is still composite,
+which is why 12 `[NEAR]` values and 5 finds went through before it.
+Reproduced in 0.2 s on three 14-digit primes.
+
+**Fix.** `_split` returns `int(min(found))` — the one place a foreign
+integer enters the file. `gate_certificates` gained the ECM leg: the
+three-prime sample must be declined by rho (else the gate is not
+drilling ECM), factored completely, and come back in Python ints. With
+the old `_split` patched back in the gate FAILS with the campaign's own
+error; with the fix it passes (the whole gate 1.2 s).
+
+**And the drift it exposed.** CLAUDE.md 5a: `[NEAR]` values skip the
+witness. `verify` computed it unconditionally, so every one-short value
+paid a bounded rho plus 200 ECM curves on a ~40-digit stopper with the
+device idle, for a factor nobody reads. `verify(..., witness=False)` on
+the `[NEAR]` path; the stopper is still shown composite by the strong
+test, which is the leg that bounds the run. Discoveries are unchanged.
+
+Battery 46 PASS, ALL GREEN; every fingerprint reproduced, SCORE
+161,115,694,817. huntlib is shared: the other projects' gates were NOT
+run (CLAUDE.md rule 2) and the change is proved there on resume.
+
+---
+
+## What the campaigns measured, and the pause (2026-09-18)
+
+Not an optimization either: the record of what the v3 defaults did when
+the owner ran them with no flags, which is the measurement every round
+above was aimed at. Sixteen terms, a(11)..a(18) on both families
+(RESULTS.md).
+
+**Campaign rate against the engine, per filter** (whole phases, from the
+evidence timestamps, `covered_by_previous_filter_to` and the checkpoints'
+`cover_x` / `elapsed`):
+
+| filter | A177013 | A177014 | the engine there |
+|---|---|---|---|
+| n = 11..16 | 66 s, six terms | ~50 s, six terms on four integers | seconds each |
+| n = 17 | 2.20e20 in 22.6 min = 1.62e17 x/s | 2.20e20 in 21.9 min = 1.68e17 | 1.65e17 (round 3) |
+| n = 18 | 5.19e21 in 5.36 h = 2.69e17 | 3.126e22 in 31.7 h = 2.73e17 | 2.99e17 harness, 2.6e17 scored |
+| n = 19 | 9.8e20 (work cursor) in 40 min = 4.1e17 | — | ~3.8e17 (paired, round 3) |
+
+Every phase is at the engine's rate for its filter. The n = 18 campaign
+rate sits between the scored shape and the harness figure, 0.90–0.91 of the
+latter on both families; that gap is **unattributed** — the `[STATUS]`
+waited fraction over a 30-hour run was not recorded, and A177014's figure
+includes the pre-fix `[NEAR]` witnesses. A resumed campaign should read the
+waited fraction off its first `[STATUS]` lines at n = 19 before anything is
+tuned.
+
+**Two things the campaigns taught that no round had priced.**
+
+1. *A find is claimed at its segment's close, and at n = 18 the segment is
+   5.4 hours.* The segment is the unit of the least-claim and it is swept
+   by residue, not in x order, so A177013's a(18) — at x = 1.64e21, a
+   quarter of its median — still cost the whole 5.2e21 segment. That is
+   the median cap doing what round 3 chose (the segment may not exceed the
+   modelled median); what it buys in rate against a shorter segment was
+   never measured at n ≥ 18. Item 5 below.
+2. *The `[NEAR]` path was the only unbounded-looking step a 30-hour run
+   found*, and it took a run that long to find it (the Incident above: 12
+   one-short values went through before the 13th took the ECM leg).
+
+**The re-verification harness** (scratchpad, not kept; ten minutes to
+rewrite): for each `evidence/A17701[34]_a*.json` in x order — rebuild
+every value as k!·x + s and compare with the file, sympy `isprime` each,
+`fladder_reference.run_length(fam, x, cap=run + 3) == run`, the stopper
+rebuilt and its factor re-multiplied, `huntlib.certificate.verify` on each
+certificate with its N checked against the rebuilt value, the route counts
+against `proof_routes`, `settles` continuing from the previous file, the
+least-claim floor equal to the previous term, the ledger agreeing with the
+files, A226935's recurrence run from x + 1; then `fladder_model.quantile`
+and `expected` from the previous term for the scoring. 14 files, 205
+certificates, ALL OK in 0.8 s.
+
+**The pause.** The finds are entered in `fladder_reference.FOUND`, which
+turns G1b from a vacuous pass into a check of all sixteen from the bare
+definition and makes G18 compile the resumed filter and the two after it
+(n = 19, 20, 21 on both families: 80 / 72 / 72 registers, 5 blocks per SM,
+no spills; G18 alone 31 s). `python score.py`: 26 PASS, every fingerprint
+reproduced, **SCORE 163,573,544,749** in 162 s. `launch.py` is untouched
+by the pause, so `--selftest` was not re-run after the Incident's 46 PASS.
+
+---
+
 ## Open, priced, unbuilt
 
 Written down so the next pass starts from evidence (OPTIMIZATION.md Rule 6):
@@ -480,3 +580,15 @@ Written down so the next pass starts from evidence (OPTIMIZATION.md Rule 6):
    item 3, unchanged): the sieve ladder's top binds at n = 11..13 for a
    quarter of a second of the machine per filter. Watch the first `[STATUS]`
    lines rather than tune blind.
+5. **The segment width at n ≥ 18** (from the campaigns, 2026-09-18): the
+   cap is the modelled median, which at n = 18 is a 5.4-hour segment and at
+   n = 19 (224 periods, 7.3e21, at ~3.8e17 x/s) about the same. A find
+   early in a segment waits for its close. Unpriced: pair the n = 19 plan
+   at 224 periods against 56 on a few third-level residues, fingerprints
+   checked, and take the shorter one if the rate holds within a percent or
+   two — the wait per find falls 4x and the checkpoint's coverage cursor
+   moves 4x as often.
+6. **n = 20 has been built and never priced.** G18 compiles it (72
+   registers, wheel to 53 re-split, q2 16384); rule 5g wants its constants
+   swept before a campaign promotes into it, which is the next thing that
+   happens after an a(19).

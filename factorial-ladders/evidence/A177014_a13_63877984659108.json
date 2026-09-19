@@ -1,0 +1,236 @@
+{
+ "sequence": "A177014",
+ "forms": "k!*m + 1, k = 1..n",
+ "sign": 1,
+ "x": 63877984659108,
+ "filter_n": 13,
+ "run": 15,
+ "settles": [
+  13,
+  14,
+  15
+ ],
+ "values": {
+  "1": 63877984659109,
+  "2": 127755969318217,
+  "3": 383267907954649,
+  "4": 1533071631818593,
+  "5": 7665358159092961,
+  "6": 45992148954557761,
+  "7": 321945042681904321,
+  "8": 2575560341455234561,
+  "9": 23180043073097111041,
+  "10": 231800430730971110401,
+  "11": 2549804738040682214401,
+  "12": 30597656856488186572801,
+  "13": 397769539134346425446401,
+  "14": 5568773547880849956249601,
+  "15": 83531603218212749343744001
+ },
+ "multipliers": {
+  "1": 1,
+  "2": 2,
+  "3": 6,
+  "4": 24,
+  "5": 120,
+  "6": 720,
+  "7": 5040,
+  "8": 40320,
+  "9": 362880,
+  "10": 3628800,
+  "11": 39916800,
+  "12": 479001600,
+  "13": 6227020800,
+  "14": 87178291200,
+  "15": 1307674368000
+ },
+ "verification": {
+  "mr_chain": true,
+  "sympy_bpsw": true,
+  "resieve_other_wheel": true,
+  "stopper_composite": true
+ },
+ "stopper": {
+  "i": 16,
+  "value": 1336505651491403989499904001,
+  "factor": 12239,
+  "why": "composite"
+ },
+ "certificates": {
+  "1": {
+   "proof": "deterministic-mr",
+   "N": 63877984659109,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "2": {
+   "proof": "deterministic-mr",
+   "N": 127755969318217,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "3": {
+   "proof": "deterministic-mr",
+   "N": 383267907954649,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "4": {
+   "proof": "deterministic-mr",
+   "N": 1533071631818593,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "5": {
+   "proof": "deterministic-mr",
+   "N": 7665358159092961,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "6": {
+   "proof": "deterministic-mr",
+   "N": 45992148954557761,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "7": {
+   "proof": "deterministic-mr",
+   "N": 321945042681904321,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "8": {
+   "proof": "deterministic-mr",
+   "N": 2575560341455234561,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "9": {
+   "proof": "deterministic-mr",
+   "N": 23180043073097111041,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "10": {
+   "proof": "deterministic-mr",
+   "N": 231800430730971110401,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "11": {
+   "proof": "deterministic-mr",
+   "N": 2549804738040682214401,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "12": {
+   "proof": "deterministic-mr",
+   "N": 30597656856488186572801,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "13": {
+   "proof": "deterministic-mr",
+   "N": 397769539134346425446401,
+   "bound": 3317044064679887385961981,
+   "note": "7-base Miller-Rabin is deterministic below the bound"
+  },
+  "14": {
+   "N": 5568773547880849956249601,
+   "F": 5568773547880849956249600,
+   "R": 1,
+   "factors": {
+    "2": 13,
+    "3": 7,
+    "5": 2,
+    "7": 2,
+    "11": 1,
+    "13": 1,
+    "43": 1,
+    "773": 1,
+    "1223": 1,
+    "43649": 1
+   },
+   "witnesses": {
+    "2": 17,
+    "3": 2,
+    "5": 2,
+    "7": 2,
+    "11": 2,
+    "13": 2,
+    "43": 2,
+    "773": 2,
+    "1223": 2,
+    "43649": 2
+   },
+   "proof": "bls75-thm1"
+  },
+  "15": {
+   "N": 83531603218212749343744001,
+   "F": 83531603218212749343744000,
+   "R": 1,
+   "factors": {
+    "2": 13,
+    "3": 8,
+    "5": 3,
+    "7": 2,
+    "11": 1,
+    "13": 1,
+    "43": 1,
+    "773": 1,
+    "1223": 1,
+    "43649": 1
+   },
+   "witnesses": {
+    "2": 17,
+    "3": 2,
+    "5": 2,
+    "7": 5,
+    "11": 2,
+    "13": 2,
+    "43": 2,
+    "773": 2,
+    "1223": 2,
+    "43649": 2
+   },
+   "proof": "bls75-thm1"
+  }
+ },
+ "certificates_verified": true,
+ "unproved": [],
+ "proof_routes": {
+  "deterministic-mr": 13,
+  "bls75-thm1": 2
+ },
+ "also_settles": [
+  {
+   "sequence": "A226935",
+   "n": 13,
+   "value": 63877984659109,
+   "claim": "A177014(13) +1"
+  },
+  {
+   "sequence": "A226935",
+   "n": 14,
+   "value": 63877984659109,
+   "claim": "A177014(14) +1"
+  },
+  {
+   "sequence": "A226935",
+   "n": 15,
+   "value": 63877984659109,
+   "claim": "A177014(15) +1"
+  }
+ ],
+ "least_claim": {
+  "swept_from_x": 946564216260,
+  "covered_by_previous_filter_to": 1251774093570,
+  "swept_to_x": 63877984659108,
+  "filter": 13,
+  "wheel": 200560490130,
+  "sieve_depth": 1048576,
+  "unit": 6,
+  "monotone_floor": 946564216260
+ },
+ "engine": "a177014-v3-p2-seg32-pbd224-cpl37w38"
+}
