@@ -31,6 +31,7 @@ survive before it is recorded.
 | [linear-ladders](linear-ladders/) | [A088250](https://oeis.org/A088250) and six siblings ([A173750](https://oeis.org/A173750), [A125838](https://oeis.org/A125838), [A125839](https://oeis.org/A125839), [A164325](https://oeis.org/A164325), [A164326](https://oeis.org/A164326), [A088651](https://oeis.org/A088651)): the least k such that r·k ± 1 is prime for every r in a run of consecutive (or consecutive odd) integers — linear ladders, whose consecutive multipliers force divisibility by every prime up to n + 1 | **PAUSED — open to others** — twenty-eight terms found & verified 2026-09-03/05 across all seven families, the first advance on any since 2017 and the first bounds of any kind at an open index, with A202778, A071576 and A202779 settled alongside. Paused with each family swept to between k = 4.3×10²⁴ and 2.1×10²⁶ and its next term open above that bound, about 10% likely under a night's sweep. |
 | [lcm-ladders](lcm-ladders/) | [A078502](https://oeis.org/A078502) and [A074200](https://oeis.org/A074200) (with [A093554](https://oeis.org/A093554) and [A093553](https://oeis.org/A093553) riding on them): the least N such that (N ± k)/k is prime for every k = 1..n — lcm ladders, whose multipliers are lcm(1..n)/k, so the small primes are nearly blind where every other ladder here has them maximal | **PAUSED — open to others** — a(15) through a(19) of A078502 and a(15) through a(18) of A074200 found & verified 2026-09-06/19, the first advance on either since 2003 and 2004, with A093554 and A093553 settled alongside. Paused at a(19) on A078502 with a(20) open, and at N = 5.11×10²⁹ on A074200 with a(19) open. |
 | [factorial-ladders](factorial-ladders/) | [A177013](https://oeis.org/A177013) and [A177014](https://oeis.org/A177014) (with [A226935](https://oeis.org/A226935) riding on the second): the least m such that k!·m ∓ 1 is prime for every k = 1..n — factorial ladders, whose multipliers vanish modulo every prime they pass, so the wheel grows with n and only 2 and 3 are ever forced | **PAUSED — open to others** — a(11) through a(18) of both A177013 and A177014 found & verified 2026-09-16/18, the first advance on either since 2010, with a(11) through a(18) of A226935 settled alongside. Paused at m = 5.41×10²¹ on A177013 and m = 3.15×10²² on A177014, with a(19) open on each. |
+| [clique-ladders](clique-ladders/) | [A093483](https://oeis.org/A093483) and five siblings ([A103828](https://oeis.org/A103828), [A037100](https://oeis.org/A037100), [A119752](https://oeis.org/A119752), [A119751](https://oeis.org/A119751), [A133761](https://oeis.org/A133761)), with five derived entries riding on them: the greedy set in which every pair sums to a prime less one — a(n) is the least x > a(n−1) with x + a(i) + 1 prime for every earlier term, so the conditions for the next term do not exist until this one does | **PAUSED — open to others** — twenty-six terms found & verified 2026-09-19/20 across all six families, the first advance on A093483 since 2012 and on A119751 and A119752 since 2008, with twenty-two terms of the five derived entries settled alongside. Paused just above each last find, with a(22) of A093483, A103828 and A037100 and a(21) of A119752, A119751 and A133761 open. |
 
 Project documentation follows a fixed template (see
 [CONVENTIONS.md](CONVENTIONS.md) § Documentation template): every
@@ -65,6 +66,10 @@ The projects share a skeleton and a library:
   didn't. A hunt's frontier is set by throughput, so this is not
   optional polish; two of its rules are design decisions best made
   before the first engine is written.
+- [`INNOVATION.md`](INNOVATION.md) — finding the optimizations the checklist
+  cannot: the representation hunt and the instruction-level pass every inner
+  loop gets before its verdict is written; the experiment ladder; the rule
+  that the default command is the fastest engine
 - [`huntlib/`](huntlib/) — the shared code: deterministic Miller-Rabin and
   BLS75 primality certificates (the N−1 routes and the N+1 Lucas route,
   with subproofs for factors past the deterministic bound), **the
@@ -120,5 +125,6 @@ its checkpoint and prints it in every 30-second `[STATUS]` line
 (`census 7:280 8:71 9:28 10:8`); a value one short of an open term gets a
 single `[NEAR]` line; anything shorter gets no line and no file. What you
 will find in `evidence/` is one JSON per verified discovery and the
-ledger — nothing else. The full rule is in
+ledger — plus, where an OEIS editor has asked for one, the entry's b-file
+built from those JSONs (`lcm-ladders/evidence/b078502.txt`). The full rule is in
 [CONVENTIONS.md](CONVENTIONS.md) § The discovery protocol.

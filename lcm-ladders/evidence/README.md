@@ -12,6 +12,16 @@ a(17) and a(18) = a(19) (one file, `settles = [18, 19]`) and A074200's a(15)
 and a(16) — and A074200's a(17) and a(18) from that campaign resumed on
 2026-09-19 ([RESULTS.md](../RESULTS.md)).
 
+## b-files
+
+`b078502.txt` is the OEIS b-file for A078502, n = 1..19, ready to upload as
+it stands: one `n a(n)` pair per line, no header. a(1)..a(14) are the
+published terms; a(15)..a(19) are taken from the `oeis_terms` of the A078502
+files here. It exists because an OEIS reviewer asked that the entry's data
+stop at a(18) and the remaining term go in a b-file. It is derived from
+the JSONs rather than being evidence in its own right, and the gates read
+only `*.json`.
+
 ## What a file contains
 
 * `sequence`, `forms`, the term, `oeis_terms` — the four fields every
@@ -35,7 +45,7 @@ and a(16) — and A074200's a(17) and a(18) from that campaign resumed on
   divide N at all, which is the stronger stop and needs no witness.
 * `certificates` — a re-verified primality certificate per value.
   Below the deterministic Miller-Rabin bound (3.317e24) that is the
-  seven-base test, which IS the proof there. Above it every value is proved
+  deterministic Miller-Rabin test, which IS the proof there. Above it every value is proved
   from ONE factorization of x: (N/i + s) − s = N/i, and N = L(n)·x with L(n)
   n-smooth, so BLS75 Theorem 1 on V − 1 (A074200) or Theorem 15, the N+1
   Lucas test, on V + 1 (A078502) covers the whole run. A prime factor of x
