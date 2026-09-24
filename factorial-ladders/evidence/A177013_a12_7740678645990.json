@@ -56,73 +56,73 @@
    "proof": "deterministic-mr",
    "N": 7740678645989,
    "bound": 3317044064679887385961981,
-   "note": "7-base Miller-Rabin is deterministic below the bound"
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
   },
   "2": {
    "proof": "deterministic-mr",
    "N": 15481357291979,
    "bound": 3317044064679887385961981,
-   "note": "7-base Miller-Rabin is deterministic below the bound"
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
   },
   "3": {
    "proof": "deterministic-mr",
    "N": 46444071875939,
    "bound": 3317044064679887385961981,
-   "note": "7-base Miller-Rabin is deterministic below the bound"
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
   },
   "4": {
    "proof": "deterministic-mr",
    "N": 185776287503759,
    "bound": 3317044064679887385961981,
-   "note": "7-base Miller-Rabin is deterministic below the bound"
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
   },
   "5": {
    "proof": "deterministic-mr",
    "N": 928881437518799,
    "bound": 3317044064679887385961981,
-   "note": "7-base Miller-Rabin is deterministic below the bound"
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
   },
   "6": {
    "proof": "deterministic-mr",
    "N": 5573288625112799,
    "bound": 3317044064679887385961981,
-   "note": "7-base Miller-Rabin is deterministic below the bound"
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
   },
   "7": {
    "proof": "deterministic-mr",
    "N": 39013020375789599,
    "bound": 3317044064679887385961981,
-   "note": "7-base Miller-Rabin is deterministic below the bound"
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
   },
   "8": {
    "proof": "deterministic-mr",
    "N": 312104163006316799,
    "bound": 3317044064679887385961981,
-   "note": "7-base Miller-Rabin is deterministic below the bound"
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
   },
   "9": {
    "proof": "deterministic-mr",
    "N": 2808937467056851199,
    "bound": 3317044064679887385961981,
-   "note": "7-base Miller-Rabin is deterministic below the bound"
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
   },
   "10": {
    "proof": "deterministic-mr",
    "N": 28089374670568511999,
    "bound": 3317044064679887385961981,
-   "note": "7-base Miller-Rabin is deterministic below the bound"
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
   },
   "11": {
    "proof": "deterministic-mr",
    "N": 308983121376253631999,
    "bound": 3317044064679887385961981,
-   "note": "7-base Miller-Rabin is deterministic below the bound"
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
   },
   "12": {
    "proof": "deterministic-mr",
    "N": 3707797456515043583999,
    "bound": 3317044064679887385961981,
-   "note": "7-base Miller-Rabin is deterministic below the bound"
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
   }
  },
  "certificates_verified": true,

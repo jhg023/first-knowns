@@ -47,7 +47,7 @@ minutes to that family's ceiling the same evening, found
     a(18) = 74,882,388,347,598,051,560,340
 
 every value under the deterministic bound, every certificate the
-seven-base test itself, each re-verified from disk; then **`a(19) >
+deterministic Miller-Rabin test itself, each re-verified from disk; then **`a(19) >
 1.7305×10²³`** by the sweep to the ceiling. `a(15)` is the integer the
 literature already holds as A125839's `a(15)`, and each term is an upper
 bound on A125839 at its index.
@@ -386,7 +386,7 @@ the search; the enforced ceiling is the **measured certificate budget**,
 below the **proof crossing** `k_proof(n, F) = (3.317×10²⁴ − s − 1) / m_max`
 — `2.2×10²³` at `n = 15`, `1.7×10²³` at `n = 19` — every classification
 the hunt makes is a deterministic Miller–Rabin proof. Past it the same
-seven-base chain is a strong probable-prime test; the census is still a
+Miller-Rabin chain is a strong probable-prime test; the census is still a
 count and a `[NEAR]` still a health check, and a *discovery* is proved
 by the value's own structure: `N − s = m·k` is completely factored once
 `k` is (`huntlib.certificate.factor_full`, the multiplier's own factors

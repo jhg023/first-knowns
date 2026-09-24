@@ -168,7 +168,7 @@ so the product has 64x less room, and the engine derives s per stage rather
 than sharing one.
 
 **5. Host classification.** The ~3.6×10⁻¹³ of the line that survives goes
-to the host, where a deterministic 7-base Miller–Rabin (valid to
+to the host, where a deterministic Miller–Rabin (valid to
 3.3×10²⁴) computes each survivor's exact run. The GPU only ever
 *proposes*.
 

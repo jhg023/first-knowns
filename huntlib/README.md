@@ -22,7 +22,7 @@ from huntlib import evidence, frontier, pool, scoring, shutdown, drills
 |--------|----------|
 | `hlog` | timestamped tagged logging + the repo-wide tag taxonomy; `census_str` — the one format every `[STATUS]` line uses for the census counts per run length (`census 7:280 8:71 9:28 10:8`); `Heartbeat` — the wall-clock `[STATUS]` timer thread every launcher runs (mark positions at segment boundaries, `doing()` around long steps; it reports the end-to-end rate and, when nothing has moved, what the launcher is stuck on) |
 | `checkpoint` | config-keyed JSON checkpoints that survive the MACHINE, not just the process: temp file, **`fsync`**, `os.replace`, and the previous file rotated to `.bak`. The fsync is not optional — a rename is atomic for the directory *entry* while the *data* may still be in the page cache, and an abrupt stop once left this repo a 785-byte checkpoint of pure NUL. `load` falls back to the `.bak` and otherwise raises `CheckpointCorrupt`, because "absent" and "corrupt" demand opposite responses from a live frontier. A save that a **file lock** defeats may not end a run: `os.replace` is `MoveFileExW`, which needs DELETE access on both ends, and any Windows reader — scanner, indexer, `open()` — withholds it, so the replaces are retried to a bounded deadline and `save` then DEFERS (returns `False`) rather than raising, escalating with `SaveBlocked` only after ten minutes. `save_json` still raises: it writes evidence too, and a discovery artefact may never be silently skipped |
-| `primes` | deterministic 7-base Miller–Rabin (valid < 3.317×10²⁴, bound exported as a constant); `sprp_base2`, a single strong test to base 2 — worth having separately because its verdict is **asymmetric**: a failure is a *proof* of compositeness, so one modular exponentiation can rigorously bound a run length that seven would only pin down exactly; and factor witnesses (trial division, a bounded Brent rho, then sympy's ECM — never unbounded: a rho on a semiprime run breaker once stalled a live campaign for 105 s) |
+| `primes` | deterministic Miller–Rabin (valid < 3.317×10²⁴, bound exported as a constant); `sprp_base2`, a single strong test to base 2 — worth having separately because its verdict is **asymmetric**: a failure is a *proof* of compositeness, so one modular exponentiation can rigorously bound a run length that seven would only pin down exactly; and factor witnesses (trial division, a bounded Brent rho, then sympy's ECM — never unbounded: a rho on a semiprime run breaker once stalled a live campaign for 105 s) |
 | `certificate` | primality **proofs**, where a strong test is only evidence: BLS75 Theorem 1 (N−1 factored past √N), Theorem 5 (past ∛N, with the `r² − 8s` side condition) and **Theorem 15 (N+1 factored past √N + 1, with a Lucas sequence per prime of F sharing one discriminant)** — the route a value `m·k − 1` needs, since its structure is on `N + 1 = m·k`; a bounded partial factorization (trial division, bounded Brent rho, bounded ECM — then it gives up and *says so*) and `factor_full` (the bounded chain, then `factorint`, for the one factorization of `k` a discovery pays); and bounded recursion on **both sides** for a prime factor past the deterministic bound. Every prime admitted into F is proved, so a certificate is a finite tree whose leaves are all deterministic Miller–Rabin. `verify` re-checks a proof from scratch and trusts nothing in it |
 | `ceiling` | **the measured k ceiling a new project starts from** — `K_CEIL = 10⁴⁰` on both signs, because with both certificate routes and the recursion nothing about a value's *size* bounds a hunt; only the cost of factoring `k` once per discovery does, and the worst case (a balanced semiprime) was measured at seconds to `10⁴⁰`. `hard_k` / `big_prime_k` build the two worst shapes at a height, `certificate_cost` times a discovery's certificate on both routes, `subproof_rate` measures how often a structureless prime near a height is proved, and `gate_ceiling` drills the machinery at `K_CEIL` in every project's battery (CLAUDE.md 5h) |
 | `gpu` | Barrett magic-multiply reciprocals: the host-side helper and the canonical CUDA snippet that every kernel uses in place of hardware u64 division; `device_report`, the one line of machine state a days-long campaign owes its own log — **read-only**, it names levers and never pulls them |
@@ -49,3 +49,30 @@ one, and a hunt that re-sieves per term settles the term it is sieving for.
 `huntlib.frontier` gives that function the facts it reasons from;
 `huntlib.drills.event_kind_drill` makes each project prove it got them
 right.
+
+## Erratum, 2026-09-20 -- the Miller-Rabin bases and their bound
+
+Until this date `primes.mr_is_prime` ran the seven bases (2, 325, 9375,
+28178, 450775, 9780504, 1795265022) up to 3.317e24 and called the result
+deterministic. That set is proved only below 2^64; 3.317e24 is psi_13, the
+bound for the FIRST THIRTEEN PRIMES as bases (Sorenson & Webster 2017). An
+outside read-only review caught the mismatch. The test now dispatches: the
+seven bases below 2^64, the thirteen primes from there to psi_13, and
+`primes.gate_bases` (run inside `certificate.gate_certificates`, so in every
+project's battery) pins the joint with psi_12 and psi_13 as tripwires.
+
+What it touched, and what it did not:
+
+* **No published term moved.** Every integer in every project's `evidence/`
+  lying in [2^64, 3.317e24) was re-tested the same day with the thirteen
+  prime bases by a standalone script (nothing imported from this repo): 734
+  `deterministic-mr` and BLS-factor claims, all prime; no integer in any file
+  on which the two base sets disagree.
+* **No least-ness claim was ever exposed.** Miller-Rabin never rejects a
+  prime under any bases, so a wrong base set can only ADMIT a composite: a
+  spurious find or census count, never a missed one. "Searched empty below
+  a(n)" did not depend on the bases.
+* The `note` in the `deterministic-mr` records on disk was rewritten to say
+  what is true; `certificate.verify` never read it -- it re-runs the test,
+  now with the right bases. Census counts from sweeps between 2^64 and the
+  bound were classified with the seven bases and have not been recounted.

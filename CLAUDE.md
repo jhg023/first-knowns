@@ -99,7 +99,7 @@ each README stays.
    second engine, so they check a new engine against every engine that
    ever reproduced them. A new engine version reproduces the fingerprints
    or it does not ship.
-3a. **Before optimizing anything, read `OPTIMIZATION.md`.** Throughput
+3a. **Before optimizing anything, read `OPTIMIZATION.md` and `INNOVATION.md`.** Throughput
    sets the frontier, so every project here needs it; that file holds the
    process and the catalogue of what has actually paid, with measured
    numbers and the rejected attempts. The rules broken most often, stated

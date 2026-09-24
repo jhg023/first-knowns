@@ -62,91 +62,91 @@
     "proof": "deterministic-mr",
     "N": 1555360041314493173761,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "2": {
     "proof": "deterministic-mr",
     "N": 3110720082628986347521,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "3": {
     "proof": "deterministic-mr",
     "N": 4666080123943479521281,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "4": {
     "proof": "deterministic-mr",
     "N": 6221440165257972695041,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "5": {
     "proof": "deterministic-mr",
     "N": 7776800206572465868801,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "6": {
     "proof": "deterministic-mr",
     "N": 9332160247886959042561,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "7": {
     "proof": "deterministic-mr",
     "N": 10887520289201452216321,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "8": {
     "proof": "deterministic-mr",
     "N": 12442880330515945390081,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "9": {
     "proof": "deterministic-mr",
     "N": 13998240371830438563841,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "10": {
     "proof": "deterministic-mr",
     "N": 15553600413144931737601,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "11": {
     "proof": "deterministic-mr",
     "N": 17108960454459424911361,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "12": {
     "proof": "deterministic-mr",
     "N": 18664320495773918085121,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "13": {
     "proof": "deterministic-mr",
     "N": 20219680537088411258881,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "14": {
     "proof": "deterministic-mr",
     "N": 21775040578402904432641,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "15": {
     "proof": "deterministic-mr",
     "N": 23330400619717397606401,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    }
   },
   "certificates_verified": true,
@@ -246,97 +246,97 @@
     "proof": "deterministic-mr",
     "N": 87117680854368555070681,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "2": {
     "proof": "deterministic-mr",
     "N": 174235361708737110141361,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "3": {
     "proof": "deterministic-mr",
     "N": 261353042563105665212041,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "4": {
     "proof": "deterministic-mr",
     "N": 348470723417474220282721,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "5": {
     "proof": "deterministic-mr",
     "N": 435588404271842775353401,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "6": {
     "proof": "deterministic-mr",
     "N": 522706085126211330424081,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "7": {
     "proof": "deterministic-mr",
     "N": 609823765980579885494761,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "8": {
     "proof": "deterministic-mr",
     "N": 696941446834948440565441,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "9": {
     "proof": "deterministic-mr",
     "N": 784059127689316995636121,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "10": {
     "proof": "deterministic-mr",
     "N": 871176808543685550706801,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "11": {
     "proof": "deterministic-mr",
     "N": 958294489398054105777481,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "12": {
     "proof": "deterministic-mr",
     "N": 1045412170252422660848161,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "13": {
     "proof": "deterministic-mr",
     "N": 1132529851106791215918841,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "14": {
     "proof": "deterministic-mr",
     "N": 1219647531961159770989521,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "15": {
     "proof": "deterministic-mr",
     "N": 1306765212815528326060201,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "16": {
     "proof": "deterministic-mr",
     "N": 1393882893669896881130881,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    }
   },
   "certificates_verified": true,
@@ -438,19 +438,19 @@
     "proof": "deterministic-mr",
     "N": 1048124771278912649231911,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "2": {
     "proof": "deterministic-mr",
     "N": 2096249542557825298463821,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "3": {
     "proof": "deterministic-mr",
     "N": 3144374313836737947695731,
     "bound": 3317044064679887385961981,
-    "note": "7-base Miller-Rabin is deterministic below the bound"
+    "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
    },
    "4": {
     "N": 4192499085115650596927641,

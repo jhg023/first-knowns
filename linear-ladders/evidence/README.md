@@ -29,7 +29,7 @@ value.
 
 The 443 certificates in these files divide by where the value sits
 against huntlib's deterministic Miller–Rabin bound: **263** are the
-seven-base test itself (`deterministic-mr`), **59** are BLS75 Theorem 1
+deterministic Miller-Rabin test itself (`deterministic-mr`), **59** are BLS75 Theorem 1
 on `N − 1` (A088250's `a(17)` and `a(18)`, A164325's `a(17)` and
 `a(18)`), and **121** are BLS75 Theorem 15 on `N + 1` — the −1 route,
 which arrived with v3 on 2026-09-04 and carried A164326's `a(17)` and
@@ -58,7 +58,7 @@ trust in this repository. It carries:
   can be re-tested directly;
 - `certificates` — one per value, each **re-verified from scratch before
   it is written**. Under huntlib's deterministic Miller-Rabin bound
-  (`3.317×10²⁴`) a certificate is that seven-base test itself
+  (`3.317×10²⁴`) a certificate is that deterministic Miller-Rabin test itself
   (`deterministic-mr`). Past the bound a `+1` value carries a BLS75
   Theorem 1 certificate (`bls75-thm1`): the complete factorization of
   `N − 1 = m·k` (the multiplier's own small factors folded in) and a

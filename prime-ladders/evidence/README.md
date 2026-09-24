@@ -45,7 +45,7 @@ trust in this repository. It carries:
   so the primality claims can be re-tested directly;
 - `certificates` — one per value, each **re-verified from scratch before
   it is written**. Under huntlib's deterministic Miller-Rabin bound
-  (`3.317×10²⁴`) a certificate is that seven-base test itself
+  (`3.317×10²⁴`) a certificate is that deterministic Miller-Rabin test itself
   (`deterministic-mr`), which is what the four A084700 files of
   2026-09-02 and all six A084701 files carry for every value — the
   largest A084701 value, `61·k − 1` of its `a(18)`, is `1.4×10²⁴`, under

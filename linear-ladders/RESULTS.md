@@ -94,7 +94,7 @@ the last whole wheel period under the engine ceiling, `k =
 survivor and finding no run of 18. So **no `k < 3.3168×10²⁴` has
 `r·k + 1` prime for all `r = 1..18`**, the first bound of any kind on
 A088250 at an open index. The claim is sound above the proof crossing
-too: past `k_proof(18) = 1.84×10²³` the seven-base chain is a
+too: past `k_proof(18) = 1.84×10²³` the Miller-Rabin chain is a
 probable-prime test, and a composite that passed it could only *lengthen*
 a run, never hide one — a true run of 18 would have passed every test and
 been claimed. The model, from `a(17)`, had put `a(18)` under the ceiling
@@ -118,7 +118,7 @@ The second campaign, `--family A125838` with no flags, ran 17.2 minutes
 from `k = 10⁶` to the family's ceiling (the proof crossing of its current
 filter, `3.317×10²⁴ / 19 = 1.746×10²³` at `n = 19`) and found four terms.
 A125838 is a −1 family (`r·k − 1` for `r = 2..n`), so every value stays
-under the deterministic bound and every certificate is the seven-base test
+under the deterministic bound and every certificate is the deterministic Miller-Rabin test
 itself; each file was re-verified from disk exactly as A088250's were.
 
 ### A125838 a(15) = 45,187,548,280,664,790 — 19:32
@@ -249,7 +249,7 @@ and puts its median at `1.1×10²⁴`, six times the ceiling.
 The fourth campaign, `--family A173750` (`r·k + 1` for `r = 2..n`, a +1
 family), 37 minutes from `k = 10⁶` to the +1 ceiling `3.317×10²⁴`. Every
 value stayed under the deterministic bound (the largest, `19·k + 1 =
-2.8×10²⁴`, just under it), so every certificate is the seven-base test;
+2.8×10²⁴`, just under it), so every certificate is the deterministic Miller-Rabin test;
 each file was re-verified from disk.
 
 ### A173750 a(16) = 828,196,248,070,762,801,230 — 20:24

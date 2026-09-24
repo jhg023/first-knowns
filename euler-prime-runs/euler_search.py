@@ -10,7 +10,7 @@
 #             and that difference is exactly what the G6 parity gate measures
 #   stage 1 : bitmask kill by primes 29..Q1 (numpy, compress-as-you-go)
 #   stage 2 : kill by primes Q1..Q2 via the exact 17-value divisibility test
-#   MR      : deterministic 7-base Miller-Rabin (valid < 3.317e24) on the
+#   MR      : deterministic Miller-Rabin (valid < 3.317e24) on the
 #             n values; survivors get their EXACT run computed
 # The engine only ever *proposes*; launch.py's three-way verification
 # (sympy + this MR + fresh window re-sieve) decides.
@@ -43,7 +43,7 @@ import sys as _sys
 import pathlib as _pathlib
 _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1]))
 from huntlib import shutdown as _shutdown  # noqa: E402
-from huntlib.primes import MR_BASES, mr_is_prime  # noqa: E402
+from huntlib.primes import mr_is_prime  # noqa: E402
 
 from euler_reference import A21_UPPER, KNOWN, run_length
 
@@ -277,8 +277,8 @@ P_CEIL = 10**24
 # Enforced value ceiling of the search.  Everything the engines
 # and the MR chain touch (values x^2+x+p <= p + 10100 at run cap 100)
 # stays a factor >3 below huntlib's deterministic-MR validity bound
-# 3.317e24 (Sorenson-Webster 7-base).  Raising this is a new engine
-# version: new gates, new fingerprint, log entry.
+# 3.317e24 (Sorenson-Webster psi_13; huntlib.primes).  Raising this is a
+# new engine version: new gates, new fingerprint, log entry.
 
 
 class CpuEngine:

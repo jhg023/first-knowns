@@ -34,6 +34,23 @@ legs stay independent), and `event_kind` stays in each project even though
 the rule it implements is repo-wide.
 """
 
-from . import (ceiling, certificate, checkpoint, drills, evidence,   # noqa: F401
-               frontier, gpu, hlog, pool, primes, rungs, scoring,    # noqa: F401
-               shutdown)                                             # noqa: F401
+from importlib import import_module
+
+# A CPU worker importing checkpoint/pool must not also load NumPy's native
+# libraries or SymPy's proof machinery. Keep the same public module names,
+# loading each only when it is requested (including attribute-style access).
+__all__ = ['ceiling', 'certificate', 'checkpoint', 'drills', 'evidence',
+           'frontier', 'gpu', 'hlog', 'pool', 'primes', 'rungs', 'scoring',
+           'shutdown']
+
+
+def __getattr__(name):
+    if name not in __all__:
+        raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
+    module = import_module(f'.{name}', __name__)
+    globals()[name] = module
+    return module
+
+
+def __dir__():
+    return sorted(set(globals()) | set(__all__))

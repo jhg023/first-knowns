@@ -30,7 +30,7 @@ n is m_max*k + s with m_max the largest multiplier -- n for the 1..n
 families, 2n - 1 for the odd ones.  So the classification is a PROOF below
 the PROOF CROSSING k_proof(n, F) = (3.317e24 - 1 - s) / m_max -- 2.2e23 at
 n = 15 for A088250, 1.1e23 at n = 16 for A164325 -- and above it the same
-seven-base chain is a strong probable-prime test: excellent evidence, not
+Miller-Rabin chain is a strong probable-prime test: excellent evidence, not
 a proof.  That is where the CERTIFICATE takes over, on BOTH signs (v3):
 N - s = m*k is completely factored once k is (m is tiny), so BLS75
 Theorem 1 on N - 1 (the +1 families) or Theorem 15 on N + 1 (the -1
@@ -86,7 +86,7 @@ def k_proof(n, fam):
     The largest value formed is m_max*k + s, so below this k every value
     is under MR_VALID_BELOW and every primality decision the hunt makes --
     census, NEAR, discovery -- is a PROOF.  At or above it the same
-    seven-base chain is a strong probable-prime test.
+    Miller-Rabin chain is a strong probable-prime test.
 
     EXCLUSIVE, like every other bound in the engines: k_proof - 1 is the
     largest k whose top value stays under the bound.  G10 pins both halves,
@@ -274,7 +274,7 @@ class CpuEngine:
     def run_length(self, k, cap=64):
         """Largest r <= cap with every form up to index r prime at k.
 
-        A proof below k_proof(n, F) and a seven-base strong probable-prime
+        A proof below k_proof(n, F) and a thirteen-base strong probable-prime
         chain above it, where a DISCOVERY is proved by certificate instead
         -- see the module docstring and G10."""
         r = FAMILIES[self.fam]["rungs_from"] - 1

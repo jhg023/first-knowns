@@ -33,7 +33,7 @@ MR_VALID_BELOW = 3.317e24, and the largest value at filter n is
 L(n)*x + s -- the k = 1 form, the published term itself shifted by one.  So
 the classification is a PROOF below the PROOF CROSSING
 k_proof(n, F) = (3.317e24 - 1 - s)/L(n) + 1 -- 9.2e18 at n = 15, 2.7e17 at
-n = 17 -- and above it the same seven-base chain is a strong probable-prime
+n = 17 -- and above it the same Miller-Rabin chain is a strong probable-prime
 test: excellent evidence, not a proof.  That is where the CERTIFICATE takes
 over, on BOTH signs: every value is V = (L/k)*x + s, so
 
@@ -103,7 +103,7 @@ def k_proof(n, fam):
     The largest value formed is L(n)*x + s, so below this x every value is
     under MR_VALID_BELOW and every primality decision the hunt makes --
     census, NEAR, discovery -- is a PROOF.  At or above it the same
-    seven-base chain is a strong probable-prime test.
+    Miller-Rabin chain is a strong probable-prime test.
 
     EXCLUSIVE, like every other bound in the engines: k_proof - 1 is the
     largest x whose top value stays under the bound.  G10 pins both halves,
@@ -294,7 +294,7 @@ class CpuEngine:
     def run_length(self, k, cap=None):
         """Largest r <= cap with every form up to index r prime at x = k.
 
-        A proof below k_proof(n, F) and a seven-base strong probable-prime
+        A proof below k_proof(n, F) and a thirteen-base strong probable-prime
         chain above it, where a DISCOVERY is proved by certificate instead --
         see the module docstring and G10.
         """

@@ -30,7 +30,7 @@ MR_VALID_BELOW = 3.317e24, and the largest value this project forms is
 prime(n)*k + s -- a MULTIPLICATIVE offset of at most prime(n), which at
 n = 18 is 61.  So the classification is a PROOF below the PROOF CROSSING
 k_proof(n, s) = (3.317e24 - 1 - s) / prime(n) -- 5.6e22 at n = 17, 5.4e22
-at n = 18 -- and above it the same seven-base chain is a strong
+at n = 18 -- and above it the same Miller-Rabin chain is a strong
 probable-prime test: excellent evidence, not a proof.  For A084700
 (s = +1) that is where the CERTIFICATE takes over.  N - 1 = prime(i)*k is
 completely factored once k is, so BLS75 Theorem 1 (huntlib.certificate)
@@ -79,7 +79,7 @@ def k_proof(n, s):
     The largest value this project forms is prime(n)*k + s, so below this k
     every value is under MR_VALID_BELOW and every primality decision the
     hunt makes -- census, NEAR, discovery -- is a PROOF.  At or above it
-    the same seven-base chain is a strong probable-prime test.
+    the same Miller-Rabin chain is a strong probable-prime test.
 
     EXCLUSIVE, like every other bound in the engines: k_proof - 1 is the
     largest k whose top value prime(n)*(k_proof - 1) + s stays under the
@@ -102,8 +102,8 @@ def k_ceil(n, s):
     N - 1 = prime(i)*k, which is completely factored once k is.  Every
     prime factor of k is below k, so with k under the deterministic bound
     the certificate is ONE LEVEL DEEP: each factor is checked by the
-    seven-base test and nothing recurses.  Past this k a factor of k could
-    itself exceed the bound and need a subproof (huntlib.certificate
+    deterministic Miller-Rabin test and nothing recurses.  Past this k a
+    factor of k could itself exceed the bound and need a subproof (huntlib.certificate
     carries them, to PROOF_DEPTH); that is a new engine version with gates
     at that height, not something this one quietly assumes.
 
@@ -266,7 +266,7 @@ class CpuEngine:
     def run_length(self, k, cap=64):
         """Largest r <= cap with prime(i)*k + s prime for i = 1..r.
 
-        A proof below k_proof(n, s) and a seven-base strong probable-prime
+        A proof below k_proof(n, s) and a thirteen-base strong probable-prime
         chain above it, where a DISCOVERY is proved by certificate instead
         -- see the module docstring and G10."""
         r = 0

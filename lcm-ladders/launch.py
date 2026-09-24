@@ -64,7 +64,7 @@ INDEFINITE BY DEFAULT (CONVENTIONS.md).  With no arguments this runs until
 the engine's enforced ceiling -- k_ceil in lcml_search, huntlib.ceiling
 .K_CEIL = 1e40 on x for both families -- and that is the last rung.  Below
 the PROOF CROSSING k_proof(n, F) every classification is a deterministic
-proof; above it the same seven-base chain is a strong probable-prime test,
+proof; above it the same Miller-Rabin chain is a strong probable-prime test,
 the census is a count and a NEAR is a health check either way, and a
 DISCOVERY is proved by CERTIFICATE on its own structure.  THE CROSSING IS
 LOW HERE -- x = 9.2e18 at n = 15 and 2.7e17 at n = 17, because the largest
@@ -406,7 +406,7 @@ def verify(N, run, fam, witness=True):
     just as surely as at the first composite.
 
     1. huntlib's Miller-Rabin, which is a PROOF below the proof crossing
-       k_proof(n, F) (G10) and a seven-base strong probable-prime chain
+       k_proof(n, F) (G10) and a thirteen-base strong probable-prime chain
        above it -- where the certificate (certify_run), not this leg, is
        the proof;
     2. sympy's BPSW, an independent implementation, which must agree on the
@@ -481,8 +481,8 @@ def certify_run(N, run, fam, only=None):
     is completely factored the moment N is -- and N = L(n)*x with L(n)
     n-smooth, so ONE factorization of x factors every value's N -+ 1 at
     once.  Below the deterministic bound huntlib.certificate.prove answers
-    with the seven-base test, which IS the proof there.  Above it every
-    value gets BLS75 Theorem 1 on N - 1 (s = +1, A074200) or Theorem 15,
+    with the deterministic Miller-Rabin test, which IS the proof there.
+    Above it every value gets BLS75 Theorem 1 on N - 1 (s = +1, A074200) or Theorem 15,
     the N+1 test with a Lucas sequence per prime, on N + 1 (s = -1,
     A078502), from that same factorization with i's own factors divided
     out.  A prime factor of x past the bound is admitted with a SUBPROOF of
@@ -567,7 +567,7 @@ def sprp_run(x, fam, n, cap, floor=CENSUS_FLOOR):
     the first pass can only overstate a run, never understate it.  Runs that
     come out below the census floor are never looked at again, so an
     overstatement there costs nothing; a run at or above it is recomputed
-    with all seven bases, which is the deterministic answer below the proof
+    with the full base set, which is the deterministic answer below the proof
     crossing and a strong probable-prime answer above it (a DISCOVERY there
     is proved by certificate; the census is a count).
 
@@ -846,7 +846,7 @@ class Campaign:
                 f"{self.oeis}) = {pc:.4g}: L({self.filter_n()})"
                 f"*x {self.s:+d} = N {self.s:+d}, the top value, now exceeds "
                 f"the deterministic Miller-Rabin "
-                f"bound, so classification is a seven-base strong "
+                f"bound, so classification is a thirteen-base strong "
                 f"probable-prime chain from here (the census is counted and "
                 f"a NEAR is a health check either way) and a DISCOVERY is "
                 f"proved by BLS75 certificate on "
@@ -1141,8 +1141,8 @@ class Campaign:
                          f"{a['value']:,}")
         if unproved:
             lines.append(f"UNPROVED at i = {unproved}: those values passed "
-                         f"the seven-base chain and BPSW but no certificate "
-                         f"landed within the bounded effort -- the find "
+                         f"the Miller-Rabin chain and BPSW but no "
+                         f"certificate landed within the bounded effort -- the find "
                          f"stands on the three legs; certify them by hand "
                          f"from the evidence file")
         banner("DISCOVERY", lines)
@@ -1378,8 +1378,8 @@ class Campaign:
         log("STAGE", f"proofs: classification is a deterministic "
                      f"Miller-Rabin proof below the proof crossing "
                      f"k_proof({self.filter_n()}, {self.oeis}) = "
-                     f"{self.proof_crossing():.4g} and a seven-base strong "
-                     f"probable-prime chain above it; a DISCOVERY is proved "
+                     f"{self.proof_crossing():.4g} and a thirteen-base "
+                     f"strong probable-prime chain above it; a DISCOVERY is proved "
                      f"by certificate either way (certify_run: BLS75 "
                      f"{'Theorem 1 on N - 1' if self.s > 0 else 'Theorem 15 on N + 1'}"
                      f" = m*k, k factored once, subproofs for factors past "

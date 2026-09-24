@@ -1,7 +1,8 @@
 """Primality CERTIFICATES -- proof, where a strong test is only evidence.
 
-`huntlib.primes.mr_is_prime` is DETERMINISTIC below 3.317e24, and inside
-that range a positive is a proof.  Above it the same call is a strong
+`huntlib.primes.mr_is_prime` is DETERMINISTIC below 3.317e24 (the seven
+bases below 2^64, the first thirteen primes from there to psi_13 -- each set
+inside the bound proved FOR IT), and inside that range a positive is a proof.  Above it the same call is a strong
 probable prime chain: excellent evidence, and not a proof.  A hunt that
 records a FIRST OCCURRENCE whose values pass that bound therefore owes the
 reader an actual certificate, and this module is where the classical N-1
@@ -113,7 +114,7 @@ from math import gcd, isqrt
 from sympy import isprime as _isprime, primerange
 from sympy.ntheory import ecm as _ecm
 
-from .primes import MR_VALID_BELOW, mr_is_prime
+from .primes import MR_VALID_BELOW, gate_bases, mr_is_prime
 
 CERT_BASE_CAP = 10_000        # witness bases: the primes below this, ascending
 LUCAS_P_CAP = 2_000           # N+1 witnesses: P tried up to this, same parity as D
@@ -505,6 +506,16 @@ def _prove_plus(N, fac, R, subs):
     return out
 
 
+# What a deterministic-mr record says about itself.  Records written before
+# 2026-09-20 said "7-base Miller-Rabin is deterministic below the bound",
+# which is true only under 2^64 (huntlib.primes); `verify` never read the
+# note -- it re-runs the test -- and the records on disk were rewritten to
+# this one the day the bases were matched to their bounds.
+MR_NOTE = ("Miller-Rabin is deterministic below the bound: the 7-base set "
+           "under 2^64, the first 13 prime bases from 2^64 to psi_13 "
+           "(Sorenson-Webster 2017)")
+
+
 def prove(N, fac=None, fac_plus=None, base_cap=CERT_BASE_CAP,
           depth=PROOF_DEPTH, **kw):
     """A checkable primality PROOF for N, or None if this cannot prove it.
@@ -535,7 +546,7 @@ def prove(N, fac=None, fac_plus=None, base_cap=CERT_BASE_CAP,
         if not mr_is_prime(N):
             return None
         return {"proof": "deterministic-mr", "N": N, "bound": MR_VALID_BELOW,
-                "note": "7-base Miller-Rabin is deterministic below the bound"}
+                "note": MR_NOTE}
     if N % 2 == 0:
         return None
     sides = []
@@ -628,7 +639,8 @@ def verify(proof):
                            f"{MR_VALID_BELOW}; this is not a proof")
         if not mr_is_prime(N):
             return False, "N fails deterministic Miller-Rabin"
-        return True, "deterministic 7-base Miller-Rabin below 3.317e24"
+        return True, ("deterministic Miller-Rabin below 3.317e24 (seven "
+                      "bases under 2^64, thirteen prime bases above)")
     if kind not in ("bls75-thm1", "bls75-thm5", "bls75-thm15"):
         return False, f"unknown proof kind {kind!r}"
     if N % 2 == 0:
@@ -722,6 +734,12 @@ def gate_certificates():
     this file: a project's own gates should be about ITS values, not about
     whether Pocklington was transcribed correctly.
     """
+    # The deterministic leaf every proof tree ends in: each base set inside
+    # the bound proved for it (huntlib.primes.gate_bases).
+    ok, msg = gate_bases()
+    if not ok:
+        return False, f"the deterministic Miller-Rabin leaf: {msg}"
+
     # Below the deterministic bound there is nothing to certify and the
     # answer says so; a composite gets no proof at all.
     small = prove(122774401)                          # 2^7*3^3*5^2*7^2*29 + 1

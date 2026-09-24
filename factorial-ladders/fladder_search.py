@@ -34,7 +34,7 @@ MR_VALID_BELOW = 3.317e24, and the largest value at filter n is n!*x + s --
 the k = n form.  So the classification is a PROOF below the PROOF CROSSING
 k_proof(n, F) = (3.317e24 - 1 - s)/n! + 1 -- 8.3e16 at n = 11, 1.6e13 at
 n = 14, 2.5e12 at n = 15, 9.3e9 at n = 17, and x = 1 from n = 25, where
-25! alone exceeds the bound -- and above it the same seven-base chain is a
+25! alone exceeds the bound -- and above it the same Miller-Rabin chain is a
 strong probable-prime test: excellent evidence, not a proof.  That is where
 the CERTIFICATE takes over, on BOTH signs: every value is V = k!*x + s, so
 
@@ -107,7 +107,7 @@ def k_proof(n, fam):
     The largest value formed is n!*x + s, so below this x every value is
     under MR_VALID_BELOW and every primality decision the hunt makes --
     census, NEAR, discovery -- is a PROOF.  At or above it the same
-    seven-base chain is a strong probable-prime test.
+    Miller-Rabin chain is a strong probable-prime test.
 
     EXCLUSIVE, like every other bound in the engines: k_proof - 1 is the
     largest x whose top value stays under the bound.  G10 pins both halves,
@@ -305,7 +305,7 @@ class CpuEngine:
         Capped at the FILTER by default: a filter-n sweep sieved for n
         conditions and this engine speaks about those.  (The oracle's
         run_length runs the chain on, which is how a rider is decided.)  A
-        proof below k_proof(n, F) and a seven-base strong probable-prime
+        proof below k_proof(n, F) and a thirteen-base strong probable-prime
         chain above it, where a DISCOVERY is proved by certificate instead
         -- see the module docstring and G10.
         """

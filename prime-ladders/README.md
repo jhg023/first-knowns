@@ -218,7 +218,7 @@ below the **proof crossing** `k_proof(n, s) = (3.317×10²⁴ − 1 − s) /
 prime(n)` — `5.6×10²²` at `n = 17`, `5.4×10²²` at `n = 18` — it stays
 under huntlib's deterministic Miller–Rabin bound, so every classification
 the hunt makes there is a proof. The first campaign ran to exactly that
-crossing and stopped. Past it the same seven-base chain is a strong
+crossing and stopped. Past it the same Miller-Rabin chain is a strong
 probable-prime test, and for A084700 a *discovery* is proved instead by
 the value's own structure: `N − 1 = prime(i)·k` is completely factored
 once `k` is, so BLS75 Theorem 1 (huntlib.certificate, as dickson-ladders

@@ -23,7 +23,7 @@ Carmody's A084700 `a(13)` of March 2004 and Wilson and Reble's A084701
 (`a(13) = 1.6×10¹⁴` for A084700, `a(11) = 3.9×10¹²` for A084701). Every
 value `prime(i)·k ± 1` of the first four A084700 finds and of all seven
 A084701 terms is under huntlib's deterministic Miller–Rabin bound
-(`3.317×10²⁴`), so each of those certificates *is* the seven-base test
+(`3.317×10²⁴`), so each of those certificates *is* the deterministic Miller-Rabin test
 (`deterministic-mr`); A084700's `a(18)` has values past the bound from
 `i = 5` on, and those fourteen are proved by BLS75 Theorem 1 on the
 factorization of `N − 1 = prime(i)·k` (`bls75-thm1`). Every stopper —
@@ -167,7 +167,7 @@ median, and two (`a(16)`, `a(18)`) at two to three times it.
 - **run 18**; the 18th value is
   `61·k − 1 = 1,437,308,491,182,815,507,376,119` — 25 digits, and still
   under the deterministic bound, so every one of the eighteen
-  certificates is the seven-base test itself (`deterministic-mr`,
+  certificates is the deterministic Miller-Rabin test itself (`deterministic-mr`,
   `certificates_verified: true`, `unproved: []`).
 - **stopper**: `67·k − 1 = 1,578,683,096,872,928,508,101,639 =
   17 × 92,863,711,580,760,500,476,567`.

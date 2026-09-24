@@ -34,7 +34,7 @@ the engine's enforced ceiling -- the PRIMALITY-PROOF validity bound of the
 family, k_ceil(n, s) in pladder_search -- which is the last rung.  For
 A084700 that is k < 3.317e24, the deterministic Miller-Rabin bound on k
 itself: below the PROOF CROSSING k_proof(n, s) (5.4e22 at n = 18) every
-classification is a deterministic proof, above it the same seven-base
+classification is a deterministic proof, above it the same Miller-Rabin
 chain is a strong probable-prime test and a DISCOVERY is proved by a BLS75
 Theorem 1 certificate on N - 1 = prime(i)*k, k factored once per find
 (certify_run); the ceiling is where a factor of k could itself pass the
@@ -292,7 +292,7 @@ def verify(k, run, s):
     """The three independent confirmations plus the bounding witness.
 
     1. huntlib's Miller-Rabin, which is a PROOF below the proof crossing
-       k_proof(n, s) (G10) and a seven-base strong probable-prime chain
+       k_proof(n, s) (G10) and a thirteen-base strong probable-prime chain
        above it -- where the certificate (certify_run), not this leg, is
        the proof;
     2. sympy's BPSW, an independent implementation, which must agree on the
@@ -322,8 +322,8 @@ def certify_run(k, run, s, only=None):
     i = 1..run: ({str(i): proof}, [the i left UNPROVED]).
 
     Below the deterministic bound huntlib.certificate.prove answers with
-    the seven-base test, which IS the proof there.  Above it, for s = +1,
-    N - 1 = prime(i)*k: so k is factored ONCE -- trial division, a bounded
+    the deterministic Miller-Rabin test, which IS the proof there.  Above
+    it, for s = +1, N - 1 = prime(i)*k: so k is factored ONCE -- trial division, a bounded
     rho, bounded ECM, then sympy's factorint on whatever is left, which for
     a k under the 3.317e24 ceiling is a 25-digit number and seconds at
     most (the bound huntlib.primes.factor_witness already accepts on the
@@ -374,7 +374,7 @@ def sprp_run(k, s, cap, floor=CENSUS_FLOOR):
     the first pass can only overstate a run, never understate it.  Runs
     that come out below the census floor are never looked at again, so an
     overstatement there costs nothing; a run at or above it is recomputed
-    with all seven bases, which is the deterministic answer below the
+    with the full base set, which is the deterministic answer below the
     proof crossing k_proof(n, s) and a strong probable-prime answer above
     it (a DISCOVERY there is proved by certificate; the census is a count).
     Measured on real survivors: 13.1 us against 49.6 us for the all-bases
@@ -586,7 +586,7 @@ class Campaign:
                 f"past the proof crossing k_proof({self.filter_n()}, "
                 f"{self.s:+d}) = {pc:.4g}: prime({self.filter_n()})*k "
                 f"{self.s:+d} now exceeds the deterministic Miller-Rabin "
-                f"bound, so classification is a seven-base strong "
+                f"bound, so classification is a thirteen-base strong "
                 f"probable-prime chain from here and a DISCOVERY is proved "
                 f"by BLS75 certificate (certify_run); the ceiling is k < "
                 f"{cpu.k_ceil(self.filter_n(), self.s):.4g}")
@@ -829,7 +829,7 @@ class Campaign:
             f"re-verified ({', '.join(f'{r} x{c}' for r, c in sorted(routes.items()))}), "
             f"evidence {path}",
         ] + ([f"UNPROVED at i = {unproved}: those values passed the "
-              f"seven-base chain and BPSW but no certificate landed within "
+              f"Miller-Rabin chain and BPSW but no certificate landed within "
               f"the bounded effort -- the find stands on the three legs; "
               f"certify them by hand from the evidence file"]
              if unproved else []))
@@ -1027,7 +1027,7 @@ class Campaign:
         log("STAGE", f"proofs: classification is a deterministic "
                      f"Miller-Rabin proof below the proof crossing "
                      f"k_proof({self.filter_n()}, {self.s:+d}) = "
-                     f"{self.proof_crossing():.4g} and a seven-base strong "
+                     f"{self.proof_crossing():.4g} and a thirteen-base strong "
                      f"probable-prime chain above it; a DISCOVERY is proved "
                      f"by certificate either way (certify_run), and the "
                      f"engine ceiling {target:.4g} is the family's "

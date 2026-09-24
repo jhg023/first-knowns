@@ -328,7 +328,7 @@ def sprp_run(k, cap):
 
     Why the prime case dominated: 24% of survivors at this depth have
     m*k^2+1 prime at m = 1, and a PRIME is what makes mr_is_prime evaluate
-    all seven bases -- a composite is rejected by the first.
+    the full base set -- a composite is rejected by the first.
     """
     kk = k * k
     r = 0

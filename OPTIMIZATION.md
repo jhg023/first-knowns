@@ -40,7 +40,12 @@ re-sweeps of constants that had just been declared optimal.
 > done when every phase above 5% has an optimization, a named roofline, or
 > a structural proof of optimality — **not** when you run out of ideas.
 > Speedups here are products of several unexciting-looking factors, so
-> "nothing big left" is compatible with 10x remaining.
+> "nothing big left" is compatible with 10x remaining. And a verdict of
+> "roofline" or "floor of this formulation" on an inner loop is not
+> admissible until [INNOVATION.md](INNOVATION.md)'s two passes — the
+> representation hunt and the instruction-level pass — have been run on
+> it: an earlier engine carried that verdict through four sessions with 1.2x
+> still in the step.
 
 ---
 
@@ -777,7 +782,10 @@ phase above 5%** write one line of one of these three kinds:
   and the per-warp cost already equals the perfectly-packed cost".
 
 A phase with none of the three is **unsearched, not optimal**. That is the
-whole test. "It looks tight" is not one of the three.
+whole test. "It looks tight" is not one of the three. And for an inner
+loop, "roofline" and "structural optimum" are only admissible after
+[INNOVATION.md](INNOVATION.md)'s representation hunt and instruction-level
+pass have been run on that loop and logged with prices.
 
 Worked example — the case study's final state, which is what let it stop:
 
