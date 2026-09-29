@@ -1,0 +1,276 @@
+{
+ "model": "Bateman-Horn over f_j(x) = 10^j*x + 1, j in J(F, n) (1..n for A305740, 0..n for A153431); w(q,n,F) = #distinct(J mod ord_q(10)), proved in decl_reference",
+ "qmax": 200000,
+ "units": "every depth is in x, the published term itself (A305740's k, A153431's m)",
+ "caveat": "the repo's first-occurrence models run late: the ladder projects before this one landed their scored finds at about 1.9-2.5x their medians while every census showed the intensity right to a percent or two. Read every depth below as a floor and budget 2-3x the median.",
+ "families": {
+  "A305740": {
+   "forms": "10^m*k + 1, m = 1..n",
+   "letter": "k",
+   "frontier": {
+    "n": 12,
+    "x": 54717848613610,
+    "by": "Giovanni Resta, Jun 25 2018 (a(12))"
+   },
+   "singular_series": {
+    "13": 23642074.55502087,
+    "14": 81756314.49481408,
+    "15": 234942036.99902606,
+    "16": 490807984.3451528,
+    "17": 1763195246.673807,
+    "18": 4554636064.671801,
+    "19": 22240067891.317356,
+    "20": 100021869705.38113
+   },
+   "validation": {
+    "E_at_known": {
+     "6": 3.1822633534440277,
+     "7": 0.000449111006810318,
+     "8": 2.2879896656294028,
+     "9": 1.0621291876962857,
+     "10": 1.7758887129328098,
+     "11": 0.7531913888436608,
+     "12": 5.37936310100146
+    },
+    "mean_E": 2.063039217222065,
+    "draws": 7,
+    "note": "riders excluded: one vote per condition"
+   },
+   "predictions_x": {
+    "13": {
+     "Q1": 129938331122175.66,
+     "median": 260822999445228.3,
+     "Q3": 531955931134565.44,
+     "P90": 957297566435102.0
+    },
+    "14": {
+     "Q1": 3361281789365497.0,
+     "median": 9891619276923174.0,
+     "Q3": 2.4333115338962308e+16,
+     "P90": 4.763933903698257e+16
+    },
+    "15": {
+     "Q1": 2.540282074977559e+17,
+     "median": 7.80555354834027e+17,
+     "Q3": 1.942841999392894e+18,
+     "P90": 3.81065824384075e+18
+    },
+    "16": {
+     "Q1": 3.352474850717381e+19,
+     "median": 1.0423461444455336e+20,
+     "Q3": 2.5912043678827695e+20,
+     "P90": 5.06305204156607e+20
+    },
+    "17": {
+     "Q1": 2.4889994795455564e+21,
+     "median": 7.472963703553359e+21,
+     "Q3": 1.8277857498353612e+22,
+     "P90": 3.5416144852140645e+22
+    },
+    "18": {
+     "Q1": 2.8088036832261523e+23,
+     "median": 8.552842910848173e+23,
+     "Q3": 2.0953882167923171e+24,
+     "P90": 4.054222778116879e+24
+    },
+    "19": {
+     "Q1": 1.609475936777443e+25,
+     "median": 4.707363385584273e+25,
+     "Q3": 1.1339140162359532e+26,
+     "P90": 2.1768277336189054e+26
+    },
+    "20": {
+     "Q1": 1.012550935479517e+27,
+     "median": 2.976269520156472e+27,
+     "Q3": 7.170836442259057e+27,
+     "P90": 1.375383075300717e+28
+    }
+   },
+   "predictions_note": "each term's quantiles are from the previous term's MEDIAN (chained), the published frontier for the first",
+   "under_the_ceiling": {
+    "13": {
+     "ceiling_x": 1e+40,
+     "proof_crossing_x": 331704406468.0,
+     "unit": 7,
+     "P_under_ceiling": 1.0
+    },
+    "14": {
+     "ceiling_x": 1e+40,
+     "proof_crossing_x": 33170440647.0,
+     "unit": 7,
+     "P_under_ceiling": 1.0
+    },
+    "15": {
+     "ceiling_x": 1e+40,
+     "proof_crossing_x": 3317044065.0,
+     "unit": 7,
+     "P_under_ceiling": 1.0
+    },
+    "16": {
+     "ceiling_x": 1e+40,
+     "proof_crossing_x": 331704407.0,
+     "unit": 119,
+     "P_under_ceiling": 1.0
+    },
+    "17": {
+     "ceiling_x": 1e+40,
+     "proof_crossing_x": 33170441.0,
+     "unit": 119,
+     "P_under_ceiling": 1.0
+    },
+    "18": {
+     "ceiling_x": 1e+40,
+     "proof_crossing_x": 3317045.0,
+     "unit": 2261,
+     "P_under_ceiling": 1.0
+    },
+    "19": {
+     "ceiling_x": 1e+40,
+     "proof_crossing_x": 331705.0,
+     "unit": 2261,
+     "P_under_ceiling": 1.0
+    },
+    "20": {
+     "ceiling_x": 1e+40,
+     "proof_crossing_x": 33171.0,
+     "unit": 2261,
+     "P_under_ceiling": 1.0
+    }
+   }
+  },
+  "A153431": {
+   "forms": "m*10^k + 1, k = 0..n",
+   "letter": "m",
+   "frontier": {
+    "n": 13,
+    "x": 43000687652274618,
+    "by": "Don Reble, Jul 06 2022 (a(11)-a(13))"
+   },
+   "singular_series": {
+    "14": 93976814.79961033,
+    "15": 196323193.73806092,
+    "16": 705278098.6695222,
+    "17": 1821854425.8687186,
+    "18": 8896027156.526934,
+    "19": 40008747882.1527,
+    "20": 156749372064.95935,
+    "21": 471218687926.0393
+   },
+   "validation": {
+    "E_at_known": {
+     "6": 0.6125728229296267,
+     "8": 2.834719665985676,
+     "9": 1.747290861775193,
+     "10": 0.43572391194470184,
+     "11": 0.8363936240678687,
+     "12": 0.32125575217858016,
+     "13": 1.6184508773659312
+    },
+    "mean_E": 1.2009153594639397,
+    "draws": 7,
+    "note": "riders excluded: one vote per condition"
+   },
+   "predictions_x": {
+    "14": {
+     "Q1": 4.3659865282942374e+17,
+     "median": 1.2513699803128225e+18,
+     "Q3": 3.0471491066195564e+18,
+     "P90": 5.943220028523759e+18
+    },
+    "15": {
+     "Q1": 5.115635298420914e+19,
+     "median": 1.6052034941294736e+20,
+     "Q3": 4.0246586430079055e+20,
+     "P90": 7.915181014742025e+20
+    },
+    "16": {
+     "Q1": 3.849215520336012e+21,
+     "median": 1.166459842124743e+22,
+     "Q3": 2.8758066954706696e+22,
+     "P90": 5.605361241259034e+22
+    },
+    "17": {
+     "Q1": 4.416435044580284e+23,
+     "median": 1.356580828543164e+24,
+     "Q3": 3.34753842864732e+24,
+     "P90": 6.51118860481297e+24
+    },
+    "18": {
+     "Q1": 2.5568739390595102e+25,
+     "median": 7.530784524476275e+25,
+     "Q3": 1.8252931133162273e+26,
+     "P90": 3.5205003527017886e+26
+    },
+    "19": {
+     "Q1": 1.6220281054582856e+27,
+     "median": 4.7989655028126783e+27,
+     "Q3": 1.1628627747162997e+28,
+     "P90": 2.240002143333594e+28
+    },
+    "20": {
+     "Q1": 1.302298007451949e+29,
+     "median": 3.8851333045873e+29,
+     "Q3": 9.423618140021142e+29,
+     "P90": 1.8136767211363888e+30
+    },
+    "21": {
+     "Q1": 1.5555152821751517e+31,
+     "median": 4.693253761395824e+31,
+     "Q3": 1.1402866418074595e+32,
+     "P90": 2.1927917421127273e+32
+    }
+   },
+   "predictions_note": "each term's quantiles are from the previous term's MEDIAN (chained), the published frontier for the first",
+   "under_the_ceiling": {
+    "14": {
+     "ceiling_x": 1e+40,
+     "proof_crossing_x": 33170440647.0,
+     "unit": 14,
+     "P_under_ceiling": 1.0
+    },
+    "15": {
+     "ceiling_x": 1e+40,
+     "proof_crossing_x": 3317044065.0,
+     "unit": 238,
+     "P_under_ceiling": 1.0
+    },
+    "16": {
+     "ceiling_x": 1e+40,
+     "proof_crossing_x": 331704407.0,
+     "unit": 238,
+     "P_under_ceiling": 1.0
+    },
+    "17": {
+     "ceiling_x": 1e+40,
+     "proof_crossing_x": 33170441.0,
+     "unit": 4522,
+     "P_under_ceiling": 1.0
+    },
+    "18": {
+     "ceiling_x": 1e+40,
+     "proof_crossing_x": 3317045.0,
+     "unit": 4522,
+     "P_under_ceiling": 1.0
+    },
+    "19": {
+     "ceiling_x": 1e+40,
+     "proof_crossing_x": 331705.0,
+     "unit": 4522,
+     "P_under_ceiling": 1.0
+    },
+    "20": {
+     "ceiling_x": 1e+40,
+     "proof_crossing_x": 33171.0,
+     "unit": 4522,
+     "P_under_ceiling": 1.0
+    },
+    "21": {
+     "ceiling_x": 1e+40,
+     "proof_crossing_x": 3318.0,
+     "unit": 104006,
+     "P_under_ceiling": 1.0
+    }
+   }
+  }
+ }
+}
