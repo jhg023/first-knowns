@@ -11,7 +11,7 @@ and on A130003 the first terms anyone has found since Jens Kruse Andersen's
 campaign of **2026-08-27**, the first run on the re-optimised engine, and
 A130003's `a(21)` from the resumed base-4 campaign on **2026-09-01**.
 
-### A130003 (`b = 4`)
+### A130003 (base 4)
 
 #### `a(19) = 13,268,589,982,417,023`
 
@@ -39,33 +39,36 @@ at `3.4×` its own live median, quantile 0.786 — which is the first draw
 this family has produced that agrees with the rest of the repository rather
 than arguing against it (see [below](#how-the-finds-scored)).
 
-### A110096 (`b = 2`)
+### A110096 (base 2)
+
+The entry's name gives no letters; these are the ones its own programs use
+(`k + 2^i`, the term `k` and the exponent `i`).
 
 #### `a(17) = 305,948,728,878,647,722,725`
 
-    m = 305948728878647722725
-    m + 2^k is prime for k = 1 .. 17
-    stopped by m + 2^18 = 305948728878647984869 = 19 * ...
+    k = 305948728878647722725
+    k + 2^i is prime for i = 1 .. 17
+    stopped by k + 2^18 = 305948728878647984869 = 19 * ...
 
 #### `a(18) = 760,056,834,873,121,351,995`
 
-    m = 760056834873121351995
-    m + 2^k is prime for k = 1 .. 18
-    stopped by m + 2^19 = 760056834873121876283 = 157 * ...
+    k = 760056834873121351995
+    k + 2^i is prime for i = 1 .. 18
+    stopped by k + 2^19 = 760056834873121876283 = 157 * ...
 
 #### `a(19) = 564,052,872,977,379,795,315,735`  — 2026-08-27
 
-    m = 564052872977379795315735
-    m + 2^k is prime for k = 1 .. 19
-    stopped by m + 2^20 = 564052872977379796364311
+    k = 564052872977379795315735
+    k + 2^i is prime for i = 1 .. 19
+    stopped by k + 2^20 = 564052872977379796364311
                         = 29 * 68902187 * 282285656160457
 
 Twenty-four digits, and `15 mod 30` as the lemma in
 [README.md](README.md#the-mathematics-of-the-engine) requires of every
 A110096 term above the exception zone. All three A110096 terms are **above
-2⁶⁴** — `16.6×`, `41.2×` and `30,577×` it. Carrying candidates as
-`(m, off)` from the first commit is what put them in range, and it cost
-nothing to do it that way at the start (OPTIMIZATION.md 2.7);
+2⁶⁴** — `16.6×`, `41.2×` and `30,577×` it. Carrying candidates as a
+launch base plus an offset from the first commit is what put them in range,
+and it cost nothing to do it that way at the start (OPTIMIZATION.md 2.7);
 square-ladders retrofitted the same property and paid for it twice.
 
 All six survived all four verification legs below, and every primality
@@ -75,15 +78,15 @@ now `564,052,872,977,379,795,840,023`, which is `5.88×` below huntlib's
 deterministic Miller-Rabin bound of `3.317×10²⁴`, where before `a(19)` it
 was `4,364×`. The certificates still read `deterministic-mr` throughout
 (gate G10); one more term on this family will not. The exact integers, all
-values `m + b^k`, the certificates and the factor witnesses are in
-[`evidence/`](evidence/).
+values (`4^k + m` on A130003, `k + 2^i` on A110096), the certificates and
+the factor witnesses are in [`evidence/`](evidence/).
 
 Nothing has been submitted anywhere. These are records; what happens to
 them is the owner's decision (CLAUDE.md rule 5).
 
 ## The frontier
 
-| | A130003 (b = 4) | A110096 (b = 2) |
+| | A130003 (base 4) | A110096 (base 2) |
 |---|---|---|
 | Last published term | `a(18) = 1,158,174,141,556,287` | `a(16) = 143,924,005,810,811,655` |
 | Found by | Jens Kruse Andersen, **Jun 08 2007** | Bert Dobbelaere, Apr 24 2021 |
@@ -105,15 +108,16 @@ asserts both on every run:
 
 ## What a find looked like
 
-A survivor `m` with run length `r` is classified against the live frontier
-(`event_kind` in `launch.py`, drilled in the selftest):
+A survivor is classified by its run length — how many consecutive
+exponents from 1 give primes — against the live frontier (`event_kind` in
+`launch.py`, drilled in the selftest):
 
 | run | class | what happens |
 |-----|-------|--------------|
-| `r > frontier` | **DISCOVERY** | settles `a(frontier+1) … a(r)` at once; verified three ways plus a factor witness for the composite that stops the run; one evidence JSON; logged once |
-| `r == frontier` | **NEAR** | one condition short of the open term — one line with its campaign ordinal, verified by the cheap legs as an engine health check, never evidenced |
-| `8 ≤ r < frontier` | **CENSUS** | counted in the `[STATUS]` heartbeat, never narrated |
-| `r < 8` | — | not even counted |
+| `run > frontier` | **DISCOVERY** | settles `a(frontier+1) … a(run)` at once; verified three ways plus a factor witness for the composite that stops the run; one evidence JSON; logged once |
+| `run == frontier` | **NEAR** | one condition short of the open term — one line with its campaign ordinal, verified by the cheap legs as an engine health check, never evidenced |
+| `8 ≤ run < frontier` | **CENSUS** | counted in the `[STATUS]` heartbeat, never narrated |
+| `run < 8` | — | not even counted |
 
 The four campaigns classified **140,976 values at run 8 or longer** —
 100,919 at base 4 and 40,057 at base 2. Six of them were discoveries and
@@ -122,12 +126,14 @@ base 2); every one of the rest was counted and nothing else.
 
 **No find carried a rider.** All six settled exactly one term, and that is
 what the model expects at these depths rather than a surprise. A rider
-needs `m + b^(n+1)` prime at the value that *stopped* at `n` — and that
-value was never sieved, because the campaign's filter was `n`. So its
-chance is roughly `S(n+1)/S(n) / log m`, which is 0.19, 0.16, 0.06, 0.12,
-0.10 and 0.15 at the six finds: **0.76 riders expected over the six, and a
-44% chance of exactly none.** The 0.4-per-step figure this file carried before the
-sweep is the *small-`m`* regime that produced the historical riders — it is
+needs the next value — `4^(n+1) + m` on A130003, `k + 2^(n+1)` on
+A110096 — prime at the term that *stopped* at `n`, and that value was
+never sieved, because the campaign's filter was `n`. So its chance is
+roughly `S(n+1)/S(n)` over the log of the term (`log m`, `log k`), which is
+0.19, 0.16, 0.06, 0.12, 0.10 and 0.15 at the six finds: **0.76 riders
+expected over the six, and a 44% chance of exactly none.** The
+0.4-per-step figure this file carried before the sweep is the
+*small-term* regime that produced the historical riders — it is
 0.38 at A130003's `a(10) = 4503` and 0.95 at A110096's `a(4) = 15`. Riders
 are a property of the depth, and this hunt is four to eighteen orders of
 magnitude past the ones that made them common.
@@ -136,19 +142,19 @@ magnitude past the ones that made them common.
 
 1. **huntlib's Miller-Rabin.** Deterministic here, not probabilistic, and
    by construction rather than by luck: the enforced ceiling *is* the
-   `3.317×10²⁴` bound rearranged, `k_ceil(n, b) = MR_VALID_BELOW − bⁿ`, so
-   no `m` the engine can reach has a value outside the deterministic zone
-   (gate G10 pins it tight to one `m`, per `(n, b)`). This project proves
-   its primes.
+   `3.317×10²⁴` bound rearranged — `k_ceil` is `MR_VALID_BELOW` less `4ⁿ`
+   at base 4 and less `2ⁿ` at base 2 — so no term the engine can reach has
+   a value outside the deterministic zone (gate G10 pins it tight to one
+   value of the term, per `n` and base). This project proves its primes.
 2. **sympy's BPSW** — an independent implementation, and it must agree on
    the run length exactly, not merely on primality.
 3. **A re-derivation by different machinery** — the CPU engine, which
-   marks the dense `m` line and uses no wheel at all, must agree that the
-   `m` survives a sieve at a different depth from the campaign's.
-4. **A factor witness for the stopper.** The value at `k = r+1` must be
-   composite, with a factor exhibited, because that is what bounds the
-   claim to exactly `r`. Trial division, then bounded rho, then bounded
-   ECM — nothing in the path runs unbounded.
+   marks the dense line of the term and uses no wheel at all, must agree
+   that the term survives a sieve at a different depth from the campaign's.
+4. **A factor witness for the stopper.** The value at the exponent one past
+   the run must be composite, with a factor exhibited, because that is what
+   bounds the claim to exactly the run. Trial division, then bounded rho,
+   then bounded ECM — nothing in the path runs unbounded.
 
 Any disagreement between the legs is an engine bug by definition and halts
 the campaign with exit 2. Nothing is ever submitted anywhere from inside
@@ -169,10 +175,11 @@ is work that has not been done. Counting it and saying so is the whole
 convention.
 
 Those two campaigns' final tallies, against what the *same* Bateman-Horn
-intensity predicts once the sieve's own retention is folded in — a run-`r`
-survivor also needs its values at `k = r+1 … n` free of factors below
-65536, and each family's filter `n` rose as its own finds landed, so the
-prediction is summed over the three windows each campaign actually ran:
+intensity predicts once the sieve's own retention is folded in — a
+survivor also needs its values at every exponent past its run, up to `n`,
+free of factors below 65536, and each family's filter `n` rose as its own
+finds landed, so the prediction is summed over the three windows each
+campaign actually ran:
 
 | run | A130003 counted | model | ratio | | A110096 counted | model | ratio |
 |-----|-----------------|-------|-------|---|-----------------|-------|-------|
@@ -193,11 +200,11 @@ prediction is summed over the three windows each campaign actually ran:
 
 Both pooled ratios are within 1% of 1, on 13,073 and 2,384 events. Read as
 conditional probabilities the base-4 column is sharper still: the measured
-fraction of run-`r` survivors that go on to reach `r+1` is 0.474, 0.483,
-0.466, 0.505, 0.450, 0.464, 0.468, 0.500 for `r = 8 … 15`, flat across two
-and a half orders of magnitude of sample size and sitting on the 0.47 the
-model predicts. The rows below 10 counts are Poisson noise and are printed
-rather than hidden.
+fraction of survivors at each run that go on to reach the next is 0.474,
+0.483, 0.466, 0.505, 0.450, 0.464, 0.468, 0.500 for runs 8 … 15, flat
+across two and a half orders of magnitude of sample size and sitting on
+the 0.47 the model predicts. The rows below 10 counts are Poisson noise
+and are printed rather than hidden.
 
 There is a third check hiding in the same numbers. The sieve should have
 handed the classifier `5.78×10⁶` candidates at base 4 and `2.40×10⁶` at
@@ -212,8 +219,9 @@ none of them shares machinery for.
 
 37,673 classified values in 10.17 hours, sweeping `3.62×10²¹` to
 `5.64×10²³` at filter `n = 19`. The right-hand column is the cumulative
-tally the checkpoint carries; the extension ratio is `c(r+1) / c(r)`,
-printed only where the denominator is 30 or more.
+tally the checkpoint carries; the extension ratio is the count at the next
+run over the count at this one, printed only where the denominator is 30
+or more.
 
 | run | this campaign | cumulative | extends |
 |-----|---------------|------------|---------|
@@ -230,10 +238,10 @@ printed only where the denominator is 30 or more.
 | 18 | 2 | 3 | — |
 | 19 | 1 | 1 | — |
 
-Pooled over `r = 8 … 14` the extension ratio is **0.367**, against
+Pooled over runs 8 … 14 the extension ratio is **0.367**, against
 the **0.424** the first two campaigns measured on this family. The fall is
 expected and is roughly the right size: an extension needs one more prime,
-so the probability goes as `1 / log m`, and this campaign's line sits two
+so the probability goes as `1 / log k`, and this campaign's line sits two
 orders of magnitude higher — `log(5.6×10²³) / log(3.6×10²¹) = 1.10`, and
 `0.424 / 1.10 = 0.385` against 0.367 measured. That is a 5%
 agreement on a quantity nothing here shares machinery for, but it is not a
@@ -266,7 +274,7 @@ only where the denominator is 30 or more.
 | 20 | 1 | 2 | — |
 | 21 | 1 | 1 | — |
 
-Pooled over `r = 8 … 15` the extension ratio is **0.429**, against the
+Pooled over runs 8 … 15 the extension ratio is **0.429**, against the
 **0.470** the first base-4 campaign measured. The fall is the same `1/log m`
 effect the base-2 pair showed and it is the right size:
 `log(2.86×10²⁰) / log(8.95×10¹⁸) = 1.079`, and `0.470 / 1.079 = 0.435`
@@ -335,7 +343,7 @@ tightening rather than merely moving.
 
 ## What the campaign cost
 
-| | A130003 (b = 4) | A110096 (b = 2) | A110096 again (b = 2) | A130003 again (b = 4) |
+| | A130003 (base 4) | A110096 (base 2) | A110096 again (base 2) | A130003 again (base 4) |
 |---|---|---|---|---|
 | started | 2026-08-23 15:53 | 2026-08-24 09:20 | 2026-08-27 01:37 | 2026-08-27 12:05 |
 | stopped | 2026-08-24 09:19 | 2026-08-24 09:58 | 2026-08-27 11:49 | 2026-09-01 04:04 |
@@ -343,7 +351,7 @@ tightening rather than merely moving.
 | first find | `a(19)` at **117 s** | `a(17)` at **9.5 min** | `a(19)` at **10.1 h** | `a(21)` at **67.9 h** |
 | second find | `a(20)` at **12.04 h** | `a(18)` at **15.8 min** | — | — |
 | line swept | `8.95×10¹⁸` | `3.62×10²¹` | `5.60×10²³` | `2.77×10²⁰` |
-| end-to-end rate | `1.42×10¹⁴ m/s` | `1.58×10¹⁸ m/s` | **`1.53×10¹⁹ m/s`** | **`1.13×10¹⁵ m/s`** |
+| end-to-end rate | `1.42×10¹⁴ m/s` | `1.58×10¹⁸ k/s` | **`1.53×10¹⁹ k/s`** | **`1.13×10¹⁵ m/s`** |
 
 **Six terms for 96.2 hours of one GPU**, on two sequences that had stood
 for nineteen and five years. `a(19)` of A130003 arrived 117 seconds into
@@ -375,8 +383,8 @@ model priced a bit-plane read at four times what it costs — and took base
 2's flat table to `p1 = 41`, for a further **1.537× and 2.380×**
 ([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)).
 
-**The third campaign is the check on all of that, and it beat the
-projection.** Predicted `1.07×10¹⁹ m/s`; measured `1.53×10¹⁹` end to end
+**The third campaign (A110096) is the check on all of that, and it beat
+the projection.** Predicted `1.07×10¹⁹ k/s`; measured `1.53×10¹⁹` end to end
 over 10.17 hours and `5.60×10²³` of line — **9.7×** the campaign that found
 `a(17)` and `a(18)` three days earlier, and 1.43× the projection itself.
 The projection was conservative because it discounted the engine rate by a
@@ -409,7 +417,7 @@ reading absolutes from.
 
 **Both families are PAUSED.** A130003 stopped at the find, with its cursor
 at `m = 285,661,108,252,160,470,830` — eleven seconds and one launch past
-`a(21)` — and A110096 stopped at `m = 5.64×10²³` on 2026-08-27. Each
+`a(21)` — and A110096 stopped at `k = 5.64×10²³` on 2026-08-27. Each
 resumes from its own checkpoint under its own config key with the filter
 already promoted to the term it would be hunting.
 
@@ -433,16 +441,16 @@ about two terms of room left before it meets the same wall base 2 already
 has.
 
 **A110096 has run out of ceiling, not out of engine.** With `a(19)` found
-at `5.64×10²³`, the enforced bound `k_ceil(n, b) = 3.317×10²⁴ − bⁿ` is only
-`5.9×` above the largest value already proved, and the model puts `a(20)`
-below it with probability **13.4%** and `a(21)` with **1.4%**:
+at `5.64×10²³`, the enforced bound (`k_ceil`, here `3.317×10²⁴ − 2ⁿ`) is
+only `5.9×` above the largest value already proved, and the model puts
+`a(20)` below it with probability **13.4%** and `a(21)` with **1.4%**:
 
 | term | Q1 | median | Q3 | P90 | P(below the ceiling) |
 |------|----|--------|----|-----|----------------------|
 | A110096 a(20) | `7.39×10²⁴` | **`2.39×10²⁵`** | `6.45×10²⁵` | `1.36×10²⁶` | **13.4%** |
 | A110096 a(21) | `2.08×10²⁶` | **`7.89×10²⁶`** | `2.25×10²⁷` | `4.85×10²⁷` | **1.4%** |
 
-At `1.53×10¹⁹ m/s` the median of `a(20)` is about **18 days** of sweeping,
+At `1.53×10¹⁹ k/s` the median of `a(20)` is about **18 days** of sweeping,
 and seven times out of eight the term is not there to be found: the engine
 would refuse the line before reaching it. Continuing that family means
 wiring huntlib's BLS75 certificates into the verification path in place of

@@ -322,13 +322,13 @@ it. Worth 1.29× and 1.11× — out of a ceiling that was already written
 down and had simply never been *spent*.
 
 **The CRT was arithmetic where it could be algebraic.** Generation computed
-`d = (r2 + W2 − r1 % W2) % W2` then `m = (d·INV) % W2` — three
-modulo-by-literal sequences and a 64-bit multiply per candidate. But
-`m = (r2·INV − r1·INV) mod W2`, and each half depends on one table index
-alone, so `A[t] = (−r1·INV) mod W2` goes into the first-level table and
-`C[s] = (r2·INV) mod W2` into the second, and the kernel does one add and
-one conditional subtract. The `r2` residues stopped being needed on the
-device at all.
+`d = (r2 + W2 − r1 % W2) % W2` then the kernel's second-level index
+`m = (d·INV) % W2` — three modulo-by-literal sequences and a 64-bit
+multiply per candidate. But `m = (r2·INV − r1·INV) mod W2`, and each half
+depends on one table index alone, so `A[t] = (−r1·INV) mod W2` goes into
+the first-level table and `C[s] = (r2·INV) mod W2` into the second, and
+the kernel does one add and one conditional subtract. The `r2` residues
+stopped being needed on the device at all.
 
 **Compaction that never leaves the block.** The textbook fix for a 5.2×
 divergence tax is a global survivor queue and a second kernel, which drags
@@ -754,11 +754,11 @@ from, production is what the hunt runs, and the price is written down here.
    a net **~2.9× loss** on time-to-`a(16)`. Two ways out, both unbuilt:
    **stage the wheel with the frontier** ((23,37] is well matched below
    ~10¹⁷ and (23,43] above it, and the launcher already moves its filter
-   as a `[STAGE]`), or **sweep in `k` order** — `x ∈ [m·W1, (m+1)·W1)`, so
-   a k-window is an `m`-range, and with the `C` table sorted the
-   qualifying `s` for each `t` form one contiguous cyclic run findable by
-   binary search. The second is the general fix and would also keep the
-   checkpoint fine-grained.
+   as a `[STAGE]`), or **sweep in `k` order** — the second-level index is
+   `⌊(k − base)/W1⌋`, so a k-window is a range of that index, and with the
+   `C` table sorted the qualifying `s` for each `t` form one contiguous
+   cyclic run findable by binary search. The second is the general fix and
+   would also keep the checkpoint fine-grained.
 6. **(Superseded by item 0.)** It was 15.3% generation / 84.7%
    test loop on the one-round v3, and the test loop has since got another
    1.21× cheaper, so generation is now the larger share it has ever been.
@@ -905,7 +905,7 @@ The whole entry follows from one identity. Let
 reaches prime q. Then the density of candidates after a wheel to `p2` is
 `S(next prime after p2)`, and the survival from there to q telescopes, so
 
-    TESTS PER UNIT OF K LINE  =  sum over primes q > p2 of S(q).
+    TESTS PER UNIT OF k LINE  =  sum over primes q > p2 of S(q).
 
 Two things fall straight out of it. The value of putting a prime **into**
 the wheel is exactly its own term `S(p)` — not a modelled ratio, a
@@ -1196,7 +1196,7 @@ total on its own), not idle lanes.
 
    **The reason it is not the answer is the window, and this is the number
    to remember.** The search is amortised over the candidates a triple
-   yields, which is `window x density / triples`, so a big window is needed
+   yields, which is `window × density / triples`, so a big window is needed
    to make it cheap: at 61 the break-even is a window near `1e19`, where a
    triple yields ~5-10 candidates and the search costs ~1.7 probes each.
    But **candidates still come out in index order inside the window**, so

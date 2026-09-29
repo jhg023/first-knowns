@@ -9,8 +9,8 @@ question twice, with the sign flipped: **what is the smallest m for which
 every one of k!·m ∓ 1, k = 1..n, is prime?** Both frontiers were the ten
 terms Enoch Haga and Farideh Firoozbakht entered in May 2010; neither carried
 a bound at any open index, neither has a b-file, and the third entry — the
-chain of primes p(i) = i·p(i−1) − (i−1), which unrolls to i!·(p−1) + 1 — had
-never been extended. The forms are the linear ladder this repository has
+chain of primes p(i) = i·p(i−1) − (i−1), which unrolls to i!·(p(1)−1) + 1 —
+had never been extended. The forms are the linear ladder this repository has
 hunted five times, with the multiplier list swapped to the factorials, and
 the published term is m itself: one line, no substitution, a wheel that
 grows with n. **The standing result: a(11) through a(18) of both A177013 and
@@ -36,35 +36,37 @@ The prior frontier, as this project found it:
 | [A177014](https://oeis.org/A177014) | least m with k!·m + 1 prime for k = 1..n | 10 | a(9) = a(10) = 228,698,250 | Haga & Firoozbakht, May 2010 (a(10) corrected by Jon E. Schoenfield, 2018) |
 | [A226935](https://oeis.org/A226935) | least prime p(1) with p(i) = i·p(i−1) − (i−1) prime for i = 1..n | 10 | = A177014 + 1 | never extended (Robin Garcia, 2013) |
 
-The third is a rider: p(i) = i!·(p − 1) + 1 by induction, so its chain is
-prime exactly when m = p − 1 satisfies A177014's condition, and the least
-such p is the least such m plus one (`fladder_reference` G2d re-derives this
-by running the recurrence on every published term). **So a find on A177014
-settles two entries.** A177013 has no rider: nobody has entered the chain
-p(i) = i·p(i−1) + (i−1).
+The third is a rider: p(i) = i!·(p(1) − 1) + 1 by induction, so its chain
+is prime exactly when m = p(1) − 1 satisfies A177014's condition, and the
+least such p(1) is the least such m plus one (`fladder_reference` G2d
+re-derives this by running the recurrence on every published term). **So a
+find on A177014 settles two entries.** A177013 has no rider: nobody has
+entered the chain p(i) = i·p(i−1) + (i−1).
 
 a(11) was open on all three when the project started, and a(19) is open on
 all three now. The conditions nest — anything satisfying filter
 n satisfies filter n − 1 — so a(n) is non-decreasing and the previous term
 is a free floor; nothing below it has to be swept at all.
 
-**Notation, and which number goes in the OEIS.** Both entries call the term
-**m** and the factorial's index k, so every document here, every evidence
-file and every line the launcher prints says m. In an evidence file the
-field `m` is the term, `forms` is the entry's own condition, and
-`oeis_terms` is literally what to submit — `{"18": 1639203889936938872760}`
-reads "A177013 a(18) is this integer", and a rider lists every index it
-settles; `also_settles` gives A226935's integers, which are m + 1. Only the
-source code says `x`, the engines' name for their sweep variable, which in
-this project *is* m (CONVENTIONS.md "Naming in an evidence file").
+**Notation, and which number goes in the OEIS.** Both entries' names call
+the term **m**, and their PARI programs (the `%o` lines) call the
+factorial's index k, so every document here, every evidence file and every
+line the launcher prints says m. In an evidence file the field `m` is the
+term, `forms` is the entry's own condition, and `oeis_terms` is literally
+what to submit — `{"18": 1639203889936938872760}` reads "A177013 a(18) is
+this integer", and a rider lists every index it settles; `also_settles`
+gives A226935's integers, p(1) = m + 1. Only the source code says `x`, the
+engines' name for their sweep variable, which in this project *is* m
+(CONVENTIONS.md "Naming in an evidence file").
 
 ## The mathematics of the engine
 
 **The killed set.** For a prime q and a multiplier k!: if k ≥ q then q | k!
-and the form k!·m + s ≡ s (mod q) is never divisible by q. For k < q it is
-divisible exactly when m ≡ −s·(k!)⁻¹ (mod q). So q kills
+and the form k!·m ∓ 1 ≡ ∓1 (mod q) is never divisible by q. For k < q it is
+divisible exactly when m ≡ ±(k!)⁻¹ (mod q) (upper signs A177013, lower
+A177014). So q kills
 
-    K(q,n) = { −s·(k!)⁻¹ mod q : 1 ≤ k ≤ min(n, q−1) }
+    K(q,n) = { ±(k!)⁻¹ mod q : 1 ≤ k ≤ min(n, q−1) }
 
 and its size w(q,n) is the number of *distinct* residues among
 1!, …, min(n, q−1)! mod q. There is no closed form: consecutive factorials
@@ -136,9 +138,10 @@ project's windows in OPTIMIZATION_LOG.md rounds 2 and 3, and one moved:
 the launch budget on the wide record.
 
 **The ceiling is 1e40 on m, and certificates are this project's best case.**
-Value k is k!·m + s, so (k!·m + s) − s = k!·m with k! k-smooth: **one
-factorization of m proves the entire run**, by BLS75 Theorem 1 on V − 1 for
-A177014 and Theorem 15 (a Lucas sequence per prime) on V + 1 for A177013.
+Value k is k!·m ∓ 1, so (k!·m ∓ 1) ± 1 = k!·m with k! k-smooth: **one
+factorization of m proves the entire run**, by BLS75 Theorem 1 on the value
+less one for A177014 and Theorem 15 (a Lucas sequence per prime) on the
+value plus one for A177013.
 The proof crossing — where a *classification* stops being a deterministic
 proof — is very low here, m = 8.3e16 at n = 11, 2.5e12 at n = 15, 9.3e9 at
 n = 17 and m = 1 from n = 25 (25! alone exceeds the Miller–Rabin bound), so
@@ -245,9 +248,9 @@ The gate discipline is [CONVENTIONS.md](../CONVENTIONS.md); the optimization
 process is [OPTIMIZATION.md](../OPTIMIZATION.md). Specific to this project:
 
 * **The rider identity is gated, not quoted.** G2d runs A226935's own
-  recurrence from m + 1 on every published term, requires every link prime
-  and equal to i!·m + 1, and checks the least-claim exhaustively at n = 4
-  and 6.
+  recurrence from p(1) = m + 1 on every published term, requires every link
+  p(i) prime and equal to i!·m + 1, and checks the least-claim exhaustively
+  at n = 4 and 6.
 * **The unit is derived and refused.** `assert_unit` raises on a unit whose
   primes are not forced at the filter *or which is not squarefree* (forcing
   says 2 | m, never 4 | m); G3, G7 and the ceiling drill require 30, 10, 12

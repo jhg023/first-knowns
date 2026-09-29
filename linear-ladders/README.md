@@ -9,14 +9,16 @@
 **A088250** asks for the least `k` such that `r·k + 1` is prime for every
 `r = 1..n`. It is a *linear ladder*: one unknown, `n` linear conditions
 whose multipliers are the consecutive integers — the prime ladders of this
-repo's prime-ladders project with `prime(i)` replaced by `i`, and the same
-engine with one substitution. Fourteen terms are published and the last,
-`a(14) = 11,429,352,906,540,438,870`, was found by Giovanni Resta in
-**March 2017**; the entry carries no bound of any kind at any open `n`. Six
-siblings share the engine, each with its own campaign: **A173750**
-(`r = 2..n`), **A125838** and **A125839** (`r·k − 1` for `r = 2..n` and
-`3..n`), **A164325** and **A164326** (`(2r−1)·k ± 1`, the odd
-multipliers), and **A088651** (`r·k − 1`, `r = 1..n`). Every first
+repo's prime-ladders project with the multipliers `prime(1..n)` replaced
+by `1..n`, and the same engine with one substitution. Fourteen terms are
+published and the last, `a(14) = 11,429,352,906,540,438,870`, was found
+by Giovanni Resta in **March 2017**; the entry carries no bound of any
+kind at any open `n`. Six siblings share the engine, each with its own
+campaign and each in its own entry's letters: **A173750** (the least `m`
+with `k·m + 1` prime for `k = 2..n`), **A125838** and **A125839**
+(`k·m − 1` for `k = 2..n` and `3..n`), **A164325** and **A164326**
+(`(2k−1)·m ± 1` for `k = 1..n`, the odd multipliers), and **A088651**
+(the least `k` with `r·k − 1` prime for `r = 1..n`). Every first
 occurrence of A088250 also settles **A202778** (its exact-run version) at
 the run's own index and **A071576** (`2ik + 1`) at half the value, and a
 find on A088651 settles **A202779** the same way.
@@ -114,19 +116,20 @@ that family from its v2 cursor and ran 7.5 hours overnight on
 
 every one of whose 35 values lies past the deterministic bound: the
 first discoveries this repository has proved by the **N+1 route**, BLS75
-Theorem 15 on `N + 1 = (2r−1)·k`, all 35 certificates re-verified from
+Theorem 15 on `N + 1 = (2k−1)·m`, all 35 certificates re-verified from
 disk; then **`a(19) > 1.6049×10²⁵`** by the sweep to where it was stopped.
 
 **v3 (2026-09-04): one ceiling of 10⁴⁰ for every family.** The v2
 campaigns stopped where their *proofs* stopped — the deterministic
-Miller–Rabin bound on `k` for the +1 families, the proof crossing for the
-−1 ones, which had no certificate route at all. v3 adds the **N+1
+Miller–Rabin bound on the term for the +1 families, the proof crossing
+for the −1 ones, which had no certificate route at all. v3 adds the **N+1
 certificate route** to huntlib (BLS75 Theorem 15: a Lucas sequence per
-prime of `N + 1 = m·k`, one shared discriminant), makes both routes
-**recurse into the factors of `k`** past the bound, and moves the ceiling
-to where the *cost* of a certificate was measured rather than where a
-test stops being one: `huntlib.ceiling.K_CEIL = 10⁴⁰`, at which a
-worst-case `k` (the unit times two 18-digit primes) is factored and a
+prime of `N + 1`, the multiplier times the term, one shared
+discriminant), makes both routes **recurse into the factors of the
+term** past the bound, and moves the ceiling to where the *cost* of a
+certificate was measured rather than where a test stops being one:
+`huntlib.ceiling.K_CEIL = 10⁴⁰`, at which a
+worst-case term (the unit times two 18-digit primes) is factored and a
 whole run proved in about a second. The wheel, the unit, the sieve and
 the segment are v2's, so every fingerprint reproduces and every v2
 cursor carries over whole: each campaign resumes at its v2 filter.
@@ -139,7 +142,7 @@ tail (the engine section below; [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)
 v4). The wheel, the unit, the sieve depth and every kill are unchanged, so
 the survivor stream is identical — the retiring v3 engine swept the new
 benchmark windows and every family's resumed filter and returned the same
-survivors bit for bit, and every k-space fingerprint reproduces — and
+survivors bit for bit, and every term-space fingerprint reproduces — and
 every v2/v3 cursor carries over. The coverage unit is now a segment of
 64–128 periods.
 
@@ -176,9 +179,11 @@ seven families, found and verified 2026-09-03/05 by sixteen campaign
 legs totalling about 44 hours of device, and a searched-empty bound on
 the next term of each — the first bounds of any kind on any of these
 seven sequences at an open index. Every campaign resumes from its
-checkpoint at `1.8–2.9×10²² k/s` with `python launch.py --family <name>`
-and nothing is in its way: the ceiling is `10⁴⁰`, fourteen orders of
-magnitude above the deepest bound, and both certificate routes work. It
+checkpoint at `1.8–2.9×10²²` of line a second (k/s for A088250 and
+A088651, m/s for the five whose term is `m`) with
+`python launch.py --family <name>` and nothing is in its way: the
+ceiling is `10⁴⁰`, fourteen orders of magnitude above the deepest bound,
+and both certificate routes work. It
 is the odds that stopped it. The seven open terms have medians between
 `8×10²⁷` and `1.4×10²⁸` — about five days of device each — so the model
 gives every one of them 9–11% under a nine-hour sweep, against the 93%
@@ -189,27 +194,35 @@ priced.
 
 ## The problem
 
-    A(F, n) = least k >= 1 with m*k + s prime for EVERY multiplier m of
-              family F at index n
+    a(n) of family F = the least term >= 1 with
+                       (multiplier)·(term) ± 1 prime for EVERY
+                       multiplier of F at index n
 
-The conditions nest, so every `A(F, ·)` is non-decreasing and a single
-lucky `k` can settle several terms at once — A088250's `a(7) = a(8) =
-512,820`, A173750's `a(12) = a(13) = a(14)`, A164325's `a(13) = a(14)`.
+The sign is +1 or −1 by family, and the table gives each condition in its
+own entry's letters. The conditions nest, so every family's `a(n)` is
+non-decreasing and a single lucky integer can settle several terms at
+once — A088250's `a(7) = a(8) = 512,820`, A173750's
+`a(12) = a(13) = a(14)`, A164325's `a(13) = a(14)`.
 
 | family | forms | offset | published frontier | found by | opens at |
 |---|---|---|---|---|---|
 | [A088250](https://oeis.org/A088250) | `r·k + 1`, `r = 1..n` | 1 | `a(14) = 11,429,352,906,540,438,870` | Giovanni Resta, Mar 31 2017 | `n = 15` |
-| [A173750](https://oeis.org/A173750) | `r·k + 1`, `r = 2..n` | 1 | `a(15) = 4,646,092,391,146,085,880` | Giovanni Resta, Mar 31 2017 | `n = 16` |
-| [A125838](https://oeis.org/A125838) | `r·k − 1`, `r = 2..n` | **2** | `a(14) = 8,047,290,924,923,250` | Giovanni Resta, Mar 29 2017 | `n = 15` |
-| [A125839](https://oeis.org/A125839) | `r·k − 1`, `r = 3..n` | **3** | `a(15) = 45,187,548,280,664,790` | Giovanni Resta, Mar 30 2017 | `n = 16` |
-| [A164325](https://oeis.org/A164325) | `(2r−1)·k + 1`, `r = 1..n` | 1 | `a(15) = 10,718,654,377,787,155,800` | Giovanni Resta, Apr 01 2017 | `n = 16` |
-| [A164326](https://oeis.org/A164326) | `(2r−1)·k − 1`, `r = 1..n` | 1 | `a(14) = 68,086,992,545,221,650` | Giovanni Resta, Mar 31 2017 | `n = 15` |
+| [A173750](https://oeis.org/A173750) | `k·m + 1`, `k = 2..n` | 1 | `a(15) = 4,646,092,391,146,085,880` | Giovanni Resta, Mar 31 2017 | `n = 16` |
+| [A125838](https://oeis.org/A125838) | `k·m − 1`, `k = 2..n` | **2** | `a(14) = 8,047,290,924,923,250` | Giovanni Resta, Mar 29 2017 | `n = 15` |
+| [A125839](https://oeis.org/A125839) | `k·m − 1`, `k = 3..n` | **3** | `a(15) = 45,187,548,280,664,790` | Giovanni Resta, Mar 30 2017 | `n = 16` |
+| [A164325](https://oeis.org/A164325) | `(2k−1)·m + 1`, `k = 1..n` | 1 | `a(15) = 10,718,654,377,787,155,800` | Giovanni Resta, Apr 01 2017 | `n = 16` |
+| [A164326](https://oeis.org/A164326) | `(2k−1)·m − 1`, `k = 1..n` | 1 | `a(14) = 68,086,992,545,221,650` | Giovanni Resta, Mar 31 2017 | `n = 15` |
 | [A088651](https://oeis.org/A088651) | `r·k − 1`, `r = 1..n` | 1 | `a(15) = 53,792,264,108,455,702,830` | Jens Kruse Andersen, May 02 2008 | `n = 16` |
 
-**Notation, and which number goes in the OEIS.** These documents, the
-engines and the log write all seven families one way — the term is `k`, the
-multiplier's index is `r`. **The OEIS entries do not**: two of them use
-those letters and five call the term `m` and use `k` for the *index*. An
+**Notation: each entry's own letters, and which number goes in the
+OEIS.** The seven entries do not share letters. A088250 and A088651 call
+the term `k` and the multiplier's index `r`; **the other five call the
+term `m` and use `k` for the *index*** — so the same letter is the term
+in two entries and the index in five. This README and RESULTS.md write
+each family in its own entry's letters, and say "the term" and "the
+multiplier" wherever they speak of several families at once. The engines
+write all seven one way — the term `k`, the multiplier's index `r` — and
+that is the code's business; until 2026-09-29 these pages did too. An
 evidence file speaks its own entry's language, so its letters change with
 the family:
 
@@ -224,13 +237,14 @@ the family:
 | A164326 | smallest m such that (2k−1)·m − 1 is prime, 0 < k < n+1 | **`m`** | `(2*k-1)*m - 1, k = 1..n` |
 
 Whatever the letter, **`oeis_terms` in the file is literally what to
-submit** — `{"18": v, "19": v}` reads "a(18) and a(19) are both v" — and
-`also_settles` carries the derived entries' own integers (A071576 is
-*half* of A088250's). Every `k` in this README and in RESULTS.md is that
-integer. Until 2026-09-18 the files said `k` for all seven, which for five
-families was the entry's m beside an entry whose k means something else
-(CONVENTIONS.md "Naming in an evidence file"); they were migrated that day,
-names only, and every term was confirmed against the OEIS by index.
+submit** — A173750's `{"18": m, "19": m}` reads "a(18) and a(19) are
+both m" — and `also_settles` carries the derived entries' own integers
+(A071576 is *half* of A088250's). The integer this README and RESULTS.md
+give under each family's own letter is that integer. Until 2026-09-18 the
+files said `k` for all seven, which for five families was the entry's m
+beside an entry whose k means something else (CONVENTIONS.md "Naming in
+an evidence file"); they were migrated that day, names only, and every
+term was confirmed against the OEIS by index.
 
 Every entry was re-checked on oeis.org on 2026-09-03 before the tables
 were frozen (the `%I` revision stamps match the local export of
@@ -242,7 +256,8 @@ were frozen (the `%I` revision stamps match the local export of
 A088250(n) wherever A088250(n) has run exactly `n`, and stays open at a
 rider index (its `a(7) = 8,224,860` against A088250's 512,820, which has
 run 8). [A071576](https://oeis.org/A071576) (`2ik + 1` prime for
-`i = 1..n`) is A088250(n)/2 for `n ≥ 3`, because `k` is even from `n = 2`.
+`i = 1..n`) is A088250(n)/2 for `n ≥ 3`, because A088250's `k` is even
+from `n = 2`.
 [A202779](https://oeis.org/A202779) is to [A088651](https://oeis.org/A088651)
 what A202778 is to A088250 — the handoff for this project named A202779,
 and A088651 is its monotone version, which is what an engine hunting
@@ -251,24 +266,27 @@ G2d asserts all three identities on every published term, and every
 evidence file records what its find settles in them (`also_settles`).
 
 Why they are open rather than merely unfinished: the density of qualifying
-`k` falls like `1/(log k)ⁿ`, so each extra condition costs a further factor
-of roughly `log k` worth of line. All seven are conjecturally infinite for
-every `n` — residue `0` survives every prime (`k ≡ 0 (mod q)` makes every
-value `≡ s ≠ 0`), so no constellation here has a fixed prime divisor at
-any `n` (proved in `lladder_reference`), Dickson's conjecture applies, and
-a find **confirms** the guiding conjecture and can never refute it.
+terms falls like the `n`-th power of one over the log of the term, so each
+extra condition costs a further factor of roughly that log worth of line.
+All seven are conjecturally infinite for every `n` — residue `0` survives
+every prime (a term `≡ 0 (mod q)` makes every value `≡ ±1`, never 0), so
+no constellation here has a fixed prime divisor at any `n` (proved in
+`lladder_reference`), Dickson's conjecture applies, and a find
+**confirms** the guiding conjecture and can never refute it.
 
 ## The mathematics of the engine
 
-Fix a prime `q` and a multiplier `m` of the family at index `n`. If `q | m`
-the form `m·k + s` is `≡ s (mod q)` and never divisible by `q`: that rung
-kills nothing. For `q ∤ m`, `q | m·k + s` exactly when `k ≡ −s·m⁻¹ (mod q)`,
-so the residues of `k` that `q` kills are
+Fix a prime `q`, a family F and one of its multipliers at index `n`. If
+`q` divides the multiplier, the form — the multiplier times the term,
+± 1 — is `≡ ±1 (mod q)` and never divisible by `q`: that rung kills
+nothing. Otherwise `q` divides the form exactly when the term is
+`≡ ∓ multiplier⁻¹ (mod q)`, so the residues of the term that `q` kills are
 
-    K(q,n,F) = { -s * m^-1 mod q : m in mults(F, n), q does not divide m }
+    K(q,n,F) = { ∓ multiplier^-1 mod q : each multiplier of F at index n
+                 that q does not divide }
 
-and the engine sieves `k` against `K(q,n,F)` and nothing else. Inversion
-and negation are bijections, so its size is
+and the engine sieves the term against `K(q,n,F)` and nothing else.
+Inversion and negation are bijections, so its size is
 
     w(q,n,F) = |K(q,n,F)| = #{ distinct nonzero residues of the multipliers mod q }
 
@@ -282,8 +300,9 @@ consequences:
   curves, one singular series and one compiled kernel.
 - **Consecutive multipliers cover the residues fast.** For the `1..n`
   family `w(q,n) = min(n, q − 1)`: every prime `q ≤ n + 1` is **forced**
-  (`k ≡ 0 mod q` is the only surviving residue), and every larger prime
-  kills the maximum `n` residues. The forcing thresholds are closed forms
+  (`0 mod q` is the only residue of the term that survives), and every
+  larger prime kills the maximum `n` residues. The forcing thresholds are
+  closed forms
   per family (`1..n`: `q` from `n = q − 1`; `2..n`: `q + 1`; `3..n`:
   `q + 2`; the odd multipliers: `n = q`), proved as G2c. So A088250's
   `a(15)` is a multiple of `30030` and its `a(16)` of `510510`, A088651
@@ -294,15 +313,17 @@ consequences:
   residues per period of `1.92×10²¹`: `6.4×10⁻⁹` of the line, 110× thinner
   than prime-ladders' opening wheel from the same primes, and `5.9×10⁻¹⁰`
   at `n = 17`. The v4 kernel runs at `0.9–2.4×10¹²` candidates per second
-  (`1.6–2.4×10¹¹` before it), which the wheel turns into `4.75×10¹⁹` k
-  per second at the densest −1 opening, `3.34×10²¹` at A088250's
-  `n = 17` and `5.5×10²²` at `c = 20`, where the campaigns now run.
+  (`1.6–2.4×10¹¹` before it), which the wheel turns into `4.75×10¹⁹` m
+  per second at the densest −1 opening (A125838's, `SCOREM`), `3.34×10²¹`
+  k per second at A088250's `n = 17` and `5.5×10²²` of line per second at
+  `c = 20` forms, where the campaigns now run.
 
 **The kernel is a window sieve (v4).** The CPU engine materialises the
-dense `k` line and marks arithmetic progressions into it, with no wheel at
-all. The GPU engine never forms the line: it generates only the `k` that
-survive the three-level wheel by CRT recombination and then, for each such
-residue, sieves **64 or 128 consecutive wheel periods at once**. For a
+dense line of the term and marks arithmetic progressions into it, with no
+wheel at all. The GPU engine never forms the line: it generates only the
+values of the term that survive the three-level wheel by CRT
+recombination and then, for each such residue, sieves **64 or 128
+consecutive wheel periods at once**. For a
 fixed residue the candidates of successive periods are an arithmetic
 progression modulo every sieve prime `q`, so which of the next periods `q`
 kills is a function of the residue mod `q` alone: a 64- or 128-bit
@@ -312,8 +333,9 @@ two shifts and two ORs per prime per 64 candidates, against twelve
 instructions per candidate per group in the engine it replaced. The
 residue itself is linear in the wheel's CRT decomposition, so it is a
 per-thread table value plus a per-block value plus the CRT borrow, and the
-launch base folds in as `j₀ mod q`. The ~0.7% of candidates that survive
-the window sieve are extracted from the live words and take the
+launch base folds in as its first period's index mod `q`. The ~0.7% of
+candidates that survive the window sieve are extracted from the live
+words and take the
 per-candidate route the earlier engines took for everything: in-block
 compaction rounds of single-prime Barrett tests against packed tables,
 then the deep tail as compaction rounds over global queues with several
@@ -324,8 +346,9 @@ tables, the masks and residue lists, the survival curve the compaction
 points are derived from — is built from `killed_residues(q, n, F, unit)`,
 and the parity gate G9 pins the result to the CPU engine bit for bit on 25
 populated windows across six families, one-, two- and three-level wheels
-in `k` space and in unit space, from `k = 2×10⁹` to `10⁴⁰` with the top
-windows above `2⁶⁴`; G14 checks the window chain itself — table, per-block
+in term space and in unit space, at heights of the term from `2×10⁹` to
+`10⁴⁰` with the top windows above `2⁶⁴`; G14 checks the window chain
+itself — table, per-block
 value, borrow, pattern word — against `killed_residues` on sampled
 candidates; and before the v3 engine was retired it swept the new
 benchmark windows and every family's resumed filter and returned the
@@ -337,9 +360,10 @@ issue: the loads removed is 1.6–1.8×, the loads doubled 0.94×, the cache
 carveout and the register count flat.
 
 **Unit space.** Every candidate at a campaign filter is a multiple of the
-forced primes, so the device sweeps `k' = k / unit` with the kill sets
-`unit⁻¹·K(q,n,F) mod q` (a bijection, so nothing about the survival curve
-changes) and the unit's primes left out of the wheel. The unit is fixed per
+forced primes, so the device sweeps the quotient of the term by the unit,
+with the kill sets `unit⁻¹·K(q,n,F) mod q` (a bijection, so nothing about
+the survival curve changes) and the unit's primes left out of the wheel.
+The unit is fixed per
 family at its opening filter (30030 for six of the seven, 510510 for
 A088651) and stays: a forced prime stays forced as `n` grows, so the unit
 remains admissible at every promotion and the period `W` — the cursor's
@@ -372,52 +396,57 @@ period 0 clipped at `K_START = 10⁶`; below that the least-claim is
 monotonicity (every frontier is above `8×10¹⁵`), above it our own
 coverage. The canaries rediscover `a(8)` and `a(9)` (or the two nearest
 terms a mini-hunt affords) of all seven families by sweeping period 0 from
-the floor, in `k` space and in unit space.
+the floor, in term space and in unit space.
 
-**Candidates are carried as `(k, off)` from the first commit**, with the
-launch base a host-side big integer folded once per launch into the
+**Candidates are carried as a base and an offset from the first commit**
+(OPTIMIZATION.md 2.7's `(k, off)`), with the launch base a host-side big
+integer folded once per launch into the
 per-prime and per-group tables (G15: the stream does not depend on where
 the base was put, at bases up to `10³⁰`; G9 pins the stream against the
 CPU engine on two windows hard against `10⁴⁰`). No machine word bounds
 the search; the enforced ceiling is the **measured certificate budget**,
 `huntlib.ceiling.K_CEIL = 10⁴⁰` (G10, one number for all seven families).
 
-**Where the proofs come from.** The largest value is `m_max·k + s`, and
-below the **proof crossing** `k_proof(n, F) = (3.317×10²⁴ − s − 1) / m_max`
-— `2.2×10²³` at `n = 15`, `1.7×10²³` at `n = 19` — every classification
+**Where the proofs come from.** The largest value is the largest
+multiplier times the term, ± 1, and below the **proof crossing** — the
+term at which that value reaches the bound, `(3.317×10²⁴ − 1 ∓ 1)`
+divided by the largest multiplier (`k_proof(n, F)` in the code),
+`2.2×10²³` at `n = 15`, `1.7×10²³` at `n = 19` — every classification
 the hunt makes is a deterministic Miller–Rabin proof. Past it the same
 Miller-Rabin chain is a strong probable-prime test; the census is still a
 count and a `[NEAR]` still a health check, and a *discovery* is proved
-by the value's own structure: `N − s = m·k` is completely factored once
-`k` is (`huntlib.certificate.factor_full`, the multiplier's own factors
-folded in — `15 = 3·5`), so **BLS75 Theorem 1 on `N − 1`** (the +1
-families) or **Theorem 15 on `N + 1`** — the N+1 test, a Lucas sequence
-`U(P, Q)` per prime of `m·k` with one shared discriminant `D`, `(D/N) =
-−1`, `N | U_{N+1}` and `gcd(U_{(N+1)/q}, N) = 1` (the −1 families) —
-proves every value of the run on that one factorization. A prime factor
-of `k` above the bound is admitted only with a **subproof** of its own,
-found by the same machinery on whichever of `p ∓ 1` factors, so a
-certificate is a finite tree whose leaves are deterministic tests. Every
-certificate is re-verified from scratch before it is written
-(`certify_run`), and the drill proves both routes at the crossing and
-**at the ceiling** on both signs, with the recursion exercised and the
-subproof shown unstrippable. What bounds `k` is therefore the *cost* of
-that certificate per discovery — factoring `k` once, then a witness
-search per value — and `huntlib.ceiling` measured it: a worst-case `k`
-(the unit times a balanced semiprime) at `10⁴⁰` is factored in 0.2–3 s
-and a run of values proved in a further second
-([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v3). The crossing is logged
-once per filter as a `[MILESTONE]` and never stops the run.
+by the value's own structure: the value `N` less its ±1 is the multiplier
+times the term, completely factored once the term is
+(`huntlib.certificate.factor_full`, the multiplier's own factors folded
+in — `15 = 3·5`), so **BLS75 Theorem 1 on `N − 1`** (the +1 families) or
+**Theorem 15 on `N + 1`** — the N+1 test, a Lucas sequence `U(P, Q)` per
+prime of the multiplier times the term, with one shared discriminant
+`D`, `(D/N) = −1`, `N | U_{N+1}` and `gcd(U_{(N+1)/q}, N) = 1` (the −1
+families) — proves every value of the run on that one factorization. A
+prime factor of the term above the bound is admitted only with a
+**subproof** of its own, found by the same machinery on whichever of
+`p ∓ 1` factors, so a certificate is a finite tree whose leaves are
+deterministic tests. Every certificate is re-verified from scratch before
+it is written (`certify_run`), and the drill proves both routes at the
+crossing and **at the ceiling** on both signs, with the recursion
+exercised and the subproof shown unstrippable. What bounds the term is
+therefore the *cost* of that certificate per discovery — factoring the
+term once, then a witness search per value — and `huntlib.ceiling`
+measured it: a worst-case term (the unit times a balanced semiprime) at
+`10⁴⁰` is factored in 0.2–3 s and a run of values proved in a further
+second ([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v3). The crossing is
+logged once per filter as a `[MILESTONE]` and never stops the run.
 
 **Coverage is coarser than work, and the checkpoint carries both**
 (CONVENTIONS.md "Two cursors"). The window engine sieves a **segment** of
-64 wheel periods (`1.23×10²³` of k; 128 from `c = 16` forms, `2.46×10²³`)
-at once and emits its candidates in `(t, s, u, period)` order, so `swept
+64 wheel periods (`1.23×10²³` of line; 128 from `c = 16` forms,
+`2.46×10²³`) at once and emits its candidates in `(t, s, u, period)`
+order, so `swept
 to` advances one segment at a time and is the only thing a least-claim
 rests on, while the work cursor `(j, u)` — the segment's first period and
 the launches of it that are classified — advances every launch. Values
-classified mid-segment are held *in the checkpoint* and narrated in `k`
-order when the segment closes; a find costs at most one segment of
+classified mid-segment are held *in the checkpoint* and narrated in order
+of the term when the segment closes; a find costs at most one segment of
 over-sweep — twenty minutes at A088250's opening, 1.7 hours at A125838's
 (which is why the width is 64 there), five to twenty seconds at the
 filters the campaigns resume at. A v2 or v3 cursor is inherited at its
@@ -448,13 +477,14 @@ the pipelined wall clock; [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)).
 
 ## The odds model
 
-Bateman–Horn over the forms `f_m(k) = m·k + s`, with the singular series
+Bateman–Horn over the forms (one linear polynomial in the term per
+multiplier: the multiplier times the term, ± 1), with the singular series
 computed numerically from the same `w(q,n,F)` the sieve is built from —
 one series per w-class, since `w` is sign-independent. The series is
 *smaller* than the prime ladders' at the same `n` (`S(14) = 2.3×10⁴`
 against `6.6×10⁵`) because consecutive multipliers kill more residues per
-prime than the first `n` primes do; fewer `k` qualify per unit of line and
-the terms are larger for their `n`, but the wheel thins the candidates by
+prime than the first `n` primes do; fewer terms qualify per unit of line
+and the terms are larger for their `n`, but the wheel thins the candidates by
 exactly the same factors, so a unit of device time covers far more line.
 
 Stated **before** any sweep (`model_results.json`, written 2026-09-03
@@ -462,7 +492,7 @@ and regenerated 2026-09-04 with the v3 ceiling in its `under_the_ceiling`
 field; the predictions themselves are unchanged), measured from each
 family's published frontier. The "under the ceiling" column is against
 the **v2 ceilings** the campaigns actually ran to — the deterministic
-bound on `k` for the +1 families, the proof crossing for the −1 ones —
+bound on the term for the +1 families, the proof crossing for the −1 ones —
 which is what the finds below were scored against:
 
 | term | Q1 | median | Q3 | P90 | under the ceiling |
@@ -494,7 +524,7 @@ A088250's own: `a(9) 2.09, a(10) 0.95, a(11) 0.14, a(12) 0.12, a(13) 0.05,
 a(14) 2.23`.
 
 **One vote per condition.** Every family has riders — terms equal to their
-predecessor because one `k` cleared two rungs at once. A rider was never
+predecessor because one integer cleared two rungs at once. A rider was never
 searched for, so its `E` is identically zero and scoring it would
 manufacture agreement out of nothing. Only terms that strictly exceed
 their predecessor are used, and only from `n = 8`, above the exception
@@ -544,7 +574,7 @@ filter after that family's frontier, from where the last leg stopped,
 with its census and finds intact (drilled on all seven real
 checkpoints, under every key each policy declares).
 A fresh campaign (`--fresh`, only ever deliberately) opens at period 0,
-clipped at `k = 10⁶`, with the filter at the next open term, a
+clipped at a term of `10⁶`, with the filter at the next open term, a
 classification pool sized from a measurement at that filter and ramped
 one interpreter at a time, and the frontier promoting itself as terms
 land, the pool re-sized at each promotion. The hunt is indefinite by
@@ -581,12 +611,12 @@ defaults bug. All seven, from their checkpoints as they stand:
 | family | resumes at | filter | window | calibrated rate | survivors/s | host need | pool | P(next term) in 9 h |
 |---|---|---|---|---|---|---|---|---|
 | A088250 | period 5949, `1.1438×10²⁵` | n = 19 | 128 periods, 680 launches | `2.88×10²² k/s` | 13,300 | 0.16 core-s/s | 1 | a(19) 11% |
-| A173750 | period 2365, `4.5473×10²⁴` | n = 20 | 128, 680 | `2.90×10²²` | 13,400 | 0.17 | 1 | a(20) 10% |
-| A125838 | period 58458, `1.1240×10²⁶` | n = 20 | 128, 680 | `2.90×10²²` | 13,100 | 0.16 | 1 | a(20) 9% |
-| A125839 | period 30938, `5.9486×10²⁵` | n = 21 | 128, 680 | `2.89×10²²` | 13,200 | 0.16 | 1 | a(21) 9% |
-| A164325 | period 2237, `4.3012×10²⁴` | n = 19 | 128, 1,360 | `1.84×10²²` | 13,100 | 0.16 | 1 | a(19) 10% |
-| A164326 | period 8603, `1.6541×10²⁵` | n = 19 | 128, 1,360 | `1.83×10²²` | 13,100 | 0.15 | 1 | a(19) 10% |
-| A088651 | period 110834, `2.1310×10²⁶` | n = 19 | 128, 680 | `2.91×10²²` | 13,100 | 0.16 | 1 | a(19) 9% |
+| A173750 | period 2365, `4.5473×10²⁴` | n = 20 | 128, 680 | `2.90×10²² m/s` | 13,400 | 0.17 | 1 | a(20) 10% |
+| A125838 | period 58458, `1.1240×10²⁶` | n = 20 | 128, 680 | `2.90×10²² m/s` | 13,100 | 0.16 | 1 | a(20) 9% |
+| A125839 | period 30938, `5.9486×10²⁵` | n = 21 | 128, 680 | `2.89×10²² m/s` | 13,200 | 0.16 | 1 | a(21) 9% |
+| A164325 | period 2237, `4.3012×10²⁴` | n = 19 | 128, 1,360 | `1.84×10²² m/s` | 13,100 | 0.16 | 1 | a(19) 10% |
+| A164326 | period 8603, `1.6541×10²⁵` | n = 19 | 128, 1,360 | `1.83×10²² m/s` | 13,100 | 0.15 | 1 | a(19) 10% |
+| A088651 | period 110834, `2.1310×10²⁶` | n = 19 | 128, 680 | `2.91×10²² k/s` | 13,100 | 0.16 | 1 | a(19) 9% |
 
 Read the absolute rates with the usual ±10%: a second calibration an
 hour later returned `3.13×10²²`, `3.11×10²²` and `2.41×10²²` for
@@ -638,10 +668,10 @@ here is built to. Specific to this one:
   engine that marks the dense line with no wheel at all, and a CuPy engine
   that generates wheel survivors and tests them. G9 pins the GPU stream to
   the CPU stream bit-for-bit on 22 populated windows across six families,
-  three wheel depths, `k` space and unit space (2310, 30030, 510510), and
+  three wheel depths, term space and unit space (2310, 30030, 510510), and
   heights from `2×10⁹` to `3.3×10²⁴`, the top windows **above 2⁶⁴**, plus
   period 0 clipped at the engine floor. G17 pins the production unit wheel
-  to a k-space wheel over one of its periods at the opening filter — the
+  to a term-space wheel over one of its periods at the opening filter — the
   same 1,304 survivors.
 - **The killed set is built three ways**, and the lemmas the engine rests
   on are gated, not observed. The oracle walks every residue and tests
@@ -661,12 +691,13 @@ here is built to. Specific to this one:
 - **A discovery past the proof crossing is proved, not tested — on
   both signs, and at the ceiling.** The certificate drill proves the
   A088250 frontier's 14 values by the deterministic route; a value past
-  the bound on each sign (`15·k + 1` at `k = 2.2×10²³` by BLS75 Theorem 1
-  on `N − 1`, `19·k − 1` at `k = 1.7×10²³` by Theorem 15 on `N + 1`,
-  each factored completely), re-verified from scratch and refused for
-  `N + 2` and as a bare Miller–Rabin claim; and then at `k ≈ 10⁴⁰` on
-  both signs a worst-case `k` (the unit times two 18-digit primes) and a
-  `k` with a 30-digit prime factor above the bound, whose certificate
+  the bound on each sign (A088250's `15·k + 1` at `k = 2.2×10²³` by BLS75
+  Theorem 1 on `N − 1`, A125838's `19·m − 1` at `m = 1.7×10²³` by
+  Theorem 15 on `N + 1`, each factored completely), re-verified from
+  scratch and refused for `N + 2` and as a bare Miller–Rabin claim; and
+  then at a term of about `10⁴⁰` on both signs a worst-case term (the
+  unit times two 18-digit primes) and a term with a 30-digit prime factor
+  above the bound, whose certificate
   must carry a subproof that cannot be stripped. huntlib's own gates
   drill the N+1 arithmetic (a tampered Lucas witness, a neighbouring
   `N`, a truncated factorization, a mislabelled theorem, a constructed
@@ -680,7 +711,7 @@ here is built to. Specific to this one:
 - **Canaries.** The GPU stream rediscovers two published terms of every
   family as first occurrences at their own filters, sweeping period 0 from
   the engine floor with the prefix `[1, floor]` cleared by the oracle, in
-  `k` space and in unit space (15 rediscoveries).
+  term space and in unit space (15 rediscoveries).
 - **The protocol is tested in both directions, on every family.** Each
   frontier term is accepted at its true run with a factor witness for its
   stopper; a run one too long, and an earlier term mislabelled as the

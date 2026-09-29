@@ -59,28 +59,29 @@ that family's proof ceiling of `4.95×10²²` two and a half hours after it
 started, where it stopped with `a(19)` open and 99% likely to lie above
 the ceiling ([RESULTS.md](RESULTS.md)). Those seven are the first new
 terms of A084701 since 2003, and the family is now out of ceiling rather
-than out of engine: its values' structure is on `N + 1`, which needs an
-N+1 primality test huntlib does not have; with one, the ceiling would
-rise to `3.317×10²⁴` and 27% of `a(19)` would be in reach. Both
-campaigns are checkpointed where they stopped and resume with no flags;
-the hunt is the owner's command.
+than out of engine: its values' structure is on each value plus one,
+which needs a plus-one primality test huntlib does not have; with one,
+the ceiling would rise to `3.317×10²⁴` and 27% of `a(19)` would be in
+reach. Both campaigns are checkpointed where they stopped and resume
+with no flags; the hunt is the owner's command.
 
 ## The problem
 
-    A(s, n) = least k >= 1 with prime(i)*k + s prime for all i = 1..n
+    A084700(n) = least k >= 1 with prime(i)*k + 1 prime for all i = 1..n
+    A084701(n) = least k >= 1 with prime(i)*k - 1 prime for all i = 1..n
 
-The conditions nest, so `A(s, ·)` is non-decreasing and a single lucky `k`
-can settle several terms at once — which is exactly what happened at
-A084700's `a(4) = 6` (it cleared `i = 5, 6, 7` for free and stopped at
-`19·6 + 1 = 115`) and at A084701's `a(5) = 120` (three terms, stopped by
-`19·120 − 1 = 2279 = 43 · 53`), and happened again at
+The conditions nest, so each sequence is non-decreasing and a single
+lucky `k` can settle several terms at once — which is exactly what
+happened at A084700's `a(4) = 6` (it cleared `i = 5, 6, 7` for free and
+stopped at `19·6 + 1 = 115`) and at A084701's `a(5) = 120` (three
+terms, stopped by `19·120 − 1 = 2279 = 43 · 53`), and happened again at
 `k = 165,784,683,394,437,030` on 2026-09-03: a run of 15 arrived while
 A084701's `a(14)` was open, so `a(14) = a(15)`.
 
 | | A084700 | A084701 |
 |---|---|---|
 | Sequence | [A084700](https://oeis.org/A084700) (`more`, `nonn`) | [A084701](https://oeis.org/A084701) (`more`, `nonn`) |
-| Sign | `s = +1` | `s = −1` |
+| Sign | `+1` | `−1` |
 | Published terms | `a(1)..a(13)` | `a(1)..a(11)` |
 | Published frontier | `a(13) = 161,082,438,032,880` | `a(11) = 3,894,254,360,010` |
 | Found by | Phil Carmody (GenSv), **Mar 08 2004** | Robert G. Wilson v and Don Reble, **Jun 15 2003** |
@@ -93,7 +94,7 @@ Why they are open rather than merely unfinished: the density of qualifying
 `k` falls like `1/(log k)ⁿ`, so each extra condition costs a further factor
 of roughly `log k` worth of line. Both are conjecturally infinite for every
 `n` — residue `0` survives every prime (`k ≡ 0 (mod q)` makes every value
-`≡ s ≠ 0`), so the constellation has no fixed prime divisor at any `n`
+`≡ ±1 ≠ 0`), so the constellation has no fixed prime divisor at any `n`
 (proved in `pladder_reference`), Dickson's conjecture applies, and a find
 **confirms** the guiding conjecture and can never refute it.
 
@@ -103,25 +104,27 @@ is fast — see below.
 
 ## The mathematics of the engine
 
-Fix a prime `q` and write `p_i = prime(i)`. If `q = p_i` for some `i ≤ n`
-the form `p_i·k + s` is `≡ s (mod q)` and never divisible by `q`: the rung
-whose multiplier is `q` itself kills nothing. For `p_i ≠ q`,
-`q | p_i·k + s` exactly when `k ≡ −s·p_i⁻¹ (mod q)`, so the residues of `k`
-that `q` kills are
+Fix a prime `q` (an upper sign below is A084700's, a lower one
+A084701's). If `q = prime(i)` for some `i ≤ n` the form `prime(i)·k ± 1`
+is `≡ ±1 (mod q)` and never divisible by `q`: the rung whose multiplier
+is `q` itself kills nothing. For `prime(i) ≠ q`, `q | prime(i)·k ± 1`
+exactly when `k ≡ ∓prime(i)⁻¹ (mod q)`, so the residues of `k` that `q`
+kills are
 
-    K(q,n,s) = { -s * prime(i)^-1 mod q : 1 <= i <= n, prime(i) != q }
+    K(q,n,+1) = { -prime(i)^-1 mod q : 1 <= i <= n, prime(i) != q }
+    K(q,n,-1) = { +prime(i)^-1 mod q : 1 <= i <= n, prime(i) != q }
 
-and the engine sieves `k` against `K(q,n,s)` and nothing else. Inversion
-and negation are bijections, so its size is
+and the engine sieves `k` against its family's `K(q,n,±1)` and nothing
+else. Inversion and negation are bijections, so its size is
 
-    w(q,n,s) = |K(q,n,s)| = #{ prime(i) mod q : i <= n, prime(i) != q }
+    w(q,n,±1) = |K(q,n,±1)| = #{ prime(i) mod q : i <= n, prime(i) != q }
 
 — the number of **distinct residues the first `n` primes take mod `q`**,
 proved in `pladder_reference.py` and gated three ways (G2b, G2c, G3: the
 closed form, direct divisibility, and the engines' construction must all
 agree, for both signs). Three consequences:
 
-- **`w` does not depend on `s`**: `K(q,n,−1) = −K(q,n,+1)`. The two
+- **`w` does not depend on the sign**: `K(q,n,−1) = −K(q,n,+1)`. The two
   families have identical table sizes, identical survival curves, one
   singular series and one compiled kernel; only the table *contents*
   differ.
@@ -157,9 +160,9 @@ the wheel stops at 47 for the same reason it does in square-ladders: the
 combined second modulus is a `u32` in the kernel's CRT arithmetic
 (`2.76×10⁹` at 47, `1.46×10¹¹` at 53), and the engine raises rather than
 wrapping. **v3 gets past it by the same lemma.** Every candidate at
-`n ≥ 14` is a multiple of 2310, so the device sweeps `k' = k / 2310`
-instead of `k`: the residues of `k'` that `q` kills are
-`2310⁻¹ · K(q,n,s) mod q` (a bijection, so nothing about the survival
+`n ≥ 14` is a multiple of 2310, so the device sweeps the quotient
+`k / 2310` instead of `k`: the residues of the quotient that `q` kills are
+`2310⁻¹ · K(q,n,±1) mod q` (a bijection, so nothing about the survival
 curve changes), the five primes of the unit leave the wheel altogether,
 and 29, 31 and 53 come in under the same `u32` and `2⁶³` bounds — levels
 `(..31]`, `(31, 41]`, `(41, 53]`, `W1 = 8.7×10⁷`, `W2 = 1.6×10⁸`, a period
@@ -213,37 +216,38 @@ bases up to `10³⁰`). So no machine word bounds this search, and the
 enforced ceiling is the family's **primality-proof validity bound**
 (G10, tight to one `k`).
 
-**Where the proofs come from.** The largest value is `prime(n)·k + s`, and
-below the **proof crossing** `k_proof(n, s) = (3.317×10²⁴ − 1 − s) /
-prime(n)` — `5.6×10²²` at `n = 17`, `5.4×10²²` at `n = 18` — it stays
+**Where the proofs come from.** The largest value is `prime(n)·k ± 1`, and
+below the **proof crossing** `(3.317×10²⁴ − 1 ∓ 1) / prime(n)` (`k_proof`
+in the code) — `5.6×10²²` at `n = 17`, `5.4×10²²` at `n = 18` — it stays
 under huntlib's deterministic Miller–Rabin bound, so every classification
 the hunt makes there is a proof. The first campaign ran to exactly that
 crossing and stopped. Past it the same Miller-Rabin chain is a strong
 probable-prime test, and for A084700 a *discovery* is proved instead by
-the value's own structure: `N − 1 = prime(i)·k` is completely factored
-once `k` is, so BLS75 Theorem 1 (huntlib.certificate, as dickson-ladders
-uses it) proves every value of the run on one factorization of `k`, and
-every certificate is re-verified from scratch before it is written
-(`certify_run`; the evidence file records the route and any value left
-unproved). `a(18)` is the first find proved this way: its values from
-`i = 5` on are past the bound, and its file carries fourteen
-`bls75-thm1` certificates on the one factorization of `k`
+the value's own structure: the value less one, `prime(i)·k`, is
+completely factored once `k` is, so BLS75 Theorem 1 (huntlib.certificate,
+as dickson-ladders uses it) proves every value of the run on one
+factorization of `k`, and every certificate is re-verified from scratch
+before it is written (`certify_run`; the evidence file records the route
+and any value left unproved). `a(18)` is the first find proved this way:
+its values from `i = 5` on are past the bound, and its file carries
+fourteen `bls75-thm1` certificates on the one factorization of `k`
 ([RESULTS.md](RESULTS.md)). The v3 ceiling is therefore the deterministic bound on `k`
 *itself*, `3.317×10²⁴`: while `k` is under it every prime factor of `k`
 is a deterministic-MR prime and the certificate is one level deep. Past
 that a factor of `k` could need a subproof, which huntlib carries but
 this engine does not assume — a new version, with gates at that height.
-A084701's structure is on `N + 1`, which needs an N+1 test huntlib does
-not have, so its ceiling stays at its crossing (`9.0×10²²` at `n = 12`,
-`4.95×10²²` at `n = 19`) and every decision on that family is a proof —
-all seven of its finds are certified by the deterministic test alone,
-every value under the bound. Its campaign reached that ceiling on
-2026-09-03 and stopped; an N+1 route (BLS75's `N + 1` theorems on the
-factorization of `prime(i)·k`, complete once `k` is factored, exactly as
-the `N − 1` route is for A084700) would lift it to the same `3.317×10²⁴`,
-and is a new engine version with a certificate drill at that height. The
-census is counted either side of the crossing; a `[MILESTONE]` line marks
-the sweep passing it.
+A084701's structure is on the value plus one, which needs a plus-one test
+huntlib does not have, so its ceiling stays at its crossing (`9.0×10²²`
+at `n = 12`, `4.95×10²²` at `n = 19`) and every decision on that family
+is a proof — all seven of its finds are certified by the deterministic
+test alone, every value under the bound. Its campaign reached that
+ceiling on 2026-09-03 and stopped; a plus-one route (BLS75's plus-one
+theorems on the factorization of `prime(i)·k`, the value plus one,
+complete once `k` is factored, exactly as the minus-one route is for
+A084700) would lift it to the same `3.317×10²⁴`, and is a new engine
+version with a certificate drill at that height. The census is counted
+either side of the crossing; a `[MILESTONE]` line marks the sweep
+passing it.
 
 **Coverage is coarser than work, and the checkpoint carries both
 (CONVENTIONS.md "Two cursors").** The wheel emits a period's candidates in
@@ -289,7 +293,7 @@ it has not looked at. Priced alternatives are in
 
 ## The odds model
 
-Bateman–Horn over the `n` linear forms `f_i(k) = prime(i)·k + s`, with the
+Bateman–Horn over the `n` linear forms `prime(i)·k ± 1`, with the
 singular series computed numerically from the same `w(q,n)` the sieve is
 built from — one series for both families, since `w` is sign-independent.
 The series is large: the five forced primes contribute `(1/q)/(1−1/q)ⁿ`
@@ -376,7 +380,7 @@ ceiling** of `3.317×10²⁴`; `a(20)` median `5.1×10²⁶`, 2% under it.
 A084701's `a(19)`, from its `a(18)`: Q1 `2.9×10²⁴`, median `1.0×10²⁵`,
 Q3 `2.8×10²⁵`, P90 `5.9×10²⁵` — **0.8% under that family's ceiling** of
 `4.95×10²²`, which its campaign has already reached, and 27% under
-`3.317×10²⁴` should an N+1 route raise the ceiling to A084700's. The
+`3.317×10²⁴` should a plus-one route raise the ceiling to A084700's. The
 ceiling, not the rate, is what now bounds both families
 ([BENCHMARKS.md](BENCHMARKS.md#wall-clock-at-the-scored-rate)).
 
@@ -455,8 +459,8 @@ here is built to. Specific to this one:
   certificate drill proves the frontier's values by the deterministic
   route and a value past the bound by BLS75 Theorem 1 on the
   factorization of `61·k`, re-verifies it from scratch, and refuses it
-  for `N + 2` and as a bare Miller–Rabin claim. Every certificate a
-  campaign writes is re-verified before it lands.
+  for the value plus 2 and as a bare Miller–Rabin claim. Every
+  certificate a campaign writes is re-verified before it lands.
 - **The adopted cursor is drilled on the live cursor's shape.** A v2
   checkpoint at period 88434 must re-denominate to period 1668 of the
   unit wheel with `u = 0` and nothing pending, keep every find and

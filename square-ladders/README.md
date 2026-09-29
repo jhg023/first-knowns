@@ -113,7 +113,7 @@ primes `41, 43, 47` are **72% of every test the engine does**.
 They do not fit in a table: `(23, 47]` is 76,038,000 residues. But CRT
 lifting is linear, so the table can be factored and factored again —
 
-    m = ( A[t] + C[s] + D[u] )  mod W2,      k = base + r1 + W1·m
+    k = base + r1 + W1·( (A[t] + C[s] + D[u])  mod W2 )
 
 — and the whole wheel of the primes to 47 comes out of tables of
 **1,088,640, 4,560 and 16,675** entries — 8.8 MB, against the 662 TB the
@@ -121,14 +121,15 @@ same 8.3×10¹³ residues would take as a plain sorted list.
 One candidate per 7,428 of the line where primes-to-23 gives one per 205.
 Measured end to end against the two-level wheel, interleaved: **3.5×**.
 
-**47 is the last one, and not by choice.** `m` is a 32-bit quantity, so the
-combined second modulus has to stay under `2³²` — primes to 47 make it
-`2.76×10⁹` and primes to 53 make it `1.46×10¹¹`. Widening `m` does not
-help: `W1·m` is what the engine's one-conditional-subtraction reduction
-bounds, so the whole wheel modulus must stay under `2⁶³`, and the primes to
-53 multiply to `3.26×10¹⁹`. Both bounds are functions of the prime set and
-not of how it is split, so no arrangement of levels moves them. G13 checks
-the bound rather than documenting it.
+**47 is the last one, and not by choice.** The second-level index (the
+multiplier of `W1` above) is a 32-bit quantity, so the combined second
+modulus has to stay under `2³²` — primes to 47 make it `2.76×10⁹` and
+primes to 53 make it `1.46×10¹¹`. Widening that index does not help: its
+product with `W1` is what the engine's one-conditional-subtraction
+reduction bounds, so the whole wheel modulus must stay under `2⁶³`, and the
+primes to 53 multiply to `3.26×10¹⁹`. Both bounds are functions of the
+prime set and not of how it is split, so no arrangement of levels moves
+them. G13 checks the bound rather than documenting it.
 
 The price is that candidates come out in `(t, s, u)` order, so only a whole
 wheel period — `6.15×10¹⁷` of line, about ten minutes — is contiguous in
@@ -174,9 +175,9 @@ and it pays here for a reason worth naming: that kernel was bound by load
 count, this one by instruction issue, so trading instructions for a load is
 the right way round.)
 
-Generation is amortised the same way. `k = base + r1 + W1·m` with `m = A[t]
-+ C[s]`, so for a fixed `t` the quantity `base + r1` does not depend on `s`
-at all — give a block eight second-level residues and one load, one index
+Generation is amortised the same way. `k = base + r1 + W1·(A[t] + C[s])`,
+so for a fixed `t` the quantity `base + r1` does not depend on `s` at all
+— give a block eight second-level residues and one load, one index
 computation and one 64-bit add serve eight candidates instead of one.
 
 Measured against the v2 kernel, interleaved in one run with both engines
@@ -185,8 +186,9 @@ required to agree on every survivor: **7.505×**.
 **And then the split moved, so the answers did.** v3 found the kernel bound
 by instruction *issue*; six structural changes later it is bound by
 **occupancy**, and the same lever reverses sign with it. The prefix's
-64-bit reduction really can be hoisted out of the inner loop — a candidate
-is `b0 + W1·m` with `b0` fixed for the whole loop, so `off mod Q` is a
+64-bit reduction really can be hoisted out of the inner loop — a
+candidate's offset is `b0` plus `W1` times the second-level index, with
+`b0` fixed for the whole loop, so its residue modulo each CRT group is a
 select, a subtract and a conditional add — but held in *registers* it costs
 72 of them, three resident blocks per SM instead of five, and **0.79×**.
 The same values in *shared memory* are 1.04×. An SM divides 128 KB between
@@ -217,7 +219,7 @@ never needs a probable-prime qualifier.
 
 ## The odds model
 
-Bateman-Horn over the `n` linear forms `f_i(k) = i²k + 1`, with the
+Bateman-Horn over the `n` linear forms `k·i² + 1`, `i = 1..n`, with the
 singular series computed numerically from the same `w(q,n)` the sieve is
 built from. Stated **before** any sweep (`model_results.json`):
 
@@ -256,7 +258,7 @@ high" — is ruled out by this campaign's own census
 ([RESULTS.md](RESULTS.md#census)): over 86,531 classified survivors the
 observed counts per run length sit at **1.022×** the same model's
 prediction, flat from run 8 to run 17, and the measured probability that a
-run-`r` survivor reaches `r+1` is 0.39-0.40 at every rung against a
+survivor extends its run by one is 0.39-0.40 at every rung against a
 predicted 0.392. The mean number of hits is right; it is the *waiting time
 to the first one* that comes out long. That is the signature of a
 first-occurrence distribution more clustered than Poisson, not of a wrong

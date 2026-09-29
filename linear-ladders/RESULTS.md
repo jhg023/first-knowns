@@ -3,11 +3,15 @@
 Verified finds, in discovery order, with the exact integers and the
 verification each one survived.
 
-**Notation.** This page writes every family as `r·k ± 1` — term `k`, index
-`r`. A173750, A125838, A125839, A164325 and A164326 call the term **m** in
-the OEIS and use k for the index, and their evidence files follow the OEIS
-(README.md, "Notation"). Either way the integer in each heading below is
-the term, and the file's `oeis_terms` says which index it goes to.
+**Letters.** Each family is written in its own OEIS entry's letters, and
+they do not agree (README.md, "Notation"). A088250 and A088651 are the
+least `k` with `r·k + 1` (respectively `r·k − 1`) prime for `r = 1..n`.
+The other five call the term **m** and use `k` for the multiplier's
+index: A173750 is `k·m + 1` for `k = 2..n`, A125838 and A125839 are
+`k·m − 1` for `k = 2..n` and `k = 3..n`, and A164325 and A164326 are
+`(2k−1)·m ± 1` for `k = 1..n`. Line rates are per second of each
+family's own term, k/s or m/s. The integer in each heading below is the
+term, and the file's `oeis_terms` says which index it goes to.
 
 ## Verified finds
 
@@ -30,7 +34,7 @@ began.
 - **stopper**: `16·k + 1 = 24,885,760,661,031,890,780,161 = 19 ×
   1,309,776,876,896,415,304,219`, so the run is exactly 15.
 - **certificates**: all 15 values under the deterministic Miller–Rabin
-  bound (`k` is under the proof crossing `k_proof(15) = 2.21×10²³`), all
+  bound (`k` is under the proof crossing at `n = 15`, `2.21×10²³`), all
   `deterministic-mr`, all re-verified.
 - **also settles**: `A202778(15) = 1,555,360,041,314,493,173,760` (the run
   is exact) and `A071576(15) = 777,680,020,657,246,586,880`.
@@ -48,8 +52,8 @@ began.
   `16·k + 1 = 1,393,882,893,669,896,881,130,881`.
 - **stopper**: `17·k + 1 = 1,481,000,574,524,265,436,201,561 = 9199 ×
   160,995,822,863,818,397,239`.
-- **certificates**: 16 `deterministic-mr` (`k` under the crossing
-  `k_proof(16) = 2.07×10²³`), all re-verified.
+- **certificates**: 16 `deterministic-mr` (`k` under the crossing at
+  `n = 16`, `2.07×10²³`), all re-verified.
 - **also settles**: `A202778(16) = k` and
   `A071576(16) = 43,558,840,427,184,277,535,340`.
 - **model**: from `a(15)`, median `2.83×10²²`, P90 `1.37×10²³`;
@@ -64,8 +68,8 @@ began.
   `17·k + 1 = 17,818,121,111,741,515,036,942,471`.
 - **stopper**: `18·k + 1 = 18,866,245,883,020,427,686,174,381 = 23 ×
   820,271,560,131,322,942,877,147`.
-- **certificates**: `k` is **past the proof crossing** `k_proof(17) =
-  1.95×10²³`, so the classification that found it was a strong
+- **certificates**: `k` is **past the proof crossing** at `n = 17`,
+  `1.95×10²³`, so the classification that found it was a strong
   probable-prime chain and the discovery is proved by certificate: the
   three values under the bound (`r = 1, 2, 3`) by `deterministic-mr`, the
   other fourteen by **BLS75 Theorem 1** on `N − 1 = r·k`, `k` factored
@@ -94,7 +98,7 @@ the last whole wheel period under the engine ceiling, `k =
 survivor and finding no run of 18. So **no `k < 3.3168×10²⁴` has
 `r·k + 1` prime for all `r = 1..18`**, the first bound of any kind on
 A088250 at an open index. The claim is sound above the proof crossing
-too: past `k_proof(18) = 1.84×10²³` the Miller-Rabin chain is a
+too: past the `n = 18` crossing, `1.84×10²³`, the Miller-Rabin chain is a
 probable-prime test, and a composite that passed it could only *lengthen*
 a run, never hide one — a true run of 18 would have passed every test and
 been claimed. The model, from `a(17)`, had put `a(18)` under the ceiling
@@ -115,66 +119,66 @@ and the monotone floor, under the engine key
 ## A125838: four terms and a bound — 2026-09-03, 19:28–19:46
 
 The second campaign, `--family A125838` with no flags, ran 17.2 minutes
-from `k = 10⁶` to the family's ceiling (the proof crossing of its current
+from `m = 10⁶` to the family's ceiling (the proof crossing of its current
 filter, `3.317×10²⁴ / 19 = 1.746×10²³` at `n = 19`) and found four terms.
-A125838 is a −1 family (`r·k − 1` for `r = 2..n`), so every value stays
+A125838 is a −1 family (`k·m − 1` for `k = 2..n`), so every value stays
 under the deterministic bound and every certificate is the deterministic Miller-Rabin test
 itself; each file was re-verified from disk exactly as A088250's were.
 
 ### A125838 a(15) = 45,187,548,280,664,790 — 19:32
 
-- **run 15**: `r·k − 1` prime for `r = 2..15`; `15·k − 1 =
-  677,813,224,209,971,849`. **stopper** `16·k − 1 =
+- **run 15**: `k·m − 1` prime for `k = 2..15`; `15·m − 1 =
+  677,813,224,209,971,849`. **stopper** `16·m − 1 =
   723,000,772,490,636,639 = 17 × 42,529,457,205,331,567`.
 - 14 certificates, all `deterministic-mr`, re-verified.
 - **This is the integer the literature holds as A125839's `a(15)`**
-  (Giovanni Resta, 2017): the `r = 3..15` ladder's least term also has
-  `2·k − 1 = 90,375,096,561,329,579` prime, so it is A125838's `a(15)` as
+  (Giovanni Resta, 2017): the `k = 3..15` ladder's least term also has
+  `2·m − 1 = 90,375,096,561,329,579` prime, so it is A125838's `a(15)` as
   well — 5.6× A125838's published `a(14)`, and far below the model's Q1
-  (`k / median = 0.02`, `E = 0.04`). Found at the close of period 0,
+  (`m / median = 0.02`, `E = 0.04`). Found at the close of period 0,
   3.5 min in, together with `a(16)`.
-- `k = 2 · 3 · 5 · 7² · 11 · 13 · 83 · 1747 · 1482499`.
+- `m = 2 · 3 · 5 · 7² · 11 · 13 · 83 · 1747 · 1482499`.
 - evidence: `evidence/A125838_a15_45187548280664790.json`
 
 ### A125838 a(16) = 436,409,209,028,729,276,340 — 19:32
 
-- **run 16**: `16·k − 1 = 6,982,547,344,459,668,421,439`. **stopper**
-  `17·k − 1 = 7,418,956,553,488,397,697,779 = 31 ×
+- **run 16**: `16·m − 1 = 6,982,547,344,459,668,421,439`. **stopper**
+  `17·m − 1 = 7,418,956,553,488,397,697,779 = 31 ×
   239,321,179,144,787,022,509`.
 - 15 `deterministic-mr` certificates, re-verified.
-- **model**: from `a(15)`, median `1.72×10²⁰`; `k / median = 2.5`,
+- **model**: from `a(15)`, median `1.72×10²⁰`; `m / median = 2.5`,
   `E = 1.32`. Inside period 0 like `a(15)`, so narrated with it.
-- `k = 2² · 3 · 5 · 7 · 11 · 13 · 17 · 427424740973467`.
+- `m = 2² · 3 · 5 · 7 · 11 · 13 · 17 · 427424740973467`.
 - evidence: `evidence/A125838_a16_436409209028729276340.json`
 
 ### A125838 a(17) = 44,387,933,133,290,055,609,300 — 19:42
 
-- **run 17**: `17·k − 1 = 754,594,863,265,930,945,358,099`. **stopper**
-  `18·k − 1 = 798,982,796,399,221,000,967,399 = 941 ×
+- **run 17**: `17·m − 1 = 754,594,863,265,930,945,358,099`. **stopper**
+  `18·m − 1 = 798,982,796,399,221,000,967,399 = 941 ×
   849,078,423,378,555,792,739`.
 - 16 `deterministic-mr` certificates, re-verified.
-- **model**: from `a(16)`, median `1.08×10²²`; `k / median = 4.1`,
+- **model**: from `a(16)`, median `1.08×10²²`; `m / median = 4.1`,
   `E = 1.99`. 13.7 min in.
-- `k = 2² · 3 · 5² · 7 · 11² · 13 · 17 · 19 · 29 · 41 · 117659 · 297377`.
+- `m = 2² · 3 · 5² · 7 · 11² · 13 · 17 · 19 · 29 · 41 · 117659 · 297377`.
 - evidence: `evidence/A125838_a17_44387933133290055609300.json`
 
 ### A125838 a(18) = 74,882,388,347,598,051,560,340 — 19:43
 
-- **run 18**: `18·k − 1 = 1,347,882,990,256,764,928,086,119`. **stopper**
-  `19·k − 1 = 1,422,765,378,604,363,979,646,459 = 233 ×
+- **run 18**: `18·m − 1 = 1,347,882,990,256,764,928,086,119`. **stopper**
+  `19·m − 1 = 1,422,765,378,604,363,979,646,459 = 233 ×
   6,106,289,178,559,497,766,723`.
 - 17 `deterministic-mr` certificates, re-verified.
-- **model**: from `a(17)`, median `1.99×10²⁴`; `k / median = 0.04`,
+- **model**: from `a(17)`, median `1.99×10²⁴`; `m / median = 0.04`,
   `E = 0.02` — only 1.7× `a(17)`, and 2.5× under the `n = 18` ceiling of
   `1.84×10²³` that the pre-run model had given it 13% of clearing. 15 min
   in.
-- `k = 2² · 3³ · 5 · 7 · 11 · 13 · 17 · 19 · 47 · 1093 · 8348939387`.
+- `m = 2² · 3³ · 5 · 7 · 11 · 13 · 17 · 19 · 47 · 1093 · 8348939387`.
 - evidence: `evidence/A125838_a18_74882388347598051560340.json`
 
-Across the four, `E` averages 0.84 and `k / median` runs 0.02, 2.5, 4.1,
+Across the four, `E` averages 0.84 and `m / median` runs 0.02, 2.5, 4.1,
 0.04. None settles a derived entry (A125838 has none), but **each is an
-upper bound on A125839 at the same index**: the `r = 3..n` conditions are
-a subset of the `r = 2..n` ones, so `A125839(16) ≤ 436,409,209,028,729,276,340`,
+upper bound on A125839 at the same index**: the `k = 3..n` conditions are
+a subset of the `k = 2..n` ones, so `A125839(16) ≤ 436,409,209,028,729,276,340`,
 `A125839(17) ≤ 44,387,933,133,290,055,609,300` and `A125839(18) ≤
 74,882,388,347,598,051,560,340` — what the A125839 campaign will find at
 or below.
@@ -183,8 +187,8 @@ or below.
 
 After `a(18)` the filter moved to `n = 19` and the sweep continued to the
 last whole period under that filter's ceiling (`1.746×10²³`), period 90,
-finding no run of 19. So no `k < 1.7305×10²³` has `r·k − 1` prime for all
-`r = 2..19`. Every classification on a −1 family is a proof (its values
+finding no run of 19. So no `m < 1.7305×10²³` has `k·m − 1` prime for all
+`k = 2..19`. Every classification on a −1 family is a proof (its values
 never leave the deterministic zone), so the bound rests on nothing
 probabilistic. The model had given `a(19)` 0.4% under this ceiling from
 `a(18)` and puts its median at `8.5×10²⁵`; lifting the ceiling needs an
@@ -192,8 +196,8 @@ N+1 certificate route ([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)).
 
 ## A125839: three terms and a bound — 2026-09-03, 19:55–20:10
 
-The third campaign, `--family A125839` (`r·k − 1` for `r = 3..n`), 15
-minutes from `k = 10⁶` to the same ceiling as A125838's (`1.746×10²³` at
+The third campaign, `--family A125839` (`k·m − 1` for `k = 3..n`), 15
+minutes from `m = 10⁶` to the same ceiling as A125838's (`1.746×10²³` at
 `n = 19`). Its conditions are a subset of A125838's, so A125838's terms
 bounded these from above before the campaign started, and each landed
 under its bound. All certificates are the deterministic test; each file
@@ -201,113 +205,113 @@ was re-verified from disk.
 
 ### A125839 a(16) = 14,423,013,361,403,116,470 — 19:58
 
-- **run 16**: `r·k − 1` prime for `r = 3..16`; `16·k − 1 =
-  230,768,213,782,449,863,519`. **stopper** `17·k − 1 =
+- **run 16**: `k·m − 1` prime for `k = 3..16`; `16·m − 1 =
+  230,768,213,782,449,863,519`. **stopper** `17·m − 1 =
   245,191,227,143,852,979,989 = 31 × 7,909,394,423,995,257,419`.
 - 14 `deterministic-mr` certificates, re-verified.
 - **model**: from the published `a(15)`, median `2.67×10¹⁸`;
-  `k / median = 5.4`, `E = 2.30`. Bound from A125838: `≤ 4.36×10²⁰`.
+  `m / median = 5.4`, `E = 2.30`. Bound from A125838: `≤ 4.36×10²⁰`.
   Inside period 0, narrated at its close 3.4 min in, together with
   `a(17)`.
-- `k = 2 · 3² · 5 · 7 · 11 · 13 · 29569 · 5414305807`.
+- `m = 2 · 3² · 5 · 7 · 11 · 13 · 29569 · 5414305807`.
 - evidence: `evidence/A125839_a16_14423013361403116470.json`
 
 ### A125839 a(17) = 771,355,748,787,892,768,500 — 19:58
 
-- **run 17**: `17·k − 1 = 13,113,047,729,394,177,064,499`. **stopper**
-  `18·k − 1 = 13,884,403,478,182,069,832,999 = 17 ×
+- **run 17**: `17·m − 1 = 13,113,047,729,394,177,064,499`. **stopper**
+  `18·m − 1 = 13,884,403,478,182,069,832,999 = 17 ×
   816,729,616,363,651,166,647`.
 - 15 `deterministic-mr` certificates, re-verified.
-- **model**: from `a(16)`, median `1.43×10²⁰`; `k / median = 5.4`,
+- **model**: from `a(16)`, median `1.43×10²⁰`; `m / median = 5.4`,
   `E = 2.61`. Bound from A125838: `≤ 4.44×10²²`. Inside period 0.
-- `k = 2² · 3 · 5³ · 7 · 11 · 13 · 19 · 31 · 872195997311`.
+- `m = 2² · 3 · 5³ · 7 · 11 · 13 · 19 · 31 · 872195997311`.
 - evidence: `evidence/A125839_a17_771355748787892768500.json`
 
 ### A125839 a(18) = 6,530,891,065,478,723,143,200 — 19:59
 
-- **run 18**: `18·k − 1 = 117,556,039,178,617,016,577,599`. **stopper**
-  `19·k − 1 = 124,086,930,244,095,739,720,799 = 17 ×
+- **run 18**: `18·m − 1 = 117,556,039,178,617,016,577,599`. **stopper**
+  `19·m − 1 = 124,086,930,244,095,739,720,799 = 17 ×
   7,299,231,190,829,161,160,047`.
 - 16 `deterministic-mr` certificates, re-verified.
-- **model**: from `a(17)`, median `1.23×10²²`; `k / median = 0.53`,
+- **model**: from `a(17)`, median `1.23×10²²`; `m / median = 0.53`,
   `E = 0.41`. Bound from A125838: `≤ 7.49×10²²`. 4.7 min in.
-- `k = 2⁵ · 3 · 5² · 7 · 11² · 13 · 23 · 31 · 79 · 439 · 9994321`.
+- `m = 2⁵ · 3 · 5² · 7 · 11² · 13 · 23 · 31 · 79 · 439 · 9994321`.
 - evidence: `evidence/A125839_a18_6530891065478723143200.json`
 
-`E` averages 1.77 over the three; `k / median` 5.4, 5.4, 0.53.
+`E` averages 1.77 over the three; `m / median` 5.4, 5.4, 0.53.
 
 ### A bound: A125839 a(19) > 173,048,431,513,879,137,516,300
 
 The sweep continued at `n = 19` to period 90, the last whole period under
-that filter's ceiling, and found no run of 19: no `k < 1.7305×10²³` has
-`r·k − 1` prime for all `r = 3..19`. Every decision on this family is a
+that filter's ceiling, and found no run of 19: no `m < 1.7305×10²³` has
+`k·m − 1` prime for all `k = 3..19`. Every decision on this family is a
 proof. The model had given `a(19)` 16% under the ceiling from `a(18)`
 and puts its median at `1.1×10²⁴`, six times the ceiling.
 
 ## A173750: four terms on three integers, and a bound — 2026-09-03, 20:23–21:00
 
-The fourth campaign, `--family A173750` (`r·k + 1` for `r = 2..n`, a +1
-family), 37 minutes from `k = 10⁶` to the +1 ceiling `3.317×10²⁴`. Every
-value stayed under the deterministic bound (the largest, `19·k + 1 =
+The fourth campaign, `--family A173750` (`k·m + 1` for `k = 2..n`, a +1
+family), 37 minutes from `m = 10⁶` to the +1 ceiling `3.317×10²⁴`. Every
+value stayed under the deterministic bound (the largest, `19·m + 1 =
 2.8×10²⁴`, just under it), so every certificate is the deterministic Miller-Rabin test;
 each file was re-verified from disk.
 
 ### A173750 a(16) = 828,196,248,070,762,801,230 — 20:24
 
-- **run 16**: `r·k + 1` prime for `r = 2..16`; `16·k + 1 =
-  13,251,139,969,132,204,819,681`. **stopper** `17·k + 1 =
+- **run 16**: `k·m + 1` prime for `k = 2..16`; `16·m + 1 =
+  13,251,139,969,132,204,819,681`. **stopper** `17·m + 1 =
   14,079,336,217,202,967,620,911 = 419 × 33,602,234,408,598,968,069`.
 - 15 `deterministic-mr` certificates, re-verified.
 - **model**: from the published `a(15)`, median `1.94×10²⁰`;
-  `k / median = 4.3`, `E = 1.99`. Found 65 s in, at the close of period 0.
-- `k = 2 · 3 · 5 · 7 · 11 · 13 · 17 · 41 · 173 · 228717315661`.
+  `m / median = 4.3`, `E = 1.99`. Found 65 s in, at the close of period 0.
+- `m = 2 · 3 · 5 · 7 · 11 · 13 · 17 · 41 · 173 · 228717315661`.
 - evidence: `evidence/A173750_a16_828196248070762801230.json`
 
 ### A173750 a(17) = 67,335,095,107,785,754,679,430 — 20:39
 
-- **run 17**: `17·k + 1 = 1,144,696,616,832,357,829,550,311`. **stopper**
-  `18·k + 1 = 1,212,031,711,940,143,584,229,741 = 19 ×
+- **run 17**: `17·m + 1 = 1,144,696,616,832,357,829,550,311`. **stopper**
+  `18·m + 1 = 1,212,031,711,940,143,584,229,741 = 19 ×
   63,791,142,733,691,767,591,039`.
 - 16 `deterministic-mr` certificates, re-verified.
-- **model**: from `a(16)`, median `1.18×10²²`; `k / median = 5.7`,
+- **model**: from `a(16)`, median `1.18×10²²`; `m / median = 5.7`,
   `E = 2.65`. 15.4 min in.
-- `k = 2 · 3 · 5 · 7 · 11 · 13 · 17 · 32029 · 41729 · 98686073`.
+- `m = 2 · 3 · 5 · 7 · 11 · 13 · 17 · 32029 · 41729 · 98686073`.
 - evidence: `evidence/A173750_a17_67335095107785754679430.json`
 
 ### A173750 a(18) = a(19) = 147,316,106,448,079,863,444,150 — 20:42
 
-- **run 19, found while `a(18)` was open**: `r·k + 1` is prime for every
-  `r = 2..19`, so this one `k` settles two terms at once — a **rider**,
-  as this family's published `a(12) = a(13) = a(14)` are. `19·k + 1 =
+- **run 19, found while `a(18)` was open**: `k·m + 1` is prime for every
+  `k = 2..19`, so this one `m` settles two terms at once — a **rider**,
+  as this family's published `a(12) = a(13) = a(14)` are. `19·m + 1 =
   2,799,006,022,513,517,405,438,851`, the largest value any campaign here
   has certified by the deterministic test (the bound is `3.317×10²⁴`).
-  **stopper** `20·k + 1 = 2,946,322,128,961,597,268,883,001 = 19 ×
+  **stopper** `20·m + 1 = 2,946,322,128,961,597,268,883,001 = 19 ×
   155,069,585,734,820,908,888,579`.
 - 18 `deterministic-mr` certificates, re-verified. Evidenced once, under
   `a(18)`, with `settles = [18, 19]`.
-- **model**: from `a(17)`, `a(18)`'s median `2.06×10²⁴`; `k / median =
+- **model**: from `a(17)`, `a(18)`'s median `2.06×10²⁴`; `m / median =
   0.07`, `E = 0.05` — very early, and it carried `a(19)` with it. 19.7 min
   in.
-- `k = 2 · 3 · 5² · 7 · 11 · 13 · 17 · 37 · 1559819157504709`.
+- `m = 2 · 3 · 5² · 7 · 11 · 13 · 17 · 37 · 1559819157504709`.
 - evidence: `evidence/A173750_a18_147316106448079863444150.json`
 
 `E` averages 1.56 over the three searched terms (the rider is not
-scored: it was never searched for); `k / median` 4.3, 5.7, 0.07.
+scored: it was never searched for); `m / median` 4.3, 5.7, 0.07.
 
 ### A bound: A173750 a(20) > 3,316,761,604,016,016,802,395,750
 
 The filter moved to `n = 20` and the sweep ran on to the last whole
-period under the +1 ceiling, finding no run of 20: no `k < 3.3168×10²⁴`
-has `r·k + 1` prime for all `r = 2..20`. Above the proof crossing
-`k_proof(20) = 1.66×10²³` the classification is a probable-prime chain,
+period under the +1 ceiling, finding no run of 20: no `m < 3.3168×10²⁴`
+has `k·m + 1` prime for all `k = 2..20`. Above the proof crossing
+at `n = 20`, `1.66×10²³`, the classification is a probable-prime chain,
 which can only lengthen a run, never hide one, so the bound stands. The
 model had given `a(20)` 0.2% under the ceiling from `a(19)` and puts its
 median at `1.3×10²⁸`.
 
 ## A164326: two terms and a bound — 2026-09-03, 22:27–22:41
 
-The fifth campaign, `--family A164326` (`(2r−1)·k − 1` for `r = 1..n`,
-the odd multipliers, a −1 family), 14 minutes from `k = 10⁶` to the
+The fifth campaign, `--family A164326` (`(2k−1)·m − 1` for `k = 1..n`,
+the odd multipliers, a −1 family), 14 minutes from `m = 10⁶` to the
 lowest ceiling of the seven: the proof crossing for its largest
 multiplier, `3.317×10²⁴ / 33 = 1.005×10²³` at `n = 17`. Every
 certificate is the deterministic test; each file was re-verified from
@@ -315,93 +319,93 @@ disk.
 
 ### A164326 a(15) = 392,547,927,582,515,694,990 — 22:29
 
-- **run 15**: `(2r−1)·k − 1` prime for `r = 1..15`; the 15th value is
-  `29·k − 1 = 11,383,889,899,892,955,154,709`. **stopper** `31·k − 1 =
+- **run 15**: `(2k−1)·m − 1` prime for `k = 1..15`; the 15th value is
+  `29·m − 1 = 11,383,889,899,892,955,154,709`. **stopper** `31·m − 1 =
   12,168,985,755,057,986,544,689 = 19 × 640,472,934,476,736,133,931`.
 - 15 `deterministic-mr` certificates, re-verified.
 - **model**: from the published `a(14)`, median `6.24×10¹⁹`;
-  `k / median = 6.3`, `E = 2.46`. Found 145 s in, at the close of
+  `m / median = 6.3`, `E = 2.46`. Found 145 s in, at the close of
   period 0.
-- `k = 2 · 3 · 5 · 7 · 11² · 13 · 59 · 285841 · 70464137`.
+- `m = 2 · 3 · 5 · 7 · 11² · 13 · 59 · 285841 · 70464137`.
 - evidence: `evidence/A164326_a15_392547927582515694990.json`
 
 ### A164326 a(16) = 10,214,000,995,018,156,616,280 — 22:33
 
-- **run 16**: `31·k − 1 = 316,634,030,845,562,855,104,679`. **stopper**
-  `33·k − 1 = 337,062,032,835,599,168,337,239 = 23 ×
+- **run 16**: `31·m − 1 = 316,634,030,845,562,855,104,679`. **stopper**
+  `33·m − 1 = 337,062,032,835,599,168,337,239 = 23 ×
   14,654,870,992,852,137,753,793`.
 - 16 `deterministic-mr` certificates, re-verified.
-- **model**: from `a(15)`, median `6.12×10²¹`; `k / median = 1.7`,
+- **model**: from `a(15)`, median `6.12×10²¹`; `m / median = 1.7`,
   `E = 1.04`. 6.4 min in.
-- `k = 2³ · 3 · 5 · 7 · 11 · 13 · 17 · 769 · 6504371094253`.
+- `m = 2³ · 3 · 5 · 7 · 11 · 13 · 17 · 769 · 6504371094253`.
 - evidence: `evidence/A164326_a16_10214000995018156616280.json`
 
-`E` averages 1.75 over the two; `k / median` 6.3, 1.7.
+`E` averages 1.75 over the two; `m / median` 6.3, 1.7.
 
 ### A bound: A164326 a(17) > 99,983,538,208,019,057,231,640
 
 At `n = 17` the sweep ran to period 52, the last whole period under
-`1.005×10²³`, and found no run of 17: no `k < 9.998×10²²` has
-`(2r−1)·k − 1` prime for all `r = 1..17`. Every decision on this family
+`1.005×10²³`, and found no run of 17: no `m < 9.998×10²²` has
+`(2k−1)·m − 1` prime for all `k = 1..17`. Every decision on this family
 is a proof. The model had given `a(17)` 12.5% under the ceiling from
 `a(16)` and puts its median at `8.3×10²³`, eight times the ceiling.
 
 ## A164325: three terms and a bound — 2026-09-03, 22:49–23:49
 
-The sixth campaign, `--family A164325` (`(2r−1)·k + 1` for `r = 1..n`,
-the odd multipliers, a +1 family), one hour from `k = 10⁶` to the +1
+The sixth campaign, `--family A164325` (`(2k−1)·m + 1` for `k = 1..n`,
+the odd multipliers, a +1 family), one hour from `m = 10⁶` to the +1
 ceiling `3.317×10²⁴`. Two of its three terms sit past the proof crossing
 and are proved by certificate; each file was re-verified from disk.
 
 ### A164325 a(16) = 1,284,243,585,711,408,422,100 — 22:49
 
-- **run 16**: `(2r−1)·k + 1` prime for `r = 1..16`; the 16th value is
-  `31·k + 1 = 39,811,551,157,053,661,085,101`. **stopper** `33·k + 1 =
+- **run 16**: `(2k−1)·m + 1` prime for `k = 1..16`; the 16th value is
+  `31·m + 1 = 39,811,551,157,053,661,085,101`. **stopper** `33·m + 1 =
   42,380,038,328,476,477,929,301 = 59 × 718,305,734,380,957,253,039`.
 - 16 `deterministic-mr` certificates, re-verified.
 - **model**: from the published `a(15)`, median `4.91×10²¹`;
-  `k / median = 0.26`, `E = 0.27`. Found 49 s in, at the close of
+  `m / median = 0.26`, `E = 0.27`. Found 49 s in, at the close of
   period 0.
-- `k = 2² · 3⁵ · 5² · 7 · 11 · 13 · 17 · 19 · 163457379389`.
+- `m = 2² · 3⁵ · 5² · 7 · 11 · 13 · 17 · 19 · 163457379389`.
 - evidence: `evidence/A164325_a16_1284243585711408422100.json`
 
 ### A164325 a(17) = 317,674,273,854,740,299,136,640 — 23:17
 
-- **run 17**: `33·k + 1 = 10,483,251,037,206,429,871,509,121`. **stopper**
-  `35·k + 1 = 11,118,599,584,915,910,469,782,401 = 53 ×
+- **run 17**: `33·m + 1 = 10,483,251,037,206,429,871,509,121`. **stopper**
+  `35·m + 1 = 11,118,599,584,915,910,469,782,401 = 53 ×
   209,784,897,828,602,084,335,517`.
-- **certificates**: `k` is **past the proof crossing** `k_proof(17) =
-  1.005×10²³`: the five values under the bound (`r = 1..5`) by
+- **certificates**: `m` is **past the proof crossing** at `n = 17`,
+  `1.005×10²³`: the five values under the bound (`k = 1..5`) by
   `deterministic-mr`, the other twelve by **BLS75 Theorem 1** on
-  `N − 1 = (2r−1)·k`, all 17 re-verified from scratch.
-- **model**: from `a(16)`, median `7.84×10²³`; `k / median = 0.40`,
+  `N − 1 = (2k−1)·m`, all 17 re-verified from scratch.
+- **model**: from `a(16)`, median `7.84×10²³`; `m / median = 0.40`,
   `E = 0.37`. 28.3 min in.
-- `k = 2⁷ · 3² · 5 · 7 · 11 · 13 · 17 · 19 · 73 · 691 · 6007 · 562943`.
+- `m = 2⁷ · 3² · 5 · 7 · 11 · 13 · 17 · 19 · 73 · 691 · 6007 · 562943`.
 - evidence: `evidence/A164325_a17_317674273854740299136640.json`
 
 ### A164325 a(18) = 511,721,589,397,871,969,516,400 — 23:23
 
-- **run 18**: `35·k + 1 = 17,910,255,628,925,518,933,074,001`. **stopper**
-  `37·k + 1 = 18,933,698,807,721,262,872,106,801 = 19 ×
+- **run 18**: `35·m + 1 = 17,910,255,628,925,518,933,074,001`. **stopper**
+  `37·m + 1 = 18,933,698,807,721,262,872,106,801 = 19 ×
   996,510,463,564,276,993,268,779`.
-- **certificates**: past the crossing `k_proof(18) = 9.48×10²²`; three
+- **certificates**: past the crossing at `n = 18`, `9.48×10²²`; three
   values by `deterministic-mr`, fifteen by BLS75 Theorem 1, all
   re-verified.
-- **model**: from `a(17)`, median `6.39×10²⁵`; `k / median = 0.01`,
+- **model**: from `a(17)`, median `6.39×10²⁵`; `m / median = 0.01`,
   `E = 0.01` — only 1.6× `a(17)`, and the pre-run model had given `a(18)`
   9% of clearing the ceiling at all. 34.4 min in.
-- `k = 2⁴ · 3 · 5² · 7² · 11 · 13 · 17 · 71 · 7457 · 6761592029`.
+- `m = 2⁴ · 3 · 5² · 7² · 11 · 13 · 17 · 71 · 7457 · 6761592029`.
 - evidence: `evidence/A164325_a18_511721589397871969516400.json`
 
-`E` averages 0.21 over the three; `k / median` 0.26, 0.40, 0.01 — all
+`E` averages 0.21 over the three; `m / median` 0.26, 0.40, 0.01 — all
 three early, against the 4–8× lateness of the −1 odd family's `a(15)`
 an hour before. One draw at a time, as ever.
 
 ### A bound: A164325 a(19) > 3,316,761,604,016,016,802,395,750
 
 The filter moved to `n = 19` and the sweep ran to the last whole period
-under the +1 ceiling with no run of 19: no `k < 3.3168×10²⁴` has
-`(2r−1)·k + 1` prime for all `r = 1..19`. Above the crossing the
+under the +1 ceiling with no run of 19: no `m < 3.3168×10²⁴` has
+`(2k−1)·m + 1` prime for all `k = 1..19`. Above the crossing the
 probable-prime chain can only lengthen a run, never hide one, so the
 bound stands. The model, from `a(18)`, had `a(19)` 0.2% under the ceiling
 and puts its median at `7.9×10²⁷`.
@@ -443,56 +447,56 @@ the sweep go (below).
 
 The eighth campaign and the first under v3's `10⁴⁰` ceiling:
 `--family A164326` with no flags, resumed from the family's v2 cursor
-(period 52, `k = 9.998×10²²`, its old ceiling) at `n = 17` and stopped by
+(period 52, `m = 9.998×10²²`, its old ceiling) at `n = 17` and stopped by
 hand 7.5 hours later at `n = 19`. Every value it certified lies past the
 deterministic bound, so these are the **first discoveries proved by the
-N+1 route**: `N + 1 = (2r−1)·k` factored once per find, BLS75 Theorem 15
+N+1 route**: `N + 1 = (2k−1)·m` factored once per find, BLS75 Theorem 15
 with a Lucas sequence per prime. Each file was re-verified from disk
 exactly as the earlier ones were, subproof machinery included (neither
-needed one: every prime factor of both `k` is under the bound).
+needed one: every prime factor of both `m` is under the bound).
 
 ### A164326 a(17) = 2,071,342,181,735,785,633,264,590 — 04:13
 
-- **run 17**: `(2r−1)·k − 1` prime for `r = 1..17`; the 17th value is
-  `33·k − 1 = 68,354,291,997,280,925,897,731,469`. **stopper** `35·k − 1 =
+- **run 17**: `(2k−1)·m − 1` prime for `k = 1..17`; the 17th value is
+  `33·m − 1 = 68,354,291,997,280,925,897,731,469`. **stopper** `35·m − 1 =
   72,496,976,360,752,497,164,260,649 = 3,997,749,779 ×
   18,134,445,717,832,531`.
-- **certificates**: `k` is 20× past the proof crossing `k_proof(17) =
-  1.005×10²³` (the v2 ceiling this family stopped at). One value under
-  the bound (`r = 1`) by `deterministic-mr`; the other sixteen by
-  **BLS75 Theorem 15** on `N + 1 = (2r−1)·k` factored completely, each
+- **certificates**: `m` is 20× past the proof crossing at `n = 17`,
+  `1.005×10²³` (the v2 ceiling this family stopped at). One value under
+  the bound (`k = 1`) by `deterministic-mr`; the other sixteen by
+  **BLS75 Theorem 15** on `N + 1 = (2k−1)·m` factored completely, each
   with its own Lucas sequence and one shared discriminant, all 17
   re-verified from scratch by the launcher and again from disk.
 - **model**: from the v2 bound `9.998×10²²`, median `1.05e+24`;
-  `k / median = 1.97`, `E = 1.22`. From `a(16)` the pre-run model had
+  `m / median = 1.97`, `E = 1.22`. From `a(16)` the pre-run model had
   put `a(17)` under the old ceiling with 12.5%; from the bound it put it
   under `3.317×10²⁴` with 83% and it landed at 2.07×10²⁴.
-- **when**: 2.73 h in, at a campaign rate of `2.0×10²⁰ k/s` over the
+- **when**: 2.73 h in, at a campaign rate of `2.0×10²⁰ m/s` over the
   `n = 17` phase.
-- `k = 2 · 3 · 5 · 7 · 11 · 13 · 17 · 113 · 35,906,175,756,150,593`.
+- `m = 2 · 3 · 5 · 7 · 11 · 13 · 17 · 113 · 35,906,175,756,150,593`.
 - evidence: `evidence/A164326_a17_2071342181735785633264590.json`
 
 ### A164326 a(18) = 9,606,289,803,039,023,735,440,800 — 08:06
 
-- **run 18**: `35·k − 1 = 336,220,143,106,365,830,740,427,999`. **stopper**
-  `37·k − 1 = 355,432,722,712,443,878,211,309,599 = 19 ×
+- **run 18**: `35·m − 1 = 336,220,143,106,365,830,740,427,999`. **stopper**
+  `37·m − 1 = 355,432,722,712,443,878,211,309,599 = 19 ×
   18,706,985,405,918,098,853,226,821`.
-- **certificates**: every value past the bound (`k_proof(18) =
-  9.48×10²²`); all 18 by BLS75 Theorem 15, all re-verified.
-- **model**: from `a(17)`, median `7e+25`; `k / median = 0.14`,
-  `E = 0.12` — early, only 4.6× `a(17)`. 6.6 h in, at `5.4×10²⁰ k/s`
+- **certificates**: every value past the bound (the crossing at `n = 18`
+  is `9.48×10²²`); all 18 by BLS75 Theorem 15, all re-verified.
+- **model**: from `a(17)`, median `7e+25`; `m / median = 0.14`,
+  `E = 0.12` — early, only 4.6× `a(17)`. 6.6 h in, at `5.4×10²⁰ m/s`
   over the `n = 18` phase.
-- `k = 2⁵ · 3² · 5² · 7³ · 11 · 13 · 17 · 32,803 · 48,778,736,311`.
+- `m = 2⁵ · 3² · 5² · 7³ · 11 · 13 · 17 · 32,803 · 48,778,736,311`.
 - evidence: `evidence/A164326_a18_9606289803039023735440800.json`
 
-`E` averages 0.67 over the two; `k / median` 1.97, 0.14. Over the
+`E` averages 0.67 over the two; `m / median` 1.97, 0.14. Over the
 family's four searched terms it is 1.23.
 
 ### A bound: A164326 a(19) > 16,049,280,642,737,212,898,317,290
 
 The filter moved to `n = 19` and the sweep ran 56 minutes more at
-`1.9×10²¹ k/s`, to period 8,346, where the campaign was stopped by hand:
-no `k < 1.6049×10²⁵` has `(2r−1)·k − 1` prime for all `r = 1..19`. Above
+`1.9×10²¹ m/s`, to period 8,346, where the campaign was stopped by hand:
+no `m < 1.6049×10²⁵` has `(2k−1)·m − 1` prime for all `k = 1..19`. Above
 the crossing the classification is a probable-prime chain, which can only
 lengthen a run, never hide one, so the bound stands. The model, from
 `a(18)`, had given `a(19)` 0.3% under this cursor and puts its
@@ -515,8 +519,8 @@ disk exactly as the earlier files were.
   `17·k − 1 = 31,181,592,683,117,797,801,640,759`.
 - **stopper**: `18·k − 1 = 33,015,804,017,418,844,731,149,039 = 19 ×
   1,737,673,895,653,623,406,902,581`.
-- **certificates**: `k` is 9.4× past the proof crossing `k_proof(17) =
-  1.951×10²³` (the v2 ceiling this family stopped at). One value under
+- **certificates**: `k` is 9.4× past the proof crossing at `n = 17`,
+  `1.951×10²³` (the v2 ceiling this family stopped at). One value under
   the bound (`r = 1`) by `deterministic-mr`; the other sixteen by
   **BLS75 Theorem 15** on `N + 1 = r·k` factored completely, each with
   its own Lucas sequence and one shared discriminant. All 17 re-verified
@@ -570,8 +574,8 @@ and each file was re-verified from disk before this page was written.
   `18·k + 1 = 202,687,938,306,671,718,947,286,241`.
 - **stopper**: `19·k + 1 = 213,948,379,323,709,036,666,579,921 = 29 ×
   7,377,530,321,507,208,160,916,549`.
-- **certificates**: every value past the bound (`k_proof(18) =
-  1.84×10²³`); all 18 by **BLS75 Theorem 1** on `N − 1 = r·k`, `k`
+- **certificates**: every value past the bound (the crossing at `n = 18`
+  is `1.84×10²³`); all 18 by **BLS75 Theorem 1** on `N − 1 = r·k`, `k`
   factored once, every prime factor under the bound, all re-verified.
   The first A088250 find with no deterministic certificate in it.
 - **also settles**: `A202778(18) = k` and `A071576(18) =
@@ -589,55 +593,55 @@ and each file was re-verified from disk before this page was written.
 
 ### A125838 a(19) = 112,258,928,035,903,409,184,283,860 — 19:44
 
-- **run 19**: `r·k − 1` prime for `r = 2..19`; the 19th value is
-  `19·k − 1 = 2,132,919,632,682,164,774,501,393,339`.
-- **stopper**: `20·k − 1 = 2,245,178,560,718,068,183,685,677,199 = 19 ×
+- **run 19**: `k·m − 1` prime for `k = 2..19`; the 19th value is
+  `19·m − 1 = 2,132,919,632,682,164,774,501,393,339`.
+- **stopper**: `20·m − 1 = 2,245,178,560,718,068,183,685,677,199 = 19 ×
   118,167,292,669,372,009,667,667,221`.
 - **certificates**: every value past the bound; all 18 by BLS75
   Theorem 15, all re-verified — the family's first non-deterministic
   file.
-- **model**: from `a(18)`, median `8.52×10²⁵`; `k / median = 1.32`,
+- **model**: from `a(18)`, median `8.52×10²⁵`; `m / median = 1.32`,
   `E = 0.84`.
 - **when**: 4.16 h into the leg, the longest of the seven, which swept
-  `1.7305×10²³` to `1.1240×10²⁶` at `7.5×10²¹ k/s` over the `n = 19`
+  `1.7305×10²³` to `1.1240×10²⁶` at `7.5×10²¹ m/s` over the `n = 19`
   phase against `6.97×10²¹` calibrated.
 - **it bounds A125839 at the same index**, as every A125838 term does:
   `A125839(19) ≤ 1.1226×10²⁶`, and the value found three hours later
   came in 39× under it.
-- `k = 2² · 3 · 5 · 7² · 11 · 13 · 17 · 23 · 29 · 23,548,473,925,778,447`.
+- `m = 2² · 3 · 5 · 7² · 11 · 13 · 17 · 23 · 29 · 23,548,473,925,778,447`.
 - evidence: `evidence/A125838_a19_112258928035903409184283860.json`
 
 ### A125839 a(19) = 2,894,601,427,937,540,670,809,460 — 22:06
 
-- **run 19**: `r·k − 1` prime for `r = 3..19`; the 19th value is
-  `19·k − 1 = 54,997,427,130,813,272,745,379,739`.
-- **stopper**: `20·k − 1 = 57,892,028,558,750,813,416,189,199 = 19 ×
+- **run 19**: `k·m − 1` prime for `k = 3..19`; the 19th value is
+  `19·m − 1 = 54,997,427,130,813,272,745,379,739`.
+- **stopper**: `20·m − 1 = 57,892,028,558,750,813,416,189,199 = 19 ×
   3,046,948,871,513,200,706,115,221`.
 - 17 BLS75 Theorem 15 certificates, all past the bound, all re-verified.
-- **model**: from `a(18)`, median `1.11×10²⁴`; `k / median = 2.6`,
+- **model**: from `a(18)`, median `1.11×10²⁴`; `m / median = 2.6`,
   `E = 1.38`. Bound from A125838's `a(19)`: `≤ 1.12×10²⁶`.
 - **when**: 20 minutes into the leg, over an `n = 19` phase at
-  `2.24×10²¹ k/s` against `2.286×10²¹` calibrated.
-- `k = 2² · 3 · 5 · 7 · 11² · 13 · 17 · 421 · 9,743 · 62,832,890,531`.
+  `2.24×10²¹ m/s` against `2.286×10²¹` calibrated.
+- `m = 2² · 3 · 5 · 7 · 11² · 13 · 17 · 421 · 9,743 · 62,832,890,531`.
 - evidence: `evidence/A125839_a19_2894601427937540670809460.json`
 
 ### A125839 a(20) = 19,653,405,164,609,436,282,292,230 — 22:43
 
-- **run 20**: `20·k − 1 = 393,068,103,292,188,725,645,844,599`.
-- **stopper**: `21·k − 1 = 412,721,508,456,798,161,928,136,829 = 193 ×
+- **run 20**: `20·m − 1 = 393,068,103,292,188,725,645,844,599`.
+- **stopper**: `21·m − 1 = 412,721,508,456,798,161,928,136,829 = 193 ×
   2,138,453,411,693,254,725,016,253`.
 - 18 BLS75 Theorem 15 certificates, all re-verified.
-- **model**: from `a(19)`, median `1.01×10²⁶`; `k / median = 0.20`,
+- **model**: from `a(19)`, median `1.01×10²⁶`; `m / median = 0.20`,
   `E = 0.18` — early, only 6.8× `a(19)`.
 - **when**: 37 minutes after `a(19)`, over an `n = 20` phase at
-  `7.6×10²¹ k/s`. The filter then promoted to `n = 21`, where the prime
+  `7.6×10²¹ m/s`. The filter then promoted to `n = 21`, where the prime
   19 is forced for a `3..n` family (the closed-form thresholds in
   [README.md](README.md#the-mathematics-of-the-engine)) and the rate
   jumped 4× to `3.2×10²²`.
-- `k = 2 · 3 · 5 · 7 · 11 · 13 · 17 · 19 · 29 · 103,567 · 674,622,091,469`.
+- `m = 2 · 3 · 5 · 7 · 11 · 13 · 17 · 19 · 29 · 103,567 · 674,622,091,469`.
 - evidence: `evidence/A125839_a20_19653405164609436282292230.json`
 
-Across the five v4 finds `E` averages 0.60 and `k / median` runs 0.69,
+Across the five v4 finds `E` averages 0.60 and term / median runs 0.69,
 0.052, 1.32, 2.6, 0.20 — the same one-draw-at-a-time scatter, with a
 draw at a twentieth of its median (A088250's `a(18)`) and one at 2.6
 times it (A125839's `a(19)`) landing seven hours apart on the same
@@ -663,15 +667,18 @@ been claimed, and then been proved by certificate.
 | A164326 | a(19) | **`1.6541×10²⁵`** | n = 19 | a(18) |
 | A088651 | a(19) | **`2.1310×10²⁶`** | n = 19 | a(18) |
 
-In full: no `k < 11,438,501,323,067,410,989,827,430` has `r·k + 1` prime
-for all `r = 1..19`; none under `4,547,328,228,114,712,891,400,550` for
-`r = 2..20`; none under `112,400,724,549,314,962,454,754,060` has
-`r·k − 1` prime for all `r = 2..20`, none under
-`59,486,359,713,071,030,627,547,660` for `r = 3..21`, and none under
-`213,107,220,648,992,003,638,684,380` for `r = 1..19`; and no
-`k < 4,301,214,903,294,973,673,599,590` (respectively
-`16,541,507,292,376,691,333,919,210`) has `(2r−1)·k + 1` (respectively
-`(2r−1)·k − 1`) prime for all `r = 1..19`.
+In full, each in its entry's letters: no
+`k < 11,438,501,323,067,410,989,827,430` has `r·k + 1` prime for all
+`r = 1..19` (A088250); no
+`m < 4,547,328,228,114,712,891,400,550` has `k·m + 1` prime for all
+`k = 2..20` (A173750); no `m < 112,400,724,549,314,962,454,754,060` has
+`k·m − 1` prime for all `k = 2..20` (A125838), and none under
+`59,486,359,713,071,030,627,547,660` for `k = 3..21` (A125839); no
+`k < 213,107,220,648,992,003,638,684,380` has `r·k − 1` prime for all
+`r = 1..19` (A088651); and no `m < 4,301,214,903,294,973,673,599,590`
+(respectively `16,541,507,292,376,691,333,919,210`) has `(2k−1)·m + 1`
+(respectively `(2k−1)·m − 1`) prime for all `k = 1..19` (A164325,
+respectively A164326).
 
 ## The census
 
@@ -723,7 +730,7 @@ filter went straight from 15 to 17 at that period's close):
 
 | filter | line swept | wall clock | campaign rate | the engine at that filter |
 |---|---|---|---|---|
-| n = 15 (period 0) | `1.92×10²¹` | 210 s, pool sizing included | `9.2×10¹⁸ k/s` | `8.4×10¹⁸` (`SCOREM`) |
+| n = 15 (period 0) | `1.92×10²¹` | 210 s, pool sizing included | `9.2×10¹⁸ m/s` | `8.4×10¹⁸` (`SCOREM`) |
 | n = 17 | `4.42×10²²` | 10.2 min | `7.2×10¹⁹` | `6.5×10¹⁹` (paired, below) |
 | n = 18 | `2.88×10²²` | 73 s | `4.0×10²⁰` | `3.99×10²⁰` (`SCORE17`) |
 | n = 19 | `9.8×10²²` | 136 s | `7.2×10²⁰` | `7.2×10²⁰` (half of A088250's n = 18) |
@@ -733,7 +740,7 @@ A125839 (`a(16)` and `a(17)` both in period 0, so the filter went from
 
 | filter | line swept | wall clock | campaign rate | the engine at that filter |
 |---|---|---|---|---|
-| n = 16 (period 0) | `1.92×10²¹` | 3.4 min, pool sizing included | `9.4×10¹⁸ k/s` | `8.4×10¹⁸` (`SCOREM`) |
+| n = 16 (period 0) | `1.92×10²¹` | 3.4 min, pool sizing included | `9.4×10¹⁸ m/s` | `8.4×10¹⁸` (`SCOREM`) |
 | n = 18 | `5.77×10²¹` | 82 s | `7.0×10¹⁹` | `6.5×10¹⁹` (paired) |
 | n = 19 | `1.65×10²³` | 10.3 min | `2.7×10²⁰` | `2.4×10²⁰` (paired) |
 
@@ -742,7 +749,7 @@ by one filter the same way):
 
 | filter | line swept | wall clock | campaign rate | the engine at that filter |
 |---|---|---|---|---|
-| n = 16 (period 0) | `1.92×10²¹` | 65 s, pool sizing included | `3.0×10¹⁹ k/s` | `3.07×10¹⁹` (`SCORE`) |
+| n = 16 (period 0) | `1.92×10²¹` | 65 s, pool sizing included | `3.0×10¹⁹ m/s` | `3.07×10¹⁹` (`SCORE`) |
 | n = 17 | `6.73×10²²` | 15.4 min | `7.3×10¹⁹` | `6.5×10¹⁹` (paired, as A125839's n = 18) |
 | n = 18 | `7.88×10²²` | 194 s | `4.1×10²⁰` | `3.99×10²⁰` (`SCORE17`) |
 | n = 20 | `3.17×10²⁴` | 17.4 min | `3.0×10²¹` | `2.8×10²¹` (A088250 n = 19, Measurement 7) |
@@ -751,7 +758,7 @@ A164326 (the odd multipliers, a −1 family):
 
 | filter | line swept | wall clock | campaign rate | the engine at that filter |
 |---|---|---|---|---|
-| n = 15 (period 0) | `1.92×10²¹` | 145 s, pool sizing included | `1.3×10¹⁹ k/s` | `1.25×10¹⁹` (Measurement 7) |
+| n = 15 (period 0) | `1.92×10²¹` | 145 s, pool sizing included | `1.3×10¹⁹ m/s` | `1.25×10¹⁹` (Measurement 7) |
 | n = 16 | `9.6×10²¹` | 236 s | `4.1×10¹⁹` | `3.75×10¹⁹` (Measurement 7, on the +1 twin) |
 | n = 17 | `8.84×10²²` | 454 s | `1.95×10²⁰` | `1.82×10²⁰` (paired against A088250's n = 17: 0.49×) |
 
@@ -759,7 +766,7 @@ A164325 (the odd multipliers, a +1 family):
 
 | filter | line swept | wall clock | campaign rate | the engine at that filter |
 |---|---|---|---|---|
-| n = 16 (period 0) | `1.92×10²¹` | 49 s, pool sizing included | `3.9×10¹⁹ k/s` | `3.75×10¹⁹` (Measurement 7) |
+| n = 16 (period 0) | `1.92×10²¹` | 49 s, pool sizing included | `3.9×10¹⁹ m/s` | `3.75×10¹⁹` (Measurement 7) |
 | n = 17 | `3.17×10²³` | 27.5 min | `1.93×10²⁰` | `1.82×10²⁰` (paired) |
 | n = 18 | `1.94×10²³` | 368 s | `5.3×10²⁰` | `4.9×10²⁰` (paired) |
 | n = 19 | `2.80×10²⁴` | 25.7 min | `1.82×10²¹` | `1.8×10²¹` (paired, OPTIMIZATION_LOG.md) |
@@ -776,7 +783,7 @@ phases from the evidence timestamps and the checkpoint):
 
 | filter | line swept | wall clock | campaign rate | the engine at that filter |
 |---|---|---|---|---|
-| n = 17 (from the v2 cursor) | `1.97×10²⁴` | 2.73 h | `2.0×10²⁰ k/s` | `1.85×10²⁰` (v3 harness) / `1.95×10²⁰` (the v2 campaign) |
+| n = 17 (from the v2 cursor) | `1.97×10²⁴` | 2.73 h | `2.0×10²⁰ m/s` | `1.85×10²⁰` (v3 harness) / `1.95×10²⁰` (the v2 campaign) |
 | n = 18 | `7.54×10²⁴` | 3.88 h | `5.4×10²⁰` | `4.9–5.3×10²⁰` (A164325's n = 18, paired) |
 | n = 19 | `6.44×10²⁴` | 56 min | `1.9×10²¹` | `1.8×10²¹` (A164325's n = 19, paired) |
 
@@ -789,11 +796,11 @@ something):
 | family, filter | line swept | wall clock | campaign rate | calibrated beforehand |
 |---|---|---|---|---|
 | A088651 n = 19 (after `a(18)`) | `6.105×10²⁵` | 32.5 min | `3.13×10²² k/s` | `2.91×10²²` (measured after the leg) |
-| A088250 n = 18 | `7.94×10²⁴` | 9.2 min | `1.44×10²²` | `1.385×10²²` |
-| A125838 n = 19 | `1.1209×10²⁶` | 4.16 h | `7.49×10²¹` | `6.97×10²¹` |
-| A125839 n = 19 | `2.72×10²⁴` | 20.3 min | `2.24×10²¹` | `2.286×10²¹` |
-| A125839 n = 20 | `1.676×10²⁵` | 36.8 min | `7.58×10²¹` | — (one filter on from the calibration) |
-| A125839 n = 21 | `3.983×10²⁵` | 21.0 min | `3.15×10²²` | `2.89×10²²` (measured after the leg) |
+| A088250 n = 18 | `7.94×10²⁴` | 9.2 min | `1.44×10²² k/s` | `1.385×10²²` |
+| A125838 n = 19 | `1.1209×10²⁶` | 4.16 h | `7.49×10²¹ m/s` | `6.97×10²¹` |
+| A125839 n = 19 | `2.72×10²⁴` | 20.3 min | `2.24×10²¹ m/s` | `2.286×10²¹` |
+| A125839 n = 20 | `1.676×10²⁵` | 36.8 min | `7.58×10²¹ m/s` | — (one filter on from the calibration) |
+| A125839 n = 21 | `3.983×10²⁵` | 21.0 min | `3.15×10²² m/s` | `2.89×10²²` (measured after the leg) |
 
 Every one is inside 10% of the engine's rate for its filter, on both
 sides of the line — the calibration is a one-second sample and the
@@ -841,12 +848,12 @@ rates below, and none of them is worth a night any more.
 | family | frontier (all this project's) | open next | searched empty below | resumes at | rate there | median from the bound |
 |---|---|---|---|---|---|---|
 | A088250 | **a(18) = 11,260,441,017,037,317,719,293,680** | a(19) | `1.1438×10²⁵` | n = 19 | `2.88×10²² k/s` | `1.2×10²⁸` |
-| A173750 | **a(18) = a(19) = 147,316,106,448,079,863,444,150** | a(20) | `4.5473×10²⁴` | n = 20 | `2.90×10²²` | `1.3×10²⁸` |
-| A125838 | **a(19) = 112,258,928,035,903,409,184,283,860** | a(20) | `1.1240×10²⁶` | n = 20 | `2.90×10²²` | `1.3×10²⁸` |
-| A125839 | **a(20) = 19,653,405,164,609,436,282,292,230** | a(21) | `5.9486×10²⁵` | n = 21 | `2.89×10²²` | `1.4×10²⁸` |
-| A164325 | **a(18) = 511,721,589,397,871,969,516,400** | a(19) | `4.3012×10²⁴` | n = 19 | `1.84×10²²` | `8.0×10²⁷` |
-| A164326 | **a(18) = 9,606,289,803,039,023,735,440,800** | a(19) | `1.6541×10²⁵` | n = 19 | `1.83×10²²` | `8.1×10²⁷` |
-| A088651 | **a(18) = 152,058,443,198,637,095,680,139,580** | a(19) | `2.1310×10²⁶` | n = 19 | `2.91×10²²` | `1.3×10²⁸` |
+| A173750 | **a(18) = a(19) = 147,316,106,448,079,863,444,150** | a(20) | `4.5473×10²⁴` | n = 20 | `2.90×10²² m/s` | `1.3×10²⁸` |
+| A125838 | **a(19) = 112,258,928,035,903,409,184,283,860** | a(20) | `1.1240×10²⁶` | n = 20 | `2.90×10²² m/s` | `1.3×10²⁸` |
+| A125839 | **a(20) = 19,653,405,164,609,436,282,292,230** | a(21) | `5.9486×10²⁵` | n = 21 | `2.89×10²² m/s` | `1.4×10²⁸` |
+| A164325 | **a(18) = 511,721,589,397,871,969,516,400** | a(19) | `4.3012×10²⁴` | n = 19 | `1.84×10²² m/s` | `8.0×10²⁷` |
+| A164326 | **a(18) = 9,606,289,803,039,023,735,440,800** | a(19) | `1.6541×10²⁵` | n = 19 | `1.83×10²² m/s` | `8.1×10²⁷` |
+| A088651 | **a(18) = 152,058,443,198,637,095,680,139,580** | a(19) | `2.1310×10²⁶` | n = 19 | `2.91×10²² k/s` | `1.3×10²⁸` |
 
 The rates are each family's own next launches, calibrated on its real
 checkpoint after the campaigns stopped (about a second of device each,
@@ -885,10 +892,11 @@ strong probable-prime chain. The searched-empty claim is sound there for
 the reason the sections above give: a composite that passes the chain
 can only *lengthen* a run, never hide one, so a true run of `n` would
 have passed every test and been claimed — and then proved by certificate
-(BLS75 Theorem 1 on `N − 1 = m·k` for the +1 families, Theorem 15 on
-`N + 1 = m·k` for the −1 ones, `k` factored once, subproofs for any
-factor past the bound, every proof re-verified before the evidence file
-is written). The census above the crossing is a count of probable-prime
+(BLS75 Theorem 1 on `N − 1` for the +1 families, Theorem 15 on `N + 1`
+for the −1 ones, each the multiplier times the term; the term factored
+once, subproofs for any factor past the bound, every proof re-verified
+before the evidence file is written). The census above the crossing is
+a count of probable-prime
 runs; the `[NEAR]` line is a health check on the cheap legs; only a
 discovery is certified. Where each campaign stands is read with
 `python launch.py --status --family <name>`, which touches nothing.
@@ -909,7 +917,7 @@ followed, and over the 27 searched ones (the A173750 rider is not scored:
 it was never searched for) `E` averages **1.08**, against the `Exp(1)`
 mean of 1 the model would have if its intensity were exactly right — the
 same answer G11 gets on the 46 published terms (0.86), from a completely
-disjoint set of draws. `k / median` over the same 27 runs **0.008 to
+disjoint set of draws. Term / median over the same 27 runs **0.008 to
 7.9**, geometric mean 0.75: the intensity is right and the individual
 draws are noisy over three orders of magnitude, exactly as the census
 says. That is the whole claim the odds model makes, and it is the reason

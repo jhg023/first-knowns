@@ -2,13 +2,13 @@
 
 SCORE convention: `python score.py` prints a score ONLY if every
 correctness gate is green and the frozen work fingerprint -- exact
-survivor count plus xor checksum of the surviving j -- reproduces
-exactly. Skipped work scores 0; broken mathematics scores 0.
+survivor count plus xor checksum of the surviving quotients k/W --
+reproduces exactly. Skipped work scores 0; broken mathematics scores 0.
 
 **Three frozen shapes.** All are measured with the one production engine,
 all are checked on every run.
 
-| name | filter | wheel | window (j) | k-line window | fingerprint (count / xor) | frozen |
+| name | filter | wheel | window (k/W) | k-line window | fingerprint (count / xor) | frozen |
 |------|--------|-------|------------|----------------|---------------------------|--------|
 | `SCORE` | n = 10 | 2,310 | [1e12, +2^32) | [2.31e15, +9.92e12) | 1,213 / 1,003,170,806,905 | 2026-08-18, v1 |
 | `SCORE12` | n = 12 | 30,030 | [6e11, +2^32) | [1.80e16, +1.29e14) | 292 / 2,752,794,123 | 2026-08-18, v1 |
@@ -172,10 +172,11 @@ a(13) median 2.14e21 is about **8.8 hours** and its P90 1.09e22 about
 ## v4 (2026-08-19, RTX 4090): the fold
 
 The engine folds its first sieve prime into candidate generation
-(OPTIMIZATION_LOG.md v4): j = 17u + r over the five surviving offsets at
-n = 13, identical survivor stream (G17), same kernels walking a line
-3.4x thinner. **Paired and interleaved at the campaign shape (n = 13,
-q2 = 262144, 2^41-j window, streams compared every round):
+(OPTIMIZATION_LOG.md v4): k/W enumerated one residue class mod 17 at a
+time, over the five surviving offsets at n = 13, identical survivor
+stream (G17), same kernels walking a line 3.4x thinner. **Paired and
+interleaved at the campaign shape (n = 13, q2 = 262144, a 2^41 window of
+k/W, streams compared every round):
 v4/v3 = 2.387x (min 2.138, max 2.439)** -- 2.31e17 k/s folded against
 9.64e16 k/s unfolded on an idle machine, 4.3 s of device per 1e18 of
 k-line. Constants re-swept after the change: NS derivation confirmed
@@ -189,8 +190,9 @@ inverted to 0.979x and is closed.
 | `SCORE13` (n = 13) | 214,673,527,566 | ~0.94 launches per offset -- eager, no double-buffer overlap -- and still 2.2x the pre-fold capture. Engine A/Bs are judged on campaign-shaped windows now (the paired 2.387x above) |
 
 The fold also extends the enforced reach 17x, to k = 2.04e24 (the u64
-quantity on the device is u, not j), which moves a(14) from "past the
-ceiling at its median" to E = 4.41 (98.8%) inside the reach. At the v4
+quantity on the device is floor(k/(17W)), not k/W), which moves a(14)
+from "past the ceiling at its median" to E = 4.41 (98.8%) inside the
+reach. At the v4
 rate the remaining a(13) tail (cursor k = 1.10e22 to P95-ish depths) is
 hours, and the a(14) median 1.68e23 is about **8.5 days** of sweep --
 the P90 8.55e23 about **43 days** -- where the pre-fold engine would

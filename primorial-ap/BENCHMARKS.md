@@ -14,8 +14,8 @@ that breaks correctness fails the gates. Either way it scores 0.
 |---|---|
 | term | n = 16 |
 | sieve depth | 65536 (2¹⁶ — the *engine default*, deliberately not the campaign's 8192) |
-| window | 1.611×10¹⁰ of p-line from p = 4.0×10¹³ |
-| launch size | 2²⁵ wheel periods (~1.0×10⁹ of p-line) |
+| window | 1.611×10¹⁰ of p₁-line from p₁ = 4.0×10¹³ |
+| launch size | 2²⁵ wheel periods (~1.0×10⁹ of p₁-line) |
 | **fingerprint** | **192 survivors, xor checksum 4046714554** |
 
 The shape is pinned to the engine default rather than to the campaign
@@ -28,7 +28,7 @@ explaining why.
 
 ## SCORE ledger
 
-| date | engine | SCORE (Mp/s) | fingerprint | note |
+| date | engine | SCORE (Mp₁/s) | fingerprint | note |
 |------|--------|--------------|-------------|------|
 | 2026-08-20 | v1 | **5,163** | 192 / 4046714554 | first gated engine; chunked marking kernel, Barrett, mod-30 bitmap |
 | 2026-08-20 | v1 | 5,095 | 192 / 4046714554 | re-run after the huntlib extraction — same fingerprint, 1.3% apart |
@@ -59,7 +59,7 @@ OPTIMIZATION_LOG #2 for why that word is load-bearing. Absolute device
 rates on this desktop swing ±15–30% with ambient load; the ratios are
 the stable quantity.
 
-| sieve depth | device p/s | survivors / unit | host cores | workers |
+| sieve depth | device p₁/s | survivors / unit | host cores | workers |
 |-------------|-----------|------------------|-----------|---------|
 | 2048 | 5.2×10¹¹ | 4.37×10⁻⁶ | 38.8 | impossible |
 | 4096 | 2.4×10¹¹ | 1.09×10⁻⁶ | 4.5 | 8 |
@@ -75,25 +75,25 @@ its host demand.
 
 **End-to-end, as the campaign actually runs it** (depth 8192, 3 workers,
 64 launches per checkpoint segment, classification overlapped one
-segment behind the device — OPTIMIZATION_LOG #8): **2.07×10¹¹ p/s**,
-measured over a bounded production run to p = 6.4×10¹², **34.7× v1's
+segment behind the device — OPTIMIZATION_LOG #8): **2.07×10¹¹ p₁/s**,
+measured over a bounded production run to p₁ = 6.4×10¹², **34.7× v1's
 end-to-end** at 96% of the device rate.
 
 ## What the campaign actually cost
 
 The three-term campaign of 2026-08-20/21 is now the real check on that
 number, and it is the one measurement here nobody chose the shape of.
-Each term is a fresh sweep from the floor — the differences P(n) differ,
-so no term's coverage carries over — which means the p-line adds:
+Each term is a fresh sweep from the floor — the differences prime(n)#
+differ, so no term's coverage carries over — which means the p₁-line adds:
 
-| stage | p-line swept | predicted at 2.07×10¹¹ | actual, wall clock |
+| stage | p₁-line swept | predicted at 2.07×10¹¹ | actual, wall clock |
 |-------|--------------|------------------------|--------------------|
 | a(16) | 1.169×10¹⁴ | 9.4 min | 21 min (includes the canary rediscovery and the first pool ramp) |
 | a(17) | 2.097×10¹⁵ | 2.8 h | 3.1 h |
 | a(18) | 1.404×10¹⁶ | 18.8 h | 19.9 h |
 | **total** | **1.626×10¹⁶** | **21.8 h** | **23.4 h** |
 
-**1.93×10¹¹ p/s end-to-end over the whole campaign — 93% of the
+**1.93×10¹¹ p₁/s end-to-end over the whole campaign — 93% of the
 pre-stated 2.07×10¹¹.** The missing 7% is everything the bounded
 measurement did not contain: the canary rediscovery of a(13) before the
 first segment, three pool ramps and three fresh sieve builds, the
@@ -119,7 +119,7 @@ correct find). A rate measured on 6.4×10¹² of line predicted a
 
 ## What each term costs
 
-At 2.07×10¹¹ p/s end-to-end, against the model's stated quartiles. The
+At 2.07×10¹¹ p₁/s end-to-end, against the model's stated quartiles. The
 first three rows are settled and carry what actually happened:
 
 | term | Q1 | median | Q3 | P90 | outcome |
@@ -134,7 +134,7 @@ v1's table said a(16) was an afternoon, a(18) five weeks, and a(19) out
 of reach without a faster engine. The faster engine found three terms in
 a day: **a(19) is a three-week hunt at the median**, and a(20) is the term
 that depends on optimization work that has not been done (or on patience).
-The enforced ceiling is p = 10²⁶, which is the campaign's last rung and is
+The enforced ceiling is p₁ = 10²⁶, which is the campaign's last rung and is
 not a depth anything here will reach.
 
 Two costs change at a(19) and neither is throughput. The values pass

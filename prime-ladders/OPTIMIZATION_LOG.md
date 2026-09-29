@@ -11,24 +11,26 @@ than the one the kernel was tuned on.
 ## v1 — square-ladders' engine, re-keyed to the primes (2026-09-02)
 
 **What it is.** square-ladders' v5 GPU engine with `killed_residues(q, n)`
-replaced by `killed_residues(q, n, s) = { -s·prime(i)⁻¹ mod q : i ≤ n,
-prime(i) ≠ q }`, and one addition: a window may start inside period 0
-(`k_min`), because both of this project's frontiers and the modelled
-medians of the next two terms of each family sit inside the first
-`6.15×10¹⁷` of line. The kernel, the three-level CRT wheel, the compaction
-design and the `(k, off)` representation are unchanged and are documented
-in square-ladders' log; nothing below re-measures what that log already
-measured, except where this problem's density changes the answer.
+replaced by `killed_residues(q, n, s)`, the set `{ ∓prime(i)⁻¹ mod q :
+i ≤ n, prime(i) ≠ q }` for the forms `prime(i)·k ± 1` (upper sign
+A084700, lower A084701), and one addition: a window may start inside
+period 0 (`k_min`), because both of this project's frontiers and the
+modelled medians of the next two terms of each family sit inside the
+first `6.15×10¹⁷` of line. The kernel, the three-level CRT wheel, the
+compaction design and the `(k, off)` representation are unchanged and
+are documented in square-ladders' log; nothing below re-measures what
+that log already measured, except where this problem's density changes
+the answer.
 
 **Design-time rules applied before a line was written:**
 
 - **2.7, carry `(k, off)`.** Inherited. The enforced ceiling is the
-  primality-proof bound `k_ceil(n, s) = (3.317×10²⁴ − 1 − s) / prime(n)`,
+  primality-proof bound `k_ceil(n, s)`, `(3.317×10²⁴ − 1 ∓ 1) / prime(n)`,
   `7.7×10²²` at n = 14, and no machine word appears in it (G10, tight to
   one k).
 - **Choose the wheel that fits at every parameter the battery runs.** The
   same (23], (37], (47] wheel serves both signs and every filter the
-  battery runs, because `w(q,n,s)` is sign-independent and the tables only
+  battery runs, because `w(q,n,±1)` is sign-independent and the tables only
   shrink as n grows. What did *not* fit is recorded under "ceilings found".
 - **Measure the campaign, not just the engine (5c).** The A/B below is
   over wheel *and* sieve depth, priced in device time and host
@@ -38,7 +40,7 @@ measured, except where this problem's density changes the answer.
 ### Measured during the v1 build
 
 **1. Wheel and sieve depth, paired and interleaved (3 rounds, n = 14,
-s = +1, from `k = 7×10¹⁷`). KEPT: three levels, sieve 65536.**
+sign +1, from `k = 7×10¹⁷`). KEPT: three levels, sieve 65536.**
 
 | configuration | line rate (median) | [min, max] | candidates/s | survivors per unit line | ratio |
 |---|---|---|---|---|---|
@@ -153,7 +155,7 @@ result, and the first pass after a campaign has run should start here:
 | **Launch size** `CAND_PER_LAUNCH` 2³⁰ → 2³¹ (52 → 104 third-level residues per launch) | ~1.01–1.03× | 10.4 ms launches; the flat 2.6% square-ladders measured was at 32 ms launches |
 | **Re-sweep `LIT_SURV` / `K2_SURV`** on this survival curve (LIT = 10 primes, K2 = 45 here against 7 and 25 there) | unknown; both directions | the curve is steeper: w = n from the first sieve prime |
 | **Sieve 2¹⁷** | −7.1% device, −58% host | measured (1); take it if the host ever binds |
-| **A084700 past the proof ceiling.** `N − 1 = prime(i)·k` is factored by construction, so BLS75 Theorem 1 proves every value once k is factored (a 23-digit k factors in milliseconds). Raises the ceiling from `5.4×10²²` | opens a(18): the model puts it below the current ceiling with only ~28% probability | dickson-ladders built exactly this path; A084701 cannot use it (its structure is on `N + 1`, an N+1 test huntlib does not have). **DONE in v3, below** — the first campaign hit exactly this ceiling |
+| **A084700 past the proof ceiling.** The value less one, `prime(i)·k`, is factored by construction, so BLS75 Theorem 1 proves every value once k is factored (a 23-digit k factors in milliseconds). Raises the ceiling from `5.4×10²²` | opens a(18): the model puts it below the current ceiling with only ~28% probability | dickson-ladders built exactly this path; A084701 cannot use it (its structure is on the value plus one, a plus-one test huntlib does not have). **DONE in v3, below** — the first campaign hit exactly this ceiling |
 | **Two campaigns at once** on one device (both families) | 2× wall-clock efficiency of the operator's time, ~1× device | the kernel is the same module; the two would time-slice the GPU |
 
 **Do not rebuild:** everything in square-ladders' rejected list (its
@@ -173,7 +175,7 @@ identical to v1's: the same wheel, the same sieve depth, the same stream.
 
 All numbers below are from harnesses importing the engine and sweeping the
 frozen `SCORE` window (period 1, the first 3,328 third-level residues, n =
-14, s = +1) with the fingerprint `34281 / 714767005960532266` checked on
+14, sign +1) with the fingerprint `34281 / 714767005960532266` checked on
 **every** run; configurations were measured interleaved and the ratio is
 the claim (OPTIMIZATION.md rule 3). Absolute rates drifted ~10% between
 runs on this desktop; ratios inside a run held to 1–2%.
@@ -335,16 +337,17 @@ measured 1.004 / 0.965 against 0.5; `TAIL_FILL` 2^18 / 2^20 flat.
 
 **Not done, priced, and the biggest thing left — a wheel to 53 by sieving
 k/2310.** Every candidate at n ≥ 14 is a multiple of 2310, so the engine
-can run on k' = k/2310 with kill sets K'(q) = 2310⁻¹·K(q) mod q. That
-divides every wheel bound by 2310: W1' = 13·17·19·23·29·31 = 8.7e7 (u32,
-856,800 residues), W2' = 37·41·43·47·53 = 1.6e8 (u32), W' = 1.4e16 < 2^63,
-so 53 fits where today nothing does (adding it directly puts W2 at 1.5e11
-and W at 3.3e19, past both u32 and 2^63). 53 kills 14 of 53 residues:
+can run on the quotient k/2310 (`k'` in the code) with kill sets
+K'(q) = 2310⁻¹·K(q) mod q. That divides every wheel bound by 2310:
+W1' = 13·17·19·23·29·31 = 8.7e7 (u32, 856,800 residues),
+W2' = 37·41·43·47·53 = 1.6e8 (u32), W' = 1.4e16 < 2^63, so 53 fits
+where today nothing does (adding it directly puts W2 at 1.5e11 and W at
+3.3e19, past both u32 and 2^63). 53 kills 14 of 53 residues:
 **1.36x fewer candidates per unit of line**, the prefix still five groups
 (59·61·67, then pairs), so about 1.35x end to end. Costs: a k-period of
 3.3e19 (2–3 minutes of over-sweep at a find, against six seconds now),
 new SCORE/SCOREM fingerprints (the period-denominated 2L/1L/10 shapes
-keep theirs), and every wheel gate re-derived in k' space. Not started
+keep theirs), and every wheel gate re-derived in `k'` space. Not started
 tonight; it is the next engine version, not a constant.
 
 **Also not done:** CRT-combining the tail rounds' first primes (the tail is
@@ -396,12 +399,12 @@ made them due.
 - `pladder_search.k_proof(n, s)` is the old formula — the **proof
   crossing**, where the classification stops being a proof — and
   `k_ceil(n, +1) = MR_VALID_BELOW = 3.317×10²⁴` on `k` itself: past the
-  crossing a discovery is proved by BLS75 Theorem 1 on
-  `N − 1 = prime(i)·k`, and with `k` under the bound every prime factor of
+  crossing a discovery is proved by BLS75 Theorem 1 on the value less
+  one, `prime(i)·k`, and with `k` under the bound every prime factor of
   `k` is a deterministic-MR prime, so the certificate is one level deep
   (huntlib.certificate needs no subproof). A084701's ceiling stays at its
-  crossing: its structure is on `N + 1`. 61× more line for A084700; the
-  model's `P(a(18))` goes from 24% to **99.4%**.
+  crossing: its structure is on the value plus one. 61× more line for
+  A084700; the model's `P(a(18))` goes from 24% to **99.4%**.
 - `launch.certify_run` factors `k` once (huntlib's bounded trial
   division, rho and ECM, then sympy's `factorint` on any 25-digit
   remainder — the bound `factor_witness` already accepts on the stopper)
@@ -413,13 +416,14 @@ made them due.
 - G10 rewritten (crossing tight to one `k` per `(n, s)`, both ceilings
   pinned); a certificate drill in the selftest (the frontier's 13 values
   by the deterministic route, a value past the bound by Theorem 1,
-  re-verified, refused for `N + 2` and as a bare MR claim); one
+  re-verified, refused for the value plus 2 and as a bare MR claim); one
   `[MILESTONE]` line per filter when the sweep crosses `k_proof`.
 
 ### 2. The wheel in unit space (device side; `SCORE`/`SCOREM` re-frozen, `SCORE18` added)
 
-- `killed_residues(q, n, s, unit)` is the set of `k' = k / unit` that `q`
-  kills, `unit⁻¹ · K(q, n, s) mod q`; a prime of the unit kills nothing.
+- `killed_residues(q, n, s, unit)` is the set of residues of the quotient
+  `k / unit` (`k'` in the code) that `q` kills,
+  `unit⁻¹ · K(q, n, ±1) mod q`; a prime of the unit kills nothing.
   `assert_unit` refuses a unit that is not forced at the filter — the one
   way this could thin the line. The engine's wheels, tables, folds and
   offsets are in `k'`; `self.W`, the survivors and every bound check are
@@ -473,7 +477,7 @@ every experiment. Ratios are against the v2 value in the same run.
 | `tpb` | 128 | 64, 256 | keep | 0.997, 0.976 | — |
 
 Final, same harness, v3 geometry and constants against v2's on the unit
-wheel: **1.358× at n = 18**, 0.933× at n = 14, 0.937× at n = 12 (s = −1;
+wheel: **1.358× at n = 18**, 0.933× at n = 14, 0.937× at n = 12 (sign −1;
 the geometry alone is 1.123× there and LIT gives it back). With the
 wheel's 1.291× that is the 1.70× above.
 
@@ -527,7 +531,7 @@ configuration at every opening" were written from this pass.
 ### 1. The pool was 2× short at the opening filter, and nothing said so
 
 Measured with the campaign's own plumbing (engine → `_submit` → pool) on
-period 0 at n = 12, s = −1, unit 210, 25 s per run:
+period 0 at n = 12, sign −1, unit 210, 25 s per run:
 
 | pool | device | survivors produced | classified | backlog growth |
 |---|---|---|---|---|
@@ -564,7 +568,7 @@ fingerprint identical across every variant of every filter; `CPT` 32 was
 also run at n ≥ 17 and never won (0.65–0.85×). Ratios are to the shipped
 0.28 at the same filter:
 
-| n | s, unit | 0.28 (shipped) | 0.19 | 0.12 | kept |
+| n | sign, unit | 0.28 (shipped) | 0.19 | 0.12 | kept |
 |---|---|---|---|---|---|
 | 12 | −1, 210 | `3.12×10¹⁶ k/s` | 1.185 | **1.192** | 0.12 |
 | 13 | −1, 210 | `5.68×10¹⁶` | 1.132 | **1.258** | 0.12 |

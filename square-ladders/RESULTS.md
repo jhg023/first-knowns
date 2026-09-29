@@ -68,15 +68,15 @@ the champion reaches exactly 15, and its 16th value is composite.
 
 ## What a find will look like
 
-A survivor `k` with run length `r` is classified against the live frontier
+A survivor `k` with run length `n` is classified against the live frontier
 (`event_kind` in `launch.py`, drilled in the selftest):
 
 | run | class | what happens |
 |-----|-------|--------------|
-| `r > frontier` | **DISCOVERY** | settles `a(frontier+1) … a(r)` at once; verified three ways plus a factor witness for the composite that stops the run; one evidence JSON; logged once |
-| `r == frontier` | **NEAR** | one condition short of the open term — one line with its campaign ordinal, verified by the cheap legs as an engine health check, never evidenced |
-| `8 ≤ r < frontier` | **CENSUS** | counted in the `[STATUS]` heartbeat, never narrated |
-| `r < 8` | — | not even counted |
+| `n > frontier` | **DISCOVERY** | settles `a(frontier+1) … a(n)` at once; verified three ways plus a factor witness for the composite that stops the run; one evidence JSON; logged once |
+| `n == frontier` | **NEAR** | one condition short of the open term — one line with its campaign ordinal, verified by the cheap legs as an engine health check, never evidenced |
+| `8 ≤ n < frontier` | **CENSUS** | counted in the `[STATUS]` heartbeat, never narrated |
+| `n < 8` | — | not even counted |
 
 Because the conditions nest, a single find can settle several terms at
 once, each logged once and all evidenced under the first. The odds of that
@@ -98,9 +98,9 @@ finds, each settling exactly one term, none riding on another.
 3. **A re-derivation by different machinery** — the CPU engine, which
    marks the dense `k` line and uses no wheel at all, must agree that the
    `k` survives the sieve.
-4. **A factor witness for the stopper.** The value at `i = r+1` must be
+4. **A factor witness for the stopper.** The value at `i = n+1` must be
    composite, with a factor exhibited, because that is what bounds the
-   claim to exactly `r`. Trial division, then bounded rho, then bounded
+   claim to exactly `n`. Trial division, then bounded rho, then bounded
    ECM — nothing in the path runs unbounded.
 
 Any disagreement between the legs is an engine bug by definition and halts
@@ -115,8 +115,8 @@ Counts per run length live in the checkpoint and in the 30-second
 --status` prints them. The campaign's final tally, over the line above
 `a(17)` where the filter stood at `n = 18`, against what the same
 Bateman-Horn intensity predicts once the sieve's own retention is folded
-in (a run-`r` survivor also needs its values at `i = r+1 … 18` free of
-factors below 65536):
+in (a survivor also needs its values past the end of its run, up to
+`i = 18`, free of factors below 65536):
 
 | run | counted | model | ratio |
 |-----|---------|-------|-------|
@@ -136,11 +136,11 @@ This is the census earning its keep. It is not decoration: for most of a
 day `a(18)` was overdue and the only question that mattered was whether
 the engine could still find one, and this table answers it without
 stopping the hunt. Read as conditional probabilities it is sharper still —
-the fraction of run-`r` survivors that go on to reach `r+1` is 0.403,
-0.399, 0.398, 0.383, 0.395, 0.417, 0.347, 0.289, 0.371 for `r = 8 … 16`,
-flat across four orders of magnitude of sample size and sitting on the
-0.392 the model predicts. An engine losing long runs cannot produce that
-table; a wrong intensity cannot either.
+the fraction of survivors at each run length that go on one rung further
+is 0.403, 0.399, 0.398, 0.383, 0.395, 0.417, 0.347, 0.289, 0.371 for run
+lengths 8 … 16, flat across four orders of magnitude of sample size and
+sitting on the 0.392 the model predicts. An engine losing long runs cannot
+produce that table; a wrong intensity cannot either.
 
 ## How `a(18)` was actually paid for
 

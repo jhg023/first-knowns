@@ -6,8 +6,10 @@
 > machine-verified and human-reviewed. That audit trail is deliberate and
 > it stays.
 
-**A130003** asks for the least `m` such that `m + 4^k` is prime for every
-`k = 1..n`, and **A110096** asks the same question of `2^k`. They are
+**A130003** asks for the least `m` such that `4^k + m` is prime for every
+`k = 1..n`, and **A110096** asks the same question of the powers of 2:
+the least `k` such that `k + 2^i` is prime for every `i = 1..n` (its name
+gives no letters; `k` and `i` are the ones its own programs use). They are
 *shift ladders*: one unknown, `n` conditions that differ only by an
 additive constant, and a killed set that is a **geometric orbit** rather
 than the quadratic one of this repo's square and Dickson ladders. Eighteen
@@ -39,7 +41,7 @@ integers, all values, the certificates and the factor witnesses are in
 [RESULTS.md](RESULTS.md).
 
 **Status: PAUSED — open to others.** A130003 is paused at
-`m = 2.86×10²⁰` with `a(22)` open, A110096 at `m = 5.64×10²³` with `a(20)`
+`m = 2.86×10²⁰` with `a(22)` open, A110096 at `k = 5.64×10²³` with `a(20)`
 open. The campaign that found `a(21)` sustained **`1.13×10¹⁵ m/s`** over
 67.9 hours, which is `7.97×` the campaign that found this project's first
 two terms. Two optimization passes got it there. The first
@@ -64,7 +66,7 @@ rebuild from 20 s to 11 s. The full battery is green (33 gates and drills)
 and all five benchmark shapes reproduce a fingerprint.
 
 **Both campaigns on that engine landed a term.** A110096's found `a(19)` in
-10.2 hours, sweeping `5.6×10²³` of line at `1.53×10¹⁹ m/s` — 9.7× the
+10.2 hours, sweeping `5.6×10²³` of line at `1.53×10¹⁹ k/s` — 9.7× the
 campaign that found `a(17)` and `a(18)` three days before, and 1.43× what
 was projected for it. A130003's resumed from `m = 8.95×10¹⁸` and found
 `a(21)` at `2.86×10²⁰`, sweeping `2.77×10²⁰` of line in 67.9 hours at
@@ -89,17 +91,18 @@ a floor (see [the odds model](#the-odds-model)).
 
 ## The problem
 
-    A(b, n) = least m >= 1 with m + b^k prime for all k = 1..n
+    A130003(n) = least m >= 1 with 4^k + m prime for all k = 1..n
+    A110096(n) = least k >= 1 with k + 2^i prime for all i = 1..n
 
-The conditions nest, so `A(b, ·)` is non-decreasing and a single lucky `m`
-can settle several terms at once — which is exactly what happened at
-A130003's `a(10) = 4503` (it cleared `k = 11, 12, 13, 14` for free) and at
+The conditions nest, so each sequence is non-decreasing and a single lucky
+value can settle several terms at once — which is exactly what happened at
+A130003's `a(10) = 4503` (it settled `a(11)` through `a(14)` for free) and at
 five separate places in A110096.
 
 | | A130003 | A110096 |
 |---|---|---|
 | Sequence | [A130003](https://oeis.org/A130003) (`nonn`, `hard`, `more`) | [A110096](https://oeis.org/A110096) (`nonn`, `more`) |
-| Base | `b = 4` | `b = 2` |
+| Base | 4 | 2 |
 | Published terms | `a(1)..a(18)` | `a(1)..a(16)` |
 | Frontier | `a(18) = 1,158,174,141,556,287` | `a(16) = 143,924,005,810,811,655` |
 | Found by | Jens Kruse Andersen, **Jun 08 2007** | Bert Dobbelaere, Apr 24 2021 |
@@ -110,9 +113,10 @@ five separate places in A110096.
 | Upper bound | **none published, at any open n** | **none published, at any open n** |
 
 Why they are open rather than merely unfinished: the density of qualifying
-`m` falls like `1/(log m)ⁿ`, so each extra condition costs a further factor
-of roughly `log m` worth of line. Both are conjecturally infinite for every
-`n` — the constellation `{b, b², …, bⁿ}` is admissible at every `n`
+terms falls like `1/(log m)ⁿ` on A130003 (`1/(log k)ⁿ` on A110096), so each
+extra condition costs a further factor of roughly the log of the term worth
+of line. Both are conjecturally infinite for every `n` — the constellations
+`{4, 4², …, 4ⁿ}` and `{2, 2², …, 2ⁿ}` are admissible at every `n`
 (proved in `shiftladder_reference`), so Dickson's conjecture applies and a
 find **confirms** the guiding conjecture and can never refute it.
 A110096's entry records that argument (Charles R Greathouse IV, Oct 2011).
@@ -127,40 +131,44 @@ still ending exactly where they did.
 
 ## The mathematics of the engine
 
-Fix a prime `q`. Then `q | m + b^k` exactly when `m ≡ -b^k (mod q)`, so
-the residues of `m` that `q` kills are
+Fix a prime `q`. On A130003, `q | 4^k + m` exactly when `m ≡ -4^k (mod q)`;
+on A110096, `q | k + 2^i` exactly when `k ≡ -2^i (mod q)`. So the residues
+of the term that `q` kills are
 
-    K(q,n,b) = { -b^k mod q : 1 <= k <= n }
+    K(q,n) = { -4^k mod q : 1 <= k <= n }      (A130003, the residues of m)
+    K(q,n) = { -2^i mod q : 1 <= i <= n }      (A110096, the residues of k)
 
-and the engine sieves `m` against `K(q,n,b)` and nothing else. Note what is
-absent: no inverse, no quadratic character, no case on whether `q | m`. Its
-size is exactly
+and the engine sieves the term against `K(q,n)` and nothing else. Note what
+is absent: no inverse, no quadratic character, no case on whether `q`
+divides the term. Its size is exactly
 
-    w(q,n,b) = |K(q,n,b)| = 1              if q | b
-                          = min(n, ord_q(b))  otherwise
+    w(q,n) = |K(q,n)| = 1                  if q = 2, the base's only prime
+                      = min(n, ord_q(4))   otherwise, on A130003
+                      = min(n, ord_q(2))   otherwise, on A110096
 
 proved in `shiftladder_reference.py`: negation is a bijection, so `|K|` is
-the number of distinct `b^k` for `k = 1..n`, and the powers of `b` cycle
-with period `ord_q(b)`. Since `w ≤ q-1 < q` always, no prime divides every
-value — the admissibility that makes this a hunt rather than a wild goose
-chase.
+the number of distinct powers `4^k` for `k = 1..n` on A130003 (`2^i` for
+`i = 1..n` on A110096), and the powers of the base cycle with period its
+order mod `q`, `ord_q(4)` or `ord_q(2)`. Since `w ≤ q-1 < q` always, no
+prime divides every value — the admissibility that makes this a hunt rather
+than a wild goose chase.
 
 **The two bases are not the same problem, and `ord` is the whole reason.**
 
     ord_q(4) = ord_q(2) / gcd(2, ord_q(2))  <=  (q-1)/2   for every odd q
 
 while `ord_q(2)` reaches `q-1` at every `q` for which 2 is a primitive
-root. So at `b = 2` and `q ≤ n+1` with 2 primitive mod `q`, `w = q-1`:
-**every** nonzero residue dies and `m` must be *divisible* by `q`. From
-`n ≥ 4` that already forces `3 | m` and `5 | m`, and with `m` odd every
-term of A110096 above the exception zone is `15 mod 30` — an observation
-A193109 records without proof, which is this lemma. At `b = 4` nothing of
-the sort happens: 2 of 3 residues survive mod 3 and 3 of 5 mod 5.
+root. So at base 2 and `q ≤ n+1` with 2 primitive mod `q`, `w = q-1`:
+**every** nonzero residue dies and A110096's `k` must be *divisible* by
+`q`. From `n ≥ 4` that already forces `3 | k` and `5 | k`, and with `k`
+odd every term of A110096 above the exception zone is `15 mod 30` — an
+observation A193109 records without proof, which is this lemma. At base 4
+nothing of the sort happens: 2 of 3 residues survive mod 3 and 3 of 5 mod 5.
 
 The consequence is a wheel that differs by sixteen thousand times between
 two sequences that read identically:
 
-| | A130003 (b = 4, n = 21) | A110096 (b = 2, n = 19) |
+| | A130003 (base 4, n = 21) | A110096 (base 2, n = 19) |
 |---|---|---|
 | flat table's primes | ≤ 29 | ≤ 41 |
 | modulus `W` | 6.47×10⁹ | 3.04×10¹⁴ |
@@ -182,17 +190,17 @@ model overpriced a plane read fourfold and every gate stayed green while it
 did, because the wheel's top removes candidates and never survivors
 ([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)).
 
-**The kernel.** The CPU engine materialises the dense `m` line and marks
-arithmetic progressions into it. The GPU engine never forms the line: it
-generates only the `m` that survive the wheel and *tests* each of those
-against a packed forbidden-residue bitmap by Barrett magic-multiply,
-bailing out at the first kill. A lane needs about three tests, which is
-what makes sieve depth nearly free — and `q2` is 65536 in production for
-exactly that reason. But a *warp* of 32 lanes runs to the deepest of its
-32, which measured 13.96 against that mean of 2.78, so the tests are run in
-branchless slices over a dense queue and the survivors compacted between
-slices, every lane alive. The slice boundaries come out of the survival
-curve, not out of a prime count.
+**The kernel.** The CPU engine materialises the dense line of the term and
+marks arithmetic progressions into it. The GPU engine never forms the line:
+it generates only the candidates that survive the wheel and *tests* each
+of those against a packed forbidden-residue bitmap by Barrett
+magic-multiply, bailing out at the first kill. A lane needs about three
+tests, which is what makes sieve depth nearly free — and `q2` is 65536 in
+production for exactly that reason. But a *warp* of 32 lanes runs to the
+deepest of its 32, which measured 13.96 against that mean of 2.78, so the
+tests are run in branchless slices over a dense queue and the survivors
+compacted between slices, every lane alive. The slice boundaries come out
+of the survival curve, not out of a prime count.
 
 The engine is v2 and it was **84.8× faster than v1 at base 4 and 44.6× at
 base 2** when it shipped, and a further **1.54× and 2.38×** since, all
@@ -201,38 +209,42 @@ compared to each other, and every frozen fingerprint reproduced or
 deliberately re-frozen ([BENCHMARKS.md](BENCHMARKS.md),
 [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)).
 
-**Candidates are carried as `(m, off)` from the first commit.** `m = base +
-off` with `base` a host-side big integer that never reaches the device and
-`off < per_launch · W` the only thing the kernel reduces; `base mod q` is
-folded once per launch, per prime, on the host. So no machine word bounds
-this search, and the enforced ceiling is the primality-proof bound
-`k_ceil(n, b) = 3.317×10²⁴ − bⁿ` rather than `2⁶⁴`. That is
-OPTIMIZATION.md 2.7 applied at the start instead of retrofitted:
-square-ladders raised its ceiling twice, and the second time cost a
-campaign stretch. G15 checks that the survivor stream does not depend on
-where the launch base was put, at `m = 10¹²`, `2⁶⁴`, `10²⁴` and `3×10²⁴`.
+**Candidates are carried as a launch base plus an offset from the first
+commit.** A candidate term is `base + off`, with `base` a host-side big
+integer that never reaches the device and `off < per_launch · W` the only
+thing the kernel reduces; `base mod q` is folded once per launch, per
+prime, on the host. So no machine word bounds this search, and the enforced
+ceiling (`k_ceil`) is the primality-proof bound less the top power —
+`3.317×10²⁴ − 4ⁿ` on A130003, `3.317×10²⁴ − 2ⁿ` on A110096 — rather than
+`2⁶⁴`. That is OPTIMIZATION.md 2.7 applied at the start instead of
+retrofitted: square-ladders raised its ceiling twice, and the second time
+cost a campaign stretch. G15 checks that the survivor stream does not
+depend on where the launch base was put, at `m = 10¹²`, `2⁶⁴`, `10²⁴` and
+`3×10²⁴` (on A130003).
 
 **Every primality decision here is a proof, by construction.** The largest
-value is `m + bⁿ`, and the offset is *additive*: `4²¹` is `4.4×10¹²`
-against a bound of `3.317×10²⁴`, so the ceiling is essentially the bound
-itself for both families. Gate G10 pins it tight to a single `m`, per
-`(n, b)`. This project will not need a probable-prime qualifier for a very
-long time.
+value is `4ⁿ + m` on A130003 and `k + 2ⁿ` on A110096, and the offset is
+*additive*: `4²¹` is `4.4×10¹²` against a bound of `3.317×10²⁴`, so the
+ceiling is essentially the bound itself for both families. Gate G10 pins it
+tight to a single value of the term, per `n` and base. This project will
+not need a probable-prime qualifier for a very long time.
 
 **The wheel is two mechanisms, and the second one is why this engine is
 fast.** The primes up to `p1` are a flat residue table, which is all v1
 had; a table cannot hold more than that, and 23 is where it stops. The
 primes above it go in as **bit planes over the period index**, which is a
-different object entirely. Write `m = j*W + r`. Then
+different object entirely. Write a candidate term as `j*W + r`, with `j`
+the period index and `r` the residue. Then
 
-    q | m  <=>  (j + Binv_q · r) mod q  in  Binv_q · K(q),   Binv_q = W⁻¹ mod q
+    q kills it  <=>  (j + Binv_q · r) mod q  in  Binv_q · K(q),
+                     Binv_q = W⁻¹ mod q
 
 and once `r` is fixed that is a condition on **`j` alone**, periodic with
 period `q`. So a group of primes above the flat wheel has one fixed
 surviving-`j` set mod their product, and **one 32-bit load and one `and`
 filter thirty-two consecutive periods**. Folding a prime into a plane costs
 a few tens of MB, not a factor of `q` in a table, so the wheel reaches 103
-at `b = 4` and 137 at `b = 2` — where a flat table at 47 would already have
+at base 4 and 137 at base 2 — where a flat table at 47 would already have
 asked numpy for 183 GiB.
 
 Two properties make it fit *this* problem. The shift is **additive**, so
@@ -241,21 +253,22 @@ per-residue state is a single number `cr_g(r)` per plane — which is
 **linear in the residue**, `cr_g(r) = (W⁻¹ mod Q_g)·r mod Q_g`, so the
 kernel computes it in the block prologue from the residue table it already
 reads instead of holding a second table of `R × NG` u32 (360 MiB at
-`b = 4`, 688 MiB at `b = 2`). And **`W` does not
-change**: the plane primes never enter the modulus, so a period still means
-what it meant, coverage still advances every launch, a v1 cursor is
-inherited rather than re-denominated, and every frozen benchmark window is
-the same window. A factored multi-level table — the thing v1's log said to
-build next, and what square-ladders does — would have multiplied `W` by
-2.8×10⁹, giving a period of `6.1×10¹⁷` against an `a(19)` median of
-`5.75×10¹⁶`: the coverage claim would have advanced in steps ten times
-wider than the entire hunt.
+base 4, 688 MiB at base 2). And **`W` does not change**: the plane
+primes never enter the modulus, so a period still means what it meant,
+coverage still advances every launch, a v1 cursor is inherited rather than
+re-denominated, and every frozen benchmark window is the same window. A
+factored multi-level table — the thing v1's log said to build next, and
+what square-ladders does — would have multiplied `W` by 2.8×10⁹, giving a
+period of `6.1×10¹⁷` against an `a(19)` median of `5.75×10¹⁶`: the
+coverage claim would have advanced in steps ten times wider than the
+entire hunt.
 
 ## The odds model
 
-Bateman-Horn over the `n` linear forms `f_k(m) = m + b^k`, with the
-singular series computed numerically from the same `w(q,n,b)` the sieve is
-built from. Stated **before** any sweep (`model_results.json`):
+Bateman-Horn over the `n` linear forms `4^k + m` (A130003) or `k + 2^i`
+(A110096), with the singular series computed numerically from the same
+`w(q,n)` the sieve is built from. Stated **before** any sweep
+(`model_results.json`):
 
 | term | Q1 | median | Q3 | P90 |
 |------|----|--------|----|-----|
@@ -339,9 +352,10 @@ aim at:
 | A110096 a(21) | 2.08×10²⁶ | **7.89×10²⁶** | 2.25×10²⁷ | 4.85×10²⁷ | **1.4%** |
 
 That last column is the one to read, and both of the newest finds moved it.
-The ceiling is `k_ceil(n, b) = 3.317×10²⁴ − bⁿ`, the primality-proof bound.
-`a(19)` took A110096's next term from `88.5%` under it to **13.4%**, one
-term sooner than the pre-sweep table expected, because it landed at
+The ceiling (`k_ceil`) is the primality-proof bound less the top power,
+`3.317×10²⁴ − 4ⁿ` on A130003 and `3.317×10²⁴ − 2ⁿ` on A110096. `a(19)`
+took A110096's next term from `88.5%` under it to **13.4%**, one term
+sooner than the pre-sweep table expected, because it landed at
 `5.64×10²³` — within a factor of six of the bound itself. `a(21)` has now
 done a smaller version of the same thing to A130003: that family had room
 to `a(23)` before, and it still does, but `a(24)` is now a coin flip at
@@ -386,11 +400,11 @@ python launch.py --base 2      # A110096 instead
 
 Each family keeps its own checkpoint under its own config key, and neither
 campaign will read the other's cursor. Either command above resumes where
-that family was paused — `m = 2.86×10²⁰` at base 4, `m = 5.64×10²³` at
-base 2 — with the filter already promoted to the term it is hunting
-(`a(22)` and `a(20)` respectively). The
-hunt is indefinite by default, resumable, checkpointed every segment, and
-stops cleanly on Ctrl+C with exit 130. `--to` caps the depth,
+that family was paused — `m = 2.86×10²⁰` on A130003 at base 4,
+`k = 5.64×10²³` on A110096 at base 2 — with the filter already promoted
+to the term it is hunting (`a(22)` and `a(20)` respectively). The hunt is
+indefinite by default, resumable, checkpointed every segment, and stops
+cleanly on Ctrl+C with exit 130. `--to` caps the depth,
 `--stop-on-discovery` exits once **this run** confirms a find, and
 `--gentle` yields 2 ms after every launch for a noticeably freer desktop.
 Its price has fallen twice and is now small: the sleep measures ~2.5 ms per
@@ -410,7 +424,7 @@ here is built to. Specific to this one:
   engine that marks the dense line with no wheel at all, and a CuPy engine
   that generates wheel survivors and tests them. G9 pins the GPU stream to
   the CPU stream bit-for-bit on six populated windows across both bases,
-  from `m = 2×10⁴` to `1.8×10¹⁹`, the top two **above 2⁶⁴**.
+  at heights from `2×10⁴` to `1.8×10¹⁹`, the top two **above 2⁶⁴**.
 - **Every v2 mechanism is checked against something that does not share its
   arithmetic (G16).** The bit planes are checked against plain divisibility
   in BOTH directions on thousands of (residue, period) pairs — a plane that
@@ -423,9 +437,10 @@ here is built to. Specific to this one:
   comment. And a launch too short to fill one block tile must spread the
   block across residues and still return the same stream.
 - **The killed set is built three ways.** The oracle walks every residue
-  and tests divisibility; the engines negate the orbit of `b`; the closed
-  form says `min(n, ord_q(b))`. G2b and G3 require all three to agree, in
-  both directions, for every prime below 300 at six filters and both bases.
+  and tests divisibility; the engines negate the orbit of the base; the
+  closed form says `min(n, ord_q(4))` or `min(n, ord_q(2))`. G2b and G3
+  require all three to agree, in both directions, for every prime below 300
+  at six filters and both bases.
 - **The benchmark checks itself.** `SCORE` and `SCORE1L` sweep the
   *identical absolute window* with the wheel at 23 and at 13 — 7,429×
   as many periods — and must return the same seven survivors and the same
@@ -440,7 +455,7 @@ here is built to. Specific to this one:
   frontier's run, are both rejected.
 - **Ceilings raise rather than compute** — the primality-proof cap, the
   engine floor, the Barrett bound on the wheel modulus, the flat table's
-  own size limit (the b = 2 wheel reaches 3.6×10¹⁰ residues at p1 = 47, and
+  own size limit (the base-2 wheel reaches 3.6×10¹⁰ residues at p1 = 47, and
   asking for it must refuse rather than fail into a 289 GiB allocation),
   and the bit planes' total budget. All drilled. `RES_MAX` is a guard and
   not a tuning constant, and it is the one that hid base 2's `p1 = 41`: the

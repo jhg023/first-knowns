@@ -71,14 +71,14 @@ where no filter reaches it; its gates were not run (CLAUDE.md rule 2).
 
 G4 (CPU survivors against the definition) multiplied object-dtype arrays by
 18! over 4-million-element windows: 66 s. The same test on residues in int64
-is 21 s. The definition is unchanged — q | m·x + s is decided mod q.
+is 21 s. The definition is unchanged — q | k!·m ∓ 1 is decided mod q.
 
 ### Measurement 3 — the window at the full wheel: 89 and 64 tie, 32 and the shorter wheel lose
 
 The question Measurement 1 raised, measured paired at n = 17 of A177013
 (three interleaved rounds of ~4 s, unit 6, sieve 65536, planned depths):
 
-| configuration | x/s | ratio | segment | over-sweep at the a(17) median |
+| configuration | m/s | ratio | segment | over-sweep at the a(17) median |
 |---|---|---|---|---|
 | wheel to 47, 89-period window (the 2^63 bound's own) | 1.426e17 | **1.000** | 5.4e19 | 39% |
 | wheel to 47, 64-period window | 1.426e17 | **1.000** | 3.9e19 | 28% |
@@ -108,7 +108,7 @@ segment is 0.6% of the median. The way to have both is item 2 below.
 Same harness, the campaign's own planned configuration (unit 6, planned
 wheel and depth), three rounds of ~3 s each:
 
-| filter | wheel | q2 | window | x/s | survivors/s | median | device to the median |
+| filter | wheel | q2 | window | m/s | survivors/s | median | device to the median |
 |---|---|---|---|---|---|---|---|
 | n = 11 (opening) | {5..23, 31} | 2^20 | 224 | 7.57e14 | 170,000 | 3.4e10 | < 1 s (one segment) |
 | n = 16 | {5..47} | 131072 | 64 | 9.38e16 | 62,000 | 3.1e18 | 33 s |
@@ -261,7 +261,7 @@ costs up to one segment of over-sweep — and at 179 periods a segment is a
 fifth of a(17)'s median. v1 then re-swept that over-sweep: `follow_frontier`
 put the new filter's cursor at the find. But every survivor of the closed
 segment was classified to run n + 8, and the filter-(n + 1) sieve keeps a
-subset of the filter-n sieve's survivors (K(q, n) ⊆ K(q, n + 1)), so no x
+subset of the filter-n sieve's survivors (K(q, n) ⊆ K(q, n + 1)), so no m
 below the old boundary can be a(n + 1) without having been found as a rider.
 The new filter now resumes at the end of the classified line, floored onto
 its own period (`cover_x`, carried in the checkpoint and in the evidence's
@@ -284,12 +284,12 @@ paired sweeps above (Measurement 7, the 179 column):
 | n = 18 | 2.09e17 | 2.28e17 | 1.088 | 6.0e21 | 7.3 h |
 
 The four campaign benchmark shapes were re-frozen at the planner's window
-(OPTIMIZATION.md 2.13; the x-space anchors SCORE11, SCORE2L, SCORE1L and
+(OPTIMIZATION.md 2.13; the m-space anchors SCORE11, SCORE2L, SCORE1L and
 SCORE9 are untouched): SCORE 85011 / 5307414496822302746 → 237557 /
 2767396319084044674, SCOREP 84789 / 14859928121148689406 → 236826 /
 80766670185484481804, SCORE16 113004 / 45101136010290950814 → 315001 /
 4287120428541611542, SCORE18 86713 / 17201059566049407390 → 242137 /
-8189509089178047674. SCORE 129,965 -> **164,784** (1.268x), SCOREP 130,278 -> 150,728, SCORE16 83,029 -> **104,178** (1.255x), SCORE18 164,899 -> **227,223** (1.378x), the same session's v1 run as the base; the anchors SCORE2L / SCORE1L / SCORE9 read 18,996 / 8,091 / 6.05 against 19,120 / 7,749 / 6.35 (flat). SCORE11 read 485 against 795 in the two score.py runs, which is the shape, not the engine: it is 0.04 s of device per run, and paired over five rounds the chooser's own margin (4.0) is the fastest of 2.5 / 4.0 / 6.0 / auto at 8.74e14 x/s, with single runs of that shape spanning 2.8e14 to 8.9e14. 45/45 green in 252 s.
+8189509089178047674. SCORE 129,965 -> **164,784** (1.268x), SCOREP 130,278 -> 150,728, SCORE16 83,029 -> **104,178** (1.255x), SCORE18 164,899 -> **227,223** (1.378x), the same session's v1 run as the base; the anchors SCORE2L / SCORE1L / SCORE9 read 18,996 / 8,091 / 6.05 against 19,120 / 7,749 / 6.35 (flat). SCORE11 read 485 against 795 in the two score.py runs, which is the shape, not the engine: it is 0.04 s of device per run, and paired over five rounds the chooser's own margin (4.0) is the fastest of 2.5 / 4.0 / 6.0 / auto at 8.74e14 m/s, with single runs of that shape spanning 2.8e14 to 8.9e14. 45/45 green in 252 s.
 
 ### Measurement 11 -- the segment loop's wall clock, off-device
 
@@ -415,7 +415,7 @@ planner's):
 | 18 | to 53, split {5,7,11,13,17,23,29,31} × {19,37,41} × {43,47,53} | 65536 | 160 | **wide** | 0.87 |
 | 19 | to 53 | 32768 | 224 | **wide** | 0.03 |
 
-At n = 16 the wheel to 43 replaces the wheel to 47: measured paired, five rounds, the wheel to 43 at 224 periods reads **0.780** of the wheel to 47 at 179 in rate (8.2e16 against 1.05e17 x/s) — and wins on the clock, because a(16)'s search is a fraction of one 47-wheel segment. The 43-wheel closes its 2.9e18 segment in 38 s; the 47-wheel's first segment is 1.1e20 and 17 minutes, of which the next filter inherits the line at its own rate (11 minutes of n = 17 work done at 60% efficiency). The plan optimises the hunt's clock, not the benchmark's rate, and this is the row where the two disagree.
+At n = 16 the wheel to 43 replaces the wheel to 47: measured paired, five rounds, the wheel to 43 at 224 periods reads **0.780** of the wheel to 47 at 179 in rate (8.2e16 against 1.05e17 m/s) — and wins on the clock, because a(16)'s search is a fraction of one 47-wheel segment. The 43-wheel closes its 2.9e18 segment in 38 s; the 47-wheel's first segment is 1.1e20 and 17 minutes, of which the next filter inherits the line at its own rate (11 minutes of n = 17 work done at 60% efficiency). The plan optimises the hunt's clock, not the benchmark's rate, and this is the row where the two disagree.
 
 ### Constants re-swept on the wide record (n = 18)
 
@@ -505,7 +505,7 @@ evidence timestamps, `covered_by_previous_filter_to` and the checkpoints'
 | filter | A177013 | A177014 | the engine there |
 |---|---|---|---|
 | n = 11..16 | 66 s, six terms | ~50 s, six terms on four integers | seconds each |
-| n = 17 | 2.20e20 in 22.6 min = 1.62e17 x/s | 2.20e20 in 21.9 min = 1.68e17 | 1.65e17 (round 3) |
+| n = 17 | 2.20e20 in 22.6 min = 1.62e17 m/s | 2.20e20 in 21.9 min = 1.68e17 | 1.65e17 (round 3) |
 | n = 18 | 5.19e21 in 5.36 h = 2.69e17 | 3.126e22 in 31.7 h = 2.73e17 | 2.99e17 harness, 2.6e17 scored |
 | n = 19 | 9.8e20 (work cursor) in 40 min = 4.1e17 | — | ~3.8e17 (paired, round 3) |
 
@@ -521,7 +521,7 @@ tuned.
 
 1. *A find is claimed at its segment's close, and at n = 18 the segment is
    5.4 hours.* The segment is the unit of the least-claim and it is swept
-   by residue, not in x order, so A177013's a(18) — at x = 1.64e21, a
+   by residue, not in m order, so A177013's a(18) — at m = 1.64e21, a
    quarter of its median — still cost the whole 5.2e21 segment. That is
    the median cap doing what round 3 chose (the segment may not exceed the
    modelled median); what it buys in rate against a shorter segment was
@@ -531,16 +531,16 @@ tuned.
    one-short values went through before the 13th took the ECM leg).
 
 **The re-verification harness** (scratchpad, not kept; ten minutes to
-rewrite): for each `evidence/A17701[34]_a*.json` in x order — rebuild
-every value as k!·x + s and compare with the file, sympy `isprime` each,
+rewrite): for each `evidence/A17701[34]_a*.json` in m order — rebuild
+every value as k!·m ∓ 1 and compare with the file, sympy `isprime` each,
 `fladder_reference.run_length(fam, x, cap=run + 3) == run`, the stopper
 rebuilt and its factor re-multiplied, `huntlib.certificate.verify` on each
-certificate with its N checked against the rebuilt value, the route counts
-against `proof_routes`, `settles` continuing from the previous file, the
-least-claim floor equal to the previous term, the ledger agreeing with the
-files, A226935's recurrence run from x + 1; then `fladder_model.quantile`
-and `expected` from the previous term for the scoring. 14 files, 205
-certificates, ALL OK in 0.8 s.
+certificate with its `N` checked against the rebuilt value, the route
+counts against `proof_routes`, `settles` continuing from the previous file,
+the least-claim floor equal to the previous term, the ledger agreeing with
+the files, A226935's recurrence run from p(1) = m + 1; then
+`fladder_model.quantile` and `expected` from the previous term for the
+scoring. 14 files, 205 certificates, ALL OK in 0.8 s.
 
 **The pause.** The finds are entered in `fladder_reference.FOUND`, which
 turns G1b from a vacuous pass into a check of all sixteen from the bare
@@ -608,7 +608,7 @@ Written down so the next pass starts from evidence (OPTIMIZATION.md Rule 6):
    lines rather than tune blind.
 5. **The segment width at n ≥ 18** (from the campaigns, 2026-09-18): the
    cap is the modelled median, which at n = 18 is a 5.4-hour segment and at
-   n = 19 (224 periods, 7.3e21, at ~3.8e17 x/s) about the same. A find
+   n = 19 (224 periods, 7.3e21, at ~3.8e17 m/s) about the same. A find
    early in a segment waits for its close. Unpriced: pair the n = 19 plan
    at 224 periods against 56 on a few third-level residues, fingerprints
    checked, and take the shorter one if the rate holds within a percent or

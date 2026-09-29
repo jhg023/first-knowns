@@ -133,7 +133,7 @@ confirmed run exactly 21.
 The 128-bit engine (see README § phase 2, gates G9–G12) finished its
 first leg 2026-08-14: contiguous coverage from the 64-bit cap (seam
 re-covered) to the leg's depth cap **3.2×10²⁰** — exactly, at wheel
-period k = 49,461,386,905 — in 152.1 wall-hours (realized rate
+period index 49,461,386,905 — in 152.1 wall-hours (realized rate
 5.5×10¹⁴ p/s), classifying 108,175,079 pre-MR survivors. No prime
 with run ≥ 19 exists below 3.2×10²⁰: combined with the phase-1
 result, **a(19) and a(20) both exceed 3.2×10²⁰**, and the exhaustive
@@ -195,8 +195,8 @@ search changed except its speed**:
   directly against big-integer divisibility of the actual values with no
   engine in the loop. Both frozen benchmark fingerprints reproduce
   exactly.
-- The mathematical configuration — n = 17 filter, 29# wheel, Q1 = 1024,
-  Q2 = 65536, ceiling 10²⁴ — is **unchanged**, so the checkpoint's
+- The mathematical configuration — n = 17 filter, 29# wheel, `Q1` = 1024,
+  `Q2` = 65536, ceiling 10²⁴ — is **unchanged**, so the checkpoint's
   `next_k` stays meaningful, the resume re-covers nothing, and the
   near-miss/census counts are not double-counted. The exhaustive
   coverage claim from 0 to 3.6004×10²⁰ carries over untouched.

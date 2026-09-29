@@ -13,12 +13,13 @@ was measured and decided in making that engine hunt a different object.
 
 ## Measurement 1 (2026-09-19) — the ceiling, because this project is rule 5h's exception
 
-The values are x + a(i) + 1, 2x + 1 and x. V − 1 = x + a(i) is an integer
-with no structure, so the repository's usual route — one factorization of k
-proves the whole run — does not exist here, and CLAUDE.md 5h allows a lower
-ceiling "only with a measurement that says why". So it was measured before
-anything else was written: `huntlib.ceiling.subproof_rate(height, samples=12)`
-— random primes near `height` through `huntlib.certificate.prove`, each proof
+The values are a(n) + a(i) + 1, 2·a(n) + 1 and a(n). The value less one,
+a(n) + a(i), is an integer with no structure, so the repository's usual
+route — one factorization of the swept variable proves the whole run — does
+not exist here, and CLAUDE.md 5h allows a lower ceiling "only with a
+measurement that says why". So it was measured before anything else was
+written: `huntlib.ceiling.subproof_rate(height, samples=12)` — random
+primes near `height` through `huntlib.certificate.prove`, each proof
 re-verified.
 
 | height | proved | slowest |
@@ -31,24 +32,24 @@ re-verified.
 | 1e40 | 12 / 12 | 0.49 s |
 
 **Decision: the ceiling is `huntlib.ceiling.K_CEIL` = 1e40, as everywhere
-else.** A 40-digit V − 1 factors completely by bounded rho and ECM well
-inside the certificate budget, so the structureless case costs nothing at
-these sizes. G10 repeats the measurement at the ceiling on every battery (8
-of 8), and the certificate drill repeats it on this project's own values:
+else.** A 40-digit value less one factors completely by bounded rho and ECM
+well inside the certificate budget, so the structureless case costs nothing
+at these sizes. G10 repeats the measurement at the ceiling on every battery
+(8 of 8), and the certificate drill repeats it on this project's own values:
 two per family just past the proof crossing and two per family at the
 ceiling, 24 of 24 proved, two of them carrying a subproof for a prime factor
 past the deterministic bound, which cannot be stripped. It will rarely
-matter: the proof crossing is x ≈ 1.66e24 (where 2x + 1 is a form) and
-3.3e24 (elsewhere), above every term the campaigns can reach in weeks.
+matter: the proof crossing is a(n) ≈ 1.66e24 (where 2·a(n) + 1 is a form)
+and 3.3e24 (elsewhere), above every term the campaigns can reach in weeks.
 
 ---
 
-## Decision 1 — sweep the forced CLASS, not x
+## Decision 1 — sweep the forced CLASS, not the dense line
 
-**The problem.** A forced prime leaves x one residue class, and here it is
-generally not 0: x ≡ 2 (mod 6) for A093483, 9 (mod 30) for A103828. The
-inherited engine sweeps x = unit·x′, the multiples of a unit, which is only
-sound when the surviving class is 0.
+**The problem.** A forced prime leaves the candidate one residue class, and
+here it is generally not 0: a(n) ≡ 2 (mod 6) for A093483, 9 (mod 30) for
+A103828. The inherited engine sweeps `x = unit·x′`, the multiples of a
+unit, which is only sound when the surviving class is 0.
 
 **First design, rejected before it was built:** unit = 1 always, the forced
 primes taken by the wheel (a prime that keeps one class in q is the best
@@ -56,25 +57,29 @@ value a wheel can buy, and the planner would take them first). It is
 correct and it costs nothing in candidates — but the period bound is on the
 period *in the swept variable*: W′ + q2 < 2^64 on the narrow record. With
 2·3(·5) inside the wheel the same prime set has a period 6 or 30 times
-longer in x than in x′, which is one to two wheel primes of room and the
-whole of v2's window win (179 periods at the wheel to 47 becomes 5). Priced
-from factorial-ladders' round 2: about 1.2× at the filters the narrow record
-serves.
+longer on the candidate line than in `x′`, which is one to two wheel primes
+of room and the whole of v2's window win (179 periods at the wheel to 47
+becomes 5). Priced from factorial-ladders' round 2: about 1.2× at the
+filters the narrow record serves.
 
-**Built instead:** the engine sweeps t with **x = r + u·t**. The killed
-residues are carried through the map, t ≡ (k − r)·u⁻¹ (mod q); a prime of
+**Built instead:** the engine sweeps a count `t` with **`x = r0 + unit*t`**,
+`r0` the forced class and `x` the candidate. The killed residues are
+carried through the map — a killed residue of the candidate, less `r0`,
+times the inverse of `unit` (mod q), is a killed residue of `t`; a prime of
 the unit kills nothing; the host maps back in the one place the value is
-rebuilt. Because r < u, x < j·W ⇔ t < j·W′, so the periods share their
-boundaries and the coverage cursor needs no change. **Two lines of the
-engine core, one new attribute (`r0`), and the kernel cache key** (which
-used the sign as "the whole of the family" and must now use the family:
-the kill sets are literals in the kernel source).
+rebuilt. Because `r0` < `unit`, the candidate lies below a multiple of W
+exactly when `t` lies below the same multiple of W′, so the periods share
+their boundaries and the coverage cursor needs no change. **Two lines of
+the engine core, one new attribute (`r0`), and the kernel cache key**
+(which used the sign as "the whole of the family" and must now use the
+family: the kill sets are literals in the kernel source).
 
-Proved by G3 (the t kills map back onto the x kills, both directions, 2,867
-cases; r is the one class the *oracle* leaves free), G7 (the class-space
-wheel == the oracle's divisibility on x = r + u·t), G9 (GPU == dense CPU
-sieve, which knows nothing of r or u, on windows at unit 6 and unit 30),
-G13, G15 and G17 (every survivor in the class).
+Proved by G3 (the kills on `t` map back onto the candidate's kills, both
+directions, 2,867 cases; `r0` is the one class the *oracle* leaves free),
+G7 (the class-space wheel == the oracle's divisibility on the candidate
+`r0 + unit*t`), G9 (GPU == dense CPU sieve, which knows nothing of `r0` or
+`unit`, on windows at unit 6 and unit 30), G13, G15 and G17 (every survivor
+in the class).
 
 ---
 
@@ -82,10 +87,11 @@ G13, G15 and G17 (every survivor in the class).
 
 factorial-ladders' v2 carries the classified line across a promotion and
 saved ten minutes a promotion by it. That is sound there because its forms
-do not depend on the find. Here a(n) creates the condition x + a(n) + 1, the
-old filter never tested it, and carrying the line would be a **coverage hole
-one segment wide** with every gate green — the survivors past the find in
-that segment were classified, just not against the right conditions.
+do not depend on the find. Here a(n) creates the condition
+a(n+1) + a(n) + 1, the old filter never tested it, and carrying the line
+would be a **coverage hole one segment wide** with every gate green — the
+survivors past the find in that segment were classified, just not against
+the right conditions.
 
 So `follow_frontier` restarts on the period that holds the find, clipped
 just above it; the segment loop stops narrating at the first find and drops
@@ -108,7 +114,7 @@ sample classified):
 
 | family | n | class | window | device | survivors/s | µs each | core-s/s | pool |
 |---|---|---|---|---|---|---|---|---|
-| A093483 | 18 | mod 6 | 128 | 6.3e16 x/s | 125,000 | 10.7 | 1.34 | 3 |
+| A093483 | 18 | mod 6 | 128 | 6.3e16 a(n)-line/s | 125,000 | 10.7 | 1.34 | 3 |
 | A103828 | 19 | mod 30 | 224 | 1.7e17 | 88,000 | 11.9 | 1.05 | 3 |
 | A037100 | 19 | mod 6 | 32 | 4.3e16 | 45,000 | 9.3 | 0.42 | 1 |
 | A119752 | 15 | mod 6 | 192 | 1.2e16 | 62,000 | 16.5 | 1.02 | 3 |
@@ -131,7 +137,7 @@ are at filters that do not exist yet.
 `python launch.py --selftest`: **47/47 ALL GREEN in 209 s** — 5 oracle, 5
 CPU, 11 GPU, 2 model, huntlib's certificate and ceiling gates, the standard
 drills, and this project's: canary (eight published terms rediscovered by
-the GPU stream as first occurrences, every family, x space and class
+the GPU stream as first occurrences, every family, dense line and class
 space), protocol, ceiling, certificate, resume, promotion, classification,
 stop-on-discovery, families-stay-apart, campaign wiring, **the real loop on
 published ground** (`Campaign.run` finds a(13), promotes itself, finds
@@ -154,7 +160,7 @@ its period).
 The project was built on an inherited engine with every constant inherited
 and an instruction to sweep "at the first filter that costs more than a few
 minutes". Those filters do not exist yet — but the model's **stand-ins** do
-(`clique_model.stand_in`: the first x past the projected median that
+(`clique_model.stand_in`: the first integer past the projected median that
 survives every prime under 2000, so it has the small-prime residues a real
 term must have), and `clique_reference.register` accepts them *in a scratch
 process*. So every measurement below that names an index past the open one
@@ -166,7 +172,7 @@ same candidates.
 
 ### Measurement 3 — where the hours are (the inherited plan, A093483)
 
-| filter | plan (wheel × window) | x/s | candidates/s | segment / median | device to the median |
+| filter | plan (wheel × window) | a(n)-line/s | candidates/s | segment / median | device to the median |
 |---|---|---|---|---|---|
 | n = 18 (open) | to 41 × 128 | 6.44e16 | 2.88e12 | 0.83 | 0.7 s |
 | n = 19* | to 43 × 160 | 1.31e17 | 2.97e12 | 0.92 | 17 s |
@@ -484,12 +490,12 @@ measured, at the filters the campaigns are actually sitting at (from the
 checkpoints, found terms registered in a scratch process): n = 22 of
 A093483, A103828 and A037100 (wide record, the wheel to 53 / 61 x 224),
 n = 21 of A119752 (narrow, clamped to 128), n = 20 of A119751 (narrow, 224),
-and A133761's opening. Method: the engine API on a window at x ~ 1e27, a
-fixed count of 30-40 launches per arm after one warm launch, 3-5 interleaved
-rounds, medians, a throwaway warm-up arm first and an A/A arm last (A/A read
-0.999-1.001 on a quiet device, to 5% when the desktop was busy -- those runs
-were repeated), and the survivor SET compared on every run wherever two arms
-share a launch decomposition.
+and A133761's opening. Method: the engine API on a window of candidates at
+~1e27, a fixed count of 30-40 launches per arm after one warm launch, 3-5
+interleaved rounds, medians, a throwaway warm-up arm first and an A/A arm
+last (A/A read 0.999-1.001 on a quiet device, to 5% when the desktop was
+busy -- those runs were repeated), and the survivor SET compared on every
+run wherever two arms share a launch decomposition.
 
 The correctness finding was real and is fixed in huntlib (the seven
 Miller-Rabin bases are proved to 2^64, not to 3.317e24; huntlib/README.md,
@@ -649,7 +655,7 @@ round is worth is at the live filters:
 
 | campaign (live filter) | record | before | now | ratio |
 |---|---|---|---|---|
-| A093483 n = 22 | wide | 4.73e17 x/s | 5.1e17 | 1.08-1.10 |
+| A093483 n = 22 | wide | 4.73e17 a(n)-line/s | 5.1e17 | 1.08-1.10 |
 | A103828 n = 22 | wide | 5.48e17 | 6.05e17 | 1.10 |
 | A037100 n = 22 | wide | 2.95e17 | 3.2e17 | 1.06-1.08 |
 | A119752 n = 21 | narrow | 1.66e17 | 1.70e17 | 1.02 |

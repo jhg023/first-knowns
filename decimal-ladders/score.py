@@ -154,7 +154,8 @@ def main():
                                decl_gpu._wheel_primes(p1, p2, p3)) + "}"
         if unit > 1:
             wheel += f" at unit {unit}"
-        print(f"benchmark {label}: {rate_k:.3e} x/s from period {j0} "
+        print(f"benchmark {label}: {rate_k:.3e} "
+              f"{decl_reference.letter(fam)}/s from period {j0} "
               f"({rate_k * eng.density():.3e} candidates/s, {fam}, "
               f"filter n={n}, wheel {wheel} W={eng.W}, window {eng.pv} "
               f"{'wide' if eng.wide else 'narrow'}, sieve {q2}, "

@@ -167,7 +167,8 @@ four fields, built by `huntlib.evidence.header` and nothing else:
    with the derived entry's own integer (A226935 is A177014 **plus one**).
 
 An engine whose sweep variable is *not* the published term (lcm-ladders
-sweeps x and publishes N = lcm(1..n)·x) carries it as a second field under
+sweeps x and publishes A078502's N = lcm(1..n)·x, and A074200's m the same
+way) carries it as a second field under
 the letter it has in `forms` — `"(N - k)/k = (L/k)*x - 1"` names both.
 Keys inside `least_claim` that carry a letter carry the OEIS one
 (`swept_to_m`). `stopper.i` is the index of the first form that fails,
@@ -198,8 +199,10 @@ code and in log passages that describe the code.
 
 **Siblings do not share letters, and the clash is not cosmetic.** A088250
 and A088651 read "smallest k such that r·k ± 1 is prime for r = 1..n";
-A173750, A125838, A125839, A164325 and A164326 — the same ladders —
-read "smallest m such that k·m ± 1 is prime for k = 2..n". linear-ladders
+A173750, A125838, A125839, A164325 and A164326 — the same ladders — read
+"smallest m such that k·m ± 1 is prime" for k = 2..n (A173750, A125838)
+or k = 3..n (A125839), and "(2k − 1)·m ± 1" for 0 < k < n + 1 (A164325,
+A164326). linear-ladders
 wrote all seven as `k` with `forms` in r and k, so for five families the
 file's `k` was the entry's m and the entry's `k` was the file's r.
 factorial-ladders wrote its sixteen finds under `x` beside a `forms` that
@@ -291,7 +294,8 @@ number that falls out of tuning — a launcher is built to a load budget the
 same way it is built to a correctness protocol. The procedure, in order:
 
 1. **Measure both sides per unit of the thing the hunt is paid in.**
-   Device seconds and host core-seconds per unit of k-line (or p-line),
+   Device seconds and host core-seconds per unit of line swept (in the
+   term's own letter: k-line for A089761, p-line for A164926),
    at the configuration the campaign will actually run — not at the
    benchmark's. Everything below needs those two numbers and nothing else
    substitutes for them.
@@ -551,8 +555,8 @@ makes it build one.
   parity gate and the frozen fingerprints. The cursor carries over whole,
   indices and all.
 * `adopt` — the old configuration covers **different** line: a new wheel, a
-  new sieve depth. Only the arithmetic claim *"every k below this is
-  swept"* carries over, which is true of any correct engine. The launcher
+  new sieve depth. Only the arithmetic claim *"every value of the term
+  below this is swept"* carries over, which is true of any correct engine. The launcher
   must re-denominate it into its own units, **flooring** so no gap opens,
   and must not reuse any index from it. See "Re-denominating a cursor
   across a wheel change".
@@ -803,20 +807,24 @@ as an enforced constant, not an assumption. Parity-gate at the ceiling.
 Raising a ceiling is a new engine version: new gates, new fingerprint,
 log entry.
 
-**The ceiling on k is high by default, and it is measured (repo-wide,
-binding; CLAUDE.md 5h).** The deterministic Miller–Rabin bound, 3.317×10²⁴,
-is where a *classification* stops being a proof — the census is still
-counted, a `[NEAR]` is still a health check, and the searched-empty bound
-still holds above it (a composite that passes a probable-prime chain can
-only lengthen a run, never hide one). A *discovery* is proved by
-certificate on the value's own structure: every ladder here forms
-`m·k ± 1`, so `N ∓ 1 = m·k` is completely factored once `k` is, and
-`huntlib.certificate` proves the whole run on that one factorization —
-BLS75 Theorem 1 on `N − 1`, Theorem 15 (a Lucas sequence per prime) on
-`N + 1`, with a subproof for any prime factor of `k` past the bound. What
-bounds `k` is therefore the **cost of one certificate per discovery**, and
-`huntlib.ceiling` measures it: the worst case is `k` whose hard part is a
-balanced semiprime, and to `10⁴⁰` that is factored and proved in seconds
+**The ceiling on the term is high by default, and it is measured
+(repo-wide, binding; CLAUDE.md 5h).** The deterministic Miller–Rabin bound,
+3.317×10²⁴, is where a *classification* stops being a proof — the census
+is still counted, a `[NEAR]` is still a health check, and the
+searched-empty bound still holds above it (a composite that passes a
+probable-prime chain can only lengthen a run, never hide one). A
+*discovery* is proved by certificate on the value's own structure: every
+multiplicative ladder here has values multiplier × term ± 1, each in its
+entry's own letters (`r·k + 1` in A088250, `k·m + 1` in A173750,
+`k!·m − 1` in A177013, `10^m·k + 1` in A305740; in A078502 the factored
+part is the quotient N/lcm(1..n)), so the value ∓ 1 is completely factored
+once the term is, and `huntlib.certificate` proves the whole run on that
+one factorization — BLS75 Theorem 1 on the value less one, Theorem 15 (a
+Lucas sequence per prime) on the value plus one, with a subproof for any
+prime factor of the term past the bound. What bounds the term is
+therefore the **cost of one certificate per discovery**, and
+`huntlib.ceiling` measures it: the worst case is a term whose hard part is
+a balanced semiprime, and to `10⁴⁰` that is factored and proved in seconds
 on this repository's machine, so **`huntlib.ceiling.K_CEIL = 10⁴⁰` is the
 ceiling a new project starts from, on both signs**. The first six projects
 used the deterministic bound as their ceiling and four campaigns ran into
@@ -827,12 +835,12 @@ What a project owes for its ceiling: `k_ceil` returns `K_CEIL`; the proof
 crossing (`k_proof`, the bound rearranged for the largest value) is logged
 as a `[MILESTONE]` and never stops the run; a certificate drill at the
 height proves the project's own values on every route it uses, exercises
-the recursion on a `k` with a prime factor past the bound and shows the
-subproof cannot be stripped nor the proof moved to a neighbouring `N`;
+the recursion on a term with a prime factor past the bound and shows the
+subproof cannot be stripped nor the proof moved to a neighbouring value;
 `huntlib.ceiling.GATES` is in the battery; and a populated parity window
 sits against the ceiling. A lower ceiling is allowed only with a
-measurement that says why — a value without `m·k ± 1` structure leaves
-`N ∓ 1` structureless, and then `factor_partial`'s success rate at the
+measurement that says why — a value without multiplier × term ± 1
+structure leaves the value ∓ 1 structureless, and then `factor_partial`'s success rate at the
 height (`huntlib.ceiling.subproof_rate`) is the honest limit. Raising it
 past `10⁴⁰` is the same measurement one decade up (ECM's curve count is
 the knob), written into `huntlib/ceiling.py`.

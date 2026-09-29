@@ -5,10 +5,11 @@
 
 `python score.py` prints a SCORE only if every correctness gate is green AND
 all nine frozen shapes reproduce their work fingerprint (survivor count +
-xor of the surviving x). The rate is end-to-end **x-line per second**; the
-published term is N = L(n)·x, so multiply by L(n) — 360360 at n = 15,
-720720 at 16, 12252240 at n = 17 and 18, 232792560 at 19 and 20 — for a rate
-in N.
+xor of the surviving quotients). The rate is end-to-end **per second of the
+swept quotient** (the term divided by lcm(1..n): N/lcm(1..n) for A078502,
+m/lcm(1..n) for A074200); multiply by lcm(1..n) — 360360 at n = 15, 720720
+at 16, 12252240 at n = 17 and 18, 232792560 at 19 and 20 — for a rate in
+the term (N/s, m/s).
 
 Nine shapes because every filter here is a different line: the unit, the
 wheel, the sieve depth and the period all change with n and none of them
@@ -30,8 +31,8 @@ nothing about the next.
 
 | 2026-09-19 | **v2** (the 2⁶⁴ bound, the wide record; the nine finds in `FOUND`; every fingerprint reproduced) | 60,071 | 60,543 | 396,924 | 67,648 | 22,912 | 5,316 | 6.4 |
 
-(in units of 10⁶ x/s; SCORE9 is ~7×10⁶ x/s, a filter whose survivor density
-is four orders higher.)
+(in units of 10⁶ per second of the quotient; SCORE9 is ~7×10⁶ per second, a
+filter whose survivor density is four orders higher.)
 
 Engine v2 adds two shapes, frozen 2026-09-19, which have no earlier row:
 **SCORE18 769,810** (the wide record; 798,330 in the run before the wide
@@ -43,10 +44,10 @@ run against 59,855 / 59,586 / 390,944 / 67,989 / 22,796 / 5,277 / 6.4 for v1
 an hour earlier): v2 plans, and runs, exactly what v1 did at n = 15, 16 and
 17.
 
-Round 2 moved two engine constants ( 2^35 → 2^37 and
- 0.5 → 0.7) and one campaign-loop cost that the benchmark
-cannot see at all:  went from 34 ms per launch to 2.5 µs, or
-about 60% of a launch to 0.01% of one. The shapes pin , so the SCORE
+Round 2 moved two engine constants (`CAND_PER_LAUNCH4` 2^35 → 2^37 and
+`TAIL_ROUND_DROP` 0.5 → 0.7) and one campaign-loop cost that the benchmark
+cannot see at all: `mark_boundary` went from 34 ms per launch to 2.5 µs, or
+about 60% of a launch to 0.01% of one. The shapes pin `nu`, so the SCORE
 row moves only by the tail-round change; the campaign gets the rest.
 
 ## The shapes
@@ -84,7 +85,7 @@ anchor. G18 checks the planner still produces exactly these.
 Device only, against the modelled medians (README.md). The campaign's own
 rate is the pipeline's — device and host — and is what `[STATUS]` prints.
 
-| filter | x/s | N/s | median x | to the median | at 2.5× |
+| filter | quotient/s | term/s (N/s, m/s) | median quotient | to the median | at 2.5× |
 |---|---|---|---|---|---|
 | n = 15 | 5.93e16 | 2.14e22 | 1.18e17 | 2.0 s | 5.0 s |
 | n = 16 | 3.85e17 | 2.77e23 | 2.13e19 | 55 s | 2.3 min |
@@ -99,7 +100,7 @@ interleaved; against the untuned engine this project started from these are
 five interleaved rounds (three at n = 17 and 20), on a quieter machine than
 the table above:
 
-| filter | v1 x/s | v2 x/s | ratio | what moved | median x | to the median, v2 |
+| filter | v1 quotient/s | v2 quotient/s | ratio | what moved | median quotient | to the median, v2 |
 |---|---|---|---|---|---|---|
 | n = 17 | 6.97e16 | 7.01e16 | 1.006 | nothing: the wheel to 59 is declined (1.10× for a 1.9-median segment) | 9.28e19 | 22 min |
 | n = 18 | 7.17e17 | **8.22e17** | **1.147** | wheel to 61 on the wide record | 2.89e22 | **9.8 h** |
@@ -112,7 +113,7 @@ from the evidence timestamps and the checkpoints, against the rows above:
 | filter | A078502 | A074200 | the row above |
 |---|---|---|---|
 | n = 15 | 21 s to the find, pool sizing included | 21 s | 2 s of device |
-| n = 16 | 3.44e17 x/s over 8.3 min | one segment, 132 s with the rebuild | 3.85e17 |
+| n = 16 | 3.44e17 quotient/s over 8.3 min | one segment, 132 s with the rebuild | 3.85e17 |
 | n = 17 | 7.05e16 over 17.0 min | 6.93e16 over 47.0 min | 6.63e16 |
 | n = 18 | 6.94e17 over 100.4 min | not reached | 6.75e17 |
 
@@ -124,16 +125,17 @@ row then: neither was priced before the campaign reached it, and the n = 20
 sweep was stopped after three minutes. Engine v2 priced both (above).
 
 **And the resumed A074200 campaign (2026-09-19, engine v2, no flags)**,
-against the v2 table: n = 18 ran **8.54e17 x/s over 7.03 h** (row: 8.22e17)
-and n = 19 **9.87e16 over 4.35 h** (row: 9.54e16) — both on the wide
-record, both within 4% of their rows and above them. The n = 17 tail ran at
-7.2e16 under v1 and 7.0–7.2e16 under v2 (`[STATUS]`), which is the 1.00× the
-table says.
+against the v2 table: n = 18 ran **8.54e17 quotient/s over 7.03 h** (row:
+8.22e17) and n = 19 **9.87e16 over 4.35 h** (row: 9.54e16) — both on the
+wide record, both within 4% of their rows and above them. The n = 17 tail
+ran at 7.2e16 under v1 and 7.0–7.2e16 under v2 (`[STATUS]`), which is the
+1.00× the table says.
 
-n = 16 is eight times the line rate of n = 15 and n = 17 because 17 is
-forced there: the unit is 34 rather than 2, and the wheel reaches 47 under
-the same period bound. n = 17's *N* rate is the highest of the four
-even though its x rate is the lowest, because L(17) is 34× L(16).
+n = 16 runs about six times the quotient rate of n = 15 and n = 17 (6.5×
+and 5.8× in the table above) because 17 is forced there: the unit is 34
+rather than 2, and the wheel reaches 47 under the same period bound. n =
+17's rate in the *term* is 2.9× n = 16's even though its rate in the
+quotient is a sixth of it, because lcm(1..17) is 17× lcm(1..16).
 
 ## The host side
 

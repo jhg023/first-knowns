@@ -492,7 +492,7 @@ The case study learned this the expensive way: it built a u64 engine, hit
 2⁶⁴, built a second engine, and then ran two phases, two checkpoints, two
 canary preludes, a deliberately re-covered seam and an `--engine` flag for
 weeks before unifying — during which the *default* invocation silently ran
-the capped engine. The (k, off) representation was valid from the beginning.
+the capped engine. The `(k, off)` representation was valid from the beginning.
 **Start here**, pick the ceiling from your primality-test validity bound,
 enforce it as a constant, and gate at it.
 
@@ -702,7 +702,7 @@ and cache it on the frontier.
 **What it cost.** `shift-ladders`, first campaign, 2026-08-23/24. Per
 launch, at the filters each family was actually running:
 
-| | base 4, n = 21 | base 2, n = 19 |
+| | A130003 (base 4), n = 21 | A110096 (base 2), n = 19 |
 |---|---|---|
 | device (sieve + tail + readback) | 13.05 ms | 23.33 ms |
 | host classification | 0.11 ms | 1.30 ms |
@@ -728,12 +728,14 @@ predicted against 578 ms and 541 ms measured. Called once per segment from
 
 | | before | after | ratio |
 |---|---|---|---|
-| base 4 (n = 21) | `1.45×10¹⁴ m/s` | `5.05×10¹⁴ m/s` | **3.47×** |
-| base 2 (n = 19) | `2.12×10¹⁸ m/s` | `5.12×10¹⁸ m/s` | **2.42×** |
+| A130003 (base 4, n = 21) | `1.45×10¹⁴ m/s` | `5.05×10¹⁴ m/s` | **3.47×** |
+| A110096 (base 2, n = 19) | `2.12×10¹⁸ k/s` | `5.12×10¹⁸ k/s` | **2.42×** |
 
 and both land on the free-GPU device rates measured independently
 (`5.08×10¹⁴`, `5.21×10¹⁸`), which is the check that nothing else is hiding
-in the budget. The loop is now 95% / 90% device.
+in the budget. The loop is now 95% / 90% device. (Each rate is per second
+of that entry's own term: m for A130003, "4^k + m"; k for A110096, whose
+name gives the term no letter and whose programs test k + 2^i.)
 
 **Use `huntlib.rungs.LiveLadder`.** It rebuilds only when the key moves and
 **takes the frontier as the first argument of `get` by signature**, so a

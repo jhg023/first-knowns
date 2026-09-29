@@ -5,11 +5,13 @@
 An engine that skips work fails the fingerprint; an engine that breaks the
 mathematics fails the gates. Either way it scores nothing.
 
-The reported rate is end-to-end **k-line per second** — the quantity a hunt
-is actually paid in — divided by 10⁶. The candidate rate is printed beside
-it because the two say different things: line rate is what the campaign
-buys, candidate rate is what the kernel does, and the wheel is the exchange
-rate between them. Here that exchange rate is extreme: forced divisibility
+The reported rate is end-to-end **line per second** — the quantity a hunt
+is actually paid in, in each entry's own letter: k/s for A088250's shapes,
+m/s for A125838's `SCOREM` — divided by 10⁶. The candidate rate is
+printed beside it because the two say different things: line rate is
+what the campaign buys, candidate rate is what the kernel does, and the
+wheel is the exchange rate between them. Here that exchange rate is
+extreme: forced divisibility
 by every prime to 13 (README.md, "The mathematics of the engine") leaves
 `6.4×10⁻⁹` of the line as candidates at A088250's opening filter and
 `5.9×10⁻¹⁰` at n = 17, so the v4 engine's candidate rate of `2.0×10¹²`
@@ -40,8 +42,9 @@ of candidates v4 cannot address, so these three were re-frozen on
 2026-09-05: the v3 engine, still in the tree for the purpose, swept the
 same windows period by period and returned the identical survivors, and
 the fingerprints are that agreement ([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)
-v4, Measurement 4). The k-space shapes sweep whole periods of their own
-wheels and kept their v1 fingerprints through v2, v3 and v4.
+v4, Measurement 4). The term-space shapes (wheels over the term itself,
+not its quotient by the unit) sweep whole periods of their own wheels
+and kept their v1 fingerprints through v2, v3 and v4.
 
 `SCORE1L` is the one to understand. It sweeps the *identical absolute
 window* as `SCORE2L` on the one-level wheel — 33,263× as many periods,
@@ -51,7 +54,7 @@ enumerating the same candidates by different arithmetic, so a bug in the
 CRT lift shows up inside the benchmark rather than as a wrong answer months
 later. It did return them, on the first run. The same cross-wheel check
 guards the production unit wheel as a gate rather than a shape (G17): v1's
-unit wheel must return the k-space wheel (23],(37],(47]'s identical 1,304
+unit wheel must return the term-space wheel (23],(37],(47]'s identical 1,304
 survivors over one of its periods at n = 15, and the v2 wheel must return
 the identical 799 survivors as *both* over `[10⁶, 3.26×10¹⁹)` at n = 17.
 
@@ -68,12 +71,12 @@ The v4 row's three unit-wheel shapes are **new shapes** (re-denominated,
 above), so their numbers are not the v3 row's ratio; the paired ratios
 the engine stands on are in OPTIMIZATION_LOG.md v4, Measurement 4: on the
 new windows v4 against v3 driven period by period is 13.1× / 10.5× /
-11.3×, and against the v3 row's own pipelined rates (`2.83×10¹⁹`,
-`3.73×10²⁰`, `7.75×10¹⁸` k/s re-measured the same morning) the v4 score
-rates are 6.6× / 9.0× / 6.1×. The three k-space shapes are the same windows and
-fingerprints as before; their movement is the engine on wheels it was not
-built for (a k-space period holds 3-192 first-level residues, a fraction
-of one block).
+11.3×, and against the v3 row's own pipelined rates (`2.83×10¹⁹` and
+`3.73×10²⁰` k/s, `7.75×10¹⁸` m/s, re-measured the same morning) the v4
+score rates are 6.6× / 9.0× / 6.1×. The three term-space shapes are the
+same windows and fingerprints as before; their movement is the engine on
+wheels it was not built for (a term-space period holds 3-192 first-level
+residues, a fraction of one block).
 
 The v3 row is **v2's engine at every fingerprint** — v3 changed the
 ceiling, the certificate routes and the resume policy and touched no
@@ -89,7 +92,7 @@ deliberate coverage change, so their windows and fingerprints moved) and
 its numbers are not the v1 row's ratio: the paired, same-line comparisons
 the change stands on are 1.27× at c = 15, 1.50× at 16, 1.20× at 17 and
 1.32× at 18 forms, within 5% at 14 ([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)
-v2). The three k-space shapes are the same windows and fingerprints as
+v2). The three term-space shapes are the same windows and fingerprints as
 v1's; their movement (1.29×, 0.96×, 0.90×, unpaired) is the ambient band —
 paired, the one v2 change that touches them (the prefix byte cap) is
 1.003–1.007×. The v1 engine had itself scored 21,407,278,511,282 /
@@ -105,7 +108,7 @@ In physical units (v4; v2's in brackets):
 |-------|-----------|----------------|
 | `SCORE` | `1.88×10²⁰ k/s` (`3.07×10¹⁹`) | `1.20×10¹² /s` (`1.96×10¹¹`) |
 | `SCORE17` | `3.34×10²¹ k/s` (`3.99×10²⁰`) | `1.98×10¹² /s` (`2.37×10¹¹`) |
-| `SCOREM` | `4.75×10¹⁹ k/s` (`8.40×10¹⁸`) | `8.86×10¹¹ /s` (`1.57×10¹¹`) |
+| `SCOREM` | `4.75×10¹⁹ m/s` (`8.40×10¹⁸`) | `8.86×10¹¹ /s` (`1.57×10¹¹`) |
 | `SCORE2L` | `2.50×10¹⁹ k/s` (`4.33×10¹⁸`) | `1.06×10¹² /s` |
 | `SCORE1L` | `1.54×10¹⁸ k/s` (`3.96×10¹⁶`) | `4.41×10¹¹ /s` |
 | `SCORE10` | `3.32×10¹⁴ k/s` (`7.78×10¹² `) | `3.32×10¹⁰ /s` |
@@ -115,8 +118,9 @@ run the same wheel and the same kernel and differ 13× in line for 1.2× in
 candidates: at n = 17 the wheel lets one candidate in `1.7×10⁹` of the
 line through, at n = 15 one in `1.6×10⁸`, because every extra condition
 kills one more residue per wheel prime. `SCOREM` is a -1 family's
-*opening* filter, where the forms are `r·k − 1` for `r = 2..15` — one
-condition fewer than A088250 at the same n — so its wheel is 2.9× denser
+*opening* filter, A125838's, where the forms are `k·m − 1` for
+`k = 2..15` — one condition fewer than A088250 at the same n — so its
+wheel is 2.9× denser
 and its line rate a quarter; the sign itself costs nothing (the two
 w-classes compile to the same kernel source), and its lower candidate rate
 is the sixth prefix group that filter's survival curve asks for.
@@ -148,15 +152,15 @@ terms under each ceiling:
 
 | family | opening rate | to the ceiling at the opening rate | terms expected under the ceiling |
 |---|---|---|---|
-| A125838 (n = 15) | `8.4×10¹⁸ k/s` | `2.2×10²³`: 7.3 h at the opening rate, far less after the promotions (each ~3–4×). **Ran 2026-09-03 in 17 min**: a(15), a(16), a(17) and a(18) found, a(19) > `1.73×10²³` ([RESULTS.md](RESULTS.md)) | a(15), a(16), a(17); a(18) 13% |
-| A125839 (n = 16) | `8.4×10¹⁸ k/s` | `2.1×10²³`: 7 h at the opening rate. **Ran 2026-09-03 in 15 min**: a(16), a(17), a(18) found, a(19) > `1.73×10²³` | a(16), a(17), a(18); a(19) 18% |
-| A173750 (n = 16) | `3.0×10¹⁹ k/s` | `3.3×10²⁴`: hours, mostly at n = 18 (`1.4×10²¹`). **Ran 2026-09-03 in 37 min**: a(16), a(17) and a(18) = a(19) found, a(20) > `3.32×10²⁴` | a(16), a(17); a(18) 66% |
-| A164326 (n = 15) | `1.25×10¹⁹ k/s` | `1.1×10²³`: 2.4 h at the opening rate. **Ran 2026-09-03 in 14 min**: a(15), a(16) found, a(17) > `1.0×10²³` | a(15), a(16); a(17) 16% |
-| A164325 (n = 16) | `3.75×10¹⁹ k/s` | `3.3×10²⁴`: hours, mostly at n = 17. **Ran 2026-09-03 in 60 min**: a(16), a(17), a(18) found, a(19) > `3.32×10²⁴` | a(16); a(17) 85% |
+| A125838 (n = 15) | `8.4×10¹⁸ m/s` | `2.2×10²³`: 7.3 h at the opening rate, far less after the promotions (each ~3–4×). **Ran 2026-09-03 in 17 min**: a(15), a(16), a(17) and a(18) found, a(19) > `1.73×10²³` ([RESULTS.md](RESULTS.md)) | a(15), a(16), a(17); a(18) 13% |
+| A125839 (n = 16) | `8.4×10¹⁸ m/s` | `2.1×10²³`: 7 h at the opening rate. **Ran 2026-09-03 in 15 min**: a(16), a(17), a(18) found, a(19) > `1.73×10²³` | a(16), a(17), a(18); a(19) 18% |
+| A173750 (n = 16) | `3.0×10¹⁹ m/s` | `3.3×10²⁴`: hours, mostly at n = 18 (`1.4×10²¹`). **Ran 2026-09-03 in 37 min**: a(16), a(17) and a(18) = a(19) found, a(20) > `3.32×10²⁴` | a(16), a(17); a(18) 66% |
+| A164326 (n = 15) | `1.25×10¹⁹ m/s` | `1.1×10²³`: 2.4 h at the opening rate. **Ran 2026-09-03 in 14 min**: a(15), a(16) found, a(17) > `1.0×10²³` | a(15), a(16); a(17) 16% |
+| A164325 (n = 16) | `3.75×10¹⁹ m/s` | `3.3×10²⁴`: hours, mostly at n = 17. **Ran 2026-09-03 in 60 min**: a(16), a(17), a(18) found, a(19) > `3.32×10²⁴` | a(16); a(17) 85% |
 | A088651 (n = 16) | `1.44×10²⁰ k/s` | `2.1×10²³`: **24 min**. **Ran 2026-09-04 in 12 min**: a(16) found, a(17) > `1.94×10²³` | a(16) 96%; a(17) 15% |
 
 Those were the v2 ceilings: the −1 families' proof crossings (no N+1
-certificate existed) and the deterministic bound on k for the +1
+certificate existed) and the deterministic bound on the term for the +1
 families. **v3 raised every ceiling to `10⁴⁰`** (README.md; the N+1 route
 and the recursion in huntlib.certificate, the measured budget in
 huntlib.ceiling), and each campaign resumes from its v2 cursor at the
@@ -166,19 +170,19 @@ own next launches (OPTIMIZATION_LOG.md v3, Measurement 1):
 | family | resumes at | device | the campaign's own rate at that filter (RESULTS.md) | next filter |
 |---|---|---|---|---|
 | A088250 | n = 18 | `1.39×10²¹ k/s` | `1.49×10²¹` | n = 19 `2.8×10²¹`, n = 20 `6.3×10²¹` |
-| A173750 | n = 20 | `2.86×10²¹` | `3.0×10²¹` | n = 21 `6.3×10²¹` (c = 20, swept 2026-09-04) |
-| A164325 | n = 19 | `1.78×10²¹` | `1.82×10²¹` | n = 20 `3.7×10²¹` (c = 20, odd wheel) |
-| A125838 | n = 19 | `7.05×10²⁰` | `7.2×10²⁰` | n = 20: 19 forced, A088250's n = 19 wheel |
-| A125839 | n = 19 | `2.51×10²⁰` | `2.7×10²⁰` | n = 20: the `2..n` n = 19 wheel, `7.2×10²⁰` |
-| A164326 | n = 17, then 18 and 19 in the v3 campaign of 2026-09-04 | `1.85×10²⁰` | `2.0×10²⁰`; n = 18 `5.4×10²⁰`; n = 19 `1.9×10²¹` | resumes at n = 19 from `1.6×10²⁵` |
-| A088651 | n = 17 | `3.77×10²⁰` | `3.9×10²⁰` | n = 18: A088250's n = 18 wheel, `1.45×10²¹` |
+| A173750 | n = 20 | `2.86×10²¹ m/s` | `3.0×10²¹` | n = 21 `6.3×10²¹` (c = 20, swept 2026-09-04) |
+| A164325 | n = 19 | `1.78×10²¹ m/s` | `1.82×10²¹` | n = 20 `3.7×10²¹` (c = 20, odd wheel) |
+| A125838 | n = 19 | `7.05×10²⁰ m/s` | `7.2×10²⁰` | n = 20: 19 forced, A088250's n = 19 wheel |
+| A125839 | n = 19 | `2.51×10²⁰ m/s` | `2.7×10²⁰` | n = 20: the `2..n` n = 19 wheel, `7.2×10²⁰` |
+| A164326 | n = 17, then 18 and 19 in the v3 campaign of 2026-09-04 | `1.85×10²⁰ m/s` | `2.0×10²⁰`; n = 18 `5.4×10²⁰`; n = 19 `1.9×10²¹` | resumes at n = 19 from `1.6×10²⁵` |
+| A088651 | n = 17 | `3.77×10²⁰ k/s` | `3.9×10²⁰` | n = 18: A088250's n = 18 wheel, `1.45×10²¹` |
 
 **v4 (2026-09-05) multiplies every one of those rates by 6-10.** Measured
 on whole segments at each family's resumed filter, the v4 engine on the
 identical candidates the v3 engine swept (its survivors bit for bit the
 same; OPTIMIZATION_LOG.md v4, Measurement 4):
 
-| family | filter | v4 candidates/s | v4 k/s | v3 at the same filter (measured 2026-09-05) |
+| family | filter | v4 candidates/s | v4 line/s (k/s or m/s) | v3 at the same filter (measured 2026-09-05) |
 |---|---|---|---|---|
 | A088250 | n = 18 | `2.18e12` | `1.29e22` | `2.35e11 candidates/s` |
 | A088250 | n = 19 | `2.35e12` | `2.60e22` | `2.52e11 candidates/s` |
@@ -191,11 +195,11 @@ same; OPTIMIZATION_LOG.md v4, Measurement 4):
 | A088651 | n = 18 | `2.18e12` | `1.29e22` | `(not run; A088250's n = 18 wheel, 2.35e11) candidates/s` |
 
 Calibrated on each family's REAL checkpoint (its own next launches, one
-second, nothing recorded) the campaigns resumed at `1.39×10²²`
-(A088250 n = 18), `2.86×10²²` (A173750 n = 20), `6.97×10²¹` (A125838
-n = 19), `2.29×10²¹` (A125839 n = 19), `1.82×10²²` (A164325 n = 19),
-`1.81×10²²` (A164326 n = 19) and `1.39×10²²` k/s (A088651 n = 18), with
-pools of 1 (A125839: 3).
+second, nothing recorded) the campaigns resumed at `1.39×10²²` k/s
+(A088250 n = 18), `2.86×10²²` m/s (A173750 n = 20), `6.97×10²¹` m/s
+(A125838 n = 19), `2.29×10²¹` m/s (A125839 n = 19), `1.82×10²²` m/s
+(A164325 n = 19), `1.81×10²²` m/s (A164326 n = 19) and `1.39×10²²` k/s
+(A088651 n = 18), with pools of 1 (A125839: 3).
 
 **After the legs of 2026-09-05 they are all one filter or more deeper**,
 and the same calibration on the checkpoints as they now stand
@@ -204,12 +208,12 @@ and the same calibration on the checkpoints as they now stand
 | family | filter now | calibrated | was, before the leg | survivors/s | pool |
 |---|---|---|---|---|---|
 | A088250 | n = 19 | `2.88×10²² k/s` | `1.39×10²²` (n = 18) | 13,300 | 1 |
-| A173750 | n = 20 | `2.90×10²²` | `2.86×10²²` (same filter) | 13,400 | 1 |
-| A125838 | n = 20 | `2.90×10²²` | `6.97×10²¹` (n = 19) | 13,100 | 1 |
-| A125839 | n = 21 | `2.89×10²²` | `2.29×10²¹` (n = 19) | 13,200 | 1 |
-| A164325 | n = 19 | `1.84×10²²` | `1.82×10²²` (same filter) | 13,100 | 1 |
-| A164326 | n = 19 | `1.83×10²²` | `1.81×10²²` (same filter) | 13,100 | 1 |
-| A088651 | n = 19 | `2.91×10²²` | `1.39×10²²` (n = 18) | 13,100 | 1 |
+| A173750 | n = 20 | `2.90×10²² m/s` | `2.86×10²²` (same filter) | 13,400 | 1 |
+| A125838 | n = 20 | `2.90×10²² m/s` | `6.97×10²¹` (n = 19) | 13,100 | 1 |
+| A125839 | n = 21 | `2.89×10²² m/s` | `2.29×10²¹` (n = 19) | 13,200 | 1 |
+| A164325 | n = 19 | `1.84×10²² m/s` | `1.82×10²²` (same filter) | 13,100 | 1 |
+| A164326 | n = 19 | `1.83×10²² m/s` | `1.81×10²²` (same filter) | 13,100 | 1 |
+| A088651 | n = 19 | `2.91×10²² k/s` | `1.39×10²²` (n = 18) | 13,100 | 1 |
 
 The three families whose legs found nothing are within 2% of what they
 calibrated at before, which is the noise band; the four that found
@@ -238,7 +242,7 @@ kernel.** Those families force each small prime one or two filters later
 filters where the prime `n` or `n − 1` is not yet forced it keeps two or
 three residues in the wheel instead of one. Measured paired against
 A088250 at the same form count (OPTIMIZATION_LOG.md v2, "What the
-campaigns measured"): A125839 n = 18 `6.5×10¹⁹ k/s` (0.50× of A088250's
+campaigns measured"): A125839 n = 18 `6.5×10¹⁹ m/s` (0.50× of A088250's
 n = 16), A125839 n = 19 `2.4×10²⁰` (0.66× of n = 17); A125838's n = 17
 and n = 19 are the same two wheels (`7.2×10¹⁹` and `7.2×10²⁰` in its
 campaign). Its n = 18 has every prime forced and runs at A088250's n = 17
@@ -246,6 +250,6 @@ rate. The odd families (`A164325`, `A164326`) have their own wheels from
 n = 17 on for a different reason: the odd multipliers `1, 3, …, 33` cover
 only 16 nonzero residues modulo 19, 23, 29 and 31 where `1..17` cover 17,
 so their first wheel level is 81,900 residues to A088250's 40,320 —
-paired, A164326 at n = 17 is `1.8×10²⁰ k/s` (0.49× of A088250's n = 17)
+paired, A164326 at n = 17 is `1.8×10²⁰ m/s` (0.49× of A088250's n = 17)
 and A164325 at n = 18 `4.9×10²⁰` (0.48× of n = 18). Their openings are
 in Measurement 7.

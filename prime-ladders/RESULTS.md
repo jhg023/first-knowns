@@ -26,9 +26,9 @@ A084701 terms is under huntlib's deterministic Miller–Rabin bound
 (`3.317×10²⁴`), so each of those certificates *is* the deterministic Miller-Rabin test
 (`deterministic-mr`); A084700's `a(18)` has values past the bound from
 `i = 5` on, and those fourteen are proved by BLS75 Theorem 1 on the
-factorization of `N − 1 = prime(i)·k` (`bls75-thm1`). Every stopper —
-the composite at `i = run + 1` that bounds the claim to exactly `run` — is
-exhibited with a factor.
+factorization of the value less one, `prime(i)·k` (`bls75-thm1`). Every
+stopper — the composite at `i = run + 1` that bounds the claim to exactly
+`run` — is exhibited with a factor.
 
 All eleven finds (A084701's `a(14)` and `a(15)` are one find: one `k`
 settled both) passed the same four legs: huntlib's Miller–Rabin chain,
@@ -77,8 +77,9 @@ bound, each stopper's factor re-divided.
   526,730,075,953 × 52,949,097,471,097`.
 - **certificates**: the values at `i = 1..4` are under the deterministic
   bound (`deterministic-mr`); the fourteen from `i = 5` on are past it,
-  and each carries a BLS75 Theorem 1 certificate on `N − 1 = prime(i)·k`
-  with `k = 2³ · 3 · 5 · 7 · 11 · 13 · 17 · 277 · 32,843 · 22,407,068,503`
+  and each carries a BLS75 Theorem 1 certificate on the value less one,
+  `prime(i)·k`, with
+  `k = 2³ · 3 · 5 · 7 · 11 · 13 · 17 · 277 · 32,843 · 22,407,068,503`
   factored once — every prime factor far under the bound, so every
   certificate is one level deep — all eighteen re-verified from scratch
   before the file was written (`certificates_verified: true`,
@@ -247,14 +248,15 @@ than one period). From `a(18)` the model puts `a(19)` at Q1 `2.9×10²⁴`,
 median `1.0×10²⁵`, Q3 `2.8×10²⁵`, P90 `5.9×10²⁵`: **0.8% of the term lay
 under the ceiling** (`E = 0.008` over the line swept for it), and none of
 it was found there. The family is out of ceiling, not out of engine. Its
-values' structure is on `N + 1 = prime(i)·k`, completely factored once
-`k` is, so a BLS75 N+1 certificate would prove a discovery past the
-crossing exactly as the N−1 route does for A084700 — but huntlib has no
-N+1 test, and adding one is a new engine version with a certificate
-drill at that height. With it the ceiling would be `3.317×10²⁴`, the
-bound on `k` itself, under which 27% of `a(19)` lies (`a(20)`: 2%,
-median `5.1×10²⁶`). A resumed `--sign -1` campaign today prints its
-banner, finds no period left under the ceiling, and stops.
+values' structure is on the value plus one, `prime(i)·k`, completely
+factored once `k` is, so a BLS75 plus-one certificate would prove a
+discovery past the crossing exactly as the minus-one route does for
+A084700 — but huntlib has no plus-one test, and adding one is a new
+engine version with a certificate drill at that height. With it the
+ceiling would be `3.317×10²⁴`, the bound on `k` itself, under which 27%
+of `a(19)` lies (`a(20)`: 2%, median `5.1×10²⁶`). A resumed `--sign -1`
+campaign today prints its banner, finds no period left under the
+ceiling, and stops.
 
 **A084700 is paused with `a(19)` open.** The first campaign stopped at
 `k = 5.4377×10²²` on 2026-09-02 at 06:30,

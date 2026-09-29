@@ -23,7 +23,7 @@ published for it.
 
 found 2026-08-20/21 in a single 23-hour campaign — the first value of any
 kind ever put on an open term of this sequence. Each is a *least* value, swept
-contiguously from p = 2; each was verified four ways and re-verified from
+contiguously from p₁ = 2; each was verified four ways and re-verified from
 its evidence file before publication; and all 51 of their values are
 **proved** prime rather than asserted, because they sit below huntlib's
 deterministic Miller–Rabin bound. The exact integers, factor witnesses and
@@ -43,16 +43,19 @@ a(14) and a(15) in October 2009. Nothing computational happened to it in
 the seventeen years after — every edit to the entry since is a link or a
 format change — until the three terms above.
 
-A053647(n) is the least prime *p* such that
+A053647(n) is the least prime *p*₁ such that
 
-&nbsp;&nbsp;&nbsp;&nbsp;*p*, *p* + P(n), *p* + 2·P(n), …, *p* + (n−1)·P(n)
+&nbsp;&nbsp;&nbsp;&nbsp;*p*₁, *p*₁ + prime(n)#, *p*₁ + 2·prime(n)#, …, *p*₁ + (n−1)·prime(n)#
 
-are **all prime**, where P(n) = [A002110](https://oeis.org/A002110)(n) is
-the product of the first n primes. The difference is not a free parameter:
-any arithmetic progression of n primes must have a common difference
-divisible by every prime up to n, so P(n) is the **minimum admissible
-difference**, and this sequence asks for the first progression that
-achieves it.
+are **all prime**, where prime(n)# = [A002110](https://oeis.org/A002110)(n)
+is the product of the first n primes. (These are the entries' own letters:
+A053647's Mathematica program writes the progression p[1], …, p[n] — p₁ is
+its p[1] — with p[k + 1] − p[k] the product of the first n primes, and
+A002110 writes that product prime(n)#.) The difference is not a free
+parameter: any arithmetic progression of n primes must have a common
+difference divisible by every prime up to n, so prime(n)# is the **minimum
+admissible difference**, and this sequence asks for the first progression
+that achieves it.
 
 | n | a(n) | | n | a(n) |
 |---|------|---|---|------|
@@ -75,37 +78,37 @@ and the terms this project added, all previously open with no bound:
 
 **The sequence is not monotone** — a(7) = 7937 is larger than a(8) = 7703 —
 and that is not a curiosity, it is the shape of the whole problem. The
-difference P(n) changes with n, so a candidate for one term says nothing
+difference prime(n)# changes with n, so a candidate for one term says nothing
 about any other: no term bounds any other, there is no ladder to climb, and
 the campaign re-sieves from the floor for every term it hunts.
 
 **Why it is open, and why a find confirms rather than refutes.** The tuple
-{0, P(n), …, (n−1)P(n)} is *admissible*: for a prime q ≤ prime(n) every
-member is congruent to p mod q, excluding one residue class and no more;
-for q > prime(n) the n members are distinct mod q and q > n leaves a class
-free. Nothing obstructs the progression at any prime, so Dickson's
-conjecture — and the Hardy–Littlewood k-tuple conjecture with it —
-predicts **infinitely many** p for every n. A new term is a confirmation.
-The only bound ever published on this sequence, Jud McCranie's
-"a(14) > 2³² and a(15) > 2³²", was superseded by the values themselves in
-2009; **every open term is open from the floor up.**
+{0, prime(n)#, …, (n−1)·prime(n)#} is *admissible*: for a prime
+q ≤ prime(n) every member is congruent to p₁ mod q, excluding one residue
+class and no more; for q > prime(n) the n members are distinct mod q and
+q > n leaves a class free. Nothing obstructs the progression at any prime,
+so Dickson's conjecture — and the Hardy–Littlewood k-tuple conjecture with
+it — predicts **infinitely many** p₁ for every n. A new term is a
+confirmation. The only bound ever published on this sequence, Jud
+McCranie's "a(14) > 2³² and a(15) > 2³²", was superseded by the values
+themselves in 2009; **every open term is open from the floor up.**
 
 ## The mathematics of the engine
 
-**The sieve.** For any prime q the killed residues of p are exactly
+**The sieve.** For any prime q the killed residues of p₁ are exactly
 
-&nbsp;&nbsp;&nbsp;&nbsp;F(q, n) = { (−j·P(n)) mod q : j = 0 … n−1 }
+&nbsp;&nbsp;&nbsp;&nbsp;F(q, n) = { (−(k−1)·prime(n)#) mod q : k = 1 … n }
 
 and that single formula covers both cases without a branch: when q divides
-P(n) — that is, q ≤ prime(n) — every j gives 0, so F = {0} and the
-condition is just that q does not divide p; when q does not divide P(n) the
-n values are distinct and q kills n of its q residue classes. At n = 16
-that is 16 residues killed by every prime from 59 up, which is a ferocious
-sieve: after depth 2048 only about 4.5 candidates in a million survive, and
-after depth 65536 about one in ninety million.
+prime(n)# — that is, q ≤ prime(n) — every k gives 0, so F = {0} and the
+condition is just that q does not divide p₁; when q does not divide
+prime(n)# the n values are distinct and q kills n of its q residue classes.
+At n = 16 that is 16 residues killed by every prime from 59 up, which is a
+ferocious sieve: after depth 2048 only about 4.5 candidates in a million
+survive, and after depth 65536 about one in ninety million.
 
 **The wheel.** a(n) is itself prime and larger than prime(n) for every
-n ≥ 5, so it is coprime to P(n) and in particular to 2, 3 and 5. Both
+n ≥ 5, so it is coprime to prime(n)# and in particular to 2, 3 and 5. Both
 engines therefore walk a mod-30 wheel of eight residues. Below
 max(10⁴, sieve depth) the argument has an exception zone — a value can *be*
 the small prime that would otherwise kill it — so the engines refuse to run
@@ -113,21 +116,23 @@ there and the launcher's low pass covers [2, floor) with the oracle
 instead, which keeps the least-claim contiguous from 2.
 
 **Representation.** Candidates are the pair `(base, offset)` with
-p = base + offset, base a Python integer and offset a u64. One engine spans
-the whole range with no seam at 2⁶⁴ — which matters here, because p passes
-it around a(21) and the *values* p + j·P(n) pass it at a(16).
+p₁ = base + offset, base a Python integer and offset a u64. One engine
+spans the whole range with no seam at 2⁶⁴ — which matters here, because p₁
+passes it around a(21) and the *values* p₁ + (k−1)·prime(n)# pass it at
+a(16).
 
 **Three implementations, sharing nothing but the answer.** The oracle
 (`ap_reference.py`, sympy only) computes killed residues by direct
 divisibility over every residue class. The CPU engine (`ap_search.py`,
-numpy) computes them as `(-j * P(n)) % q` in Python integers and sieves a
-flat array with one entry per integer, masking the wheel afterwards. The
-GPU engine (`ap_gpu.py`, CuPy) never multiplies by P(n) at all: it *walks*
-the residues, starting at 0 and subtracting P(n) mod q with a conditional
-add-back, in u32 registers, with Barrett magic-multiply throughout — and it
-sieves a bitmap indexed by (wheel period, lane), in which an integer
-divisible by 2, 3 or 5 has no representation at all. The parity gates
-compare streams that were produced by three different constructions.
+numpy) computes them as (−(k−1)·prime(n)#) mod q in Python integers and
+sieves a flat array with one entry per integer, masking the wheel
+afterwards. The GPU engine (`ap_gpu.py`, CuPy) never multiplies by
+prime(n)# at all: it *walks* the residues, starting at 0 and subtracting
+prime(n)# mod q with a conditional add-back, in u32 registers, with Barrett
+magic-multiply throughout — and it sieves a bitmap indexed by (wheel
+period, lane), in which an integer divisible by 2, 3 or 5 has no
+representation at all. The parity gates compare streams that were produced
+by three different constructions.
 
 **Why the marking work is chunked.** The kill count for a prime is
 proportional to 1/q, so the smallest sieve prime does thousands of times
@@ -146,8 +151,9 @@ A Bateman–Horn estimate with a numerically computed singular series
 is **enormous** — every prime q ≤ prime(n) contributes (1−1/q)^(1−n), so at
 n = 16 the primes up to 53 alone multiply the density by about 5×10⁹, which
 is why these terms are findable at all — and the log factors are **not all
-log p**, because P(n) dwarfs every p this hunt will reach, so for j ≥ 1 the
-value is essentially j·P(n) and its log barely moves as p sweeps.
+log p₁**, because prime(n)# dwarfs every p₁ this hunt will reach, so every
+value p₁ + (k−1)·prime(n)# after the first is essentially (k−1)·prime(n)#
+and its log barely moves as p₁ sweeps.
 
 **Validation, on the nine known terms the model did not help find.**
 E(n, a(n)) should be an Exp(1) draw for each, so the values must *scatter*:
@@ -157,12 +163,12 @@ E(n, a(n)) should be an Exp(1) draw for each, so the values must *scatter*:
 | E at a(n) | 2.53 | 0.35 | 1.03 | 0.22 | 0.14 | 0.20 | 0.39 | 0.70 | 0.06 |
 
 They range 0.06 to 2.53 and sum to **5.64 against 9 expected** — honest
-scatter with a mild *early* lean (p ≈ 0.12 under Gamma(9), so not
+scatter with a mild *early* lean (p-value ≈ 0.12 under Gamma(9), so not
 significant). Recorded rather than smoothed away, and noted here because it
 is the opposite skew from the sibling project in this repo, whose model ran
 about 2× optimistic.
 
-**Predictions, stated before the run.** Depths on the p-line; each term is
+**Predictions, stated before the run.** Depths on the p₁-line; each term is
 its own sweep from the floor. The `found at` column was filled in
 afterwards; nothing else in the table moved, and `model_results.json` is
 unchanged from the pre-run file.
@@ -186,14 +192,14 @@ interval excludes 1. The per-term arithmetic is in
 [RESULTS.md](RESULTS.md).
 
 **What that means for what this project can expect to find.** The
-measured **v2** rates are **2.1×10¹¹ p/s** of device sieve at the
-campaign depth and **2.07×10¹¹ p/s end-to-end** (classification runs one
+measured **v2** rates are **2.1×10¹¹ p₁/s** of device sieve at the
+campaign depth and **2.07×10¹¹ p₁/s end-to-end** (classification runs one
 segment behind the device and is fully hidden;
 [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) #8), 34.7× the v1 engine this
 project was first built and priced around. The table above uses the
 end-to-end number, and the campaign then tested it against something
 nobody chose the shape of: three sweeps from the floor totalling
-1.63×10¹⁶ of p-line, predicted at 21.8 h and delivered in **23.4 h** —
+1.63×10¹⁶ of p₁-line, predicted at 21.8 h and delivered in **23.4 h** —
 **93% of a rate measured on a run 2,500× shorter**
 ([BENCHMARKS.md](BENCHMARKS.md)). So a(16) was minutes, a(17) a lunch
 break, a(18) a day — and **a(19), which was out of reach for v1 at 2.2
@@ -210,16 +216,15 @@ that **this project was built to find four new terms — three of them are
 in, and a(19) is the fourth.**
 
 **Verification changes character at a(19), too.** The largest value is
-about (n−1)·P(n): 4.9×10²⁰ at a(16), 3.1×10²² at a(17), 2.0×10²⁴ at
-a(18) — all below huntlib's deterministic Miller–Rabin bound of
+about (n−1)·prime(n)#: 4.9×10²⁰ at a(16), 3.1×10²² at a(17), 2.0×10²⁴
+at a(18) — all below huntlib's deterministic Miller–Rabin bound of
 3.317×10²⁴, which is why the three terms found here are *proved* by the
 engine's own chain. At a(19) the values reach 1.4×10²⁶ and the bound is
-gone; from
-there every value carries a BLS75 certificate, and since N−1 = p−1+j·P(n)
-has no structure to exploit, that means a bounded partial factorization and
-Theorem 5's cube-root threshold rather than Theorem 1's square root. Gate
-`g10` pins the crossing so no future edit can assume determinism it does
-not have.
+gone; from there every value carries a BLS75 certificate, and since
+N−1 = p₁−1+(k−1)·prime(n)# (N the k-th value) has no structure to exploit,
+that means a bounded partial factorization and Theorem 5's cube-root
+threshold rather than Theorem 1's square root. Gate `g10` pins the
+crossing so no future edit can assume determinism it does not have.
 
 ## Running it
 
@@ -273,13 +278,13 @@ load budget are repository-wide and documented in
   a(10) exhaustively one integer at a time with no wheel, and G2b checks
   the closed-form residue set against direct divisibility.
 - **The two fast engines are pinned bit-for-bit** on populated windows at
-  p ≈ 10⁶, 10⁹, 4×10¹³ and at the enforced ceiling of 10²⁶ (G6), and the
+  p₁ ≈ 10⁶, 10⁹, 4×10¹³ and at the enforced ceiling of 10²⁶ (G6), and the
   comparator is itself drilled with a corrupted, a dropped and an added
   survivor (G7). G14 checks kill decisions against big-integer divisibility
   of the actual values with no engine on the other side.
 - **A canary rediscovery runs before every campaign**: the production
   stream must re-derive a(13) = 3,708,797,237 from the floor, over
-  3.7×10⁹ of contiguous p-line, as the *smallest* p it accepts.
+  3.7×10⁹ of contiguous p₁-line, as the *smallest* p₁ it accepts.
 - **Every claimed find is verified four ways** before it is recorded: the
   engine's own chain, sympy's independent BPSW chain over the values in
   Python integers, a from-scratch re-derivation at a sieve depth the

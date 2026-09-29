@@ -12,10 +12,10 @@ bind hardest here, because the sibling project paid for both:
 
 ## v1 (2026-08-18): the engine as built
 
-One kernel, one thread per candidate j, all primes from n+2 to 65536 in
-one loop with an early exit on the first kill. Barrett magic-multiply
-(huntlib/gpu.py) for every reduction; no residue table on the device; no
-compaction stage; no bit-sieve.
+One kernel, one thread per candidate j (the code's name for k/W), all
+primes from n+2 to 65536 in one loop with an early exit on the first
+kill. Barrett magic-multiply (huntlib/gpu.py) for every reduction; no
+residue table on the device; no compaction stage; no bit-sieve.
 
 | shape | rate | candidates/s |
 |-------|------|--------------|
@@ -107,16 +107,16 @@ physical cores; pipelined 3 segments 3.9 s against 3.0 s GPU-only. A
 The sweep read "more workers, better ratio" and took `cpu_count - 4` = 60
 processes. It measured throughput only, and throughput was not the binding
 constraint: the campaign has to leave the desktop it runs on usable, and
-`cpu_count - k` is an appetite that scales with the host rather than with
-the work. Everything the hunt actually consumes is modest, and was
-measured: one launch is 21 ms of device time across 9 kernels (the TDR
-watchdog is 2 s), every queue write is bounds-guarded, the engine holds
-~0.8 GB of 24 GB of VRAM, and the pool holds ~7-9 GB of 64 GB. What is
-*not* modest is 60 fresh interpreters importing numpy and sympy in the
-same instant, which is peak host draw and lands exactly while the device
-is flat out on the next segment. The default became `min(8, cpu_count -
-2)` and then 4, sized from the requirement (CONVENTIONS.md, "Sizing a
-hunt so it leaves the machine usable").
+`cpu_count` less a constant is an appetite that scales with the host
+rather than with the work. Everything the hunt actually consumes is
+modest, and was measured: one launch is 21 ms of device time across 9
+kernels (the TDR watchdog is 2 s), every queue write is bounds-guarded,
+the engine holds ~0.8 GB of 24 GB of VRAM, and the pool holds ~7-9 GB of
+64 GB. What is *not* modest is 60 fresh interpreters importing numpy and
+sympy in the same instant, which is peak host draw and lands exactly
+while the device is flat out on the next segment. The default became
+`min(8, cpu_count - 2)` and then 4, sized from the requirement
+(CONVENTIONS.md, "Sizing a hunt so it leaves the machine usable").
 
 Eight was the conservative setting, and it is NOT the throughput optimum --
 recorded here so the tradeoff is explicit rather than rediscovered.
@@ -161,7 +161,7 @@ somebody's desktop does not get to take the whole machine**
 At v2 speed a 2^32 window is one to four launches and ~1-5 ms; identical
 configurations read 0.5x-2.3x against each other on it. Per Rule 4 and
 OPTIMIZATION.md 2.13 the frozen shapes were not touched: a third shape,
-`SCORE13` (n = 13, wheel 30030, j in [7e16, +2^38), k ~ 2.1e21 = the
+`SCORE13` (n = 13, wheel 30030, k/W in [7e16, +2^38), k ~ 2.1e21 = the
 model's a(13) median, 16-64 launches wide), was frozen from v2 (2,739
 survivors, xor 70000110051605722) and cross-checked bit-for-bit against
 v1 (56 s at v1 speed). Every verdict below is on SCORE13 unless stated.
@@ -614,7 +614,8 @@ depth, so the host pool is essentially idle at n = 13 (~3.7 core-s per
 
 ### 3. The fold, built (engine v4)
 
-Enumerate u with j = P*u + r over the offsets r that survive P = 17
+Enumerate u with j = P*u + r (code names: j = k/W, P the fold prime)
+over the offsets r, the residues of k/W mod 17 that survive P = 17
 (five of seventeen at n = 13: 0, 2, 6, 11, 15, from the same walk the
 device runs).  The kill-bit and pattern tables are built per offset --
 entry s answers for j = P*s + r -- and the KERNELS ARE UNCHANGED: they
@@ -632,8 +633,8 @@ carries more primes at the same queue density -- and the densest
 stage-1b primes moved into 1a with it, which is where the measured win
 beats the 1.8x prediction).
 
-**Paired A/B at the campaign shape (n = 13, q2 = 262144, 2^41-j window
-at the live cursor, streams compared every round, both arms in one
+**Paired A/B at the campaign shape (n = 13, q2 = 262144, a 2^41 window
+of k/W at the live cursor, streams compared every round, both arms in one
 process): fold/unfold = 2.387x (min 2.138, max 2.439, 7 rounds).**
 2.31e17 k/s folded vs 9.64e16 unfolded on the idle machine -- 4.3 s of
 device per 1e18 k.

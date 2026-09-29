@@ -168,7 +168,7 @@ each README stays.
    from the live frontier on every use so the retirement cannot be
    forgotten. See CONVENTIONS.md.
 5c. **Optimize the campaign, not just the engine.** A hunt's rate is
-   `max(device, host/workers)` over the k-line it covers, and the biggest
+   `max(device, host/workers)` over the line it covers, and the biggest
    lever in this repo has never once been the kernel: it was which filter
    the sieve asks for (which sets the wheel, and cost 13x), how deep it
    sieves (which decides *which side binds*, and therefore how many host
@@ -297,13 +297,16 @@ each README stays.
    The deterministic Miller-Rabin bound (3.317e24) is where a CLASSIFICATION
    stops being a proof; it is NOT where a hunt stops. A discovery is proved
    by CERTIFICATE on its own structure -- `huntlib.certificate` has BLS75
-   Theorem 1 and 5 on N - 1, Theorem 15 (Lucas) on N + 1, and subproofs for
-   any prime factor past the bound -- so for every ladder here (values
-   m*k +- 1) one factorization of k proves a whole run at any height. What
-   bounds k is the COST of that certificate per discovery, and
-   `huntlib.ceiling` MEASURED it: a worst-case k (a balanced semiprime) is
-   factored and proved in seconds to 1e40, so **`huntlib.ceiling.K_CEIL =
-   1e40` is the ceiling every new project starts from, on both signs.**
+   Theorem 1 and 5 on the value less one, Theorem 15 (Lucas) on the value
+   plus one, and subproofs for any prime factor past the bound -- so for
+   every multiplicative ladder here (values multiplier x term +- 1, each
+   written in its entry's own letters: r*k + 1 in A088250, k*m + 1 in
+   A173750, k!*m - 1 in A177013, 10^m*k + 1 in A305740) one factorization
+   of the term proves a whole run at any height. What bounds the term is
+   the COST of that certificate per discovery, and `huntlib.ceiling`
+   MEASURED it: a worst-case term (a balanced semiprime) is factored and
+   proved in seconds to 1e40, so **`huntlib.ceiling.K_CEIL = 1e40` is the
+   ceiling every new project starts from, on both signs.**
    Four campaigns ran into the deterministic bound with their next term
    probably just above it (prime-ladders' A084701, linear-ladders' four -1
    families) and each paid an engine version to move it; that was the
@@ -313,9 +316,9 @@ each README stays.
    the recursion exercised and the subproof shown unstrippable), runs the
    repo-wide `huntlib.ceiling.GATES`, and puts a populated parity window
    against the ceiling. A LOWER ceiling is allowed only with a
-   measurement that says why (a value with no m*k +- 1 structure, whose
-   N -+ 1 is structureless: measure `subproof_rate` there). See
-   CONVENTIONS.md "Numeric hygiene".
+   measurement that says why (a value with no multiplier x term +- 1
+   structure, so that the value -+ 1 is structureless: measure
+   `subproof_rate` there). See CONVENTIONS.md "Numeric hygiene".
 
 5i. **AN EVIDENCE FILE SPEAKS THE OEIS ENTRY'S LANGUAGE, AND SAYS WHICH
    INTEGER TO SUBMIT.** The reader of an evidence file is the owner, at the
@@ -361,8 +364,17 @@ each README stays.
    A305740 (smallest **k** with 10^m*k + 1 prime) and A153431 (smallest
    **m** with m*10^k + 1 prime), and that x and j reached the top-level
    table; the audit that followed found invented or borrowed letters in five
-   more rows (2026-09-29). Before writing any description, open each
-   entry's `%N` line in the OEIS data and copy its letters.
+   more rows (2026-09-29), and every project's documents were then
+   rewritten to the rule. Before writing any description, open each
+   entry's `%N` line in the OEIS data and copy its letters; where the name
+   gives a quantity no letter, use the letter the entry's own `%C`/`%F`/
+   `%e`/program lines use for it, else words or a(n). **Before committing
+   any document, list its single-letter variables** (grep the changed text
+   for letters standing alone next to `=`, `·`, `^`, `±`, `+`, `/`, `≡`)
+   and check each against the `%N` letters of the entry that sentence is
+   about; auxiliary notation that is no sequence's variable (a sieve prime
+   q, a wheel period W, a killed set K, BLS75's F and R) may stay unless it
+   collides with an entry's letter.
 
 6. **New projects** copy the skeleton, import huntlib for
    infrastructure, keep all mathematics in-project, and add a row to the
@@ -409,12 +421,12 @@ each README stays.
          family and runs `evidence.gate_names` on the project's own
          `evidence/` (CONVENTIONS.md "Naming in an evidence file")
    - [ ] campaign configuration priced the way 5c says (device s and
-         host core-s per unit k-line, per candidate setting), not just a
+         host core-s per unit of line swept, per candidate setting), not just a
          fast kernel
    - [ ] **the ceiling is `huntlib.ceiling.K_CEIL` (1e40) on every sign**
          (rule 5h), not the deterministic bound: `k_ceil` returns it, the
          proof crossing is a `[MILESTONE]`, the certificate route for each
-         sign (N - 1 or N + 1, from the value's structure) is drilled AT
+         sign (the value less one or plus one, from its structure) is drilled AT
          the ceiling with a subproof exercised, `huntlib.ceiling.GATES` is
          in the battery, and a populated parity window sits against it
    - [ ] checkpoints fsynced + `.bak` rotated, corrupt-file path drilled,

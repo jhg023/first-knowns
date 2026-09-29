@@ -5,7 +5,10 @@
 
 Verified finds for [A053647](https://oeis.org/A053647), in discovery order:
 the exact integers, the verification performed, the evidence file, and the
-basis of the least-claim.
+basis of the least-claim. A053647(n) is the least prime p₁ such that p₁,
+p₁ + prime(n)#, …, p₁ + (n−1)·prime(n)# are all prime; the entry's
+Mathematica program writes the progression p[1], …, p[n], and
+[A002110](https://oeis.org/A002110) writes the primorial prime(n)#.
 
 ## Standing state (2026-08-21)
 
@@ -22,7 +25,7 @@ A053647 since October 2009 — a 17-year-old frontier:
 
 All three were verified four ways (below), each was re-verified from its
 evidence file before publication — independently, from the definition, with
-sympy alone — and each sweep is contiguous from p = 2, which is what makes
+sympy alone — and each sweep is contiguous from p₁ = 2, which is what makes
 these *least* values rather than merely examples. **No upper or lower bound
 had ever been published for any of them**; the sequence's only bound,
 Jud McCranie's "a(14) > 2³² and a(15) > 2³²", was superseded in 2009.
@@ -37,14 +40,14 @@ submissions**: the pipeline records, humans decide (CLAUDE.md rule 5).
 
 ## A053647(16) = 116,781,362,669,989
 
-Found 2026-08-20, **21 minutes** into the campaign, at p ≈ 1.168×10¹⁴.
+Found 2026-08-20, **21 minutes** into the campaign, at p₁ ≈ 1.168×10¹⁴.
 
-- P(16) = 32,589,158,477,190,044,730, and p + j·P(16) is prime for every
-  j = 0…15 — sixteen simultaneous primes, the largest
-  488,837,493,939,213,340,939 (21 digits).
-- The chain breaks at j = 16: 521,426,652,416,403,385,669 =
+- prime(16)# = 32,589,158,477,190,044,730, and p₁, p₁ + prime(16)#, …,
+  p₁ + 15·prime(16)# are all prime — sixteen simultaneous primes, the
+  largest 488,837,493,939,213,340,939 (21 digits).
+- The chain breaks at p₁ + 16·prime(16)# = 521,426,652,416,403,385,669 =
   **79,817** × 6,532,776,882,323,357, so the chain is exactly 16.
-- Least-claim basis: every mod-30 wheel candidate from p = 10⁴ to
+- Least-claim basis: every mod-30 wheel candidate from p₁ = 10⁴ to
   1.1693×10¹⁴ was sieved and every survivor classified, each rejection a
   small prime dividing one of the values or a failed strong test;
   [2, 10⁴) was covered by the oracle's low pass.
@@ -54,20 +57,21 @@ Found 2026-08-20, **21 minutes** into the campaign, at p ≈ 1.168×10¹⁴.
 
 ## A053647(17) = 2,097,209,048,106,247
 
-Found 2026-08-20, 3.1 hours after a(16), at p ≈ 2.097×10¹⁵.
+Found 2026-08-20, 3.1 hours after a(16), at p₁ ≈ 2.097×10¹⁵.
 
-- P(17) = 1,922,760,350,154,212,639,070, and p + j·P(17) is prime for every
-  j = 0…16 — seventeen simultaneous primes, the largest
-  30,764,167,699,676,450,331,367 (23 digits).
-- **The chain does not stop at 17 — it runs 19 deep.** j = 17 and j = 18
-  give 32,686,928,049,830,662,970,437 and 34,609,688,399,984,875,609,507,
-  both prime, so this p is simultaneously a **19-term arithmetic
-  progression of primes** with common difference P(17). That is admissible
-  because 19 is itself among the first 17 primes, so P(17) is divisible by
-  it; it is a bonus, not another term — a(18) and a(19) require the
-  *different* differences P(18) and P(19), and neither is bounded by this.
-- The chain breaks at j = 19: 36,532,448,750,139,088,248,577 = **71** ×
-  514,541,531,692,099,834,487.
+- prime(17)# = 1,922,760,350,154,212,639,070, and p₁, p₁ + prime(17)#, …,
+  p₁ + 16·prime(17)# are all prime — seventeen simultaneous primes, the
+  largest 30,764,167,699,676,450,331,367 (23 digits).
+- **The chain does not stop at 17 — it runs 19 deep.** p₁ + 17·prime(17)#
+  and p₁ + 18·prime(17)# are 32,686,928,049,830,662,970,437 and
+  34,609,688,399,984,875,609,507, both prime, so this p₁ is simultaneously
+  a **19-term arithmetic progression of primes** with common difference
+  prime(17)#. That is admissible because 19 is itself among the first 17
+  primes, so prime(17)# is divisible by it; it is a bonus, not another
+  term — a(18) and a(19) require the *different* differences prime(18)# and
+  prime(19)#, and neither is bounded by this.
+- The chain breaks at p₁ + 19·prime(17)# = 36,532,448,750,139,088,248,577
+  = **71** × 514,541,531,692,099,834,487.
 - Least-claim basis: the same contiguous sweep, from the floor to
   2.0974×10¹⁵, unbroken.
 - Model quantile of the find: **0.823** (E = 1.73; median predicted
@@ -89,14 +93,15 @@ found in the published terms.
 
 ## A053647(18) = 14,042,451,608,819,603
 
-Found 2026-08-21, 19.9 hours after a(17), at p ≈ 1.404×10¹⁶ — 120× above
+Found 2026-08-21, 19.9 hours after a(17), at p₁ ≈ 1.404×10¹⁶ — 120× above
 a(17) and the deepest sweep of the campaign.
 
-- P(18) = 117,288,381,359,406,970,983,270, and p + j·P(18) is prime for
-  every j = 0…17 — eighteen simultaneous primes, the largest
-  1,993,902,497,152,370,115,535,193 (25 digits).
-- The chain breaks at j = 18: 2,111,190,878,511,777,086,518,463 =
-  **424,267** × 4,976,090,241,550,196,189, so the chain is exactly 18.
+- prime(18)# = 117,288,381,359,406,970,983,270, and p₁, p₁ + prime(18)#,
+  …, p₁ + 17·prime(18)# are all prime — eighteen simultaneous primes, the
+  largest 1,993,902,497,152,370,115,535,193 (25 digits).
+- The chain breaks at p₁ + 18·prime(18)# =
+  2,111,190,878,511,777,086,518,463 = **424,267** ×
+  4,976,090,241,550,196,189, so the chain is exactly 18.
 - Least-claim basis: the same contiguous sweep, from the floor to
   1.40425×10¹⁶.
 - Model quantile of the find: **0.425** (E = 0.55; median predicted
@@ -105,7 +110,7 @@ a(17) and the deepest sweep of the campaign.
 
 ## How the model did
 
-Each E below is the expected count of qualifying p up to the value that was
+Each E below is the expected count of qualifying p₁ up to the value that was
 found, under the Bateman–Horn estimate fixed in `model_results.json` before
 the first production sweep. Each should be an Exp(1) draw.
 
@@ -159,21 +164,22 @@ recorded, and any disagreement halts the campaign with exit 2:
    `huntlib.certificate`.
 
 Leg 4 was free for all three finds and is real work after them. The largest
-value is about (n−1)·P(n) — 4.9×10²⁰ at a(16), 3.1×10²² at a(17),
+value is about (n−1)·prime(n)# — 4.9×10²⁰ at a(16), 3.1×10²² at a(17),
 2.0×10²⁴ at a(18) — all below the deterministic Miller–Rabin bound of
 3.317×10²⁴, so legs 1 and 2 are proofs and the certificate restates them;
 all 51 values carry `deterministic-mr`. At a(19) the values reach 1.4×10²⁶:
 from there each value needs a BLS75 certificate over a bounded partial
 factorization of N−1, which has no structure to exploit
-(N−1 = p−1+j·P(n)), so it will usually be Theorem 5's cube-root threshold
-with a subproof when a large prime cofactor appears.
+(N−1 = p₁−1+(k−1)·prime(n)# for N the k-th value), so it will usually be
+Theorem 5's cube-root threshold with a subproof when a large prime cofactor
+appears.
 
 **The basis of the least-claim.** Each term is swept contiguously from the
-floor: p = 2 up to max(10⁴, sieve depth) by the oracle in the launcher's
-low pass, and everything above by the engine. Every p the sweep passes over
-is rejected either by a small prime dividing one of its values — a factor
-witness, checkable with one multiplication — or by a failed strong test,
-which is a proof of compositeness. So "this is the least p" rests on
+floor: p₁ = 2 up to max(10⁴, sieve depth) by the oracle in the launcher's
+low pass, and everything above by the engine. Every p₁ the sweep passes
+over is rejected either by a small prime dividing one of its values — a
+factor witness, checkable with one multiplication — or by a failed strong
+test, which is a proof of compositeness. So "this is the least p₁" rests on
 rigorous ground throughout, independently of the primality proofs for the
 find itself. A canary rediscovery of a(13) = 3,708,797,237 from the floor
 ran before the campaign was trusted.
@@ -181,7 +187,7 @@ ran before the campaign was trusted.
 **Re-verified before publication.** All three evidence files were re-checked
 against the definition by a script that shares nothing with the engines —
 sympy's `isprime` and a primorial recomputed from `primerange` — confirming
-for each: the difference is P(n), all n values are prime, the recorded
+for each: the difference is prime(n)#, all n values are prime, the recorded
 `values[]` match the definition, the chain's true depth is what the file
 says, and the recorded factor witness divides the breaking value.
 
@@ -192,7 +198,7 @@ sweeps. The census — chain depths counted in the checkpoint and shown in
 every 30-second `[STATUS]` line — is kept **per term**, because a chain of
 depth 12 means something different under a different difference, and it is
 cleared when the campaign moves to the next term. So what survives is the
-**a(18) sweep's** census, over 1.404×10¹⁶ of p-line:
+**a(18) sweep's** census, over 1.404×10¹⁶ of p₁-line:
 
 ```
 census 6:1137084 7:332357 8:97660 9:28451 10:8277 11:2391 12:701
@@ -211,13 +217,13 @@ Only first occurrences get files (CONVENTIONS.md).
 ## Where it stopped
 
 **PAUSED 2026-08-21**, resumable. The campaign halted immediately after the
-a(18) find, with the cursor at p = 1.40425×10¹⁶ under the a(18) sieve; the
+a(18) find, with the cursor at p₁ = 1.40425×10¹⁶ under the a(18) sieve; the
 checkpoint has a(18) settled but the stage advance not yet taken, so
 `python launch.py` resumes by retiring a(18)'s rungs, resetting the cursor
 to the floor and building a fresh sieve for **a(19)** — the launcher does
 this itself and logs a `[STAGE]` line saying so.
 
-a(19) is a genuinely bigger hunt: median 4.12×10¹⁷ on the p-line, **about
+a(19) is a genuinely bigger hunt: median 4.12×10¹⁷ on the p₁-line, **about
 23 days** on one 4090 at the measured end-to-end rate, and the first term
 whose values pass the deterministic Miller–Rabin bound, so every value will
 need a BLS75 certificate. See [BENCHMARKS.md](BENCHMARKS.md) for what the

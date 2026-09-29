@@ -22,7 +22,7 @@ end-to-end rate predicted it to within 7%.
 ## #1 — The phase split, measured before anything was touched
 
 **Rule 1 of OPTIMIZATION.md, and it paid immediately.** One launch of
-2²⁵ wheel periods (1.0×10⁹ of p-line) at n = 16, depth 4096, timed phase by
+2²⁵ wheel periods (1.0×10⁹ of p₁-line) at n = 16, depth 4096, timed phase by
 phase with a device sync between each:
 
 | phase | time |
@@ -52,7 +52,7 @@ overlapping the 24%.
 ## #2 — The first depth sweep was wrong, and the reason is a clock regime
 
 **Rejected — the numbers, not the conclusion.** The first sieve-depth sweep
-was run on a card that had been idle, and reported 2.44×10¹⁰ p/s at depth
+was run on a card that had been idle, and reported 2.44×10¹⁰ p₁/s at depth
 2048. A re-measurement after a 12-second soak, on the same window with the
 same code, reported **8.46×10⁹** — the first numbers were inflated **2.9×**
 by boost clocks the card cannot hold. The card in its sustained state sits
@@ -73,10 +73,10 @@ compare a number taken on a cold card with one taken on a warm one.
 ## #3 — Campaign configuration: sieve depth and the load budget
 
 **Kept: depth 2048, two workers.** Measured at the production shape
-(n = 16, p ≈ 4×10¹³), interleaved, four rounds, median, sustained card,
+(n = 16, p₁ ≈ 4×10¹³), interleaved, four rounds, median, sustained card,
 with the host priced at the measured 17 µs per survivor:
 
-| sieve depth | device p/s | survivors / unit | host cores | verdict |
+| sieve depth | device p₁/s | survivors / unit | host cores | verdict |
 |-------------|-----------|------------------|-----------|---------|
 | 1024 | 9.67×10⁹ | 1.99×10⁻⁵ | 3.28 | **declined** — see below |
 | **2048** | **8.46×10⁹** | 4.47×10⁻⁶ | **0.64** | **chosen** |
@@ -165,7 +165,7 @@ table row is mostly zeros and a load per word loses to marking the rare
 bits directly; the crossover is where ~4·w/q bits per q words thins out.
 
 At the campaign depth the whole sieve is now the gather: device rate
-measured **2.4–5.8×10¹¹ p/s** across ambient regimes, against v1's
+measured **2.4–5.8×10¹¹ p₁/s** across ambient regimes, against v1's
 0.7–2.4×10¹⁰ — the honest cross-regime statement is **20–25× device**,
 and the SCORE (one number, one shape, gates green) went 5,163 → 39,772.
 
@@ -221,11 +221,11 @@ overlap (#8) hides all of it. Priced and declined:
 - **gmpy2's powmod (~2–4× on the classify): declined** — a new
   dependency is the owner's call, and at the kept depth it buys nothing
   (the classify is already hidden).
-- **a device base-2 sprp prefilter on p: declined on the measured
+- **a device base-2 sprp prefilter on p₁: declined on the measured
   arithmetic.** It first looked like a 3× host cut (it removes the ~53%
-  of survivors whose p is composite). It is not, and the reason is the
-  classify cost's own shape: a p-composite survivor costs ONE 7 µs test,
-  while a p-passing survivor averages 1.7 more tests on values that are
+  of survivors whose p₁ is composite). It is not, and the reason is the
+  classify cost's own shape: a p₁-composite survivor costs ONE 7 µs test,
+  while a p₁-passing survivor averages 1.7 more tests on values that are
   ~65 bits — past u64, so the device cannot touch them at n = 16. The
   filter therefore removes only 23% of host work (16.7 → 12.9 µs per
   sieve survivor), leaving depth 4096 at ~3.5 cores — still 4× the
@@ -238,9 +238,9 @@ overlap (#8) hides all of it. Priced and declined:
 **Kept, unchanged: the numbers held.** The a(16)–a(18) campaign
 (2026-08-20/21) is the first production run at the #9 configuration, and
 it is the only measurement in this file whose shape nobody chose: three
-sweeps from the floor, 1.63×10¹⁶ of p-line, stopped by a find rather than
-by a `--to`. Predicted at the pre-stated 2.07×10¹¹ p/s: 21.8 h. Actual:
-**23.4 h wall clock, 1.93×10¹¹ p/s, 93%** — with the shortfall accounted
+sweeps from the floor, 1.63×10¹⁶ of p₁-line, stopped by a find rather than
+by a `--to`. Predicted at the pre-stated 2.07×10¹¹ p₁/s: 21.8 h. Actual:
+**23.4 h wall clock, 1.93×10¹¹ p₁/s, 93%** — with the shortfall accounted
 for and none of it in the kernel (the canary rediscovery, three pool ramps
 and three fresh sieve builds, verification pauses, one restart). A rate
 measured on 6.4×10¹² of line predicted a run 2,500× longer to within a
@@ -251,12 +251,12 @@ Two things to carry into the next pass rather than fix now:
 
 - **The depth table (#9, BENCHMARKS.md) was measured at n = 16 and does
   not transfer up.** Classification cost is bignum `pow` on values of
-  ~(n−1)·P(n), which grew from 21 digits at a(16) to 25 at a(18) and hits
-  27 at a(19) — and at a(19) each find also needs BLS75 certificates. The
-  host side is the one that moves; **re-measure µs per survivor at n = 19
-  before sizing that pool** (CONVENTIONS.md rule 5c), because 3 workers
-  was sized from 1.1 cores of demand at n = 16 and that number is stale by
-  construction.
+  ~(n−1)·prime(n)#, which grew from 21 digits at a(16) to 25 at a(18) and
+  hits 27 at a(19) — and at a(19) each find also needs BLS75 certificates.
+  The host side is the one that moves; **re-measure µs per survivor at
+  n = 19 before sizing that pool** (CONVENTIONS.md rule 5c), because 3
+  workers was sized from 1.1 cores of demand at n = 16 and that number is
+  stale by construction.
 - **`wall_s` undercounted, and the fix was a placement, not a
   calculation.** The clock was folded in by `run`'s `finally`, *after* the
   boundary snapshot had been taken; the interrupt callback then saved that

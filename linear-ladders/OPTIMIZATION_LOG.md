@@ -23,7 +23,9 @@ every measurement here is an engine call on a chosen window.
 **What it is.** prime-ladders' v3.1 GPU engine with
 `killed_residues(q, n, s) = { -s·prime(i)⁻¹ }` replaced by
 `killed_residues(q, n, F, unit) = { -s·m⁻¹ mod q : m in mults(F, n), q ∤ m }`
-over the family's multipliers, a family key in place of a sign, and the
+(the docstring's formula in the code's own names: `s` the sign, `m` a
+multiplier — not any entry's `m`) over the family's multipliers, a
+family key in place of a sign, and the
 unit chosen per family from the forced primes at its opening filter. The
 kernel, the three-level CRT wheel in unit space, the compaction design,
 the tail rounds with lanes per item, the pipelined loop and the `(k, off)`
@@ -34,15 +36,16 @@ this problem's density changes the answer — and it changes several.
 **Design-time rules applied before a line was written:**
 
 - **2.7, carry `(k, off)`.** Inherited. The enforced ceiling is the
-  primality-proof bound: `3.317×10²⁴` on k for the +1 families (BLS75
-  Theorem 1 on `N − 1 = m·k` past the crossing), the crossing
-  `k_proof(n, F) = (3.317×10²⁴ − s − 1) / m_max` for the −1 families
+  primality-proof bound: `3.317×10²⁴` on the term for the +1 families
+  (BLS75 Theorem 1 on `N − 1`, the multiplier times the term, past the
+  crossing), the crossing — `3.317×10²⁴` over the largest multiplier,
+  `k_proof(n, F)` in the code — for the −1 families
   (`2.2×10²³` at n = 15), and no machine word appears in either (G10,
-  tight to one k).
+  tight to one value of the term).
 - **Choose the wheel that fits at every parameter the battery runs.** The
   same (31],(41],(53] wheel serves all seven families at every filter
   they can reach, because `w(q,n,F)` only grows with n and the tables only
-  shrink. The k-space wheels the gates run stop at 47, as prime-ladders'
+  shrink. The term-space wheels the gates run stop at 47, as prime-ladders'
   did.
 - **Measure the campaign, not just the engine (5c), at every opening
   (5g).** Seven families, four filters each: the openings are enumerated
@@ -57,7 +60,7 @@ production pipelined sweep's wall clock, 48 launches of period 1:
 |---|---|---|---|---|---|
 | A088250 n = 15 | 259 | 4.35 ms (87%) | 0.65 ms (13%) | 5.00 ms = **95%** of 5.25 ms | `2.37×10¹⁹ k/s` |
 | A088250 n = 17 | 31 | 3.17 ms (86%) | 0.52 ms (14%) | 3.70 ms = **101%** of 3.67 ms | `3.5×10²⁰ k/s` |
-| A125838 n = 15 | 719 | 4.60 ms (85%) | 0.83 ms (15%) | 5.43 ms = **98%** of 5.51 ms | `7.9×10¹⁸ k/s` |
+| A125838 n = 15 | 719 | 4.60 ms (85%) | 0.83 ms (15%) | 5.43 ms = **98%** of 5.51 ms | `7.9×10¹⁸ m/s` |
 
 The loop is device-bound at every opening: the host gap is 0–5% of wall,
 and the tail — 25% of the device in prime-ladders v1, 11% after its
@@ -86,7 +89,7 @@ first is whatever sits between the launches.
 64 launches of period 1 (whole periods where a period holds fewer), 3
 rounds, the constants of item 4:
 
-| family | filter | forms c | unit | R1 × R2 × R3 | density (cand / k) | line rate | survivors / unit line | survivors / s | host need at 14.5 µs |
+| family | filter | forms c | unit | R1 × R2 × R3 | density (candidates per unit of line) | line rate | survivors / unit line | survivors / s | host need at 14.5 µs |
 |---|---|---|---|---|---|---|---|---|---|
 | A088250 | 15 | 15 | 30030 | 14,336 × 572 × 34,048 | `8.6×10⁻⁹` | **`2.2×10¹⁹`** | `2.1×10⁻¹⁵` | 46,000 | 0.66 core-s/s |
 | A088250 | 16 | 16 | 30030 | 4,095 × 525 × 30,969 | `2.0×10⁻⁹` | **`8.3×10¹⁹`** | `1.7×10⁻¹⁶` | 13,600 | 0.20 |
@@ -233,8 +236,9 @@ rejected lists applies to this kernel unchanged, since it is this kernel.
   launch count over a period's, and the deep shapes are denominated in
   periods.
 - **The −1 families' ceilings are the crossing**, `2.2×10²³` at n = 15
-  down to `1.0×10²³` for A164326 at n = 17 (m_max = 33). An N+1
-  certificate (BLS75 on the factorization of `m·k = N + 1`) would lift
+  down to `1.0×10²³` for A164326 at n = 17 (its largest multiplier is
+  33). An N+1 certificate (BLS75 on the factorization of `N + 1`, the
+  multiplier times the term) would lift
   every one of them to `3.317×10²⁴`; huntlib does not have it, and adding
   it is a new engine version with a certificate drill at that height.
 
@@ -269,7 +273,7 @@ rejected lists applies to this kernel unchanged, since it is this kernel.
 
 `SCORE 30,826,035,115,578` / `SCORE17 404,629,246,197,708` /
 `SCOREM 8,416,469,598,948`, the three shapes re-frozen on the new wheel
-(the wheel is a deliberate coverage change; the three k-space shapes keep
+(the wheel is a deliberate coverage change; the three term-space shapes keep
 v1's fingerprints and reproduce them). 42/42 green in 88 s (G18 is new;
 G17 gained a three-wheel leg). Every number below is a **paired,
 interleaved ratio** from a harness that builds two engines from the same
@@ -472,7 +476,7 @@ c = 16 is nearer 1.25×. `LIT_SURV_UNIT_BY_C` is now 0.12 to c = 16 and
 round-2 tables leaving L1); `tpb` 256 0.980 / 0.960; `CAND_PER_LAUNCH`
 2³¹ **1.027 / 1.032** at n = 17 / 18 (two third-level residues per
 launch; below c = 17 one residue exceeds either budget) — KEPT; and the
-prefix byte cap itself on the k-space gate shapes (`SCORE10`, `SCORE2L`)
+prefix byte cap itself on the term-space gate shapes (`SCORE10`, `SCORE2L`)
 1.003–1.007 against no cap. `PRE_COPY` was raised to 2¹⁵ because a c = 14
 launch returns ~15,000 survivors and the synchronous read past 2¹³ was
 the 2.2% host gap in that phase split.
@@ -483,7 +487,7 @@ Wheel (..37],(37,47],(47,59]; `LIT_GROUP_MAX` 2¹⁹ with `PREFIX_BYTES_MAX`
 40 KB; `LIT_SURV_UNIT_BY_C` 0.12 / 0.19; the offset fold; `Q3_MAX` 2²⁸;
 `CAND_PER_LAUNCH` 2³¹; `PRE_COPY` 2¹⁵; `CARVEOUT_PCT` 50 pinned;
 `OCC_MIN_BLOCKS` 8 with the (4, 1) body as the fallback; G18; G17's
-three-wheel leg (the v2 wheel, v1's and the k-space wheel over
+three-wheel leg (the v2 wheel, v1's and the term-space wheel over
 `[10⁶, 3.26×10¹⁹)` at n = 17: 799 identical survivors); `CKPT_LAUNCHES`
 32 (a launch is 8–40× the work it was). Against v1 at the same filter,
 paired: **1.27× (c = 15), 1.50× (16), 1.20× (17), 1.32× (18), 0.94–1.00×
@@ -507,13 +511,13 @@ second-level offset in the kernel and a chunk loop in `_sweep`); the
 `ffs` compaction and the vectorised residue loads; an N+1 BLS75 route for
 the −1 families' ceilings (unchanged from v1). **Do not rebuild:** shared
 pair tables, unroll-depth changes, `kacc`, `lazyoff`, any variant of the
-fallback (Measurement 4), and every k-space reject in square-ladders' and
+fallback (Measurement 4), and every term-space reject in square-ladders' and
 prime-ladders' logs.
 
 ### What the gates caught
 
 - **The resume drill's two-level window fell inside period 0.** Its
-  `k = 10¹⁵` sat in the first period of the wider two-level wheel
+  start at `10¹⁵` sat in the first period of the wider two-level wheel
   (`6.2×10¹⁷`), and the engine refused the unclipped window as designed;
   the drill moved to `10¹⁹`, six periods, cut at two.
 - **The harness measured one kernel six times.** CuPy memoizes
@@ -640,16 +644,17 @@ the segment are v2's; nothing in the kernel moved), so this version has no
 paired engine ratio to report and the SCORE row in BENCHMARKS.md is the
 ambient band. 44/44 green in 120 s (three new drills, two gates extended).
 Nothing here is a campaign (CLAUDE.md 0a): every number is an engine call
-on a chosen window, a certificate timed on a constructed k, or a model
+on a chosen window, a certificate timed on a constructed term, or a model
 query.
 
 ### The design (handoff items 1-3), and why the ceiling is not two numbers
 
 The v2 ceilings were where the PROOFS stopped: the deterministic
-Miller-Rabin bound on k for the +1 families (so that every prime factor
-of k stayed under the bound and Theorem 1 needed no subproof), and the
-proof crossing itself for the -1 families, whose values' structure is on
-`N + 1 = m*k` and for which huntlib had no test at all. Both were limits
+Miller-Rabin bound on the term for the +1 families (so that every prime
+factor of the term stayed under the bound and Theorem 1 needed no
+subproof), and the proof crossing itself for the -1 families, whose
+values' structure is on `N + 1`, the multiplier times the term, and for
+which huntlib had no test at all. Both were limits
 of the CERTIFICATE, not of the engine -- candidates are `(k, off)` with a
 Python-int base, the CPU engine, the model and the checkpoint are Python
 ints -- so the design is three things in huntlib and none in the kernel:
@@ -671,7 +676,8 @@ ints -- so the design is three things in huntlib and none in the kernel:
    past the bound; `N = 2P - 1` with P a prime past the bound, for the
    recursion; and `(F' - 1)(F' + 1)` for the composite side). The
    cube-root N+1 theorem (BLS75 Theorem 17) is NOT implemented, priced
-   at nothing: a value `m*k - 1` has `N + 1` fully factored once k is, so
+   at nothing: a value (the multiplier times the term) - 1 has `N + 1`
+   fully factored once the term is, so
    `F = N + 1` and the square-root condition holds trivially; a subproof
    of a structureless prime has Theorem 5 (cube root) on its `p - 1` side
    already, and the measured subproof rate below says that suffices.
@@ -684,11 +690,12 @@ ints -- so the design is three things in huntlib and none in the kernel:
    chain then `factorint` -- the one unbounded call, which is exactly
    what the ceiling bounds.
 3. **The ceiling from the measurement** (`huntlib.ceiling`). The worst
-   case for the factoring chain is a k whose hard part is a balanced
-   semiprime; here every k is a multiple of its unit (30030, 510510, or
-   9699690 from n = 18), so the hard part is `k / unit`. Measured 2026-09-04,
-   `factor_full` (200 ECM curves, then factorint), two seeds per height,
-   k = unit x two primes within 1% of `sqrt(k / unit)`:
+   case for the factoring chain is a term whose hard part is a balanced
+   semiprime; here every term is a multiple of its unit (30030, 510510, or
+   9699690 from n = 18), so the hard part is the term over the unit.
+   Measured 2026-09-04, `factor_full` (200 ECM curves, then factorint),
+   two seeds per height, the term = unit x two primes within 1% of the
+   square root of that quotient:
 
    | height | unit 1 (huntlib's default case) | unit 9699690 (this project from n = 18) |
    |---|---|---|
@@ -703,7 +710,7 @@ ints -- so the design is three things in huntlib and none in the kernel:
    | 1e42 | not measured | 1.6, 0.3 s |
 
    `factorint` was never reached: the 200 curves found every factor.
-   The other expensive shape, `k = unit * P` with P a prime above the
+   The other expensive shape, a term `unit * P` with P a prime above the
    bound (a subproof of P): `factor_partial` leaves P in 0.1 s and the
    subproof is the question. A random prime near each height, eight (six
    from 1e35) samples each, `prove(P)` with both sides available: **8/8
@@ -712,7 +719,7 @@ ints -- so the design is three things in huntlib and none in the kernel:
    in a third of the cases from 1e33. So the certificate a discovery
    costs at 1e40 is one or two seconds of factoring plus tens of
    milliseconds per value, on either sign; the huntlib gate at K_CEIL
-   times four proofs on a worst-case k at 0.9 s and four with a subproof
+   times four proofs on a worst-case term at 0.9 s and four with a subproof
    of a 35-digit factor at 1.2 s, against a 60 s budget. **K_CEIL =
    1e40**, one number for every family and both signs (`lladder_search
    .k_ceil`, G10); what would raise it is the same table one decade up
@@ -721,8 +728,9 @@ ints -- so the design is three things in huntlib and none in the kernel:
    once per filter as a `[MILESTONE]`.
 
 **Where the cost actually goes in the campaign.** A discovery's
-`certify_run` is one `factor_full(k)` and then, per value, a witness
-search: measured on a worst-case k at 1e40 with this project's units and
+`certify_run` is one `factor_full` of the term and then, per value, a
+witness search: measured on a worst-case term at 1e40 with this
+project's units and
 signs, `ceiling.certificate_cost` (three values per family, Measurement
 1): factoring 1.3-3.8 s, three proofs 0.01 s. `verify()`'s stopper witness is now
 BOUNDED too (`stopper_witness`: trial division, rho, 200 ECM curves; the
@@ -738,15 +746,15 @@ Every family resumes at the filter after its frontier (`Campaign.calibrate`
 on a scratch copy of the real v2 checkpoint, one second of the campaign's
 own next launches; nothing recorded):
 
-| family | resumes at | k (v2 cursor) | device | survivors / s | host need | pool | regs / blocks |
+| family | resumes at | v2 cursor | device | survivors / s | host need | pool | regs / blocks |
 |---|---|---|---|---|---|---|---|
 | A088250 | n = 18 | `3.317e24` (period 1725) | `1.39e21 k/s` | 3,350 | 0.047 core-s/s | 1 | 56 / 9 |
-| A173750 | n = 20 | `3.317e24` (1725) | `2.86e21` | 1,320 | 0.017 | 1 | 56 / 9 |
-| A125838 | n = 19 | `1.730e23` (90) | `7.05e20` | 3,500 | 0.043 | 1 | 56 / 9 |
-| A125839 | n = 19 | `1.730e23` (90) | `2.51e20` | 9,000 | 0.108 | 1 | 56 / 9 |
-| A164325 | n = 19 | `3.317e24` (1725) | `1.78e21` | 1,270 | 0.016 | 1 | 56 / 9 |
-| A164326 | n = 17 | `9.998e22` (52) | `1.85e20` | 9,000 | 0.122 | 1 | 56 / 9 |
-| A088651 | n = 17 | `1.942e23` (101) | `3.77e20` | 9,020 | 0.113 | 1 | 56 / 9 |
+| A173750 | n = 20 | `3.317e24` (1725) | `2.86e21 m/s` | 1,320 | 0.017 | 1 | 56 / 9 |
+| A125838 | n = 19 | `1.730e23` (90) | `7.05e20 m/s` | 3,500 | 0.043 | 1 | 56 / 9 |
+| A125839 | n = 19 | `1.730e23` (90) | `2.51e20 m/s` | 9,000 | 0.108 | 1 | 56 / 9 |
+| A164325 | n = 19 | `3.317e24` (1725) | `1.78e21 m/s` | 1,270 | 0.016 | 1 | 56 / 9 |
+| A164326 | n = 17 | `9.998e22` (52) | `1.85e20 m/s` | 9,000 | 0.122 | 1 | 56 / 9 |
+| A088651 | n = 17 | `1.942e23` (101) | `3.77e20 k/s` | 9,020 | 0.113 | 1 | 56 / 9 |
 
 (one-second windows, the fingerprint of each family's first launches
 implicit in the survivor counts; the campaign rates in RESULTS.md, taken
@@ -754,7 +762,7 @@ over minutes, agree to 5% -- `1.45e21`, `3.0e21`, `7.2e20`, `2.4e20`,
 `1.8e21`, `1.8e20`, `3.75e20` -- and are the numbers to check the first
 `[STATUS]` lines against.) The host need is 0.02-0.12 core-seconds per
 second everywhere, so every resumed campaign sizes a pool of 1, and the
-loop is device-bound by 8x or more. The certificate at k = 9.83e39 with
+loop is device-bound by 8x or more. The certificate at a term of 9.83e39 with
 each family's own unit, sign and multipliers (`ceiling.certificate_cost`,
 three prime values each): factoring 1.3 s (3.8 s for A088651's unit
 510510, whose hard part is a 19-digit square) and 0.00-0.01 s for the
@@ -769,10 +777,10 @@ each configuration (ratio to the shipped 0.19):
 
 | configuration (forms) | 0.12 | 0.19 | 0.28 |
 |---|---|---|---|
-| A173750 n = 21 (c = 20) | 0.977 | **1.000** (`6.28e21 k/s`) | 0.928 |
-| A164325 n = 20 (c = 20, odd) | 0.977 | **1.000** (`3.72e21`) | 0.933 |
-| A088250 n = 20 (c = 20) | 0.979 | **1.000** (`6.28e21`) | 0.934 |
-| A088250 n = 19 (c = 19, the control) | 0.967 | **1.000** (`2.81e21`) | 0.964 |
+| A173750 n = 21 (c = 20) | 0.977 | **1.000** (`6.28e21 m/s`) | 0.928 |
+| A164325 n = 20 (c = 20, odd) | 0.977 | **1.000** (`3.72e21 m/s`) | 0.933 |
+| A088250 n = 20 (c = 20) | 0.979 | **1.000** (`6.28e21 k/s`) | 0.934 |
+| A088250 n = 19 (c = 19, the control) | 0.967 | **1.000** (`2.81e21 k/s`) | 0.964 |
 
 The last entry stands, c = 21 takes it, and the n = 19 control reproduces
 v2's Measurement 7 row. All twelve configurations compiled to 50-58
@@ -783,7 +791,7 @@ openings: 34 configurations, all at 8-9 blocks, no spills.
 ### Measurement 2 -- nothing in the segment loop scales with the campaign's age
 
 The host side of one launch (`_submit`, `_drain`, `_backpressure`, the
-rate-limited save check) on 200 fake launches of 320 real wheel k at
+rate-limited save check) on 200 fake launches of 320 real wheel candidates at
 n = 18 through a real 2-worker pool, and the period close (`handle` on the
 pending census, `check_rungs`, `status_line`, one save), at three ages:
 
@@ -817,7 +825,7 @@ durability drill and the interrupt snapshot are unchanged and green.
 ### What the gates caught
 
 - **The first per-family harness timed the fallback, not the route.** It
-  called `certify_run` on a worst-case k whose values are not prime, so
+  called `certify_run` on a worst-case term whose values are not prime, so
   every value fell through to `certificate.prove(N)`'s own bounded search
   on both sides -- about a second each, 17-20 s per family. A real
   discovery's values are prime and take the structured route (0.03 s for
@@ -839,14 +847,14 @@ timestamps and the checkpoint:
 
 | filter | line swept | wall clock | campaign rate | the harness / paired figure |
 |---|---|---|---|---|
-| n = 17 | `1.97e24` | 2.73 h | `2.0e20 k/s` | `1.85e20` (Measurement 1 above), `1.95e20` (v2 campaign) |
+| n = 17 | `1.97e24` | 2.73 h | `2.0e20 m/s` | `1.85e20` (Measurement 1 above), `1.95e20` (v2 campaign) |
 | n = 18 | `7.54e24` | 3.88 h | `5.4e20` | `4.9-5.3e20` (A164325 n = 18, paired) |
 | n = 19 | `6.44e24` | 56 min | `1.9e21` | `1.8e21` (A164325 n = 19, paired) |
 
 The pool was 1 throughout, no `HOST-BOUND` fragment, and the wall clock
 per unit of line matched the device's at every filter, which is the
 measurement OPTIMIZATION.md 2.14 says only a campaign can take. The two
-certificates cost nothing visible: `k` of a(17) is `30030 * 113 * 3.59e16`
+certificates cost nothing visible: `m` of a(17) is `30030 * 113 * 3.59e16`
 and a(18)'s `unit * 3.3e4 * 4.9e10`, seconds of factoring at most, and
 the 34 Theorem 15 proofs re-verified from disk in under a second. Eight
 campaigns, twenty-five phases, all at the engine's rate.
@@ -872,7 +880,7 @@ pin and then retired (OPTIMIZATION.md rule 0). Nothing here is a campaign
 
 Baseline on 2026-09-05, the frozen shapes with the fingerprint checked:
 `SCORE` `1.81e11` candidates/s (`2.83e19 k/s`), `SCORE17` `2.22e11`
-(`3.73e20`), `SCOREM` `1.45e11` (`7.75e18`); tail rounds 10.7-11.2% of
+(`3.73e20`), `SCOREM` `1.45e11` (`7.75e18 m/s`); tail rounds 10.7-11.2% of
 every launch, entered by 0.78% of candidates. v2's termination table had
 the sieve kernel issue-bound at ~12 instructions per candidate per prefix
 group -- five groups at c = 15 -- and ~170 issue slots per candidate in
@@ -921,7 +929,7 @@ each a differential variant of the same source (3.3):
 | variant (n = 17) | ratio | what it says |
 |---|---|---|
 | extraction removed (a data-dependent test that is never true) | **2.87** | two thirds of the kernel was the survivor path, at 0.7% survivors |
-| per-lane shared atomics in the extraction replaced by ONE reservation per warp (`warp_reserve`: a shuffle prefix and one atomic) | **1.50** | a same-address shared atomic from k lanes is k-deep |
+| per-lane shared atomics in the extraction replaced by ONE reservation per warp (`warp_reserve`: a shuffle prefix and one atomic) | **1.50** | a same-address shared atomic is as deep as the number of lanes issuing it |
 | round loop unrolled 4 (`ROUND_ILP`) vs 1 | 0.95 | no ILP gain, 4x the round code (477 vs 180 `mul.hi.u64` in the PTX) -- back to 1 |
 | the `while (alive)` bit loop replaced by one `if` (wrong answer) | **4.3** | a data-dependent loop INSIDE the residue loop stopped the compiler overlapping one residue's loads with the next's |
 | live words written to shared, extraction after the sieve loop | 1.10 | the loop out of the hot body; registers 87 -> 66 |
@@ -1011,7 +1019,7 @@ v4 (whole periods, so no launch decomposition of either engine is in the
 comparison) and returned the identical survivors, family by family at the
 filter each campaign resumes at:
 
-| configuration | window | survivors | v4 candidates/s | v4 k/s | v3 candidates/s | ratio |
+| configuration | window | survivors | v4 candidates/s | v4 line/s (k/s or m/s) | v3 candidates/s | ratio |
 |---|---|---|---|---|---|---|
 | A088250 n = 18 (c = 18) | the 128-period segment at period 1 | 596,704 | `2.18e12` | `1.29e22` | `2.35e11` | **9.3x** |
 | A088250 n = 19 (c = 19) | the 128-period segment at period 1 | 112,795 | `2.35e12` | `2.60e22` | `2.52e11` | **9.3x** |
@@ -1034,7 +1042,7 @@ segment, `1.30e21`) 31,431 / 118193132530909840366348, `1.85e12` against
 without its pipeline; against v3's own pipelined benchmark rates --
 `1.81e11`, `2.22e11`, `1.45e11` -- v4's score.py rates are 6.6× / 9.0× / 6.1×.)
 Then `GpuEngineV3` and its template were deleted; the CPU parity gate
-(G9, 25 windows) and the three k-space fingerprints are the permanent
+(G9, 25 windows) and the three term-space fingerprints are the permanent
 other half.
 
 ### Measurement 5 -- the resumed campaigns, calibrated on their real checkpoints (5g)
@@ -1044,7 +1052,7 @@ the v4 policy into a `Campaign` (every one `inherited`; A088651's u = 945
 floored to 0 with its line), and `Campaign.calibrate()` on the launches
 the loop would run next -- about a second of device, nothing recorded:
 
-| family | filter (c) | launches in 1 s | k/s | survivors/s | us each | core-s/s | pool |
+| family | filter (c) | launches in 1 s | line/s (k/s or m/s) | survivors/s | us each | core-s/s | pool |
 |---|---|---|---|---|---|---|---|
 | A088250 | n = 18 (18) | 81 | `1.385e22` | 33,866 | 12.0 | 0.41 | 1 |
 | A173750 | n = 20 (19) | 80 | `2.861e22` | 13,149 | 11.9 | 0.16 | 1 |
@@ -1056,13 +1064,13 @@ the loop would run next -- about a second of device, nothing recorded:
 
 and the fresh openings (a scratch checkpoint at period 0): A088250
 n = 15 `1.967e20 k/s`, 404,145 survivors/s, 4.63 core-s/s, pool 10;
-A125838 n = 15 `5.004e19`, 850,726/s, 9.94 core-s/s, pool 20 (of the 31
-a 32-core host offers); A164325 n = 16 `3.372e20`, 200,642/s, 2.31,
+A125838 n = 15 `5.004e19 m/s`, 850,726/s, 9.94 core-s/s, pool 20 (of the 31
+a 32-core host offers); A164325 n = 16 `3.372e20 m/s`, 200,642/s, 2.31,
 pool 5. Segment 0 takes 626 s, 2,459 s and 730 s of device at those
 openings. So the load picture inverted (CLAUDE.md 5f): the openings are
 now host-heavy and the resumed filters trivially light, and the pool
 sized from the measurement is what makes both defaults right. Every
-`swept to` equalled the file's k; every next segment sat under the
+`swept to` equalled the value in the file; every next segment sat under the
 ceiling.
 
 ### Measurement 6 -- the same seven, re-calibrated AFTER the legs ran (5g)
@@ -1071,7 +1079,7 @@ The seven v4 legs of 2026-09-05 (RESULTS.md, "The v4 legs") moved four
 of the seven cursors past a find and the other three by a few segments.
 The identical harness on the checkpoints as they now stand:
 
-| family | filter (c) | launches in 1 s | k/s | survivors/s | us each | core-s/s | pool |
+| family | filter (c) | launches in 1 s | line/s (k/s or m/s) | survivors/s | us each | core-s/s | pool |
 |---|---|---|---|---|---|---|---|
 | A088250 | n = 19 (19) | 80 | `2.875e22` | 13,309 | 12.3 | 0.16 | 1 |
 | A173750 | n = 20 (19) | 81 | `2.902e22` | 13,396 | 12.5 | 0.17 | 1 |
@@ -1106,8 +1114,9 @@ n = 19) and 1.09x (A125839 n = 21) of the corresponding calibration,
 which is the same band.
 
 **What this measurement decided.** The seven open terms have medians of
-`8e27`-`1.4e28`; at `1.8-2.9e22 k/s` that is about five days of device
-each, and the model gives every one of them 9-11% under a nine-hour
+`8e27`-`1.4e28`; at `1.8-2.9e22` of line a second that is about five
+days of device each, and the model gives every one of them 9-11% under a
+nine-hour
 sweep, against the 93% three of them carried before the legs ran. There
 is no configuration bug left to find -- the defaults are the fastest
 correct ones at every opening the launcher has, the pool is right at
@@ -1139,7 +1148,7 @@ after this measurement they are all the same bet.
   live-period mask idles the rest of the window. The engine's coverage
   unit is the segment; the launcher never sweeps less (except at the
   ceiling), and the benchmark windows are whole segments.
-- **The k-space wheel to 47 (W' = 6.2e17) cannot hold 32 periods under
+- **The term-space wheel to 47 (W' = 6.2e17) cannot hold 32 periods under
   the 2^63 reduction bound** ((PB + 1) W' + q2 < 2^63 caps it at 14) and
   the first build raised at construction, failing G14 and G17. The
   window's bit width (PB, a multiple of 32) is now decoupled from the
@@ -1174,7 +1183,7 @@ residue x every period of the segment. The work cursor `u` is the launch
 index inside the segment; a v2/v3 cursor (`u` a third-level residue index
 of one period) is inherited at its period with `u` floored to 0, which
 re-sweeps at most one period. The over-sweep at a find is one segment:
-`1.23e23`-`2.46e23` of k -- 20 minutes at A088250's n = 15, 1.7 hours at
+`1.23e23`-`2.46e23` of line -- 20 minutes at A088250's n = 15, 1.7 hours at
 A125838's c = 14 opening at P = 64 (the reason the width is 64 there),
 and 5-20 s at the resumed filters where the campaigns run. The
 heartbeat's `periods [j, j+seg) ..%` is progress through the segment.

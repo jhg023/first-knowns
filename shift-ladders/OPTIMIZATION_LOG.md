@@ -22,7 +22,7 @@ frozen benchmark fingerprints.
   raise cost a campaign stretch; here the enforced ceiling has never been
   anything but the primality-proof bound.
 - **Choose the wheel that fits at every parameter the battery runs.** `p1`
-  is per base (23 at b = 4, 37 at b = 2) because the two wheels differ in
+  is per base (23 at base 4, 37 at base 2) because the two wheels differ in
   density by 3,000×, and the flat table's size limit is enforced
   (`RES_MAX`) rather than discovered.
 
@@ -54,9 +54,9 @@ every run, median of seven per-round ratios:**
 
 | shape | v1 | v2 | ratio | [min, max] |
 |---|---|---|---|---|
-| `SCORE` (b = 4 production) | 445.1 ms | 5.37 ms | **82.9×** | [69.6, 98.5] |
+| `SCORE` (base-4 production) | 445.1 ms | 5.37 ms | **82.9×** | [69.6, 98.5] |
 | `SCORE1L` | 1905.6 ms | 40.87 ms | **46.6×** | [42.7, 52.6] |
-| `SCORE2` (b = 2 production) | 532.6 ms | 10.84 ms | **49.1×** | [46.1, 54.3] |
+| `SCORE2` (base-2 production) | 532.6 ms | 10.84 ms | **49.1×** | [46.1, 54.3] |
 | `SCORE4W` | 306.9 ms | 5.20 ms | **58.4×** | [35.1, 63.9] |
 | `SCORE10` | 141.6 ms | 19.60 ms | **7.2×** | [6.5, 7.7] |
 
@@ -103,7 +103,8 @@ no early exit to hide, which is why it survives only inside the tail loops.
 
 ### The change: the wheel became a bit plane over the period index
 
-`m = j*W + r` is killed by `q` exactly when
+A candidate term `j*W + r` (`j` the period index, `r` the residue) is
+killed by `q` exactly when
 
     (j + Binv_q * r) mod q  in  Binv_q * K(q),     Binv_q = W^-1 mod q
 
@@ -203,11 +204,11 @@ engine that **says so**: `_pick_q3cap` sets `q3_short` when the ceiling
 binds, and `config()` reports it, so a campaign that is in this state can
 be seen to be.
 
-At `b = 2` the same sweep is flat to 3% across every combination, because
+At base 2 the same sweep is flat to 3% across every combination, because
 that family's overflow is genuinely cheap — so its ceiling does bind
 (`q3_short` is true at 713 MiB held) and it costs about 3%. Halving its
 `per_launch` would hand back 256 MiB for nothing measurable, and is not
-done automatically only because the identical change costs `b = 4` 14%.
+done automatically only because the identical change costs base 4 14%.
 Priced, and left where a reader can act on it.
 
 ### Rejected, with numbers
@@ -342,7 +343,7 @@ because a knob whose every setting measures 1.00 is a dead code path
 ### The one lever left in the dominant phase, and why it is not pulled here
 
 Generation costs `ng` plane reads per 32 periods **per residue of the flat
-table**, so its cost per unit of m line is proportional to `R/W` — the flat
+table**, so its cost per unit of line is proportional to `R/W` — the flat
 table's density — and **not to `p2` at all**. Raising `p1` from 23 to 29
 halves that density (7.05×10⁻³ → 3.65×10⁻³) while leaving the *total* wheel
 where it was: the model still picks a wheel to 79, it just draws the line
@@ -357,7 +358,7 @@ compared, three interleaved rounds:
 | **29** | 23,587,200 | 6.47×10⁹ | ≤ 79 | **3.602×10⁸** | **1.198×** | 1015 MiB |
 
 29 is also the last step available: `p1 = 31` would need 613 million flat
-residues against `RES_MAX`'s 33.5 million, and at `b = 2` the next step
+residues against `RES_MAX`'s 33.5 million, and at base 2 the next step
 (41) needs 129 million, so that family is already at its top.
 
 **It was priced, put to the owner, and taken.** What follows is the record
@@ -391,7 +392,7 @@ benchmark exists to have.
 **The owner chose to amend the frozen shapes.** What that cost:
 
 - **`SCORE` and `SCORE1L` re-frozen.** They are the only two shapes whose
-  windows are counted in periods of the b = 4 flat wheel. New window
+  windows are counted in periods of the base-4 flat wheel. New window
   `[1.000001e15, +2.649986e13)` — `j0 = 154,567`, 4,096 periods at
   `W = 6,469,693,230`; fingerprint **73 / 1038246173448745**. `SCORE1L`
   covers the *identical absolute window* at `p1 = 13`
@@ -418,7 +419,7 @@ benchmark exists to have.
   (`R × per_launch`, `CAND_SLOTS`) rather than floored at one block tile,
   and `RPB_MAX` went 8 → 32 so that a launch short in *periods* still fills
   a block by covering more *residues*. Both families now use all 1,024 of
-  a block's work items, and `b = 2` — which was quietly running with its
+  a block's work items, and base 2 — which was quietly running with its
   tail queue at the ceiling — stopped being short as a side effect, worth
   **1.26×** on `SCORE2` (1.21e12 → 1.53e12) that has nothing to do with
   `p1` at all.
@@ -436,13 +437,13 @@ different spans now):
 
 | family | v1 | v2 | ratio |
 |---|---|---|---|
-| A130003, `b = 4` | 4.17×10¹² m/s | **3.54×10¹⁴ m/s** | **84.8×** [84.7, 85.5] |
-| A110096, `b = 2` | 2.90×10¹⁶ m/s | **1.29×10¹⁸ m/s** | **44.6×** [41.9, 47.4] |
+| A130003, base 4 | 4.17×10¹² m/s | **3.54×10¹⁴ m/s** | **84.8×** [84.7, 85.5] |
+| A110096, base 2 | 2.90×10¹⁶ k/s | **1.29×10¹⁸ k/s** | **44.6×** [41.9, 47.4] |
 
 ## The campaign, measured (2026-08-24) — and the biggest lever is not the kernel
 
 Two campaigns ran (RESULTS.md): base 4 for 17.44 h to `m = 8.95×10¹⁸`, base
-2 for 38.2 min to `m = 3.62×10²¹`, four terms between them. This section is
+2 for 38.2 min to `k = 3.62×10²¹`, four terms between them. This section is
 what they measured about the *campaign*, which OPTIMIZATION.md 5c says to
 price separately from the engine and which this project had not done.
 
@@ -455,7 +456,7 @@ median of four:
 | | campaign | device, same configuration | share |
 |---|---|---|---|
 | A130003, `n = 21` at the cursor | `1.45×10¹⁴ m/s` | `5.08×10¹⁴ m/s` | 29% |
-| A110096, `n = 19` at the cursor | `2.12×10¹⁸ m/s` | `5.21×10¹⁸ m/s` | 41% |
+| A110096, `n = 19` at the cursor | `2.12×10¹⁸ k/s` | `5.21×10¹⁸ k/s` | 41% |
 
 **The phase split, per launch, before anything was concluded** (Rule 1 —
 and it is the whole of this finding):
@@ -555,7 +556,7 @@ segments per arm, three rounds, arms alternating within each round:
 | | rebuild (before) | cached (after) | ratio |
 |---|---|---|---|
 | base 4 | `1.274×10¹⁴ m/s` (51.9 ms/launch) | `3.788×10¹⁴` (17.5 ms) | — |
-| base 2 | `5.186×10¹⁷ m/s` (58.6 ms/launch) | `1.098×10¹⁸` (27.9 ms) | — |
+| base 2 | `5.186×10¹⁷ k/s` (58.6 ms/launch) | `1.098×10¹⁸` (27.9 ms) | — |
 
 That arm ran at the *published* frontier (filter 19 / 17, a fresh scratch
 checkpoint), which is the wrong configuration for a resume. Re-run with the
@@ -565,7 +566,7 @@ resume actually uses, 12 segments each:
 | | campaign, as it ran | after | ratio |
 |---|---|---|---|
 | base 4, n = 21 | `1.453×10¹⁴ m/s` | **`5.046×10¹⁴ m/s`** | **3.47×** |
-| base 2, n = 19 | `2.119×10¹⁸ m/s` | **`5.119×10¹⁸ m/s`** | **2.42×** |
+| base 2, n = 19 | `2.119×10¹⁸ k/s` | **`5.119×10¹⁸ k/s`** | **2.42×** |
 
 Two independent corroborations that the budget has nothing else in it:
 the "before" arm reproduces the campaign's own launch times (51.9 vs 45.6
@@ -692,10 +693,11 @@ filter is faster.** The same 4,096-period window at the base-4 cursor:
 | `n = 20` | `4.90×10¹⁴ m/s` | 1.13× |
 | `n = 21` | `5.32×10¹⁴ m/s` | 1.23× |
 
-`w(q,n,b) = min(n, ord_q(b))` grows with `n`, so a longer ladder kills more
-of the line per prime and the wheel gets denser rather than the test loop
-longer. **Every term this project finds makes the next one cheaper per unit
-line.** That is the opposite of the usual, and it means `a(22)`'s cost
+`w(q,n) = min(n, ord_q(4))` (`min(n, ord_q(2))` at base 2) grows with
+`n`, so a longer ladder kills more of the line per prime and the wheel gets
+denser rather than the test loop longer. **Every term this project finds
+makes the next one cheaper per unit line.** That is the opposite of the
+usual, and it means `a(22)`'s cost
 should be priced at its own filter and not extrapolated from `a(21)`'s.
 
 ## 2026-08-27 — the wheel top was DERIVED, and the constant that derived it was 4x wrong
@@ -716,7 +718,7 @@ inside each round (the first pass showed rates climbing monotonically with
 POSITION in a round, which would have credited whatever ran last), survivor
 stream compared across arms every round:
 
-| `p2` at `b = 4`, `n = 21` | ratio | | `p2` at `b = 2`, `n = 19` | ratio |
+| `p2` at base 4, `n = 21` | ratio | | `p2` at base 2, `n = 19` | ratio |
 |---|---|---|---|---|
 | 79 (shipped, derived) | 1.000 | | 89 (shipped, derived) | 1.000 |
 | 97 | 1.220 | | 109 | 1.373 |
@@ -740,21 +742,21 @@ old sweep ran 2^17 / 2^19 / 2^21 / 2^23 / 2^26 and stopped at 2^26 because
 that was the shipped value. At a FIXED `p2 = 103` the budget is worth
 **1.311 / 1.202 = 1.09x**: 2^28 packs (29, 103] into 4 groups where 2^26
 needs 5, and the group it saves costs more than the 27.6 MiB of L2 it
-spends. The counterweight is real but further out — at 2^30 the b = 4 wheel
-wants 119.5 MiB and stops being L2-resident.
+spends. The counterweight is real but further out — at 2^30 the base-4
+wheel wants 119.5 MiB and stops being L2-resident.
 
 **`UNIT_Q_MAX` was stale for a reason worth naming: the test-unit list
 STARTS at `p2`.** Moving the wheel top makes it a different list, so the
 old optimum was measured against an object that no longer exists. 2^15
-measures **1.115x [1.051, 1.185]** at b = 4 — at 2^15 the first units
-become PAIRS instead of singletons — and 1.04x [0.97, 1.04] at b = 2.
+measures **1.115x [1.051, 1.185]** at base 4 — at 2^15 the first units
+become PAIRS instead of singletons — and 1.04x [0.97, 1.04] at base 2.
 2^18 is still the L1 cliff at 1.018x, so the cap moved two steps, not off.
 
 ### `p1` = 41 at base 2 — and the comment that said it could not be
 
-The code said b = 2 was already at its ceiling: "41 would want 129 million
+The code said base 2 was already at its ceiling: "41 would want 129 million
 residues" against `RES_MAX`. **That is an n-DEPENDENT number and the
-campaign had moved past it.** `w(41,n,2) = min(n, ord_41(2)) = min(n, 20)`,
+campaign had moved past it.** `w(41,n) = min(n, ord_41(2)) = min(n, 20)`,
 so 41 keeps `41 - w` residues: 24 of them at the `n = 17` the comment was
 written at, but **22** at the `n = 19` the hunt now runs — 44.5 million,
 not 129. And it only shrinks from here, because `w` grows with `n` and
@@ -770,14 +772,14 @@ the two streams agree on all 958 survivors:
 
 | | rate | ratio |
 |---|---|---|
-| `p1 = 37`, `per_launch` 16,384 | `8.62×10¹⁸ m/s` | 1.000 |
+| `p1 = 37`, `per_launch` 16,384 | `8.62×10¹⁸ k/s` | 1.000 |
 | `p1 = 41`, `per_launch` 1,024 | **`1.21×10¹⁹`** | **1.398x** |
 | `p1 = 41`, `per_launch` 2,048 | `1.15×10¹⁹` | 1.336x (`q3_short`) |
 | `p1 = 41`, `per_launch` 512 | `8.49×10¹⁸` | 1.051x |
 
 Base 4 has no such step, and the arithmetic says why: a prime buys density
 `(q - w)/q` and costs `(q - w)` TIMES the residue count, so the primes
-worth adding are those with a small SURVIVING set. At b = 4, `p1 = 31`
+worth adding are those with a small SURVIVING set. At base 4, `p1 = 31`
 keeps 26 residues (`ord_31(4) = 5`) — 613 million of them, 16 GiB of
 tables, for 1.19x. Declined on the numbers, not on the ceiling.
 
@@ -787,15 +789,15 @@ tables, for 1.19x. Declined on the numbers, not on the ceiling.
 The quantity that actually binds is the **tail queue**: `q3` holds
 `R · per_launch · d2 · S_tail` entries, so it moves with the WHEEL — and
 when `p2` moved, `d2` fell 3x and the queue emptied. 4,096 periods at
-b = 4 had been measured at 1.07x **and rejected** by the previous pass
+base 4 had been measured at 1.07x **and rejected** by the previous pass
 because it reported `q3_short` at the old `d2`; the same setting is now
 comfortably inside the queue, and the derivation could not see it, because
 a slot target does not know what a queue holds.
 
 `_pick_launch` now takes the largest power of two that BOTH the slot guard
 and the tail queue allow; `CAND_SLOTS` is raised 2^35 to 2^37 and demoted
-to a guard. It derives 4,096 at b = 4 (was 1,024) and 2,048 at b = 2 (was
-16,384 at `p1 = 37`) — and the b = 2 value is the interesting one, because
+to a guard. It derives 4,096 at base 4 (was 1,024) and 2,048 at base 2 (was
+16,384 at `p1 = 37`) — and the base-2 value is the interesting one, because
 deriving against the slot count alone would have picked 2,048 at
 `p1 = 41` too, where the table above shows it is SHORT. The rule now stops
 one power of two before `q3_short` rather than reporting it and running.
@@ -807,8 +809,8 @@ actually resumes at:
 
 | family | before this pass | after | ratio |
 |---|---|---|---|
-| A130003, `b = 4`, `n = 21` | `5.15×10¹⁴ m/s` | **`7.92×10¹⁴`** | **1.537x** [1.437, 1.607] |
-| A110096, `b = 2`, `n = 19` | `5.63×10¹⁸ m/s` | **`1.34×10¹⁹`** | **2.380x** [2.247, 2.466] |
+| A130003, base 4, `n = 21` | `5.15×10¹⁴ m/s` | **`7.92×10¹⁴`** | **1.537x** [1.437, 1.607] |
+| A110096, base 2, `n = 19` | `5.63×10¹⁸ k/s` | **`1.34×10¹⁹`** | **2.380x** [2.247, 2.466] |
 
 Three of the five frozen shapes were re-frozen, and only one of the three
 is the `p1` reason this project already had a precedent for:
@@ -855,7 +857,7 @@ All at the new `p2`, because that is what the re-sweep rule is for.
   residue (`cr_g(r) = (W^-1 mod Q_g) · r mod Q_g`), so a two-level table
   costs `R_a + R_b` instead of `R_a · R_b` and the memory wall disappears
   entirely. It dies at the other end: `per_launch` is `~CAND_SLOTS / R`, so
-  at b = 4's `p1 = 31` (613M residues) a launch would cover 32 periods —
+  at base 4's `p1 = 31` (613M residues) a launch would cover 32 periods —
   ONE plane word per residue — and the per-residue setup, which currently
   amortises over 128 words, would dominate. The measured shape of that
   penalty is in the `p1 = 41` table above: 512 periods reads 1.051x where
@@ -1060,11 +1062,12 @@ G16 now pins encode against decode over every tile shape `logw = 0..10`
 rather than arguing the identity.
 
 **The wheel cache is keyed on the effective `w` vector, not on `n`.** The
-wheel depends on the filter only through `w(q,n,b) = min(n, ord_q(b))`, so
-once `n` passes every ord below `p1` the table stops changing: at
-`b = 4, p1 = 29` the largest is `ord_29(4) = 14`, and `wheel(n, 4, 29)` is
-**byte-identical for every n >= 14**. Keyed on `n`, every discovery
-rebuilt 23.6 million residues for a table already in hand. Base 2 at
+wheel depends on the filter only through `w(q,n) = min(n, ord_q(4))` (or
+`min(n, ord_q(2))` at base 2), so once `n` passes every ord below `p1` the
+table stops changing: at base 4, `p1 = 29` the largest is
+`ord_29(4) = 14`, and `wheel(n, 4, 29)` is **byte-identical for every
+n >= 14**. Keyed on `n`, every discovery rebuilt 23.6 million residues for
+a table already in hand. Base 2 at
 `p1 = 41` genuinely changes until `n >= 36` (`ord_37(2) = 36`), which is
 why the key is the vector and not a per-base special case. G8 pins both
 halves.
@@ -1214,7 +1217,7 @@ fingerprint moving is not a regression, and neither is one that improves.
   update is ~0.2 ms against a ~27 ms production launch — 0.7%, and the
   double buffer would have to be right across the interrupt path. Priced,
   declined, and the price is written down.
-- ~~**`b = 2`'s launch size against its tail queue.**~~ SETTLED 2026-08-27:
+- ~~**Base 2's launch size against its tail queue.**~~ SETTLED 2026-08-27:
   `_pick_launch` now derives against the tail queue itself, so neither
   family needs a per-base override and both land on their measured
   optimum (4,096 and 2,048).

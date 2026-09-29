@@ -12,30 +12,34 @@ wheel is 2,400× stronger, so *every* constant started stale.
 
 All ratios are medians of three interleaved rounds of ten launches each,
 paired (OPTIMIZATION.md Rule 3), at the configuration named. Absolute rates
-move ~30% with ambient load; the ratio is the stable quantity.
+move ~30% with ambient load; the ratio is the stable quantity. Every rate
+here is per second of the swept quotient — the term divided by lcm(1..n) at
+the filter named (N/lcm(1..n) for A078502, m/lcm(1..n) for A074200) — and is
+written quotient/s; multiply by lcm(1..n) for a rate in the term.
 
 ---
 
 ## v1 (2026-09-06) — the engine, and what the regime change moved
 
 The engine is `linear-ladders`' v4 window sieve with the multiplier list
-swapped from `i` to `L(n)/i`. Everything problem-specific enters through
-`killed_residues`, so the kernel needed no mathematical change — but the
-*regime* changed completely, and five constants moved with it.
+swapped from 1, 2, …, n to lcm(1..n)/1, lcm(1..n)/2, …, lcm(1..n)/n.
+Everything problem-specific enters through `killed_residues`, so the kernel
+needed no mathematical change — but the *regime* changed completely, and
+five constants moved with it.
 
 ### Measurement 1 — the phase the whole design turns on: the wheel is weak
 
 `w(q,n) = floor(n/q^e)` for q ≤ n against the linear ladders' `min(n, q−1)`.
-At n = 15 the wheel to 43 keeps **4.21e-5** of x where theirs keeps 1.3e-10.
-Two consequences, both structural:
+At n = 15 the wheel to 43 keeps **4.21e-5** of the quotients where theirs
+keeps 1.3e-10. Two consequences, both structural:
 
 * the candidate density is 3.2e5× higher, so a given window holds vastly more
   survivors — every gate window and drill span inherited from that project
   was 40–2,400× too wide, and three of them (G9, G17, the resume drill) ran
   for minutes or hours until they were re-sized;
 * the singular series is 4,600× larger (1.34e8 against 2.9e4), so terms are
-  correspondingly denser in x. What the engine loses in candidates per unit
-  of line it gets back in terms per candidate.
+  correspondingly denser in the quotient. What the engine loses in
+  candidates per unit of line it gets back in terms per candidate.
 
 **Kept as the design premise.** Nothing to optimize; it is why the rest of
 the numbers are what they are.
@@ -47,7 +51,7 @@ ladders' form counts. Swept at n = 15 of A078502:
 
 | pb | 32 | 64 | 128 | 160 | 192 | 224 | 256 |
 |---|---|---|---|---|---|---|---|
-| x/s (12 KB queue) | 2.92e16 | 4.17e16 | 5.09e16 | 5.11e16 | **7.09e15** | 7.03e15 | 5.96e15 |
+| quotient/s (12 KB queue) | 2.92e16 | 4.17e16 | 5.09e16 | 5.11e16 | **7.09e15** | 7.03e15 | 5.96e15 |
 
 The collapse at 192 looked like a hard cliff and was a **shared-queue
 overflow**: a wider window puts more live words in shared memory,
@@ -61,7 +65,7 @@ verdict:
 
 | QUEUE_BYTES_MAX at pb = 192 | 12 KB | 20 KB | 28 KB |
 |---|---|---|---|
-| x/s | 7.07e15 | **5.40e16** | 5.36e16 |
+| quotient/s | 7.07e15 | **5.40e16** | 5.36e16 |
 
 and re-sweeping pb at 20 KB gives 128 → 5.04e16, **192 → 5.37e16 (1.066×)**,
 224 → 4.96e16, 256 → 5.00e16. **Kept: PB_DEFAULT = 192, QUEUE_BYTES_MAX =
@@ -77,7 +81,7 @@ survivor standalone (12.4 µs inside the pool):
 
 | q2 | 32768 | 65536 | 131072 | 262144 | 1048576 |
 |---|---|---|---|---|---|
-| x/s | 5.43e16 | 5.44e16 | 5.33e16 | 5.28e16 | 3.84e16 |
+| quotient/s | 5.43e16 | 5.44e16 | 5.33e16 | 5.28e16 | 3.84e16 |
 | ratio | 1.000 | 1.001 | 0.981 | 0.972 | 0.706 |
 | survivors/s | 7.02e5 | 2.69e5 | 1.07e5 | 4.52e4 | 6.66e3 |
 | cores needed | 12 | 4.6 | **1.8** | 0.77 | 0.11 |
@@ -289,7 +293,7 @@ just over the line — for **4** blocks per SM where 5 were available:
 | `qcap_sigma` at n = 16 | 1.5 | 2.0 | 2.5 | 3.0 | 6.0 |
 |---|---|---|---|---|---|
 | shared / blocks per SM | 17,740 / 5 | 18,124 / 5 | 18,380 / 5 | 18,508 / 5 | 20,044 / 4 |
-| x/s | 2.86e17 | 3.23e17 | 3.46e17 | **3.46e17** | 3.23e17 |
+| quotient/s | 2.86e17 | 3.23e17 | 3.46e17 | **3.46e17** | 3.23e17 |
 | ratio | 0.825 | 0.933 | 0.999 | **1.000** | 0.933 |
 
 Both ends are real: 6.0 costs the block, and 1.5 costs more than the block
@@ -468,7 +472,7 @@ Measured at every filter both families can run:
 
 | filter | 15 | 16 | 17 | 18 | 19 | 20 |
 |---|---|---|---|---|---|---|
-| period (x) | 1.31e16 | 6.15e17 | 1.31e16 | 6.15e17 | 6.15e17 | 6.15e17 |
+| period (quotient) | 1.31e16 | 6.15e17 | 1.31e16 | 6.15e17 | 6.15e17 | 6.15e17 |
 | periods to the modelled median | **9.0** | 34.6 | 7,093 | 46,939 | 141,938 | 2.4e7 |
 
 The tightest is n = 15 at 9.0 (11.1 for A074200), so the plan is safe
@@ -549,9 +553,10 @@ The four CAMPAIGN shapes named prefix wheels the campaign no longer runs, so
 a score against them had stopped measuring the hunt (OPTIMIZATION.md 2.13:
 the benchmark shape becoming the blocker). They were re-frozen at the
 planned subset wheels, and `score.py` says so. **SCORE2L, SCORE1L and
-SCORE9 were NOT touched** -- they are x-space shapes over whole wheel
-periods, the same candidates whatever sweeps them, and they are the anchor
-across this change. They read 21,152 / 4,865 / 6.8 before and after.
+SCORE9 were NOT touched** -- they are unit-1 shapes (every quotient, no
+forced unit factored out; "x-space" in the code) over whole wheel periods,
+the same candidates whatever sweeps them, and they are the anchor across
+this change. They read 21,152 / 4,865 / 6.8 before and after.
 
 SCORE 54,288 -> **55,995**; SCORE16 336,674 -> **364,682**; SCORE17
 40,688 -> **62,510**.
@@ -717,7 +722,7 @@ evidence timestamps, `swept_from_x` and the checkpoints):
 | filter | A078502 | A074200 | the engine there |
 |---|---|---|---|
 | n = 15 | 21 s to the find, pool sizing included | 21 s | 2 s of device |
-| n = 16 | 1.71e20 in 8.3 min = 3.44e17 x/s | one segment, 132 s with the rebuild | 3.85e17 |
+| n = 16 | 1.71e20 in 8.3 min = 3.44e17 quotient/s | one segment, 132 s with the rebuild | 3.85e17 |
 | n = 17 | 7.19e19 in 17.0 min = 7.05e16 | 1.95e20 in 47.0 min = 6.93e16 | 6.63e16 |
 | n = 18 | 4.18e21 in 100.4 min = 6.94e17 | — | 6.75e17 |
 
@@ -731,24 +736,27 @@ pool re-size, and nothing here separates those from the sweep.
    as a run of 19, so the launcher went from n = 18 straight to n = 20
    (unit 30, q2 16384, 107-period segments) — a configuration with no
    benchmark shape, no sweep of its constants, and a modelled median of
-   x = 1.5e25. Rule 5g was written three days earlier for exactly this, and
-   G18 only compiles "the resumed filter and the two after it" once `FOUND`
-   is populated — which it was not until 2026-09-18.
+   N/lcm(1..20) = 1.5e25. Rule 5g was written three days earlier for
+   exactly this, and G18 only compiles "the resumed filter and the two
+   after it" once `FOUND` is populated — which it was not until 2026-09-18.
 2. *The opening of each campaign is pool sizing and engine builds, not
    sweep.* Both families took 21 s to an a(15) that is 2 s of device, and
    A074200's n = 16 phase was 132 s for one segment. Harmless here; it is
    the fixed cost to remember when a filter's whole yield is seconds long.
 
 **The re-verification harness** (scratchpad, not kept; ten minutes to
-rewrite): for each evidence file in N order — term == L(filter_n)·x; every
-value N/i + s rebuilt, compared with the file and tested with sympy
-`isprime`; `lcml_reference.run_length_N(fam, N, cap=run + 4) == run`; the
-stopper rebuilt (or i ∤ N) and its factor re-multiplied;
-`huntlib.certificate.verify` on each certificate with its N checked; the
-rider's integer = term ± 1; `settles` continuing from the previous file; the
-least-claim floor equal to the previous term; the ledger agreeing with the
-files; then `lcml_model.floor_for` / `quantile` / `expected` at the find's
-own filter for the scoring. 6 files, 98 certificates, ALL OK in 0.5 s.
+rewrite): for each evidence file in term order — the term == lcm(1..n)
+times the file's quotient `x`, with n its `filter_n`; every value
+(N/k − 1 for A078502, m/k + 1 for A074200) rebuilt, compared with the file
+and tested with sympy `isprime`;
+`lcml_reference.run_length_N(fam, N, cap=run + 4) == run`; the stopper
+rebuilt (or its k shown not to divide the term) and its factor
+re-multiplied; `huntlib.certificate.verify` on each certificate with the
+value it proves checked; the rider's integer = term ± 1; `settles`
+continuing from the previous file; the least-claim floor equal to the
+previous term; the ledger agreeing with the files; then
+`lcml_model.floor_for` / `quantile` / `expected` at the find's own filter
+for the scoring. 6 files, 98 certificates, ALL OK in 0.5 s.
 
 **The pause.** The finds are entered in `lcml_reference.FOUND` (G1b now
 checks all seven from the bare definition; G18 compiles the resumed filters).
@@ -786,10 +794,11 @@ bound is the word (the paper bound is at the constant; G19 emulates it bit
 for bit on 11,117 primes x 68 offsets in [2^63, 2^64), and shows it WRONG at
 2^64 + x). It binds only where the narrow window was cut: n = 20 and 21,
 107 periods -> 216. Paired, v1 at its own campaign window (128 bits, 107
-live) against v2 (224 bits, 216 live): 3.710e17 -> 4.705e17 x/s, **1.268x**;
-192 live periods reads 1.263x. Cross-checked before it was frozen: v2's
-first four third-level residues over 216 periods are IDENTICAL, all 264,771
-survivors, to v1 at pb = 64, where every offset is under 2^63 (SCORE20).
+live) against v2 (224 bits, 216 live): 3.710e17 -> 4.705e17 quotient/s,
+**1.268x**; 192 live periods reads 1.263x. Cross-checked before it was
+frozen: v2's first four third-level residues over 216 periods are
+IDENTICAL, all 264,771 survivors, to v1 at pb = 64, where every offset is
+under 2^63 (SCORE20).
 
 A trap this avoided: lifting the constant ALONE makes the old greedy take 59
 at n = 17 on a 45-period narrow window (PV_MIN was 32). The planner now
@@ -804,7 +813,7 @@ no u64 holds j*W' and the wheel is bounded by W' < 2^63 alone. `WIDE` is a
 literal in the generated kernel and the ENGINE chooses it from the wheel and
 window it is handed. Candidate density said 1.42x / 1.45x; measured:
 
-| filter | v1 plan | v2 plan | x/s v1 -> v2 | ratio |
+| filter | v1 plan | v2 plan | quotient/s v1 -> v2 | ratio |
 |---|---|---|---|---|
 | n = 17 | wheel to 53, narrow, 224 | unchanged | 6.97e16 -> 7.01e16 | 1.006 |
 | n = 18 | wheel to 59, narrow, 224 | **wheel to 61, WIDE, 224** (split {5,7,23,47,53,59} x {29,31,37} x {41,43,61}, non-contiguous) | 7.17e17 -> 8.22e17 | **1.147** |
@@ -885,7 +894,7 @@ minutes later and a(18) 7.03 hours after that (RESULTS.md).
 
 | filter | campaign | the paired A/B above | v1 beside it |
 |---|---|---|---|
-| n = 17 | 7.0-7.2e16 x/s in `[STATUS]`, as v1 ran it an hour earlier | 7.01e16 | 6.97e16 |
+| n = 17 | 7.0-7.2e16 quotient/s in `[STATUS]`, as v1 ran it an hour earlier | 7.01e16 | 6.97e16 |
 | n = 18, wide record | **8.54e17** over 7.03 h, 2.16e22 of line | 8.22e17 | 7.17e17 |
 | n = 19, wide record | **9.87e16** over 4.35 h, 1.55e21 of line | 9.54e16 | 7.78e16 |
 

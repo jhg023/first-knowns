@@ -204,7 +204,7 @@ def main():
                      f"({p1}],({p2}],({p3}]" if p3 else f"({p1}],({p2}]")
         if unit > 1:
             wheel += f" at unit {unit}"
-        print(f"benchmark {label}: {rate_k:.3e} x/s over "
+        print(f"benchmark {label}: {rate_k:.3e} a(n)-line/s over "
               f"[{j0 * eng.W:.4e}, +{line:.4e}) "
               f"({rate_k * eng.density():.3e} candidates/s, {fam}, "
               f"filter n={n}, wheel {wheel} W={eng.W}, sieve {q2}, "

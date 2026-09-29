@@ -26,14 +26,14 @@ absolute window per wheel.
 | `SCORE1L` | n = 16 | one-level ≤ 23, W = 223,092,870 | 65536 | the **same** window | 303 / 999990048677220 |
 | `SCORE10` | n = 10 | one-level ≤ 13, W = 30,030 | 4096 | `[2.0e9, +6.006e9)` | 2931 / 2555483804 |
 | `SCORE16W` | n = 16 | one-level ≤ 17, W = 510,510 | 1024 | `[1.0e15, +3.0631e10)` | 581 / 999980563688462 |
-| `SCORE3L` | n = 18 | **three-level (23],(37],(47]**, W = 614,889,782,588,491,410 | 65536 | 600 launches from `j = 15` | 19511 / 9328162232848324866 |
+| `SCORE3L` | n = 18 | **three-level (23],(37],(47]**, W = 614,889,782,588,491,410 | 65536 | 600 launches from wheel period 15 | 19511 / 9328162232848324866 |
 
 `SCORE3L` is measured in **launches**, not wheel periods, and that is a
 property of the engine rather than a convenience: one production period is
 `6.15e17` of line and about ten minutes, so the natural reproducible unit
-below it is one kernel launch — a fixed `(t, s)` sweep at one third-level
-residue. 600 of them is about 20 seconds and just as deterministic a set of
-candidates as a whole period.
+below it is one kernel launch — a sweep of the first two wheel levels at
+one third-level residue. 600 of them is about 20 seconds and just as
+deterministic a set of candidates as a whole period.
 
 `SCORE` and `SCORE1L` cover the **same stretch of line with the same sieve
 depth**, so they must return the identical fingerprint — and they do. The

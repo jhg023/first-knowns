@@ -134,7 +134,7 @@ size in steady state, so **~14x sustained**; the frozen window shows
 
 The note above -- "the cold phase costs ~2.5 ns per queued candidate" --
 is arithmetically impossible against production wall-clock: 5.1e7 queued
-candidates per launch x 2.5 ns = 127 ms, but a whole 8192-period launch
+candidates per launch × 2.5 ns = 127 ms, but a whole 8192-period launch
 took 96 ms. The 80%-cold finding it descends from describes the
 **one-kernel v1-128**, which is exactly what the v2 compaction split
 fixed; nobody re-measured the split afterwards. CUDA events around the
@@ -183,7 +183,7 @@ spill). Recorded rather than explained -- the point of this ledger.
 Why stage 2 is NOT split into its own compacted kernel, despite being
 24% of the cold phase and 109 tests deep per entering lane: it is
 entered by 5.69e-3 of the queue, so at most one lane per warp is ever in
-it. Per-warp cost is 19.3 iterations against 32 x 0.62 = 19.8 for the
+it. Per-warp cost is 19.3 iterations against 32 × 0.62 = 19.8 for the
 same work perfectly packed -- there is no divergence waste to recover.
 Stage 1b is the opposite case (mean 13.85 tests per lane, warp-max 80.4,
 5.8x waste), which is why (8) pays there and only there.
@@ -254,7 +254,7 @@ independently.**
 
 The key therefore MATCHED and the cursor loaded, but `next_k` counts wheel
 PERIODS, and 1,804,941,739 periods of 31# got read as periods of 29#:
-1,804,941,739 x 6.47e9 = 1.168e19. Exactly where it started.
+1,804,941,739 × 6.47e9 = 1.168e19. Exactly where it started.
 
 The wasted sweep was the cheap part. The dangerous part was that `next_k`
 then advanced in 29# units inside a file whose `M` field said 31#: after
@@ -418,7 +418,7 @@ of 2e16 at 6.1e20 (24 launches, so no single-launch flattery).
 
 | # | change | ratio | verdict |
 |---|--------|-------|---------|
-| 13 | **stage-2 kill test by bitset**: the scan over the n values of x^2+x asks a membership question about a set that never changes, and every stage-2 prime exceeds max(x^2+x), so no residue wraps -- rr dies iff rr == 0 or q - rr is itself of the form x^2+x. A 17-iteration loop becomes one bounds test and one bit probe | **1.165x** | KEPT, gated (G15). Cold kernel 170 -> 55 ms, its share 20.3% -> 7.6% |
+| 13 | **stage-2 kill test by bitset**: the scan over the n values of x^2+x asks a membership question about a set that never changes, and every stage-2 prime exceeds max(x^2+x), so no residue wraps -- with rr = p mod q, a candidate dies iff rr == 0 or q - rr is itself of the form x^2+x. A 17-iteration loop becomes one bounds test and one bit probe | **1.165x** | KEPT, gated (G15). Cold kernel 170 -> 55 ms, its share 20.3% -> 7.6% |
 | 14 | **balance the sieve grid**: blockIdx.y slices T periods and the last slice takes the remainder, but per-thread setup (NINC Barrett reductions) is paid in full by every slice. PPL=4228 with T=2048 gave slices of 2048/2048/**132**. Derive T from PPL instead: gy = round(PPL/T_target), T = ceil(PPL/gy) rounded up to W -- 2176, slices 2176/2052 | **1.066x** | KEPT. Derived, not tuned, because PPL moves with the wheel, with n and with LAUNCH_SPAN |
 | 15 | **32-bit reductions in stage 1b** (`_R_MIX32`): of the three 64-bit Barretts per candidate-prime, only `off mod q` needs 64 bits. k never has to be formed -- the host knows k_base mod q and kp is the low half of the queue entry -- and the recombination kq*dM + oq stays under 2^32 for every stage-1 and stage-2 prime | **1.048x** | KEPT, gated (G15) |
 | 16 | **sieve `__launch_bounds__` 4 -> 3 blocks/SM**: at 4 the compiler is held to 64 registers and spills 24 B/thread | **1.028x** | KEPT. 2 and 0 both give ~0.998x: below 3 the spill is already gone and only occupancy is being sold |
@@ -736,8 +736,8 @@ the 31# wheel is `20 * f(w37) / (launches * f(w31))`:
 
 | window | 31# | 37# | 37# sieve cost |
 |---|---|---|---|
-| production / steady-state (many full launches) | 24 launches x 67 words | 1 x 43 | **0.54x -- a 1.85x WIN** |
-| the frozen 5e14 benchmark shape | 1 launch x 39 words | 1 x **2** | **1.7-1.8x -- a 0.55-0.58x loss** |
+| production / steady-state (many full launches) | 24 launches × 67 words | 1 × 43 | **0.54x -- a 1.85x WIN** |
+| the frozen 5e14 benchmark shape | 1 launch × 39 words | 1 × **2** | **1.7-1.8x -- a 0.55-0.58x loss** |
 
 So the Phase-4 verdict is inverted: at production shape the wheel is
 **1.85x on a phase that is 78% of GPU time**, i.e. ~1.5x overall, and the
@@ -964,7 +964,7 @@ and since M_base is invertible mod q, `j -> (off + j*M_base) mod q` is a
 bijection -- so which j survive q depends on off only through `off mod q`, and
 every base offset has exactly `q - |F_q(n)|` admissible j.  The whole wheel is
 therefore the 31# table (2.99e7 offsets, 240 MB, already built) plus a
-**37 x nj byte table**, and a chunk of offsets is generated on the device from
+**37 × nj byte table**, and a chunk of offsets is generated on the device from
 those two, once per chain, by one extra kernel:
 
     a -> i = a / nj, t = a % nj -> off = base[i] + jtab[(base[i] % 37)*nj + t] * M_base
@@ -993,7 +993,7 @@ one.
 | 30 | `LAUNCH_PERIODS` 4228 -> 16912, `MP_T` 4096 -> 16384, `QUEUE_BUDGET` 220e6 -> 440e6, measured on the **31# wheel** so it is not credited to the wheel | **1.0276x** | 1.0269 / 1.0277 | KEPT |
 | -- | **paired total, HEAD engine vs this one** | **1.5733x** | 1.5700 / 1.5751 | 14 gates green, all three frozen fingerprints exact |
 
-Rows 29 x 30 = 1.584 against the measured 1.573, i.e. they overlap by 0.7%.
+Rows 29 × 30 = 1.584 against the measured 1.573, i.e. they overlap by 0.7%.
 Quote the paired total.
 
 On the three frozen shapes, same pairing, 5 rounds:
@@ -1223,8 +1223,8 @@ be priced against option 1 rather than instead of it.
 
 **3. Nothing on the sieve.** Phase 5 established it is neither
 instruction- nor sector-bound and moves only on candidate count; the next
-wheel (41#) generates 1.708x fewer candidates (24 admissible j of 41 at
-n = 17, computed not assumed) for a 41x longer period, and
+wheel (41#) generates 1.708x fewer candidates (24 admissible residues mod
+41 at n = 17, computed not assumed) for a 41x longer period, and
 it would be optimizing a 19.1 h phase while a 20.7 h phase sits next to it
 untouched. Declining it costs nothing to say and is priced here so the next
 agent does not re-derive it.

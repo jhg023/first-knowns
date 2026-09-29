@@ -5,8 +5,9 @@
 
 `python score.py` prints a SCORE only if every correctness gate is green AND
 all nine frozen shapes reproduce their work fingerprint (survivor count + xor
-of the surviving x). The rate is end-to-end **x-line per second**, and the
-published term is x itself, so there is nothing to multiply by.
+of the surviving candidates). The rate is end-to-end **line of the candidate
+a(n) per second** (a(n)-line/s), and the published term is the candidate
+itself, so there is nothing to multiply by.
 
 Nine shapes because a launcher owes a shape at every opening it has
 (CLAUDE.md 5g), and here a family has exactly **one** opening: its open
@@ -23,19 +24,19 @@ that family's open index — and three anchors.
 | 2026-09-19 | v1 / **p2** — five campaign shapes RE-FROZEN at the new plan (below) | **63,037** | 160,248 | 57,272 | 10,487 | 19,664 | 108,699 | 10,046 | 4,968 | 4.18 |
 | 2026-09-20 | v1 / p2, round 2: the in-block queues ping-pong (every shape); the rounds in the window's coordinates (WIDE record only -- no shape here is wide, see OPTIMIZATION_LOG.md round 2) | 63,231 | 162,836 | 58,360 | 11,609 | 20,142 | 110,340 | 10,348 | 4,994 | 4.11 |
 
-(in units of 10¹² x/s: SCORE is 6.30e16 x/s.) **Read the third row against
-the second only in its last four columns.** The five re-frozen shapes cover
-different candidates at a different sieve depth and over four times as many
-launches, so their numbers are not ratios of an engine; S119751 and the
-three anchors did not move and read flat, which is the comparison across
-the re-freeze. The second row is the one that compares engines on fixed
-shapes: the block shape is worth 1.28× on the one shape that ran a
-32-period window and 1.03× on SCORE (128 periods), and nothing elsewhere
-(224-period shapes keep the inherited shape). What the round was worth to
-the *campaign* is a clock, not a rate, and it is in the next table and in
-OPTIMIZATION_LOG.md round 1. A campaign shape is a few tenths of a second,
-so a single reading moves ~10% between runs; the fingerprints do not move
-at all.
+(in units of 10¹² a(n)-line/s: SCORE is 6.30e16 a(n)-line/s.) **Read the
+third row against the second only in its last four columns.** The five
+re-frozen shapes cover different candidates at a different sieve depth and
+over four times as many launches, so their numbers are not ratios of an
+engine; S119751 and the three anchors did not move and read flat, which is
+the comparison across the re-freeze. The second row is the one that
+compares engines on fixed shapes: the block shape is worth 1.28× on the one
+shape that ran a 32-period window and 1.03× on SCORE (128 periods), and
+nothing elsewhere (224-period shapes keep the inherited shape). What the
+round was worth to the *campaign* is a clock, not a rate, and it is in the
+next table and in OPTIMIZATION_LOG.md round 1. A campaign shape is a few
+tenths of a second, so a single reading moves ~10% between runs; the
+fingerprints do not move at all.
 
 ## The shapes
 
@@ -47,9 +48,9 @@ at all.
 | S119752 | A119752 | 15 | 2 (mod 6) | {5..23},{29},{31} | 2^17 | the whole segment (18 residues) at 128 periods | 3948 / 621344468468060 |
 | S119751 | A119751 | 15 | 9 (mod 30) | {7..29},{31} | 2^17 | the whole 224-period segment | 3949 / 527123306958529 |
 | S133761 | A133761 | 17 | 11 (mod 30) | {7..29},{31,37},{41} | 2^17 | 16 residues, 224 periods | 7122 / 53488743232834886 |
-| SCORE2L | A037100 | 15 | x space | (23],(37] | 65536 | 240 periods from 94334 | 59938 / 1037504555151628 |
-| SCORE1L | A037100 | 15 | x space | ≤ 23 | 65536 | the SAME absolute window, 33263× as many periods | 59938 / 1037504555151628 |
-| SCORE9 | A093483 | 9 | x space | ≤ 13 | 4096 | 4e8 periods from 3330003 | 10505565 / 9428818188514 |
+| SCORE2L | A037100 | 15 | dense line | (23],(37] | 65536 | 240 periods from 94334 | 59938 / 1037504555151628 |
+| SCORE1L | A037100 | 15 | dense line | ≤ 23 | 65536 | the SAME absolute window, 33263× as many periods | 59938 / 1037504555151628 |
+| SCORE9 | A093483 | 9 | dense line | ≤ 13 | 4096 | 4e8 periods from 3330003 | 10505565 / 9428818188514 |
 
 SCORE2L and SCORE1L cover the identical absolute window with different
 arithmetic and must return the identical fingerprint — a CRT-lift bug shows
@@ -76,7 +77,7 @@ timed on a far window, their survivors counted:
 
 | family | opens at | device | survivors/s | modelled median | device to it | one segment |
 |---|---|---|---|---|---|---|
-| A093483 | n = 18, mod 6, wheel to 41 × 128 | 6.7e16 x/s | 16,000 | 4.7e16 | 0.7 s | 0.6 s |
+| A093483 | n = 18, mod 6, wheel to 41 × 128 | 6.7e16 a(n)-line/s | 16,000 | 4.7e16 | 0.7 s | 0.6 s |
 | A103828 | n = 19, mod 30, wheel to 43 × 224 | 1.7e17 | 28,000 | 7.7e18 | 45 s | 17 s |
 | A037100 | n = 19, mod 6, wheel to 41 × 224 | 6.5e16 | 22,000 | 7.1e17 | 11 s | 1.0 s |
 | A119752 | n = 15, mod 6, wheel to 31 × 128 | 9.4e15 | 49,000 | 4.4e13 | one segment (ms) | 3 ms |
@@ -95,7 +96,7 @@ to a *confirmed* find over the measured rate):
 
 | filter | plan p2 | device | segment / median | expected clock to a confirmed find | the inherited plan |
 |---|---|---|---|---|---|
-| n = 18 | to 41 × 128 | 6.7e16 x/s | 0.83 | 2.4 s | the same plan; 6.4e16 |
+| n = 18 | to 41 × 128 | 6.7e16 a(n)-line/s | 0.83 | 2.4 s | the same plan; 6.4e16 |
 | n = 19* | to 43 × 128 | 1.3e17 | 0.73 | 45 s | to 43 × 160 |
 | n = 20* | to 43 × 224 | 1.6e17 | 0.07 | **12 min** | to 47 × 64: 12.7 min |
 | n = 21* | to 47 × 128 | 2.4e17 | 0.07 | **3.4 h** | to 53 × 32, wide: 5.6 h |
@@ -115,5 +116,6 @@ filter, never from a constant, and re-sized at every promotion. Since round
 survivors a second at 9–18 µs each — **0.2–0.4 core-seconds per second, one
 worker** — where the inherited depth asked for 1.0–1.3 and a pool of three.
 The launcher's whole host path measured 1.000 of the device alone at either
-depth (OPTIMIZATION_LOG.md, Measurement 6). The 2x + 1 families cost more
-per survivor (17 µs) because their first test is on a number twice the size.
+depth (OPTIMIZATION_LOG.md, Measurement 6). The 2·a(n) + 1 families cost
+more per survivor (17 µs) because their first test is on a number twice the
+size.

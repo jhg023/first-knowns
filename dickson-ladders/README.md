@@ -90,9 +90,10 @@ ceilings. There is no depth at which the hunt is guaranteed to end.
 ## The mathematics of the engine
 
 **1. The wheel is forced, and it is enormous.** For a prime q ≤ n+1 and
-a k not divisible by q, the residue u = −k⁻² mod q is one of
-1, …, q−1 ⊆ {1, …, n}, so the value u·k²+1 is divisible by q — composite
-as soon as it exceeds q. Every candidate is therefore a multiple of
+a k not divisible by q, the residue −k⁻² mod q is one of
+1, …, q−1 ⊆ {1, …, n}, so for the m equal to it the value m·k²+1 is
+divisible by q — composite as soon as it exceeds q. Every candidate is
+therefore a multiple of
 
   W(n) = product of the primes q ≤ n+1  (2310 at n = 10, 30030 at n = 12)
 
@@ -102,12 +103,13 @@ assuming it. (The exception zone is real: a(1) = a(2) = 1 works because
 1·1+1 *is* the prime 2. The engines refuse to run below k = 10⁴ and the
 oracle owns everything under it.)
 
-**2. Representation: (W, j), never k — and folded, (W, P·u + r).** A
-candidate is the pair (W, j) with k = W·j. The value k passes 2⁶⁴ around
-a(12) and the *values* m·k²+1 pass it before a(8) — but no engine ever
-forms either. Every sieve test needs only
+**2. Representation: (W, k/W), never k — and folded, k/W taken one
+residue class mod the fold prime at a time.** A candidate is the pair
+(W, k/W): the wheel and the quotient of k by it. The value k passes 2⁶⁴
+around a(12) and the *values* m·k²+1 pass it before a(8) — but no engine
+ever forms either. Every sieve test needs only
 
-  k mod q = ((W mod q) · (j mod q)) mod q
+  k mod q = ((W mod q) · ((k/W) mod q)) mod q
 
 One engine spans the whole range; there is no second engine waiting at
 the machine-word boundary, which is
@@ -117,22 +119,24 @@ project instead of after it hurts.
 **2a. The fold (v4).** The first sieve prime is also the strongest
 killer this problem has: each solvable m contributes two roots, so
 w_q ≈ n residues die per prime, and at n = 13 the prime 17 kills **12 of
-17** j-residues — the line the sieve walks is 70% dead on arrival. The
-GPU engine therefore folds 17 out of the sieve and into candidate
-*generation*: it enumerates u with j = 17u + r over the five surviving
-offsets r, building its kill-bit and pattern tables per offset (only one
+17** residues of k/W — the line the sieve walks is 70% dead on arrival.
+The GPU engine therefore folds 17 out of the sieve and into candidate
+*generation*: it enumerates k/W one residue class mod 17 at a time, over
+the five surviving offsets (the values of k/W mod 17 that 17 does not
+kill), building its kill-bit and pattern tables per offset (only one
 offset's tables are hot per launch, so the cache footprint is unchanged)
-while the kernels themselves are untouched — they walk u where they
-walked j. That is 3.4× fewer candidates per unit of k-line for the
-provably identical survivor stream (**G17** pins folded == unfolded bit
-for bit), measured **2.39× end-to-end** at the campaign configuration.
-It also moves the ceiling: the device's u64 quantity is now u, so the
-engine holds to j = 17 × 4×10¹⁸, i.e. **k up to 2.04×10²⁴** on the 30030
-wheel — past j ≈ 1.8×10¹⁹ the value of j itself no longer fits a machine
-word, and the campaign carries survivors as Python integers. An earlier
-pass priced this fold at "~1.06× of candidates" and declined it; that
-number was wrong by 3× (a linear-form intuition applied to a quadratic
-form), and the correction is written down in
+while the kernels themselves are untouched — they walk ⌊k/(17W)⌋ where
+they walked k/W. That is 3.4× fewer candidates per unit of k-line for
+the provably identical survivor stream (**G17** pins folded == unfolded
+bit for bit), measured **2.39× end-to-end** at the campaign
+configuration. It also moves the ceiling: the device's u64 quantity is
+now ⌊k/(17W)⌋, so the engine holds to k/W = 17 × 4×10¹⁸, i.e. **k up to
+2.04×10²⁴** on the 30030 wheel — past k/W ≈ 1.8×10¹⁹ the quotient k/W
+itself no longer fits a machine word, and the campaign carries survivors
+as Python integers. An earlier pass priced this fold at "~1.06× of
+candidates" and declined it; that number was wrong by 3× (a linear-form
+intuition applied to a quadratic form), and the correction is written
+down in
 [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md) v4 so it cannot be re-derived.
 
 **3. The sieve.** For a prime q > n+1 the killed residues of k are the
@@ -141,14 +145,15 @@ roots of k² ≡ −1/m (mod q) over m = 1..n: two roots for each m with
 them. The two engines exploit that fact in deliberately different ways —
 
 - the **CPU engine** (`ladder_search.py`) builds the root table with
-  sympy's `sqrt_mod`, converts it to j-residues, and marks arithmetic
+  sympy's `sqrt_mod`, converts it to residues of k/W, and marks arithmetic
   progressions with numpy slice strides;
 - the **GPU engine** (`ladder_gpu.py`) never takes a square root. It
   derives every kill decision on the device from the residue *walk* —
-  t = k² mod q by Barrett reduction, then r ← r + t from r = t+1, n
-  times, killing on r = 0, which is m·k²+1 mod q for m = 1..n with no
-  multiplication — evaluated once per (prime, residue) into a bit table
-  that the sieve then consumes: the first 16-23 primes as 64-bit kill
+  k² mod q by Barrett reduction, then a running residue that starts at
+  k²+1 mod q and adds k² mod q at each step, n times, killing when it
+  reaches 0; it is m·k²+1 mod q for m = 1..n, with no multiplication —
+  evaluated once per (prime, residue) into a bit table that the sieve
+  then consumes: the first 16-23 primes as 64-bit kill
   patterns OR-ed once per 64 candidates (stage 1a), the rest as one
   Barrett plus one bit probe per surviving candidate in compaction
   rounds (stage 1b). The v1 kernel, which walked every candidate against
@@ -157,7 +162,7 @@ them. The two engines exploit that fact in deliberately different ways —
 
 They share no subroutine — square roots and numpy strides on one side,
 the walk, Barrett arithmetic and bit patterns on the other — so **G6**
-(bit-for-bit parity on populated windows from j = 10⁶ up to the enforced
+(bit-for-bit parity on populated windows from k/W = 10⁶ up to the enforced
 ceiling) and **G14** (the GPU stream against big-integer divisibility of
 the actual values, no engine on the other side) are real checks rather
 than tautologies.
@@ -170,8 +175,8 @@ learned the hard way that a fast kernel turns the host into the
 bottleneck (its host share went from 2% to 52% while nobody was
 watching), so this one measured the split from the first commit, and
 when the v2 kernel made the host 92% of the wall the launcher grew a
-process pool that classifies segment i−1 while the device sieves segment
-i, consuming results in ascending order so the least-claim ordering is
+process pool that classifies each segment while the device sieves the
+next, consuming results in ascending order so the least-claim ordering is
 untouched. At the n = 13 filter the host is 18% of device time and fully
 hidden; at n = 10 it binds at 2.2x, on legs that take seconds — see
 [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md).
@@ -193,9 +198,9 @@ first occurrences only.
 Repo-wide convention: [CONVENTIONS.md](../CONVENTIONS.md).
 
 **5. Certificates, because this problem hands them over.** The values
-m·k²+1 pass huntlib's deterministic Miller–Rabin bound (3.317×10²⁴)
+p = m·k²+1 pass huntlib's deterministic Miller–Rabin bound (3.317×10²⁴)
 *before a(9)*, so probable-prime tests are evidence and not proof. But
-N − 1 = m·k² is our own number: factor m and k and the factorization is
+p − 1 = m·k² is our own number: factor m and k and the factorization is
 complete, which is exactly what Brillhart–Lehmer–Selfridge Theorem 1
 needs. Every claimed find therefore carries a **primality certificate**
 for all n of its values — a per-factor witness set, re-verified from
@@ -211,13 +216,14 @@ forged witness and a falsified factorization; both must be rejected.
 The witness search takes its bases from the primes in ascending order, as
 many as it takes, not from a fixed short list — and the reason is
 structural, not paranoia. For every prime q dividing k (and k is a wheel
-multiple), N = m·k²+1 ≡ 1 (mod q), and reciprocity with (N−1)/2 even makes
-q a quadratic residue mod N; 2 itself is a residue for every even m. So the
-wheel primes can never witness p = 2, and a list of the first eleven primes
-left only five or six coin flips per value: it ran out on a genuine run-10
-census value at m = 2 (every prime below 41 a residue) and aborted a
-campaign with a false alarm. **G12** replays that value: the eleven-prime
-list must fail and the open-ended search must certify it.
+multiple), p = m·k²+1 ≡ 1 (mod q), and reciprocity with (p−1)/2 even makes
+q a quadratic residue mod p; 2 itself is a residue for every even m. So the
+wheel primes can never witness the prime factor 2 of p − 1, and a list of
+the first eleven primes left only five or six coin flips per value: it ran
+out on a genuine run-10 census value at m = 2 (every prime below 41 a
+residue) and aborted a campaign with a false alarm. **G12** replays that
+value: the eleven-prime list must fail and the open-ended search must
+certify it.
 
 ## The odds model
 
@@ -341,10 +347,10 @@ period, never a gap — and logged as a `[STAGE]` line.
 **`--fold P`** controls the v4 fold (default auto: the first sieve
 prime, 17 at the current filter; `--fold 0` runs the unfolded line). The
 fold changes nothing about the stream or the cursor — the checkpoint's
-j-cursor means exactly what it meant, and a campaign can switch fold
-settings between runs without re-denominating anything — it changes how
-much of the line the device has to touch (2.39× measured) and how deep
-the engine reaches (17 × J_CEIL × wheel = 2.04×10²⁴).
+cursor, kept as k/W, means exactly what it meant, and a campaign can
+switch fold settings between runs without re-denominating anything — it
+changes how much of the line the device has to touch (2.39× measured)
+and how deep the engine reaches (17 × `J_CEIL` × wheel = 2.04×10²⁴).
 
 Every 30 s of wall clock (`--heartbeat`) the launcher logs a `[STATUS]`
 line from its own timer thread — whatever the main loop is doing: position,

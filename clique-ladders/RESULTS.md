@@ -15,13 +15,13 @@ since 2015, on A037100 since 2019 and on A103828 since 2021.
 Each evidence file was re-verified from disk on 2026-09-24 by a harness
 that shares nothing with the launcher: the prefix matched to the OEIS data
 plus this project's earlier finds, a(n) > a(n−1), every condition
-a(n) + a(i) + 1 (and the family's extra form: 2x + 1, parity, or x prime)
-re-tested with sympy's `isprime`, every value's certificate re-verified by
-`huntlib.certificate.verify` and matched to its value, the riders' affine
-maps recomputed, and each ledger matched to its files. 26 files, 472
-certificates, all green. Every value sits below the deterministic
-Miller–Rabin bound (the largest term is 5.6e21), so every certificate is
-`deterministic-mr` and nothing is `unproved`.
+a(n) + a(i) + 1 (and the family's extra form: 2·a(n) + 1, parity, or a(n)
+prime) re-tested with sympy's `isprime`, every value's certificate
+re-verified by `huntlib.certificate.verify` and matched to its value, the
+riders' affine maps recomputed, and each ledger matched to its files. 26
+files, 472 certificates, all green. Every value sits below the
+deterministic Miller–Rabin bound (the largest term is 5.6e21), so every
+certificate is `deterministic-mr` and nothing is `unproved`.
 
 Every file also carries the three-way verification (huntlib's Miller–Rabin
 chain, sympy's BPSW, a re-sieve by the CPU engine at a different depth), the
@@ -29,7 +29,7 @@ oracle's re-derivation against the whole prefix, and a `least_claim`: the
 sweep from a(n−1) + 1 to a(n) under the filter of index n, its wheel, sieve
 depth and forced class. Times below are the ledger's, local.
 
-### A093483 (`hard,nice`) — from a(17) = 252,534,792,143,648; riders A180565 = 2·a + 1
+### A093483 (`hard,nice`) — from a(17) = 252,534,792,143,648; riders A180565(n) = 2·A093483(n) + 1
 
 | n | a(n) | found | A180565(n) |
 |---|---|---|---|
@@ -38,7 +38,7 @@ depth and forced class. Times below are the ledger's, local.
 | 20 | 40,922,105,898,791,188,184 | 09-19 17:40:31 | 81,844,211,797,582,376,369 |
 | 21 | 217,741,095,176,373,431,678 | 09-19 17:53:45 | 435,482,190,352,746,863,357 |
 
-### A103828 — from a(18) = 2,504,509,324,460,255,499; riders A115760 = 2·a + 1, A128933 = a + 1
+### A103828 — from a(18) = 2,504,509,324,460,255,499; riders A115760(n) = 2·A103828(n) + 1, A128933(n) = A103828(n) + 1
 
 | n | a(n) | found | A115760(n) | A128933(n) |
 |---|---|---|---|---|
@@ -57,7 +57,7 @@ terms plus one, and are owed before these three can be entered.
 | 20 | 1,028,739,281,939,216,454 | 09-19 21:51:52 |
 | 21 | 140,672,999,403,766,760,844 | 09-19 22:06:37 |
 
-### A119752 (`hard`) — from a(14) = 4,566,262,987,328; rider A120403 = a + 1
+### A119752 (`hard`) — from a(14) = 4,566,262,987,328; rider A120403(n) = A119752(n) + 1
 
 | n | a(n) | found | A120403(n) |
 |---|---|---|---|
@@ -68,7 +68,7 @@ terms plus one, and are owed before these three can be entered.
 | 19 | 281,488,937,353,667,828 | 09-19 22:08:58 | 281,488,937,353,667,829 |
 | 20 | 23,912,359,356,224,311,448 | 09-19 22:18:26 | 23,912,359,356,224,311,449 |
 
-### A119751 (`hard`) — from a(14) = 4,565,283,812,559; rider A113875 = 2·a + 1
+### A119751 (`hard`) — from a(14) = 4,565,283,812,559; rider A113875(n) = 2·A119751(n) + 1
 
 | n | a(n) | found | A113875(n) |
 |---|---|---|---|
@@ -95,11 +95,11 @@ ledger per family, `evidence/a<number>_discoveries.json`.
 
 | entry | frontier | open | settles for free |
 |---|---|---|---|
-| A093483 (`hard,nice`) | a(17) = 252,534,792,143,648 (Don Reble, 2012) | a(18) | A180565(n) = 2·a(n) + 1 |
-| A103828 | a(18) = 2,504,509,324,460,255,499 (Don Reble, 2021) | a(19) | A115760(n) = 2·a(n) + 1; A128933(n) = a(n) + 1 |
+| A093483 (`hard,nice`) | a(17) = 252,534,792,143,648 (Don Reble, 2012) | a(18) | A180565(n) = 2·A093483(n) + 1 |
+| A103828 | a(18) = 2,504,509,324,460,255,499 (Don Reble, 2021) | a(19) | A115760(n) = 2·A103828(n) + 1; A128933(n) = A103828(n) + 1 |
 | A037100 | a(18) = 20,116,294,396,883,346 (Don Reble, 2019) | a(19) | — |
-| A119752 (`hard`) | a(14) = 4,566,262,987,328 (Donovan Johnson, 2008) | a(15) | A120403(n) = a(n) + 1 |
-| A119751 (`hard`) | a(14) = 4,565,283,812,559 (Donovan Johnson, 2008) | a(15) | A113875(n) = 2·a(n) + 1 |
+| A119752 (`hard`) | a(14) = 4,566,262,987,328 (Donovan Johnson, 2008) | a(15) | A120403(n) = A119752(n) + 1 |
+| A119751 (`hard`) | a(14) = 4,565,283,812,559 (Donovan Johnson, 2008) | a(15) | A113875(n) = 2·A119751(n) + 1 |
 | A133761 | a(16) = 3,544,413,963,914,171 (Don Reble, 2015) | a(17) | — |
 
 No entry carries a published bound at its open index and none has a b-file;
@@ -138,12 +138,13 @@ a day or so. Read every depth as a floor.
 
 Counted, not narrated (CONVENTIONS.md). The **run** of a survivor is in
 index units: 0 if the family's extra form fails, else 1 + the number of
-leading conditions x + a(1) + 1, x + a(2) + 1, … that are prime — "x is
-compatible with the first r − 1 terms". Runs of 8 and up are counted per
-length in the checkpoint and printed in every 30-second `[STATUS]` line; a
-run one short of the open index gets a single `[NEAR]` line and is verified
-as a health check, with a factor witness skipped; only a full run above
-a(n−1) is a `[DISCOVERY]`, and only a discovery gets a file.
+leading conditions a(n) + a(1) + 1, a(n) + a(2) + 1, … that are prime —
+one more than the number of leading terms the candidate is compatible
+with. Runs of 8 and up are counted per length in the checkpoint and printed
+in every 30-second `[STATUS]` line; a run one short of the open index gets
+a single `[NEAR]` line and is verified as a health check, with a factor
+witness skipped; only a full run above a(n−1) is a `[DISCOVERY]`, and only
+a discovery gets a file.
 
 Two things differ from the other ladders here. A run cannot exceed the
 filter, so there are no riders and a find settles exactly one index. And

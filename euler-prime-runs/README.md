@@ -55,12 +55,12 @@ So Euler's "lucky numbers" {2, 3, 5, 11, 17, 41} are provably the last
 of their kind, and any prime with a long run beyond them is a *generic*
 statistical object, findable only by search.
 
-Define run(p) = the number of consecutive x from 0 with x² + x + p prime.
-A164926(n) is the least prime with run exactly n. Before this project:
-a(1)–a(16) known (a(15) = 291,598,227,841,757, Andersen 2009), then a
-17-year gap — **a(17) through a(20) unknown**, with a run-21 example
-234,505,015,943,235,329,417 known as an upper bound for a(21) (from a
-construction-style search, so not a confirmed least).
+Call the number of consecutive x from 0 with x² + x + p prime the *run*
+of p. A164926(n) is the least prime p with run exactly n. Before this
+project: a(1)–a(16) known (a(15) = 291,598,227,841,757, Andersen 2009),
+then a 17-year gap — **a(17) through a(20) unknown**, with a run-21
+example 234,505,015,943,235,329,417 known as an upper bound for a(21)
+(from a construction-style search, so not a confirmed least).
 
 There is no known upper bound for a(17)–a(20): every new segment of the
 sweep could contain the find. That is what makes it a hunt.
@@ -73,7 +73,8 @@ residues of p are −(x²+x) mod q — about min(17, (q+1)/2) classes. One
 engine covers the whole range:
 
 **0. Representation.** p is never held in a machine word. Every candidate
-is the pair (k, off) with p = k·37# + off, so every sieve test reduces to
+is the engine's pair `(k, off)` — a wheel-period index and an offset in the
+period — with `p = k·37# + off`, so every sieve test reduces to
 `((k mod q)·(37# mod q) + off mod q) mod q`, which stays 64-bit-safe to
 the enforced ceiling 10²⁴ — a factor >3 under the Miller–Rabin validity
 bound. There is no 2⁶⁴ boundary in the search: the same code sweeps 10⁵
@@ -89,13 +90,14 @@ widening.
 
 The limit used to be the offset table, and 37#'s is 5.99×10⁸ entries (4.8 GB
 at n = 17, and *larger* for smaller n). It is never built. The offsets of a
-wheel base·q are exactly `{off + j·M_base}`, and since M_base is invertible
-mod q, which j survive q depends on off only through `off mod q` — leaving
-exactly `q − |F_q(n)|` admissible j for **every** base offset. So the wheel is
-the 31# table (2.99×10⁷ offsets, 240 MB) plus a 37×20 byte table of
-admissible j, and the GPU generates one chunk of offsets at a time from those
-two. That count is computed, not assumed: it is 20 at n = 17 because the 17
-values x²+x are distinct mod 37, and 18 at n = 21 because they are not.
+wheel base·q are exactly `{off + j·M_base}`, and since `M_base` is
+invertible mod q, which `j` survive q depends on `off` only through
+`off mod q` — leaving exactly `q − |F_q(n)|` admissible `j` for **every**
+base offset. So the wheel is the 31# table (2.99×10⁷ offsets, 240 MB) plus
+a 37×20 byte table of admissible `j`, and the GPU generates one chunk of
+offsets at a time from those two. That count is computed, not assumed: it
+is 20 at n = 17 because the 17 values x²+x are distinct mod 37, and 18 at
+n = 21 because they are not.
 
 The gates cannot compare that against a built 37# table — there isn't one at
 any n — so **G16** checks the identical construction at (23#,29) and (29#,31)
@@ -109,13 +111,13 @@ against a 29#-wheel reference where the same p would be missing from neither
 side.
 
 **2. Stage 1a, the bit-sieve.** For prime q, if a block of 64 consecutive
-wheel periods starts at residue r, then period offset u is killed by q
+wheel periods starts at residue `r`, then period offset `u` is killed by q
 exactly when `(r + u·(37# mod q)) mod q` is forbidden — a function of
-(q, r) alone. So the host precomputes `pat[q][r]`, a 64-bit kill pattern,
+(q, `r`) alone. So the host precomputes `pat[q][r]`, a 64-bit kill pattern,
 and the kernel ORs **one word per prime per 64 periods** for the first 26
 stage-1 primes, then reads survivors straight out of the complement with
 `__ffsll`. Those words are stored in *visit order* — the index sequence for
-prime q is `(r₀ + s·dmw) mod q`, and dmw is invertible mod q, so storing
+prime q is `(r₀ + s·dmw) mod q`, and `dmw` is invertible mod q, so storing
 `G[m] = pat[m·dmw mod q]` makes the walk stride-1 and shared by every prime,
 which collapses the per-prime residue step into one pointer bump. Nothing is
 tested per candidate, so there is no per-candidate
@@ -124,10 +126,10 @@ the obvious "test each candidate, exit early" loop spends most of its
 instructions maintaining state for primes the average candidate never
 reaches, and a warp runs until its *last* lane dies.
 
-Seeding those residues is not free — each thread reduces k and its offset
+Seeding those residues is not free — each thread reduces `k` and its offset
 against all 26 primes before the loop starts. So the grid is shaped to pay it
-as few times as possible: the periods-per-thread T is *derived* from the
-launch size rather than fixed, chosen so the grid's y-slices come out even
+as few times as possible: the number of periods per thread is *derived* from
+the launch size rather than fixed, chosen so the grid's y-slices come out even
 and, at the production launch size, so there is only one of them. Measured by
 sweeping the window and fitting, the sieve costs
 `~36 + ~21·words` ms per 10⁹ threads, so seeding is now ~2.5% of it.
@@ -147,10 +149,10 @@ with every lane alive recovers most of that 5.8x. Each round is its own
 **generated kernel** with its primes unrolled and their moduli, magics and
 mask offsets as literals: the indexed loop read six warp-uniform values per
 prime out of global arrays, and five of them are properties of the prime.
-Only one of the modular reductions per candidate-prime needs 64 bits — *k*
-itself is never formed, because the host knows k mod q and the candidate
+Only one of the modular reductions per candidate-prime needs 64 bits — *`k`*
+itself is never formed, because the host knows `k mod q` and the candidate
 carries its period offset in the low half of its queue entry — and even
-`off mod q` does not, since `off = a·2ˢ + b` with s chosen so that
+`off mod q` does not, since `off = a·2ˢ + b` with `s` chosen so that
 `a·(2ˢ mod q) + b` clears 2³² for every prime in the stage. **G15** checks
 that bound at its worst case rather than trusting it.
 
@@ -164,8 +166,8 @@ its precondition — and the same restatement is used for the stage-1 primes
 above 272, where it replaces a gather into the ~10 KB forbidden-residue mask
 with a probe of the same 36-byte table. Its residue reduction uses the same
 splits as stage 1b, with its **own** split point: these primes reach 65521,
-so the product has 64x less room, and the engine derives s per stage rather
-than sharing one.
+so the product has 64x less room, and the engine derives `s` per stage
+rather than sharing one.
 
 **5. Host classification.** The ~3.6×10⁻¹³ of the line that survives goes
 to the host, where a deterministic Miller–Rabin (valid to
@@ -222,12 +224,13 @@ A third frozen shape, [6.11×10²⁰, +2×10¹⁶), was added to resolve it — 
 The sieve's *other* term is per-thread setup. It was 17.4% of the kernel;
 halving the thread count (one grid slice instead of two) beat making each
 thread's arithmetic cheaper, 1.022x against 1.015x, which says that term is
-mostly thread overhead rather than instructions — and with T now derived from
-a larger launch it is down to 2.1%. That measurement is also what prices the
-next wheel: 37# generates 1.85x fewer candidates, and once the queue stopped
-capping the launch's period count it measures **1.85x** on production-shaped
-launches. It measures 0.58x on the frozen 5×10¹⁴ window, which holds only 68
-of its periods — a blocker in the benchmark's shape, not the engine's.
+mostly thread overhead rather than instructions — and with the periods per
+thread now derived from a larger launch it is down to 2.1%. That
+measurement is also what prices the next wheel: 37# generates 1.85x fewer
+candidates, and once the queue stopped capping the launch's period count it
+measures **1.85x** on production-shaped launches. It measures 0.58x on the
+frozen 5×10¹⁴ window, which holds only 68 of its periods — a blocker in the
+benchmark's shape, not the engine's.
 Amending the anchor that makes scores comparable across engine generations is
 a human's call, not an optimizer's, so the anchor was not amended: a third
 frozen shape was **added** beside it, wide enough to hold 2,696 periods of
@@ -336,7 +339,7 @@ derived at start from the singular series) plus the ceiling, logged
 `[RUNG]` as each is passed and shown with an ETA in every `[STATUS]`.
 
 **One engine, one cursor, no flags.** Every candidate is carried as the
-pair (k, off) with p = k·37# + off, which is as valid at 10⁵ as at 10²³,
+pair `(k, off)` with `p = k·37# + off`, which is as valid at 10⁵ as at 10²³,
 so a single sweep runs from the oracle floor to the enforced ceiling
 10²⁴ with no seam at 2⁶⁴ and nothing to select. The GPU is always used.
 `--engine cpu` selects the numpy reference engine, which exists for
@@ -358,8 +361,8 @@ other half of the parity gate.
 `--stop-on-discovery` follows the repo-wide convention (CONVENTIONS.md):
 **a discovery is a first occurrence, logged once; the census is counted,
 not narrated.** A164926(n) is the least prime with run *exactly* n, so
-settledness is per run length: the first run-r prime while a(r) is open
-is a(r) and a `[DISCOVERY]` — the launcher records it in the checkpoint at
+settledness is per run length: the first run-n prime while a(n) is open
+is a(n) and a `[DISCOVERY]` — the launcher records it in the checkpoint at
 once (and saves it at the end of that segment), and it is the only thing
 that is evidenced. Every other run-13+ prime is census, of two kinds. A
 run one short of an *open* term (a run-19 while a(20) is open) gets one

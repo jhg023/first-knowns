@@ -16,19 +16,19 @@ by a harness that shares nothing with the launcher: every value rebuilt as
 k!·m ∓ 1 and re-tested with sympy's BPSW, the run re-derived from the bare
 definition (`fladder_reference.run_length`), the stopper's factor
 re-multiplied, every certificate re-verified by `huntlib.certificate.verify`
-and matched to its own N, the ledger matched to the files, the least-claim
-basis read back, and A226935's own recurrence run from m + 1 on every
-A177014 find. 14 files, 205 certificates, all green. Model figures are from
-`fladder_model`, each scored from the term before it — the frontier that was
-known when the search for that term began.
+and its `N` matched to its own value, the ledger matched to the files, the
+least-claim basis read back, and A226935's own recurrence run from
+p(1) = m + 1 on every A177014 find. 14 files, 205 certificates, all green.
+Model figures are from `fladder_model`, each scored from the term before
+it — the frontier that was known when the search for that term began.
 
 ### A177013 — one campaign, 2026-09-16, 14:01–20:26
 
 `python launch.py`, from a(10) = 3,240,034,842. The first six terms landed
 inside the first 66 seconds, as the README's wall-clock table had said they
 would; a(17) at 24 minutes and a(18) at 5.75 hours. Forms k!·m − 1, so the
-certificate route past the proof crossing is BLS75 Theorem 15 on
-N + 1 = k!·m, m factored once per find.
+certificate route past the proof crossing is BLS75 Theorem 15 on the value
+plus one, k!·m, m factored once per find.
 
 #### a(11) = 83,398,005,540 — 14:01:38
 
@@ -144,8 +144,8 @@ and which claims nothing until that segment closes.
 ### A177014 — one campaign, 2026-09-16 20:27 to 2026-09-18 17:45
 
 `python launch.py --family A177014`, from a(9) = a(10) = 228,698,250. Forms
-k!·m + 1, so the certificate route is BLS75 Theorem 1 on N − 1 = k!·m. Every
-term is also **A226935 at the same index, plus one**: the chain
+k!·m + 1, so the certificate route is BLS75 Theorem 1 on the value less one,
+k!·m. Every term is also **A226935 at the same index, plus one**: the chain
 p(i) = i·p(i−1) − (i−1) from p(1) = m + 1 was re-run on each find for this
 page and is prime, and equal to i!·m + 1, at every link.
 

@@ -148,14 +148,15 @@ The enforced ceiling is now the family's primality-proof validity bound:
 `3.317×10²⁴` for A084700 (the deterministic Miller–Rabin bound on `k`
 itself; past the proof crossing at `5.4×10²²` a discovery is proved by
 certificate) and for A084701 its proof crossing — `9.0×10²²` at n = 12,
-`4.95×10²²` at n = 19 — because its structure is on `N + 1` and huntlib
-has no N+1 test (see the README for why). The first A084700 campaign
-stopped at the old ceiling in 4.4 hours; the second found `a(18)` 15.2
-hours in; what is left to the ceiling at n = 19 is `2.9×10²⁴` of line,
-and `a(19)` is only 22% likely to be in it. The A084701 campaign reached
-its ceiling in 2.5 hours with `a(19)` 99% likely above it; an N+1 route
-would lift that ceiling to `3.317×10²⁴`, under which 27% of the term
-lies — `3.3×10²⁴` of line, about three days at the n = 19 rate.
+`4.95×10²²` at n = 19 — because its structure is on the value plus one
+and huntlib has no plus-one test (see the README for why). The first
+A084700 campaign stopped at the old ceiling in 4.4 hours; the second
+found `a(18)` 15.2 hours in; what is left to the ceiling at n = 19 is
+`2.9×10²⁴` of line, and `a(19)` is only 22% likely to be in it. The
+A084701 campaign reached its ceiling in 2.5 hours with `a(19)` 99%
+likely above it; a plus-one route would lift that ceiling to
+`3.317×10²⁴`, under which 27% of the term lies — `3.3×10²⁴` of line,
+about three days at the n = 19 rate.
 
 The three ladder projects before this one landed their finds at a pooled
 optimism factor of 1.92× over their models' medians; this one's eleven

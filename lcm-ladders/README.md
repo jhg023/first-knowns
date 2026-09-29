@@ -5,24 +5,26 @@
 > owner's direction.
 
 A GPU hunt for the next terms of four OEIS sequences that ask the same
-question twice, with the sign flipped: **what is the smallest N for which
-every one of (N ± k)/k, k = 1..n, is prime?** All four frontiers were last
-moved between 2003 and 2004, by Jens Kruse Andersen; none carries a bound of
-any kind at any open index, and none has a b-file. The substitution that
-makes them tractable is that N must be a multiple of L = lcm(1..n), so
-N = L·x and the conditions become **(L/k)·x ± 1 prime for k = 1..n** — one
-unknown, a list of multipliers, a fixed sign: the linear ladder this
-repository has hunted four times, with a wheel that behaves nothing like the
-others. **The standing result: a(15) through a(19) of A078502 and a(15)
-through a(18) of A074200, found and verified 2026-09-06 and 2026-09-19 —
-nine terms on eight integers, each proved prime value by value — and with
-them a(15)–a(19) of A093554 and a(15)–a(18) of A093553: eighteen new terms
-in all** ([RESULTS.md](RESULTS.md)).
+question twice, with the sign flipped: **what is the smallest N with every
+(N − k)/k, k = 1..n, prime (A078502), and the smallest m with every
+(m + k)/k, k = 1..n, prime (A074200)?** All four frontiers were last moved
+between 2003 and 2004, by Jens Kruse Andersen; none carries a bound of any
+kind at any open index, and none has a b-file. The substitution that makes
+them tractable is that the term must be a multiple of lcm(1..n), so the
+conditions become **(lcm(1..n)/k)·(N/lcm(1..n)) − 1 prime** and
+**(lcm(1..n)/k)·(m/lcm(1..n)) + 1 prime for k = 1..n** — one unknown (the
+quotient of the term by lcm(1..n)), a list of multipliers, a fixed sign: the
+linear ladder this repository has hunted four times, with a wheel that
+behaves nothing like the others. **The standing result: a(15) through a(19)
+of A078502 and a(15) through a(18) of A074200, found and verified
+2026-09-06 and 2026-09-19 — nine terms on eight integers, each proved prime
+value by value — and with them a(15)–a(19) of A093554 and a(15)–a(18) of
+A093553: eighteen new terms in all** ([RESULTS.md](RESULTS.md)).
 
 **Status: PAUSED — open to others** — A078502 stands at a(18) = a(19) =
 52,270,101,840,951,834,355,676,160,000 with a(20) open and priced at about a
 year; A074200 at a(18) = 246,823,048,779,050,778,944,771,141,280 with no
-a(19) below N = 5.1133e29 and a(19) about 11 days of device away at the
+a(19) below m = 5.1133e29 and a(19) about 11 days of device away at the
 median. Both campaigns resume from their checkpoints with no flags.
 
 ## The problem
@@ -39,35 +41,40 @@ one shifted by one, and `lcml_reference`'s G2d re-derives that from the bare
 definition on every published term and on every find. **So a single find
 settles two entries, and the two hunted families settle four.**
 
-**Notation, and which number goes in the OEIS.** A078502 calls its term
-**N** and A074200 calls its term **m**; this project's prose and code write
-both as N, with N = lcm(1..n)·x and x the variable the engine sweeps. An
-evidence file follows its own entry — the term is the field `N` in an
-A078502 file and the field `m` in an A074200 file, `x` is there too and is
-**never** what gets submitted — and `oeis_terms` is literally what to
-submit: `{"18": v, "19": v}` reads "a(18) and a(19) are both v". The riders'
+**Which number goes in the OEIS.** A078502 calls its term **N** and A074200
+calls its term **m**, and this page writes each in its own letter; what the
+engine sweeps is the quotient of the term by lcm(1..n) (N/lcm(1..n),
+m/lcm(1..n)), which is never the term. An evidence file follows its own
+entry — the term is the field `N` in an A078502 file and the field `m` in an
+A074200 file, the quotient is there too as `x` and is **never** what gets
+submitted — and `oeis_terms` is literally what to submit:
+`{"18": v, "19": v}` reads "a(18) and a(19) are both v". The riders'
 integers (A093554 = A078502 − 1, A093553 = A074200 + 1) are in
 `also_settles` (CONVENTIONS.md "Naming in an evidence file").
 
 a(15) was open on all four when the project started (the table above is the
 frontier as this project found it); a(20) is open on A078502 / A093554 now
-and a(19) on A074200 / A093553. The conditions nest in N — anything satisfying
-filter n satisfies filter n − 1 — so a(n) is non-decreasing and the previous
-term is a free floor; nothing below it has to be swept at all.
+and a(19) on A074200 / A093553. The conditions nest in the term — anything
+satisfying filter n satisfies filter n − 1 — so a(n) is non-decreasing and
+the previous term is a free floor; nothing below it has to be swept at all.
 
 ## The mathematics of the engine
 
-**The substitution.** (N + s·k)/k is an integer for every k ≤ n exactly when
-L(n) | N. Write N = L·x; the k-th condition is (L/k)·x + s prime. The
-multipliers are the same for both families and only the sign differs, so the
+**The substitution.** (N − k)/k and (m + k)/k are integers for every k ≤ n
+exactly when lcm(1..n) divides the term. Dividing it out, the k-th condition
+is (lcm(1..n)/k)·(N/lcm(1..n)) − 1 prime for A078502 and
+(lcm(1..n)/k)·(m/lcm(1..n)) + 1 prime for A074200. The multipliers
+lcm(1..n)/k are the same for both families and only the sign differs, so the
 two share every killed-set size, the whole survival curve and one singular
 series.
 
-**The killed set.** For a prime q and a multiplier m, the form m·x + s is
-divisible by q only when x ≡ −s·m⁻¹ (mod q), and never at all when q | m.
-So q kills exactly
+**The killed set.** For a prime q, the k-th value is divisible by q only
+when the quotient is ≡ (lcm(1..n)/k)⁻¹ (mod q) for A078502 and
+≡ −(lcm(1..n)/k)⁻¹ (mod q) for A074200, and never at all when q divides the
+multiplier lcm(1..n)/k. So q kills exactly these residues of the quotient,
 
-    K(q,n) = { −s·m⁻¹ mod q : m ∈ {L/1, …, L/n}, q ∤ m }
+    K(q,n) = {  (lcm(1..n)/k)⁻¹ mod q : k = 1..n, q ∤ lcm(1..n)/k }   A078502
+    K(q,n) = { −(lcm(1..n)/k)⁻¹ mod q : k = 1..n, q ∤ lcm(1..n)/k }   A074200
 
 and its size has a closed form, proved in `lcml_reference` and gated three
 ways (closed form vs distinct-residue count vs direct divisibility, G2b):
@@ -78,18 +85,19 @@ ways (closed form vs distinct-residue count vs direct divisibility, G2b):
 **This is the whole difference from the linear ladders, and it is a large
 one.** There w(q,n) = min(n, q−1) for every q, so every small prime is a
 maximal killer. Here the small primes are nearly blind — w(3,15) = 1,
-w(5,15) = 3, w(7,15) = 2 — because L/k is divisible by q for all but a
-handful of k. The wheel is about **2,400× weaker** at n = 15, and the
+w(5,15) = 3, w(7,15) = 2 — because lcm(1..n)/k is divisible by q for all
+but a handful of k. The wheel is about **2,400× weaker** at n = 15, and the
 compensation is the singular series, which is about **4,600× larger**
-(1.34e8 against 2.9e4). Fewer x are killed per unit of line, and each
-survivor is far likelier to be a hit. Every engine constant in this project
-was re-swept for that regime; none was inherited (OPTIMIZATION_LOG.md).
+(1.34e8 against 2.9e4). Fewer quotients are killed per unit of line, and
+each survivor is far likelier to be a hit. Every engine constant in this
+project was re-swept for that regime; none was inherited
+(OPTIMIZATION_LOG.md).
 
 **Forced divisibility, and why nothing may be cached across filters.** When
-w(q,n) = q − 1 only x ≡ 0 (mod q) survives. q = 2 is forced at *every* n,
-which is the published observation that A078502(n) ≡ 0 (mod 2L). Above that
-the forcing is **sporadic and not monotone**: q = n + 1 is forced whenever
-n + 1 is prime, so the forced unit is
+w(q,n) = q − 1 only a quotient ≡ 0 (mod q) survives. q = 2 is forced at
+*every* n, which is the published observation that A078502(n) ≡ 0
+(mod 2·lcm(1..n)). Above that the forcing is **sporadic and not monotone**:
+q = n + 1 is forced whenever n + 1 is prime, so the forced unit is
 
 | n | 15 | 16 | 17 | 18 | 19 | 20 | 22 |
 |---|---|---|---|---|---|---|---|
@@ -113,22 +121,24 @@ stops it before 47. Choosing the subset by value density is **1.82× fewer
 candidates per unit of line at n = 17, and 1.49× end to end**; the primes
 the wheel declines are sieved instead, so the coverage claim is unchanged.
 
-**And every filter is a different line.** N = L(n)·x, so an x at filter n
-and an x at filter n + 1 are not the same number. When a find moves the
-frontier the campaign rebuilds the engine *and restarts the line* at the new
-filter's floor — which is the term just found, so nothing is skipped and
-nothing is re-swept. That is the one structural difference from every other
-project here, and `_promotion_drill` is the gate for it.
+**And every filter is a different line.** The swept quotient is the term
+divided by lcm(1..n), so the same quotient at filter n and at filter n + 1
+stands for two different terms. When a find moves the frontier the campaign
+rebuilds the engine *and restarts the line* at the new filter's floor —
+which is the term just found, so nothing is skipped and nothing is
+re-swept. That is the one structural difference from every other project
+here, and `_promotion_drill` is the gate for it.
 
-**The engine.** Candidates are carried as (x, off) pairs, so no machine word
-bounds the search. The GPU never materialises the x line: it generates the
-residues of a three-level wheel and sieves them a SEGMENT of 224 wheel
-periods at a time, testing each sieve prime against a periodic bit pattern
-(one window is a handful of shared loads and funnel shifts for 192
-candidates), then compacts the survivors through in-block rounds and global
-tail rounds. The CPU engine marks arithmetic progressions into a dense array
-and uses no wheel at all; the parity gate (G9) pins the two streams bit for
-bit on 22 populated windows from x = 2e9 up to the 1e40 ceiling.
+**The engine.** Candidates are carried as a quotient and an offset (the
+code's `(x, off)` pairs), so no machine word bounds the search. The GPU
+never materialises the line of quotients: it generates the residues of a
+three-level wheel and sieves them a SEGMENT of 224 wheel periods at a time,
+testing each sieve prime against a periodic bit pattern (one window is a
+handful of shared loads and funnel shifts for 192 candidates), then
+compacts the survivors through in-block rounds and global tail rounds. The
+CPU engine marks arithmetic progressions into a dense array and uses no
+wheel at all; the parity gate (G9) pins the two streams bit for bit on 22
+populated windows from a quotient of 2e9 up to the 1e40 ceiling.
 
 **Two survivor records (engine v2, 2026-09-19).** Past the window sieve a
 candidate is either its u64 offset within the launch — exact while a whole
@@ -146,12 +156,14 @@ and *not* the wheel to 59 at n = 17, where it reads 1.10× for a segment of
 periods where 2⁶³ admitted 107). The design is factorial-ladders' v3 record;
 the measurements are in OPTIMIZATION_LOG.md round 10.
 
-**The ceiling is 1e40 on x, and certificates are this project's best case.**
-Value i is N/i + s, so (N/i + s) − s = N/i, and N = L(n)·x with L(n)
-n-smooth: **one factorization of x proves the entire run**, by BLS75
-Theorem 1 on V − 1 for A074200 and Theorem 15 (a Lucas sequence per prime)
-on V + 1 for A078502. The proof crossing — where a *classification* stops
-being a deterministic proof — is low here, x = 9.2e18 at n = 15 and 2.7e17
+**The ceiling is 1e40 on the quotient, and certificates are this project's
+best case.** Value k is N/k − 1 for A078502 and m/k + 1 for A074200, so the
+value plus one is N/k and the value less one is m/k, and the term is
+lcm(1..n), which is n-smooth, times the quotient: **one factorization of the
+quotient proves the entire run**, by BLS75 Theorem 1 on the value less one
+for A074200 and Theorem 15 (a Lucas sequence per prime) on the value plus
+one for A078502. The proof crossing — where a *classification* stops being a
+deterministic proof — is low here, a quotient of 9.2e18 at n = 15 and 2.7e17
 at n = 17, because the largest value is the published term itself. So the
 certificate is the normal path in this project rather than an edge case, and
 the ceiling is where its *cost* was measured (`huntlib.ceiling`), not where
@@ -169,12 +181,13 @@ the model puts between the previous term and the one that actually occurred
 terms (riders excluded: one vote per condition) the mean is **1.12**, spread
 0.09–3.08: A078502 1.28 over 5 draws, A074200 1.00 over 7.
 
-**Predictions, in x at each filter** (`model_results.json`; multiply by L(n)
-for N). Read them as a floor: the ladder projects before this one landed
-their finds at about 1.9–2.5× their medians while every census showed the
-intensity right to a percent or two.
+**Predictions, in the quotient of the term by lcm(1..n) at each filter**
+(`model_results.json`; multiply by lcm(1..n) for the term). Read them as a
+floor: the ladder projects before this one landed their finds at about
+1.9–2.5× their medians while every census showed the intensity right to a
+percent or two.
 
-| term | Q1 | median | Q3 | P90 | L(n) | unit |
+| term | Q1 | median | Q3 | P90 | lcm(1..n) | unit |
 |---|---|---|---|---|---|---|
 | a(15) A078502 | 3.31e16 | **1.18e17** | 3.19e17 | 6.59e17 | 360360 | 2 |
 | a(15) A074200 | 5.28e16 | **1.46e17** | 3.56e17 | 7.03e17 | 360360 | 2 |
@@ -196,25 +209,26 @@ a(18) at 2.1 hours, a seventh of its median, as a run of **19**, so a(19)
 came with it. A074200 landed a(15) and a(16) inside three minutes and then
 swept 47 minutes at n = 17, past twice the median, without an a(17): a 32%
 event. Over the six searched draws **E averages 1.26** (A078502 1.33 over 4,
-A074200 1.12 over 2) against G11's 1.12 on a disjoint set, and x / median
-runs 0.145 to 7.6, geometric mean 1.32. Every timed phase ran inside 11% of
-its benchmark. Term by term: [RESULTS.md](RESULTS.md).
+A074200 1.12 over 2) against G11's 1.12 on a disjoint set, and the ratio of
+find to median runs 0.145 to 7.6, geometric mean 1.32. Every timed phase ran
+inside 11% of its benchmark. Term by term: [RESULTS.md](RESULTS.md).
 
 **And the resumed campaign (2026-09-19).** A074200's a(17) came at 3.18× its
 median (E = 1.62, a 20% event) after 76 minutes at n = 17 over three
 sittings, and a(18) 7.03 hours later at 0.66× its median (E = 0.51), on
-engine v2's wide record at 8.54e17 x/s. Over all eight searched draws **E
-averages 1.21** (A074200 1.09 over 4), geometric mean of x / median 1.35.
+engine v2's wide record at 8.54e17 per second of the quotient
+m/lcm(1..18). Over all eight searched draws **E averages 1.21** (A074200
+1.09 over 4), geometric mean of find / median 1.35.
 
 | open term | searched empty below | median from there | what it costs |
 |---|---|---|---|
-| a(19) A074200 (and A093553) | N = 5.1133e29 | x ≈ 9.4e22 at n = 19, N ≈ 2.2e31 | **about 11 days** at 9.87e16 x/s; 10% inside a day, 39% inside a week |
-| a(20) A078502 (and A093554) | — (a(19) only) | x = 1.48e25 at n = 20, N = 3.4e33 | about a year at the 4.7e17 x/s engine v2 measured there |
+| a(19) A074200 (and A093553) | m = 5.1133e29 | m/lcm(1..19) ≈ 9.4e22 at n = 19, m ≈ 2.2e31 | **about 11 days** at 9.87e16 per second of m/lcm(1..19); 10% inside a day, 39% inside a week |
+| a(20) A078502 (and A093554) | — (a(19) only) | N/lcm(1..20) = 1.48e25 at n = 20, N = 3.4e33 | about a year at the 4.7e17 per second of N/lcm(1..20) engine v2 measured there |
 
 The singular series is **not monotone in n**, and G12 asserts the mechanism
 rather than the numbers: it jumps ×44.8 at n = 17 and ×67.0 at n = 19 (when
-n is prime it enters L(n) and q = n's kill count collapses from n − 1 to 1),
-and *falls* ×0.996 at n = 18, where q = 3 becomes forced.
+n is prime it enters lcm(1..n) and q = n's kill count collapses from n − 1
+to 1), and *falls* ×0.996 at n = 18, where q = 3 becomes forced.
 
 ## Running it
 
@@ -230,7 +244,7 @@ The hunt itself, which is the owner's command and nobody else's:
 python launch.py                        # A078502, indefinite, resumable
 python launch.py --family A074200       # the other family
 python launch.py --family A093554       # a rider spelling: opens A078502
-python launch.py --to 1e20              # stop at a chosen depth in x
+python launch.py --to 1e20              # stop at a chosen depth of the quotient
 python launch.py --stop-on-discovery    # stop when THIS RUN finds something
 ```
 
@@ -253,9 +267,9 @@ The gate discipline is [CONVENTIONS.md](../CONVENTIONS.md); the optimization
 process is [OPTIMIZATION.md](../OPTIMIZATION.md). Specific to this project:
 
 * **The substitution is gated, not assumed.** G2 re-derives the small terms
-  *twice* — once by walking N itself with the divisibility test the OEIS
-  definition states, once by walking x over N = L(n)·x — and requires them to
-  agree.
+  *twice* — once by walking the term itself with the divisibility test the
+  OEIS definition states, once by walking the quotient over multiples of
+  lcm(1..n) — and requires them to agree.
 * **The wheel is re-derived at every filter and refused at the wrong one.**
   `assert_unit` raises on a unit whose primes are not forced at that filter,
   `wheel()` calls it, and G7 requires the n = 16 unit to be *rejected* at
@@ -263,8 +277,9 @@ process is [OPTIMIZATION.md](../OPTIMIZATION.md). Specific to this project:
 * **Four wheels, one stream.** G17 sweeps one whole production period with
   the planned wheel, the same primes split at a different level, a coarser
   wheel that covers the window in 43 of its own periods (so 43 moves from
-  the wheel into the sieve), and an x-space wheel — and requires the
-  identical survivor set.
+  the wheel into the sieve), and a wheel of unit 1, over every quotient
+  rather than the multiples of the forced unit — and requires the identical
+  survivor set.
 * **A bug the parity gate caught while this project was being built:** the
   kernel unpacked a queue entry's period index with `qi & (PB - 1)`, a mask
   that is only correct when the window width is a power of two. At the

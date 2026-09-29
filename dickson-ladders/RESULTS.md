@@ -163,13 +163,14 @@ stored certificate:
 | stored k factorization re-multiplied, factors re-proved prime | ok | ok | ok | ok |
 
 a(13)'s alternate-alignment leg ran in the post-crash direct-table form
-(Python integers, no j ceiling — see below); what is checked is unchanged.
+(Python integers, no ceiling on k's quotient by the wheel — see below);
+what is checked is unchanged.
 
-The certificates matter here rather than being decoration: m·k²+1 passes
-huntlib's deterministic Miller–Rabin bound (3.317×10²⁴) before a(9), so
-probable-prime tests would be evidence and not proof. N − 1 = m·k² is our
-own number, fully factored by construction, which is exactly what
-Brillhart–Lehmer–Selfridge Theorem 1 needs.
+The certificates matter here rather than being decoration: p = m·k²+1
+passes huntlib's deterministic Miller–Rabin bound (3.317×10²⁴) before
+a(9), so probable-prime tests would be evidence and not proof.
+p − 1 = m·k² is our own number, fully factored by construction, which is
+exactly what Brillhart–Lehmer–Selfridge Theorem 1 needs.
 
 ## The machinery behind the claims
 
@@ -189,7 +190,7 @@ can check them today:
   whichever engine production is about to use. a(9) = 3,332,396,388,090
   is the deepest: 1.6×10¹⁰ wheel candidates swept to reach it.
 - **The two engines agree bit-for-bit** on populated windows from
-  j = 10⁶ to the enforced ceiling 4×10¹⁸ (G6), and the GPU stream is
+  k/W = 10⁶ to the enforced ceiling 4×10¹⁸ (G6), and the GPU stream is
   independent of how the work is sliced (G13).
 - **The kernel's decisions equal big-integer divisibility** of the
   actual values m·k²+1, checked with no engine on the other side of the
@@ -199,8 +200,9 @@ can check them today:
   Brillhart–Lehmer–Selfridge witness set that re-verifies from scratch,
   and the verifier rejects both a forged witness and a falsified
   factorization (G11). The witness search is open-ended over the primes,
-  because the wheel primes can never witness p = 2 here (README, item 5);
-  G12 replays a genuine run-10 value whose m = 2 certificate needs base 41.
+  because the wheel primes can never witness the prime factor 2 of m·k²
+  here (README, item 5); G12 replays a genuine run-10 value whose m = 2
+  certificate needs base 41.
 
 ## The least-claim, and what it rests on
 
@@ -268,8 +270,9 @@ occurrences only.
 With a(13) found and verified, the owner paused the campaign to move to
 other work. Where it stands, all of it in the checkpoint:
 
-- cursor k = 1.57×10²² (next_j = 521,960,159,937,822,721 on the 30030
-  wheel), filter n = 14, contiguous from the floor;
+- cursor k = 1.57×10²² (k/W = 521,960,159,937,822,721 on the 30030
+  wheel, the checkpoint's `next_j`), filter n = 14, contiguous from the
+  floor;
 - 956,235,834 survivors classified over 25.1 h of campaign wall clock;
 - census at pause: `7:19446 8:4349 9:927 10:183 11:59 12:9 13:1`;
 - every a(13) rung is passed and retired; the ladder aims at a(14).
@@ -291,22 +294,23 @@ Two 2026-08-19 changes bear on the claims and the reach, both gated
 before the sweep that found a(13) resumed:
 
 - **A verification-path crash was found by the campaign itself and
-  fixed.** At k = 1.097×10²² a run-12 `[NEAR]` verification converted k
-  to j on the *coarser* alternate-alignment wheel (2310), crossed the
-  enforced j ceiling — which the coarse wheel reaches at k = 9.24×10²¹,
-  13× before the campaign's own wheel — and halted the run with the
-  checkpoint intact at a segment boundary. The leg now consults the
-  alternate table directly in Python integers (same table, same
-  mathematics, no ceiling), and the selftest drills it at the exact j
-  that raised. **No recorded value is affected**: the leg only ever
-  checked membership of k, and every earlier verification ran below the
-  coarse wheel's reach.
+  fixed.** At k = 1.097×10²² a run-12 `[NEAR]` verification divided k
+  by the *coarser* alternate-alignment wheel (2310), crossed the enforced
+  ceiling on that quotient — which the coarse wheel reaches at
+  k = 9.24×10²¹, 13× before the campaign's own wheel — and halted the run
+  with the checkpoint intact at a segment boundary. The leg now consults
+  the alternate table directly in Python integers (same table, same
+  mathematics, no ceiling), and the selftest drills it at the exact
+  quotient that raised. **No recorded value is affected**: the leg only
+  ever checked membership of k, and every earlier verification ran below
+  the coarse wheel's reach.
 - **The engine folded its first sieve prime into candidate generation**
-  (v4): j = 17u + r over the five surviving offsets, an identical
-  survivor stream (G17 pins folded == unfolded bit for bit, and the
-  frozen fingerprints reproduce), measured **2.39× end-to-end** at the
-  campaign configuration — and the enforced reach moved from
-  k = 1.20×10²³ to **k = 2.04×10²⁴**, which is what makes **a(14)**
+  (v4): k/W enumerated one residue class mod 17 at a time, over the five
+  surviving offsets, an identical survivor stream (G17 pins folded ==
+  unfolded bit for bit, and the frozen fingerprints reproduce), measured
+  **2.39× end-to-end** at the campaign configuration — and the enforced
+  reach moved from k = 1.20×10²³ to **k = 2.04×10²⁴**, which is what
+  makes **a(14)**
   (median 1.68×10²³, past the old ceiling) a realistic continuation of
   the same sweep: E = 4.41 (98.8%) inside the new reach, against
   E = 0.54 (42%) inside the old one.

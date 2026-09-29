@@ -5,11 +5,13 @@
 An engine that skips work fails the fingerprint; an engine that breaks the
 mathematics fails the gates. Either way it scores nothing.
 
-The reported rate is end-to-end **m-line per second** — `blocks × W /
-wall`, the quantity a hunt is actually paid in — divided by 10⁶. The
-candidate rate is printed beside it because the two say different things:
-line rate is what the campaign buys, candidate rate is what the kernel
-does, and the wheel is the exchange rate between them.
+The reported rate is end-to-end **line of the term per second** —
+`blocks × W / wall`, the quantity a hunt is actually paid in — divided by
+10⁶. It is written m/s on the base-4 shapes, which sweep A130003's `m`, and
+k/s on the base-2 shape, which sweeps A110096's `k`. The candidate rate is
+printed beside it because the two say different things: line rate is what
+the campaign buys, candidate rate is what the kernel does, and the wheel is
+the exchange rate between them.
 
 ## The shapes
 
@@ -32,10 +34,11 @@ the wheel removes candidates, never survivors.
 `p1` is the exception, and it has now moved on both families: 23 → 29 at
 base 4 (1.198×) and 37 → 41 at base 2 (1.398×). Every shape that names one
 of those wheels was re-frozen for it (see the ledger). `SCORE2` moved its
-FILTER at the same time, 17 → 19, because `w(41,n,2) = min(n, 20)`: the
-p1 = 41 table holds 129 million residues at n = 17 and `RES_MAX` refuses
-it, against 44.5 million at the n = 19 the campaign now runs. `SCORE4W`
-and `SCORE10` use neither wheel and have never been touched.
+FILTER at the same time, 17 → 19, because at base 2
+`w(41,n) = min(n, 20)`: the p1 = 41 table holds 129 million residues at
+n = 17 and `RES_MAX` refuses it, against 44.5 million at the n = 19 the
+campaign now runs. `SCORE4W` and `SCORE10` use neither wheel and have
+never been touched.
 
 `SCORE1L` is the one to understand. It sweeps the *identical absolute
 window* as `SCORE` on a coarser flat wheel — 215,441× as many periods,
@@ -109,8 +112,8 @@ resolution is measured rather than assumed.
 
 | family | HEAD | new | control (identical to `new`) | reading |
 |---|---|---|---|---|
-| A130003, `b = 4`, `n = 21`, 60 rounds | 1.0000 | 1.0033 | 0.9947 | **1.00x** |
-| A110096, `b = 2`, `n = 20`, 39 rounds | 1.0000 | 1.0113 | 1.0289 | **1.02x** |
+| A130003, base 4, `n = 21`, 60 rounds | 1.0000 | 1.0033 | 0.9947 | **1.00x** |
+| A110096, base 2, `n = 20`, 39 rounds | 1.0000 | 1.0113 | 1.0289 | **1.02x** |
 
 Each control arm differs from its own twin by 0.9% and 1.8%; that is the
 resolution, and the pass is inside it on both families.
@@ -124,8 +127,8 @@ table that has not changed:
 
 | | device tables | engine rebuild at the next filter |
 |---|---|---|
-| A130003, `b = 4` | 855 -> **495 MiB** | 20.0 -> **11.1 s** |
-| A110096, `b = 2` | 1340 -> **652 MiB** | 26.6 -> **13.2 s** |
+| A130003, base 4 | 855 -> **495 MiB** | 20.0 -> **11.1 s** |
+| A110096, base 2 | 1340 -> **652 MiB** | 26.6 -> **13.2 s** |
 
 That rebuild happens on every discovery, and it is GPU idle time in the
 middle of a hunt. The four things this pass measured and DECLINED — the
@@ -160,11 +163,11 @@ absolute window with the survivor streams compared to each other:
 
 | family | before this pass | after | ratio |
 |---|---|---|---|
-| A130003, `b = 4`, `n = 21` | `5.15×10¹⁴ m/s` | **`7.92×10¹⁴`** | **1.537×** [1.437, 1.607] |
-| A110096, `b = 2`, `n = 19` | `5.63×10¹⁸ m/s` | **`1.34×10¹⁹`** | **2.380×** [2.247, 2.466] |
+| A130003, base 4, `n = 21` | `5.15×10¹⁴ m/s` | **`7.92×10¹⁴`** | **1.537×** [1.437, 1.607] |
+| A110096, base 2, `n = 19` | `5.63×10¹⁸ k/s` | **`1.34×10¹⁹`** | **2.380×** [2.247, 2.466] |
 
 Base 2's arms have different moduli (`p1` moved), so that row is an
-absolute-`m` comparison and the two streams agree on all 958 survivors —
+absolute-`k` comparison and the two streams agree on all 958 survivors —
 two different wheels, one answer.
 
 ### v2 — 2026-08-23, the bit-plane wheel, a compacted test loop, `p1` = 29
@@ -173,7 +176,7 @@ two different wheels, one answer.
 |-------|------|--------------|---------------------|--------|
 | `SCORE` | 3.57×10¹⁴ m/s | 2.21×10¹⁰ | **356,942,342** | 2.4% |
 | `SCORE1L` | 5.53×10¹³ m/s | 3.27×10¹⁰ | 55,293,477 | 0.2% |
-| `SCORE2` | 1.53×10¹⁸ m/s | 9.19×10⁹ | **1,530,341,835,472** | 23% |
+| `SCORE2` | 1.53×10¹⁸ k/s | 9.19×10⁹ | **1,530,341,835,472** | 23% |
 | `SCORE4W` | 4.66×10¹³ m/s | 2.76×10¹⁰ | 46,634,780 | 33% |
 | `SCORE10` | 2.80×10¹² m/s | 8.50×10⁸ | 2,801,972 | 2% |
 
@@ -183,8 +186,8 @@ comparing different spans now that `W` has moved:
 
 | family | v1 | v2 | ratio |
 |---|---|---|---|
-| A130003, `b = 4` | 4.17×10¹² m/s | **3.54×10¹⁴ m/s** | **84.8×** [84.7, 85.5] |
-| A110096, `b = 2` | 2.90×10¹⁶ m/s | **1.29×10¹⁸ m/s** | **44.6×** [41.9, 47.4] |
+| A130003, base 4 | 4.17×10¹² m/s | **3.54×10¹⁴ m/s** | **84.8×** [84.7, 85.5] |
+| A110096, base 2 | 2.90×10¹⁶ k/s | **1.29×10¹⁸ k/s** | **44.6×** [41.9, 47.4] |
 
 **The candidate column means something different from v1's.** v1's
 candidates were the flat wheel's residues; v2's are what survives the bit
@@ -192,8 +195,8 @@ planes as well, which is about a hundredth as many. Read the ratio of the
 rate and candidate columns as the wheel's exchange rate and nothing else.
 
 The old `SCORE` / `SCORE1L` shape, for the record, since its number is not
-comparable to the new one: 8,192 periods from `j0 = 4,482,439` at
-`W(23) = 223,092,870` (and 60,858,368 from `j0 = 33,300,039,331` at
+comparable to the new one: 8,192 periods from period `4,482,439` at
+`W(23) = 223,092,870` (and 60,858,368 from period `33,300,039,331` at
 `W(13)`), fingerprint **7 / 998631924604311**, on which v1 scored
 4,461,600 and the v2 engine at `p1 = 23` scored 319,266,425.
 
@@ -203,7 +206,7 @@ comparable to the new one: 8,192 periods from `j0 = 4,482,439` at
 |-------|------|--------------|-------------------|-------|
 | `SCORE` | 4.46×10¹² m/s | 3.15×10¹⁰ | **51%** | **4,461,600** |
 | `SCORE1L` | 1.07×10¹² m/s | 3.58×10¹⁰ | 13% | 1,066,100 |
-| `SCORE2` | 3.06×10¹⁶ m/s | 2.22×10¹⁰ | 20% | 30,611,000,000 |
+| `SCORE2` | 3.06×10¹⁶ k/s | 2.22×10¹⁰ | 20% | 30,611,000,000 |
 | `SCORE4W` | 1.01×10¹² m/s | 3.38×10¹⁰ | 11% | 1,007,900 |
 | `SCORE10` | 4.61×10¹¹ m/s | 1.55×10¹⁰ | 12% | 460,960 |
 
@@ -226,8 +229,8 @@ so the prediction can be read against the outcome below it:
 | A110096 `a(18)` | " | `1.74×10²²` | `1.7×10²²` | 6.6 d | **3.1 h** |
 | A110096 `a(19)` | " | `5.67×10²³` | `5.7×10²³` | 214 d | **4.3 d** |
 
-at 3.57×10¹⁴ m/s for `b = 4` and 1.53×10¹⁸ m/s for `b = 2` — the scored
-rates, which for `b = 2` is the conservative one (its sustained rate over
+at 3.57×10¹⁴ m/s at base 4 and 1.53×10¹⁸ k/s at base 2 — the scored
+rates, which at base 2 is the conservative one (its sustained rate over
 several launches measures ~1.9×10¹⁸).
 
 **What actually happened**, 2026-08-23 to 2026-09-01
@@ -256,12 +259,13 @@ base 4, because the term sat at 3.4× its median.
 
 ### The campaign rate is not the scored rate
 
-Measured end to end from each checkpoint's own `elapsed` and swept `m`:
+Measured end to end from each checkpoint's own `elapsed` and the line it
+swept:
 
 | | line swept | wall clock | end-to-end | last stretch | same configuration, free GPU |
 |---|---|---|---|---|---|
-| A130003 (`b = 4`) | `8.95×10¹⁸` | 17.44 h | `1.42×10¹⁴ m/s` | `1.45×10¹⁴` (n = 21) | `5.08×10¹⁴ m/s` (n = 21 at the cursor) |
-| A110096 (`b = 2`) | `3.62×10²¹` | 38.2 min | `1.58×10¹⁸ m/s` | `2.12×10¹⁸` (n = 19) | `5.21×10¹⁸ m/s` (n = 19 at the cursor) |
+| A130003 (base 4) | `8.95×10¹⁸` | 17.44 h | `1.42×10¹⁴ m/s` | `1.45×10¹⁴` (n = 21) | `5.08×10¹⁴ m/s` (n = 21 at the cursor) |
+| A110096 (base 2) | `3.62×10²¹` | 38.2 min | `1.58×10¹⁸ k/s` | `2.12×10¹⁸` (n = 19) | `5.21×10¹⁸ k/s` (n = 19 at the cursor) |
 
 The campaigns bought **29% and 41%** of what the kernel does in the same
 configuration, and that gap was larger than anything left in the kernel.
@@ -280,8 +284,8 @@ segment loop, median of three rounds:
 
 | | campaign | after | ratio |
 |---|---|---|---|
-| A130003 (`b = 4`, n = 21) | `1.45×10¹⁴ m/s` | **`5.05×10¹⁴ m/s`** | **3.47×** |
-| A110096 (`b = 2`, n = 19) | `2.12×10¹⁸ m/s` | **`5.12×10¹⁸ m/s`** | **2.42×** |
+| A130003 (base 4, n = 21) | `1.45×10¹⁴ m/s` | **`5.05×10¹⁴ m/s`** | **3.47×** |
+| A110096 (base 2, n = 19) | `2.12×10¹⁸ k/s` | **`5.12×10¹⁸ k/s`** | **2.42×** |
 
 landing on the free-GPU device rates measured independently
 (`5.08×10¹⁴`, `5.21×10¹⁸`), which is the check that nothing else was
@@ -320,14 +324,14 @@ the pre-fix column kept so the change is legible:
 | A110096 `a(20)` | `5.64×10²³` | `2.39×10²⁵` | `2.3×10²⁵` | — | 17.6 d — but only **13.4%** of it is under the engine's ceiling |
 
 at the rates the campaigns themselves measured end to end:
-`1.13×10¹⁵ m/s` for `b = 4` (from the 67.9-hour campaign that found
-`a(21)`) and `1.53×10¹⁹` for `b = 2` (from the 10.2-hour campaign that
+`1.13×10¹⁵ m/s` at base 4 (from the 67.9-hour campaign that found
+`a(21)`) and `1.53×10¹⁹ k/s` at base 2 (from the 10.2-hour campaign that
 found `a(19)`). The two `a(21)` and `a(22)` rows are also the clearest
 statement of what this family costs now: the term that took 2.8 days
 raised the next one's median wait to 30.
 
 **The `a(19)` row is this table's own check, and it passed.** The version
-written on 2026-08-27 projected `15 h` at `1.07×10¹⁹ m/s`; the campaign
+written on 2026-08-27 projected `15 h` at `1.07×10¹⁹ k/s`; the campaign
 took `10.2 h` at `1.53×10¹⁹` and found the term at `5.64×10²³`, three
 percent below its predicted median. The projection was 1.43× conservative
 because it discounted the engine's benchmark rate by a device share
