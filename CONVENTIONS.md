@@ -173,11 +173,28 @@ Keys inside `least_claim` that carry a letter carry the OEIS one
 (`swept_to_m`). `stopper.i` is the index of the first form that fails,
 whatever letter the entry uses for its index. The same letter goes in
 every line a person reads — `[DISCOVERY]`, `[NEAR]`, `[STATUS]`, `[STAGE]`,
-`--status` — and in RESULTS.md; where a project's prose keeps a uniform
-notation across siblings whose entries disagree, its README and RESULTS
-open with a table mapping it to each entry's letters. What the engines,
-the checkpoint and the gate messages call their variables is their own
-business.
+`--status` — and in RESULTS.md. What the engines, the checkpoint and the
+gate messages call their variables is their own business.
+
+**The same holds for every sentence a person reads about a sequence**, not
+only for evidence and logs: the top-level README's project table, a
+project's README (headline, problem, the engine's mathematics, the model,
+the trust notes), RESULTS.md, the rates in BENCHMARKS.md (k/s, m/s — never
+x/s), the passages of OPTIMIZATION_LOG.md that state the mathematics, and
+commit messages. Each condition, term, exponent and index is written in the
+letters of that entry's `%N` line; a letter the `%N` line does not contain
+(x, j, y, b, V, …) is not introduced for convenience, and **a project does
+not keep a uniform notation of its own across siblings whose entries
+disagree** — each entry is described in its own letters, and a statement
+about several at once is made in words ("the term", "the exponent",
+"ten times A305740(n)"). decimal-ladders' README once declared "this README
+calls the swept integer x and the exponent j" for A305740 ("smallest k such
+that 10^m*k + 1 is prime for all m in 1..n") and A153431 ("smallest number
+m such that all n+1 numbers m*10^k+1 k=0,1,...,n are prime"), and the x and
+j reached the top-level table; auditing the table against the `%N` lines
+then found invented or borrowed letters in five more rows (2026-09-29).
+The engine's names — its sweep variable, `x0`, a wheel mode — stay in the
+code and in log passages that describe the code.
 
 **Siblings do not share letters, and the clash is not cosmetic.** A088250
 and A088651 read "smallest k such that r·k ± 1 is prime for r = 1..n";
@@ -866,6 +883,19 @@ names used for performance context are fine.
 The top-level README carries one table row per project:
 
 `| project | problem (one line, linked OEIS/reference) | status |`
+
+**The rows are in alphabetical order of the project name**, and stay
+that way: a new project's row is inserted where its name sorts, never
+appended at the bottom (owner directive 2026-09-29). Re-check the order
+whenever a row is added or a project renamed.
+
+**The problem cell states each entry's condition in the letters of that
+entry's `%N` line** ("Naming in an evidence file" above). Siblings whose
+names disagree get one clause each — `the least k such that 10^m·k + 1 is
+prime for every m = 1..n (A305740), and the least m such that m·10^k + 1
+is prime for every k = 0..n (A153431)` — and no letter the entries do not
+use is introduced to fold them into one. The cursor in the status cell
+carries the term's own letter too (`m = 5.11×10²⁹ on A074200`, not `N`).
 
 The **status cell is a summary, not a report.** It is three things, in
 this order, and nothing else:

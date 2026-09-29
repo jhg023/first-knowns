@@ -18,12 +18,14 @@ June 2018 term, A153431 at a(13) since Don Reble's July 2022 terms.
 Each evidence file was re-verified from disk on 2026-09-29 by a harness
 that shares nothing with the launcher: the published prefix read from the
 OEIS data (A305740 through a(12), A153431 through a(13), both unchanged),
-every value rebuilt as 10^j·x + 1 and re-tested with sympy's `isprime`, the
-run re-derived from the bare definition (exactly n, the next exponent
+every value rebuilt from the entry's own forms (10^m·k + 1 for A305740,
+m·10^k + 1 for A153431) and re-tested with sympy's `isprime`, the run
+re-derived from the bare definition (exactly n, the next exponent
 composite), the stopper's factor re-divided, every certificate re-verified
 by `huntlib.certificate.verify` AND by a from-scratch BLS75 Theorem 1 check
-(factors proved prime by sympy, F | V − 1, F > √V, the Fermat and gcd
-conditions per prime), each find above its predecessor, the forced unit
+(the claimed factors proved prime by sympy, their product dividing the
+value less one and exceeding its square root, the Fermat and gcd conditions
+per prime), each find above its predecessor, the forced unit
 dividing it, and each ledger matched to its files. **9 files, 141
 certificates (40 `deterministic-mr`, 101 BLS75 Theorem 1), all green;
 nothing is `unproved`.** Every file also carries the launcher's three-way
@@ -170,7 +172,8 @@ Stopped by the owner right after a(18).
   279,538,512,218,613,194,061,432,950,819,672,131,147,541.
 - 18 certificates, **all BLS75 Theorem 1**: every value is past the
   deterministic Miller–Rabin bound (the smallest, 10·k + 1, is 1.7e25), and
-  each is proved by the one factorization of k, since V − 1 = 2^m·5^m·k.
+  each is proved by the one factorization of k, since 10^m·k + 1, less one,
+  is 2^m·5^m·k.
 - **model**: from a(17), median 8.95e23; k / median = 1.90, E = 1.16 (69th
   percentile); 1.99× the 8.6e23 stated before the run.
 - k = 7 · 11 · 13 · 17 · 19 · 23 · 29 · 313 · 269189 · 93844193.
@@ -189,9 +192,10 @@ timestamp).
 
 ### The least-claim basis
 
-Each find is a **first occurrence**: every x from the floor to the find was
-swept at the forced unit and every survivor classified in x order. Three
-things set the floor, and every evidence file names which one it used:
+Each find is a **first occurrence**: every candidate term (every k for
+A305740, every m for A153431) from the floor to the find was swept at the
+forced unit and every survivor classified in increasing order. Three things
+set the floor, and every evidence file names which one it used:
 
 * **Monotonicity.** The conditions nest, so a(n) ≥ a(n − 1)
   (`monotone_floor`).
@@ -201,14 +205,15 @@ things set the floor, and every evidence file names which one it used:
   filter-n survivor, and each of those was already run to n + 8
   (`covered_by_previous_filter_to`).
 * **The sibling's floor** (A305740 only). If k had an A305740 run of n, then
-  y = 10k would meet A153431's condition at index n − 1, so
+  m = 10k would meet A153431's condition at index n − 1, so
   A305740(n) ≥ ⌈A153431(n − 1)/10⌉ (`sibling_floor`, which names the
   A153431 term it rests on). A305740's a(14) rests on the published
   A153431(13); its a(15), a(16) and a(17) on this project's A153431 a(14),
   a(15) and a(16) — so those three claims are only as good as A153431's,
   which is why they were hunted first.
 
-The proof crossing is low (k = 3.3e7 at n = 17 and 3.3e6 at n = 18), so
+The proof crossing is low (a term of 3.3e7 at n = 17 and 3.3e6 at n = 18,
+in either entry), so
 almost all of both sweeps classified by a thirteen-base strong probable-prime
 chain rather than a proof. The searched-empty claims are sound there for the
 reason every ladder project in this repository gives: a composite that
@@ -244,7 +249,7 @@ new index and did work in this hunt:
 | terms | 6: a(13)–a(18) | 3: a(14)–a(16) | **9** |
 | searched draws | 5 (a(16) is A153431 a(15)'s event) | 3 | 8 |
 | mean E | 1.17 | 2.44 | **1.65** |
-| x / median, range | 0.84–2.64, geometric mean 1.61 | 4.26–5.89, geometric mean 4.92 | geometric mean **2.45** |
+| term / median, range | k: 0.84–2.64, geometric mean 1.61 | m: 4.26–5.89, geometric mean 4.92 | geometric mean **2.45** |
 | certificates | 93: 28 `deterministic-mr`, 65 BLS75 thm 1 | 48: 12 `deterministic-mr`, 36 BLS75 thm 1 | 141 |
 | campaign clock | 93.64 h | 8.38 h | 102.0 h |
 
@@ -295,8 +300,9 @@ A run one short of the open term got a `[NEAR]` line and was verified as a
 health check; everything shorter is a count and nothing else. 5.5 billion
 survivors were classified across the two campaigns. Each extra rung costs a
 factor of about 3.2–3.7 through run 14 on both families. The short lengths
-are counts of *sieve survivors*, not densities: a filter-n sieve removes an
-x with a short run whenever one of its later forms has a small factor, so
+are counts of *sieve survivors*, not densities: a filter-n sieve removes a
+candidate with a short run whenever one of its later forms has a small
+factor, so
 they are comparable within a campaign and not across filters. A305740 swept
 22× the line A153431 did.
 

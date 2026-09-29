@@ -5,14 +5,16 @@
 
 `python score.py` prints a SCORE only if every correctness gate is green AND
 all seven frozen shapes reproduce their work fingerprint (survivor count +
-xor of the surviving x). The rate is end-to-end **x-line per second** — the
-published term is x itself (A305740's k, A153431's m) — divided by 10^6.
+xor of the surviving terms). The rate is end-to-end **line of the published
+term per second** — k/s for A305740, m/s for A153431, since the engine
+sweeps the term itself — divided by 10^6.
 **The SCORE of a commit is the SCORE row**: A305740 at n = 18, the filter
 where the days are.
 
 Seven shapes because the plan is per filter: one at each family's opening
-filter, one at each family's long leg, and three x-space anchors whose
-shapes no planner change can move.
+filter, one at each family's long leg, and three unit-1 anchors (the wheel
+laid over the term itself, no forced unit) whose shapes no planner change
+can move.
 
 ## The ledger
 
@@ -35,10 +37,10 @@ shapes no planner change can move.
 | 2026-09-28 | **5 blocks per SM: the x0 table in pairs, the row's words in registers; the overflow fallbacks out of the hot loops; the small-prime tail kernel (Measurement 17)** | **5,889,263** | **11,614,452** | 5,460 | 173,979 | 27,154 | 12,105 | 8.23 |
 | 2026-09-29 | the same engine, read on the day the finds were written up (the hunt stopped; see below) | 5,644,766 | 11,057,682 | 5,565 | 178,352 | 29,468 | 12,774 | 9.09 |
 
-(in units of 10^12 x/s: SCORE is 5.89e18 k/s.) **The 2026-09-29 row is
+(in units of 10^12 of the term per second: SCORE is 5.89e18 k/s.) **The 2026-09-29 row is
 the second of two readings minutes apart on an unchanged tree.** The first
 read six of the seven shapes at 0.61–0.77× this one — SCORE 4,330,149,
-SCORE153 7,690,012, and the x-space anchors SCORE2L and SCORE1L, which no
+SCORE153 7,690,012, and the unit-1 anchors SCORE2L and SCORE1L, which no
 engine or plan change can move, at 0.61× and 0.63× (SCORE9, microsecond
 launches, read 1.06×) — with the GPU otherwise idle but shared with desktop
 applications; a drop across every heavy shape on code that did not change is
@@ -67,8 +69,9 @@ rows are single readings twenty minutes apart. **The parenthesised
 readings are overcounted**: `score.py` credited every launch with a full
 `cand_per_launch` while the last first-level chunk of each unit is partial,
 1.12× too high on those shapes (OPTIMIZATION_LOG.md Measurement 12). The
-fingerprints were right throughout. The x-space anchors (SCORE13, SCORE2L,
-SCORE1L, SCORE9) are not launch-counted and were never affected. SCORE14's
+fingerprints were right throughout. The shapes counted in segments or
+periods rather than launches (SCORE13, SCORE2L, SCORE1L, SCORE9) were never
+affected. SCORE14's
 drop is the new plan's different shape (a different wheel and window), not a
 slower engine: at the campaign's own configuration A153431 n = 14 runs 1.035×
 the old plan. SCORE9's drop in the last row is real and expected: the
@@ -109,7 +112,7 @@ Steady-state rates of the campaign's own configuration, on exact launch
 counts (one continuous sweep; OPTIMIZATION_LOG.md Measurement 12), and the
 device time to each term's modelled median from the previous term's:
 
-| filter | x/s | to the median |
+| filter | rate (A305740 k/s; A153431 m/s) | to the median |
 |---|---|---|
 | A305740 n = 13 / 14 / 15 / 16 / 17 | 5.01e15 / 1.86e16 / 7.64e16 / 4.02e17 / 1.19e18 | < 1 s / 1 s / 10 s / 4 min / 1.7 h |
 | **A305740 n = 18** | **5.11e18** | **46 h** (about 7 h less if A153431 a(17) is settled first) |

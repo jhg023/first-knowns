@@ -24,21 +24,23 @@ number from another project on this GPU.**
 ## v1 (2026-09-24) — the build
 
 The kernel needed no mathematical change: every problem-specific quantity
-enters through `killed_residues` (K(q,n,F) = { −10^−j mod q }). What the
+enters through `killed_residues` (K(q,n,F): −10^(−m) mod q over A305740's
+exponents m = 1..n, −10^(−k) mod q over A153431's k = 0..n). What the
 regime changed, and the two bugs the first battery found, are in
 Measurements 1–2 and the notes under them.
 
 ### Measurement 1 — the regime
 
-* w(q,n,F) = min(|J|, ord_q(10)). The primes with 10 as a primitive root
-  kill |J| residues (≈ the linear ladders' law); the small-order primes are
-  weak and saturate at their order (3: 1, 11: 2, 37: 3, 101: 4, 41: 5,
-  13 and 7: 6, 73: 8, 53: 13, 31: 15). 2 and 5 kill nothing for A305740;
-  for A153431 the x + 1 form makes 2 forced and 5 a one-residue prime.
+* w(q,n,F) = the smaller of the number of exponents and ord_q(10). The
+  primes with 10 as a primitive root kill one residue per exponent (≈ the
+  linear ladders' law); the small-order primes are weak and saturate at
+  their order (3: 1, 11: 2, 37: 3, 101: 4, 41: 5, 13 and 7: 6, 73: 8,
+  53: 13, 31: 15). 2 and 5 kill nothing for A305740; for A153431 the
+  m + 1 form makes 2 forced and 5 a one-residue prime.
 * **Forcing is by primitive roots**: 7 from six forms, 17 from sixteen, 19
   from eighteen — so the unit grows with the filter (A305740 7 → 119 → 2261,
   A153431 14 → 238 → 4522), the period changes at those promotions, and the
-  forced class is always 0 (x ≡ 0 makes every form ≡ 1).
+  forced class is always 0 (a term ≡ 0 makes every form ≡ 1).
 * The model validates (G11): pooled mean E = 1.63 over 14 draws (A305740
   2.06 over 7, A153431 1.20 over 7), spread 0.00–5.38.
 * Medians (chained from the published frontiers): A305740 a(13) 2.6e14,
@@ -68,7 +70,7 @@ Measurements 1–2 and the notes under them.
 
 Steady-state (method above), the inherited planner's own plan:
 
-| filter | plan (inherited planner p2) | x/s | candidates/s |
+| filter | plan (inherited planner p2) | rate (k/s; m/s) | candidates/s |
 |---|---|---|---|
 | A305740 n = 18 | wheel to 67 (12 primes), WIDE, 224 | 3.83e18 | 2.06e12 |
 | A153431 n = 17 | wheel to 67 (12 primes), narrow, 224 | 8.52e18 | 2.42e12 |
@@ -190,7 +192,7 @@ the find's segment × density / candidate rate). `plan()` returns the table
 entry for those filters and the model's pick elsewhere; the depth is still
 `plan_q2`'s and the record still the engine's.
 
-| filter | measured best | x/s | the model's pick, measured |
+| filter | measured best | rate (k/s; m/s) | the model's pick, measured |
 |---|---|---|---|
 | A305740 n = 13 | to 43 (9 primes), 192 | 3.9e15 | 1.21× slower |
 | A305740 n = 14 | to 47 (10), 192 | 1.8e16 | 1.06× |
@@ -297,7 +299,7 @@ fell from an overcounted 4.17e18 to an honest one (3.7e18 on the old shape).
 wide record's model penalty lowered from 0.76 to 0.90 and the best wide
 candidates forced into it; three rotated rounds, median):
 
-| filter | new plan | x/s | over the old entry, same run |
+| filter | new plan | rate (k/s; m/s) | over the old entry, same run |
 |---|---|---|---|
 | A305740 n = 13 / 14 | unchanged | 3.86e15 / 1.70e16 | (within 0.4%) |
 | A305740 n = 15 | to 53 (11), **224** | 7.19e16 | 1.027× |
@@ -403,7 +405,7 @@ is green on the parallel one. Same run, exact counts:
 | **A153431 n = 17** | **1.014** |
 | A153431 n = 18 | 1.016 |
 
-The x-space anchor SCORE9 (n = 9, microsecond launches) reads 0.86: one
+The unit-1 anchor SCORE9 (n = 9, microsecond launches) reads 0.86: one
 more barrier per block where there is almost no work per block; no campaign
 runs there. Re-swept after the change: the block shape ((8, 1) still best;
 (16, 1) 0.984 / 0.974 and (4, 1) 0.935 / 0.943 at the two long legs) and
@@ -503,9 +505,10 @@ n = 18, with no host wait. The loop is still the device.
 
 ### Measurement 15 — THE SIBLING'S FLOOR (the campaign, not the kernel)
 
-If x had an A305740 run of n or more, y = 10x would meet A153431's
-condition at index n − 1 (10^k·y + 1 = 10^(k+1)·x + 1 for k = 0..n − 1), so
-A153431(n − 1) ≤ 10x: **A305740(n) ≥ ⌈A153431(n − 1)/10⌉**, a theorem
+If k had an A305740 run of n or more, m = 10k would meet A153431's
+condition at index n − 1 (A153431's forms at exponents 0..n − 1 on 10k are
+A305740's forms at exponents 1..n on k), so A153431(n − 1) ≤ 10k:
+**A305740(n) ≥ ⌈A153431(n − 1)/10⌉**, a theorem
 (decl_reference G2d checks it on every published index). `launch.x_floor`
 now takes it: once A153431(n − 1) is settled — published, in `FOUND`, or a
 verified first occurrence in `evidence/` — A305740's sweep for a(n) starts
@@ -527,11 +530,11 @@ sweep that needs no shared coverage claim: a floor from a settled term, not
 a cursor from a running campaign.
 
 **The other half, priced and left for later: A153431's class 0 mod 10.** The
-same relation read the other way: a y ≡ 0 (mod 10) that meets A153431's
-condition at index n is 10x with an A305740 run of n + 1, so once
+same relation read the other way: an m ≡ 0 (mod 10) that meets A153431's
+condition at index n is 10k for a k with an A305740 run of n + 1, so once
 A305740(n + 1) is settled, A153431's sweep at filter n can drop the class
-y ≡ 0 mod 5 (a quarter of its candidates — 2 is forced, 5 already kills 4)
-below Y0 = 10·A305740(n + 1), and need never pass Y0 (Y0 itself is a hit).
+m ≡ 0 mod 5 (a quarter of its candidates — 2 is forced, 5 already kills 4)
+below 10·A305740(n + 1), and need never pass it (that m is itself a hit).
 At the medians that is ~25% of A153431's n = 17 leg (~9 h) when A305740 is
 hunted first, which would make the order indifferent (7 h one way, 9 h the
 other). It is a CONDITIONAL kill set for 5 in all three engines and their
@@ -587,7 +590,7 @@ All three at TBL = 8 (4 rounds each, medians):
 | A305740 n = 19 (promotion) | **1.0669** | — |
 | A153431 n = 18 (promotion) | **1.0464** | — |
 | SCORE2L / SCORE1L | 1.055 / 1.104 | — |
-| SCORE9 (x-space anchor, no campaign) | 0.960 | — |
+| SCORE9 (unit-1 anchor, no campaign) | 0.960 | — |
 
 **Kept, TBL = 8**: 32 is no faster at the long legs and loses at both
 openings, where too few blocks are left to fill the device. SCORE9's loss
@@ -737,11 +740,11 @@ source), and all seven frozen fingerprints reproduce.
 ### Priced and declined
 
 1. **The joint sweep of both families.** A305740's filter n + 1 is
-   A153431's condition at n on y = 10x (decl_reference G2d), so one sweep of
-   y at C_n classifies both — A153431 needs all four surviving classes mod 5,
+   A153431's condition at n on m = 10k (decl_reference G2d), so one sweep of
+   m at C_n classifies both — A153431 needs all four surviving classes mod 5,
    A305740 only the class 0. At the long legs (both C_17) the A153431 sweep
-   to its median, 1.36e24, would cover A305740's y-line from 7.5e22 to
-   1.36e24 for nothing: ≈9% of the two legs' COMBINED device time at the
+   to its median, m = 1.36e24, would cover A305740's k from 7.5e21 to
+   1.36e23 for nothing: ≈9% of the two legs' COMBINED device time at the
    medians, and only if both run. Declined: the campaigns run one family at
    a time from separate checkpoints, the overlap depends on where each find
    lands, and a shared coverage claim across two sequences is a new
@@ -762,12 +765,12 @@ source), and all seven frozen fingerprints reproduce.
    u8 `jj`. Declined (2026-09-28).
 5. **A153431's class 0 mod 10, NOW.** Measurement 15's "other half" was
    priced as waiting on A305740(n + 1) being settled. It does not have to
-   wait for a term, only for COVERAGE: a y = 10x below Y0 meeting A153431's
-   condition at n = 17 is an x below Y0/10 with an A305740 run of 18, and the
-   A305740 campaign has swept filter 18 from a(17) = 2.19e22 (no x below it
-   has a run of 17) to 1.415e24 (checkpoint, 2026-09-28) without one. So
-   A153431's filter-17 sweep may drop the class y ≡ 0 (mod 5) -- a quarter
-   of its candidates -- everywhere below 1.415e25, ten times its median:
+   wait for a term, only for COVERAGE: an m = 10k meeting A153431's
+   condition at n = 17 is a k with an A305740 run of 18, and the A305740
+   campaign has swept filter 18 from a(17) = 2.19e22 (no k below it has a
+   run of 17) to k = 1.415e24 (checkpoint, 2026-09-28) without one. So
+   A153431's filter-17 sweep may drop the class m ≡ 0 (mod 5) -- a quarter
+   of its candidates -- everywhere below m = 1.415e25, ten times its median:
    **1.33× on the whole A153431 a(17) leg**, the largest lever this project
    has left. What it costs is not code but a CLAIM: a find would rest on
    another campaign's cursor (its evidence citing the A305740 checkpoint and
@@ -776,10 +779,10 @@ source), and all seven frozen fingerprints reproduce.
 
    **Update, 2026-09-29: the objection has lapsed.** A305740 a(18) =
    1,705,184,924,533,540,483,774,741 is found and verified (RESULTS.md), so
-   the lever now rests on a settled TERM, not a cursor: Y0 = 10·a(18) =
-   1.7052e25 meets A153431's condition at n = 17 (so A153431(17) ≤ Y0, and
-   the sweep need never pass it), and every y ≡ 0 (mod 10) below Y0 is
-   excluded by a(18)'s own least claim — a verified first occurrence in
+   the lever now rests on a settled TERM, not a cursor: m = 10·a(18) =
+   1.7052e25 meets A153431's condition at n = 17 (so A153431(17) ≤
+   1.7052e25, and the sweep need never pass it), and every m ≡ 0 (mod 10)
+   below it is excluded by a(18)'s own least claim — a verified first occurrence in
    `evidence/`, the same kind of fact Measurement 15's sibling floor
    already takes. What is left is the code: a conditional kill set for 5 in
    all three engines and their parity gates, the capped sweep, and a

@@ -341,10 +341,36 @@ each README stays.
    is the rule as code and `gate_names` reads a whole `evidence/` back.
    See CONVENTIONS.md "Naming in an evidence file".
 
+   **AND EVERY SENTENCE A PERSON READS ABOUT A SEQUENCE USES THAT ENTRY'S
+   OWN LETTERS -- NEVER A NOTATION OF OUR OWN.** Not just evidence and log
+   lines: the top-level README's project table, a project's README (the
+   headline, the problem, the engine's mathematics, the model, the trust
+   notes), RESULTS.md, BENCHMARKS.md's rates (k/s, m/s -- not x/s), the
+   OPTIMIZATION_LOG passages that state the mathematics, and commit
+   messages. Every condition, term, exponent and index is written in the
+   letters of that entry's `%N` line, and a letter the `%N` line does not
+   contain (an x, a j, a y, a b, a V) is not introduced for the reader's
+   convenience. **There is no "uniform notation across siblings"**:
+   siblings that disagree are each described in their own letters, once per
+   entry, and a statement about several entries at once is made in words
+   ("the term", "the exponent", "ten times A305740(n)") -- never in a
+   project variable declared in a notation paragraph. The engine's own
+   names (a sweep variable, `x0`, a wheel mode) live in the code and in log
+   passages that describe the code, and nowhere else. decimal-ladders
+   declared "this README calls the swept integer x and the exponent j" for
+   A305740 (smallest **k** with 10^m*k + 1 prime) and A153431 (smallest
+   **m** with m*10^k + 1 prime), and that x and j reached the top-level
+   table; the audit that followed found invented or borrowed letters in five
+   more rows (2026-09-29). Before writing any description, open each
+   entry's `%N` line in the OEIS data and copy its letters.
+
 6. **New projects** copy the skeleton, import huntlib for
    infrastructure, keep all mathematics in-project, and add a row to the
-   top-level README's project table. Only projects with verified
-   results get published here.
+   top-level README's project table **in alphabetical order of the project
+   name** -- the table is kept alphabetized, so a new row goes where its
+   name sorts, never at the bottom (owner directive 2026-09-29;
+   CONVENTIONS.md "The top-level README's project table"). Only projects
+   with verified results get published here.
 
    Checklist when adding a project (all binding):
    - [ ] five-file skeleton per CONVENTIONS.md; huntlib for
@@ -362,6 +388,14 @@ each README stays.
          find them (CONVENTIONS.md "The top-level README's project
          table"). A row is read across; a status cell that has outgrown
          its neighbours gets cut back, not extended
+   - [ ] the row inserted where its project name sorts ALPHABETICALLY,
+         and its problem cell stating each entry's condition in the
+         letters of that entry's `%N` line (rule 5i) -- one clause per
+         entry when siblings disagree, no letter of our own
+   - [ ] every document the project publishes (README, RESULTS,
+         BENCHMARKS, the log's mathematics) written in each entry's own
+         `%N` letters, with no notation paragraph declaring a variable of
+         the project's own (rule 5i)
    - [ ] evidence/ directory with verifiable JSONs (exact integers +
          factor witnesses) for FIRST OCCURRENCES ONLY -- census is counts
          in the checkpoint and the log, never files; runtime checkpoints
