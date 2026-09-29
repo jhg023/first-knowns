@@ -327,14 +327,17 @@ def write_model_results(path=None):
     from lcml_search import forced_unit, k_ceil, k_proof
     path = path or os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "model_results.json")
-    out = {"model": "Bateman-Horn over f_k(x) = (L(n)/k)*x + s, k = 1..n, "
-                    "with N = L(n)*x and L(n) = lcm(1..n); w(q,n) = "
+    out = {"model": "Bateman-Horn over (N - k)/k (A078502) and (m + k)/k "
+                    "(A074200), k = 1..n, each written as (lcm(1..n)/k) times "
+                    "the quotient of the term by lcm(1..n), -+ 1; w(q,n) = "
                     "floor(n/q^e) for q <= n and n for q > n, proved in "
                     "lcml_reference and independent of the sign, so both "
                     "families share one singular series",
            "qmax": QMAX,
-           "units": "every depth is in x at the stated filter; the published "
-                    "term is N = L(n)*x",
+           "units": "every depth is in the quotient of the term by "
+                    "lcm(1..n) at the stated filter (N/lcm(1..n) for "
+                    "A078502, m/lcm(1..n) for A074200); the published term "
+                    "is that quotient times lcm(1..n)",
            "caveat": "the repo's first-occurrence models run late: the ladder "
                      "projects before this one landed their scored finds at "
                      "about 1.9-2.5x their medians while every census showed "
@@ -402,9 +405,9 @@ if __name__ == "__main__":
             for n, qs in sorted(d["predictions_x"].items(),
                                 key=lambda x: int(x[0])):
                 u = d["under_the_ceiling"].get(n)
-                print("     a(%s) in x: %s%s" % (n, "  ".join(
+                print("     a(%s)/lcm(1..n): %s%s" % (n, "  ".join(
                     "%s %.3g" % (q, v) for q, v in qs.items()),
-                    ("  [unit %d, L %d, %.0f%% under the ceiling]"
+                    ("  [unit %d, lcm(1..n) %d, %.0f%% under the ceiling]"
                      % (u["unit"], u["L"], 100 * u["P_under_ceiling"]))
                     if u else ""))
 

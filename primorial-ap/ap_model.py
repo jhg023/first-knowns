@@ -177,9 +177,9 @@ def write(path=None):
         "model": "Bateman-Horn, numerically computed singular series",
         "qmax": QMAX,
         "stated": "2026-08-20, before the first production sweep",
-        "note": ("Predictions are depths on the p-line for each open term. "
+        "note": ("Predictions are depths on the p1-line for each open term. "
                  "Each term is its own sweep from the floor: the differences "
-                 "P(n) differ, so no term's depth bounds another's."),
+                 "prime(n)# differ, so no term's depth bounds another's."),
         "validation": [{"n": n, "a_n": p, "E_at_a_n": e} for n, p, e in rows],
         "validation_sum": sum(e for _n, _p, e in rows),
         "validation_expected": len(rows),
@@ -205,7 +205,7 @@ if __name__ == "__main__":
                                                   row["E_at_a_n"]))
         print("  sum %.2f against %d expected"
               % (doc["validation_sum"], doc["validation_expected"]))
-        print("\npredictions (depth on the p-line):")
+        print("\npredictions (depth on the p1-line):")
         for n in OPEN:
             q = doc["predictions"][str(n)]
             print("  a(%2d)  Q1 %-10.3g median %-10.3g Q3 %-10.3g P90 %-10.3g"

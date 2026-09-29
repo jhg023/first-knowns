@@ -22,25 +22,35 @@ trust in this codebase. The shape:
 
 ```json
 {
+ "sequence": "A247965",
+ "forms": "m*k^2 + 1, m = 1..n",
  "k": 3776600100,
+ "oeis_terms": {"7": 3776600100},
+ "settles": [7],
  "run": 7,
  "values_prime_m": [1, 2, 3, 4, 5, 6, 7],
- "k_factorization": {"2": 2, "3": 2, "5": 2, "7": 1, "11": 1, "13": 1, ...},
+ "k_factorization": {"2": 2, "3": 1, "5": 2, "7": 1, "13": 1, "138337": 1},
  "breaker_m": 8,
  "breaker_factor": 11,
  "certificates_bls75": {"1": {"2": 3, "3": 2, ...}, "2": {...}, ...}
 }
 ```
 
-- `values_prime_m` — the m for which m*k^2+1 is claimed prime.
+- `sequence`, `forms`, `k`, `oeis_terms` — the four fields every
+  evidence file in this repository opens with (CONVENTIONS.md "Naming in
+  an evidence file"). A247965 calls its term k and the multiplier m, so
+  the integer to submit is the field `k`; `oeis_terms` maps every index
+  the find settles to it, and `settles` lists the same indices.
+- `values_prime_m` — the m for which p = m*k^2+1 is claimed prime.
 - `k_factorization` — the complete factorization of k, which is what
-  makes N-1 = m*k^2 fully factored and the certificates possible.
-- `breaker_m` / `breaker_factor` — the value that ends the run and a
-  nontrivial factor of it. One multiplication checks the claim.
-- `certificates_bls75` — for each m, a witness a_p for every prime
-  p | N-1, proving N = m*k^2+1 prime by Brillhart-Lehmer-Selfridge
-  Theorem 1: a_p^(N-1) == 1 (mod N) and gcd(a_p^((N-1)/p) - 1, N) == 1.
-  Every p is far below huntlib's deterministic Miller-Rabin bound, so
+  makes p-1 = m*k^2 fully factored and the certificates possible.
+- `breaker_m` / `breaker_factor` — the m whose value m*k^2+1 ends the run,
+  and a nontrivial factor of that value. One multiplication checks the
+  claim.
+- `certificates_bls75` — for each m, a witness a_q for every prime
+  q | p-1, proving p = m*k^2+1 prime by Brillhart-Lehmer-Selfridge
+  Theorem 1: a_q^(p-1) == 1 (mod p) and gcd(a_q^((p-1)/q) - 1, p) == 1.
+  Every q is far below huntlib's deterministic Miller-Rabin bound, so
   each is certified prime outright and the proof is complete.
 
 To re-verify a file without this repository, in any bignum system:

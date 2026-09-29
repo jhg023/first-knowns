@@ -1,5 +1,4 @@
-"""The campaign for the prime ladders -- least k with prime(i)*k + s prime,
-i = 1..n.
+"""The prime-ladders campaign: least k with prime(i)*k +- 1 prime, i = 1..n.
 
     python launch.py --selftest      the full gate battery (must end ALL GREEN)
     python launch.py                 the hunt: indefinite, resumable (A084700)
@@ -1009,7 +1008,8 @@ class Campaign:
             f"{self.eng.R3}, {100.0 * self.eng.density():.5f}% of the line); "
             f"{cfg['nu']} third-level residues per launch, "
             f"{-(-self.eng.R3 // cfg['nu'])} launches per period; resume at "
-            f"period {self.j}, u = {self.u} (k = "
+            f"period {self.j}, cursor field 'u' = {self.u} (third-level "
+            f"residues already swept in that period; progress k = "
             f"{self.u_progress(self.j, self.u):,})")
         for n, qs in sorted(model.predictions(
                 self.s, self.frontier(), self.frontier_k(),
@@ -1020,9 +1020,10 @@ class Campaign:
                      "the same claim: 'swept to' is the k below which EVERY "
                      "value at or above K_START has been tested, and it "
                      "advances one whole wheel period (%.4g of line) at a "
-                     "time; 'period N .. X%%' is progress THROUGH the period "
-                     "being worked, whose candidates arrive out of k order, "
-                     "so no part of it is clear until that reads 100%%."
+                     "time; 'period <index> [<start>, <end>) <percent>%%' is "
+                     "progress THROUGH the period being worked, whose "
+                     "candidates arrive out of k order, so no part of it is "
+                     "clear until that reads 100%%."
                      % self.eng.W)
         log("STAGE", f"proofs: classification is a deterministic "
                      f"Miller-Rabin proof below the proof crossing "
@@ -1117,10 +1118,12 @@ class Campaign:
         snap = self._snapshot or self.state()
         if self.save_boundary():
             return (f"checkpoint written at the last classified launch: "
-                    f"period {int(snap['j'])}, u = {int(snap['u'])}, swept "
-                    f"to k = {int(snap['k']):,} ({self.ckpt})")
+                    f"period {int(snap['j'])}, cursor field 'u' = "
+                    f"{int(snap['u'])} (third-level residues swept in it), "
+                    f"swept to k = {int(snap['k']):,} ({self.ckpt})")
         return (f"{self.ckpt} is held open by another process, so THIS "
-                f"boundary (period {int(snap['j'])}, u = {int(snap['u'])}) "
+                f"boundary (period {int(snap['j'])}, cursor field 'u' = "
+                f"{int(snap['u'])}, the third-level residues swept in it) "
                 f"was not written; the run resumes from the last save that "
                 f"landed")
 
@@ -1861,7 +1864,8 @@ def _status(sign):
         front = max(front, int(n))
     # an adopted cursor's indices are in the OLD period; say so rather
     # than print a number the campaign will not use
-    cursor = (f"work cursor period {int(st['j'])} u = {int(st.get('u', 0))}"
+    cursor = (f"work cursor: period {int(st['j'])}, field 'u' = "
+              f"{int(st.get('u', 0))} (third-level residues swept in it)"
               + (f" (in periods of W = {int(st.get('W', 0)):,}, the stored "
                  f"key's; the campaign re-denominates on start)"
                  if kind == "adopted" else ""))
@@ -1933,8 +1937,9 @@ def main(argv=None):
         args.to = int(args.to)
     _POLICIES[args.sign].refuse_mismatch(
         fresh=args.fresh,
-        describe=lambda st: (f"period {st.get('j')}, u = {st.get('u')}, "
-                             f"swept to k = {st.get('k')}"))
+        describe=lambda st: (f"period {st.get('j')}, cursor field 'u' = "
+                             f"{st.get('u')} (third-level residues swept in "
+                             f"it), swept to k = {st.get('k')}"))
     if args.fresh:
         import os
         for p in (ckpt_path(args.sign), ckpt_path(args.sign) + ".bak"):

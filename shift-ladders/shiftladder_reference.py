@@ -83,13 +83,20 @@ from sympy import isprime, n_order, primerange
 # The two families, keyed by base.  Both are `more` sequences whose terms
 # were re-verified against the OEIS export of 2026-08-22 the day this
 # project was built.
+#
+# `term`, `exp` and `expr` are each entry's OWN letters, for every line a
+# person reads (CLAUDE.md rule 5i): A130003's name says "smallest positive
+# integer m such that 4^k + m is prime for all k=1,2,...,n"; A110096's name
+# gives no letters, and both its programs (%t, %o PARI) write k + 2^i.
 FAMILIES = {
     4: {"oeis": "A130003",
+        "term": "m", "exp": "k", "expr": "4^k + m",
         "keywords": "nonn,hard,more",
         "author": "Farideh Firoozbakht, May 30 2007",
         "frontier_by": "Jens Kruse Andersen, Jun 08 2007",
         "link": "Rivera, Puzzle 403"},
     2: {"oeis": "A110096",
+        "term": "k", "exp": "i", "expr": "k + 2^i",
         "keywords": "nonn,more",
         "author": "Joseph L. Pe, Sep 05 2005",
         "frontier_by": "Bert Dobbelaere, Apr 24 2021",

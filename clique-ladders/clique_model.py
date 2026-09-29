@@ -354,16 +354,19 @@ def write_model_results(path=None):
     from clique_search import k_ceil, k_proof
     path = path or os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "model_results.json")
-    out = {"model": "Bateman-Horn over the forms of index n: x + a(i) + 1 for "
-                    "i < n, plus the family's extra form (2x + 1, or x). "
-                    "w(q,n,F) is the size of the sieve's own killed set.",
+    out = {"model": "Bateman-Horn over the forms of index n: a(n) + a(i) + 1 "
+                    "for i < n, plus the family's extra form (2*a(n) + 1, or "
+                    "a(n) itself). w(q,n,F) is the size of the sieve's own "
+                    "killed set.",
            "qmax": QMAX,
-           "units": "every depth is x, which is the published term itself",
+           "units": "every depth is a candidate for a(n), the published "
+                    "term itself",
            "projection": "ONLY the first index per family is the model's real "
                          "answer. The form list of every later index depends "
                          "on terms nobody has; those rows replace each unknown "
-                         "term by a stand-in (first x past the previous median "
-                         "that survives every prime under 2000).",
+                         "term by a stand-in (the first integer past the "
+                         "previous median that survives every prime under "
+                         "2000).",
            "caveat": "first-occurrence models run late in this repository: "
                      "read every depth as a floor and budget 2-3x the median.",
            "families": {}}

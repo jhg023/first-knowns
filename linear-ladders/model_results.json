@@ -1,5 +1,5 @@
 {
- "model": "Bateman-Horn over f_m(k) = m*k + s for the multipliers m of each family at index n; w(q,n,F) = #distinct nonzero residues of the multipliers mod q, proved in lladder_reference and independent of the sign",
+ "model": "Bateman-Horn over each family's own forms: r*k +- 1 (A088250, A088651), k*m +- 1 (A173750, A125838, A125839), (2k-1)*m +- 1 (A164325, A164326); w(q,n,F) = #distinct nonzero residues of the multipliers mod q, proved in lladder_reference and independent of the sign",
  "qmax": 200000,
  "caveat": "the repo's first-occurrence models run late: the four ladder projects before this one landed their scored finds at about 1.9-2.5x their medians while every census showed the intensity right to a percent or two. Read every depth below as a floor and budget 2-3x the median.",
  "families": {
@@ -85,7 +85,7 @@
    ]
   },
   "A173750": {
-   "forms": "r*k + 1, r = 2..n",
+   "forms": "k*m + 1, k = 2..n",
    "sign": 1,
    "frontier": {
     "n": 15,
@@ -157,7 +157,7 @@
    "also_settles": []
   },
   "A125838": {
-   "forms": "r*k - 1, r = 2..n",
+   "forms": "k*m - 1, k = 2..n",
    "sign": -1,
    "frontier": {
     "n": 14,
@@ -230,7 +230,7 @@
    "also_settles": []
   },
   "A125839": {
-   "forms": "r*k - 1, r = 3..n",
+   "forms": "k*m - 1, k = 3..n",
    "sign": -1,
    "frontier": {
     "n": 15,
@@ -303,7 +303,7 @@
    "also_settles": []
   },
   "A164325": {
-   "forms": "(2r-1)*k + 1, r = 1..n",
+   "forms": "(2*k-1)*m + 1, k = 1..n",
    "sign": 1,
    "frontier": {
     "n": 15,
@@ -375,7 +375,7 @@
    "also_settles": []
   },
   "A164326": {
-   "forms": "(2r-1)*k - 1, r = 1..n",
+   "forms": "(2*k-1)*m - 1, k = 1..n",
    "sign": -1,
    "frontier": {
     "n": 14,

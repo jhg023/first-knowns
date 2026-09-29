@@ -449,18 +449,22 @@ def full_verify(p, n, claimed, certify=True, witness=True, q2=Q2_CAMPAIGN):
 def record_discovery(ev, label):
     """Write the evidence JSON for a FIRST OCCURRENCE and upsert the ledger.
 
-    Keyed by p, so the segment redone after an interrupt or a crash rewrites
+    Keyed by p1, so the segment redone after an interrupt or a crash rewrites
     the same record instead of appending a duplicate.
     """
     # The record speaks the OEIS entry's language (CONVENTIONS.md "Naming
-    # in an evidence file"): A053647(n) is the FIRST TERM p of the
-    # progression p + j*prime(n)#, and a find settles exactly its n.
-    ev = {**_evid.header("A053647", "p + j*prime(n)#, j = 0..n-1", "p",
+    # in an evidence file"): A053647(n) is the FIRST TERM p1 of the
+    # progression p1 + (k-1)*prime(n)#, k = 1..n -- the entry's own %t
+    # program writes it p[1], ..., p[n] -- and a find settles exactly its n.
+    # full_verify's "p" is that same integer under the engine's name, so it
+    # is carried once, under the entry's letter.
+    body = {key: val for key, val in ev.items() if key != "p"}
+    ev = {**_evid.header("A053647", "p1 + (k-1)*prime(n)#, k = 1..n", "p1",
                          ev["p"], [ev["n"]]),
-          "settles": [int(ev["n"])], **ev}
+          "settles": [int(ev["n"])], **body}
     return _evid.record(ev, "evidence",
-                        f"ap_a{ev['n']}_p{ev['p']}.json", DISC,
-                        key="p", label=label)
+                        f"ap_a{ev['n']}_p{ev['p1']}.json", DISC,
+                        key="p1", label=label)
 
 
 # -------------------------------- preludes ----------------------------------
@@ -534,7 +538,7 @@ def production(args):
     log("STAGE", f"primorial-ap v1 -- A053647, hunting a({n}); "
                  f"sieve depth {q2}, engine {args.engine}")
     log("STAGE", f"machine: {device_report(getattr(eng, 'nbytes', lambda: None)())}")
-    log("STAGE", f"P({n}) = {difference(n)}; the largest value is "
+    log("STAGE", f"prime({n})# = {difference(n)}; the largest value is "
                  f"{(n - 1) * difference(n):.4g}, "
                  f"{'inside' if (n - 1) * difference(n) < _cert.MR_VALID_BELOW else 'PAST'}"
                  f" the deterministic Miller-Rabin bound")
@@ -570,7 +574,7 @@ def production(args):
         lad = ladder()
         fr = _front.top_settled(TABLES, c.get("found"))
         nn = int(c["n"])
-        bits = [f"a({nn}) p={pos:.4e}", f"{rate:.3e} p/s",
+        bits = [f"a({nn}) p1={pos:.4e}", f"{rate:.3e} p1/s",
                 f"surv {int(c['survivors']):,}",
                 census_str(c.get("census"), DEPTH_FLOOR, max(DEPTH_FLOOR, nn - 1)),
                 f"finds {int(c['hits'])}",
@@ -604,7 +608,7 @@ def production(args):
                 eng = make_engine(n_now, q2, args.engine)
                 span = engine_span(eng)
                 log("STAGE", f"now hunting a({n_now}): new difference "
-                             f"P({n_now}) = {difference(n_now):.6g}, cursor "
+                             f"prime({n_now})# = {difference(n_now):.6g}, cursor "
                              f"back to the floor, a fresh sieve")
                 save_ckpt(c)
                 pending = None          # in-flight survivors were the OLD
@@ -619,7 +623,7 @@ def production(args):
                 seg -= seg % W0
             nxt = None
             if seg > 0:
-                hb.doing(f"sieving a({n}) from p={base:.4e}" +
+                hb.doing(f"sieving a({n}) from p1={base:.4e}" +
                          (f" (classifying {len(pending['offs'])} behind it)"
                           if pending else ""))
                 offs = []
@@ -636,7 +640,7 @@ def production(args):
             found_here = False
             if pending is not None:
                 hb.doing(f"classifying {len(pending['offs'])} survivors at "
-                         f"p={pending['base']:.4e}")
+                         f"p1={pending['base']:.4e}")
                 found_here = _finalize(c, eng, hb, n, q2, pending, clock)
                 boundary = dict(c)
             pending = nxt
@@ -663,7 +667,7 @@ def production(args):
             pool.shutdown(wait=True)
     if rc == 0:
         log("STAGE", f"campaign stopped: {stop_reason}; cursor at "
-                     f"p = {int(c['next_u']) * W0:.6e}, checkpoint {CKPT}")
+                     f"p1 = {int(c['next_u']) * W0:.6e}, checkpoint {CKPT}")
     return rc
 
 
@@ -727,22 +731,22 @@ def _finalize(c, eng, hb, n, q2, pending, clock):
             continue
         if kind == "NEAR":
             ordinal = _front.bump_census(census, dep)
-            hb.doing(f"verifying a NEAR at p={p}")
+            hb.doing(f"verifying a NEAR at p1={p}")
             v = full_verify(p, n, dep, certify=False, witness=False,
                             q2=q2)
             if not v["agree"]:
-                log("ALARM", f"verification legs disagree on p={p}: "
+                log("ALARM", f"verification legs disagree on p1={p}: "
                              f"{v['legs']}")
                 raise CorruptEngineError("legs disagree")
-            log("NEAR", f"chain {dep} at p = {p} (depth-{dep} #"
+            log("NEAR", f"chain {dep} at p1 = {p} (depth-{dep} #"
                         f"{ordinal} of this stage; verified 3-way) "
                         f"-- ONE value short of a({n})!")
             continue
         # DISCOVERY
-        hb.doing(f"verifying a claimed a({n}) at p={p}")
+        hb.doing(f"verifying a claimed a({n}) at p1={p}")
         v = full_verify(p, n, dep, q2=q2)
         if not v["agree"]:
-            log("ALARM", f"a claimed a({n}) at p={p} failed "
+            log("ALARM", f"a claimed a({n}) at p1={p} failed "
                          f"verification: {v.get('error', v['legs'])}")
             raise CorruptEngineError("discovery failed verification")
         _front.settle_one(c["found"], n, p)
@@ -753,7 +757,7 @@ def _finalize(c, eng, hb, n, q2, pending, clock):
         path = record_discovery(v, "DISCOVERY")
         banner("DISCOVERY", [
             f"a({n}) = {p:,}",
-            f"P({n}) = {difference(n):,}",
+            f"prime({n})# = {difference(n):,}",
             f"all {n} values prime"
             + (f" -- and the chain runs {int(v['depth'])} deep"
                if int(v["depth"]) > n else "")
@@ -779,7 +783,7 @@ def _finalize(c, eng, hb, n, q2, pending, clock):
 def _save_boundary(state, path=CKPT):
     save_ckpt(state, path)
     return (f"checkpoint written at the last segment boundary: "
-            f"a({state.get('n')}) p = {int(state.get('next_u', 0)) * W0:.6e}"
+            f"a({state.get('n')}) p1 = {int(state.get('next_u', 0)) * W0:.6e}"
             f", {float(state.get('wall_s', 0.0)) / 3600:.2f} h swept")
 
 
@@ -802,7 +806,7 @@ def _milestones(c, was, now, n):
     are persisted in the checkpoint.
     """
     if was > 0 and int(math.log10(now)) > int(math.log10(was)):
-        log("MILESTONE", f"p passed 1e{int(math.log10(now))} hunting a({n})  "
+        log("MILESTONE", f"p1 passed 1e{int(math.log10(now))} hunting a({n})  "
                          f"{census_str(c.get('census'), DEPTH_FLOOR, max(DEPTH_FLOOR, n - 1))}")
     o_now = _odds(n, now)
     marks = set(c.get("odds_marks", []))
@@ -812,7 +816,7 @@ def _milestones(c, was, now, n):
             marks.add(tag)
             log("MILESTONE", f"past the model's {name} for a({n}): the model "
                              f"gave it a {q:.0%} chance of having appeared by "
-                             f"p = {now:.4e}")
+                             f"p1 = {now:.4e}")
     c["odds_marks"] = sorted(marks)
 
     lad = ladder()
@@ -838,10 +842,10 @@ def status(q2=Q2_CAMPAIGN):
     lad = ladder()
     print(f"primorial-ap -- A053647")
     print(f"  hunting      a({n})   (frontier a({fr}) settled)")
-    print(f"  cursor       p = {pos:.6e}   swept from {max(ref.P_FLOOR, q2)}")
+    print(f"  cursor       p1 = {pos:.6e}   swept from {max(ref.P_FLOOR, q2)}")
     print(f"  survivors    {int(c['survivors']):,}   finds {int(c['hits'])}")
     print(f"  {census_str(c.get('census'), DEPTH_FLOOR, max(DEPTH_FLOOR, n - 1))}")
-    print(f"  best chain   {int(c['best_depth'])} at p = {int(c['best_p'])}")
+    print(f"  best chain   {int(c['best_depth'])} at p1 = {int(c['best_p'])}")
     print(f"  model        P(a({n}) by now) = {_odds(n, pos):.1%}")
     print(f"  {lad.status_str(pos, fr, None, only_term=n)}")
     for r, v in sorted((int(k), v) for k, v in (c.get("found") or {}).items()):
@@ -1022,7 +1026,7 @@ def _drill_published(certify=False):
             return False, f"published terms: a({n}) has no evidence file"
         with open(path) as fh:
             ev = json.load(fh)
-        if int(ev["p"]) != p or int(ev["n"]) != n:
+        if int(ev["p1"]) != p or int(ev["n"]) != n:
             return False, f"published terms: {path} is not about a({n})"
         if int(ev["depth"]) != int(v["depth"]):
             return False, (f"published terms: a({n})'s file records depth "
@@ -1243,7 +1247,7 @@ def main():
                          "the rate for a machine that stays comfortable")
     ap.add_argument("--heartbeat", type=float, default=30.0)
     ap.add_argument("--to", type=float, default=None,
-                    help="stop at this p (opt-in; the default is indefinite)")
+                    help="stop at this p1 (opt-in; the default is indefinite)")
     ap.add_argument("--stop-on-discovery", action="store_true")
     ap.add_argument("--fresh", action="store_true",
                     help="discard an existing cursor deliberately")

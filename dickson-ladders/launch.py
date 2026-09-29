@@ -605,9 +605,9 @@ def check_cursor(c, eng):
     if c.get("W") != eng.W or wheel_modulus(int(c.get("n", -1))) != eng.W:
         raise CorruptEngineError(
             f"[ALARM] cursor was written for wheel {c.get('W')} (filter "
-            f"{c.get('n')}) but the engine runs {eng.W}; next_j counts "
-            f"multiples of the wheel, so reading it against another one "
-            f"moves the frontier silently")
+            f"{c.get('n')}) but the engine runs {eng.W}; the cursor is kept "
+            f"as k/W, the quotient of k by the wheel, so reading it against "
+            f"another wheel moves the frontier silently")
 
 
 def refuse_unreadable_cursor(eng, fresh):
@@ -625,9 +625,10 @@ def refuse_unreadable_cursor(eng, fresh):
     """
     try:
         _ckpt.refuse_mismatch(CKPT, ckpt_key(eng.q2), fresh=fresh,
-                              describe=lambda s: f"n={s.get('n')} next_j="
-                                                 f"{s.get('next_j')} of "
-                                                 f"W={s.get('W')}")
+                              describe=lambda s: f"n={s.get('n')}, cursor "
+                                                 f"k/W = {s.get('next_j')} "
+                                                 f"on the wheel W = "
+                                                 f"{s.get('W')}")
     except (_ckpt.CursorRefused, CheckpointCorrupt) as e:
         raise CorruptEngineError(f"[ALARM] {e}")
 
@@ -1606,7 +1607,8 @@ def status():
     W = c.get("W", 1)
     print(f"key       : {c['key']}")
     print(f"filter    : n = {c.get('n')}  wheel {W}")
-    print(f"frontier  : k = {c['next_j'] * W:.6e}  (next_j {c['next_j']:,})")
+    print(f"frontier  : k = {c['next_j'] * W:.6e}  (k/W = {c['next_j']:,}, "
+          f"checkpoint field `next_j`)")
     print(f"rungs     : {len(c.get('rungs_passed', []))} passed; last: "
           f"{(c.get('rungs_passed') or ['-'])[-1]}")
     print(f"survivors : {c['survivors']:,} classified in "
@@ -1668,7 +1670,8 @@ def main():
                          "past a(14) P90. 0 disables the fold, capping the "
                          "reach at k = 1.2e23, below the a(14) median)")
     ap.add_argument("--seg-span", type=float, default=None,
-                    help="k per checkpoint segment (default: %d j)" % SEG_J)
+                    help="k per checkpoint segment (default: k/W advances "
+                         "by %d per segment)" % SEG_J)
     ap.add_argument("--heartbeat", type=float, default=30.0,
                     help="seconds between [STATUS] lines (position, rate, the "
                          "census counts per run length, finds, odds, next "

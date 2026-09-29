@@ -440,7 +440,7 @@
   "sibling_floor": {
    "value": 74056070675659134790,
    "rests_on": "A153431(15) = 740560706756591347900",
-   "why": "an x below it with run >= n would make 10x meet A153431's condition at index 15 below that term"
+   "why": "a k below it with run >= n would make m = 10k meet A153431's condition at index 15 below that term"
   }
  },
  "engine": "a305740-v1-p1-seg32-pbd224-cpl37w38"

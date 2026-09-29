@@ -282,8 +282,9 @@ def load(path, expect_key, warn=None, accept=(), adopt=()):
             if warn:
                 warn(f"checkpoint ADOPTED from {got_key} by {expect_key}: "
                      f"these configurations do NOT cover the same line, so "
-                     f"only the claim 'every k below this is swept' carries "
-                     f"over -- the caller must re-denominate the cursor "
+                     f"only the claim 'everything below this cursor is "
+                     f"swept' carries over -- the caller must "
+                     f"re-denominate the cursor "
                      f"itself and must not reuse any index from it")
         else:
             if warn:

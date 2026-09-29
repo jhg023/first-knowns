@@ -1,4 +1,4 @@
-"""The campaign for the shift ladders -- least m with m + b^k prime, k = 1..n.
+"""The shift-ladder campaign -- A130003: least m with 4^k + m prime, k = 1..n; A110096: least k with k + 2^i prime, i = 1..n.
 
     python launch.py --selftest      the full gate battery (must end ALL GREEN)
     python launch.py                 the hunt: indefinite, resumable
@@ -248,9 +248,11 @@ class Campaign:
         if self._adopted:
             log("STAGE",
                 f"checkpoint written by {self._adopted[0]} ADOPTED: it "
-                f"claims the line swept to m = {self._adopted[1]:,}, which "
+                f"claims the line swept to {self.fam['term']} = "
+                f"{self._adopted[1]:,}, which "
                 f"floors to period {self.j:,} of this engine's W = "
-                f"{int(self.eng.W):,} (m = {self.j * int(self.eng.W):,}) -- "
+                f"{int(self.eng.W):,} ({self.fam['term']} = "
+                f"{self.j * int(self.eng.W):,}) -- "
                 f"floored, so no line is skipped")
         if self._stored_w and self._stored_w != int(self.eng.W):
             raise ValueError(
@@ -386,7 +388,7 @@ class Campaign:
         parts = [f"swept to {self.swept_m():.6g}",
                  f"{self.oeis} filter n = {self.filter_n()}"]
         if rate:
-            parts.append(f"{rate:.3g} m/s")
+            parts.append(f"{rate:.3g} {self.fam['term']}/s")
         parts.append(census_str(self.census, CENSUS_FLOOR, self.frontier()))
         parts.append(f"finds {self.discoveries}")
         nr = self.next_rung(m)
@@ -417,10 +419,10 @@ class Campaign:
             self.near += 1
             ok, legs, _ = verify(m, run, self.b)
             if not ok:
-                log("ALARM", f"NEAR value m = {m:,} run {run} failed "
-                             f"verification: {legs}")
+                log("ALARM", f"NEAR value {self.fam['term']} = {m:,} run "
+                             f"{run} failed verification: {legs}")
                 raise SystemExit(2)
-            log("NEAR", f"run {run} at m = {m:,} (run-{run} "
+            log("NEAR", f"run {run} at {self.fam['term']} = {m:,} (run-{run} "
                         f"#{self.census[run]} of the campaign; verified) -- "
                         f"ONE condition short of a({frontier + 1})!")
             return False
@@ -429,7 +431,7 @@ class Campaign:
 
     def record_discovery(self, m, run):
         frontier = self.frontier()
-        self.hb.doing(f"verifying run-{run} m={m}")
+        self.hb.doing(f"verifying run-{run} {self.fam['term']}={m}")
         ok, legs, stop = verify(m, run, self.b)
         if not ok:
             log("ALARM", f"claimed a({frontier+1}) = {m} failed the "
@@ -442,14 +444,17 @@ class Campaign:
         # "Naming in an evidence file"): the published integer under the
         # entry's own letter, a `forms` that uses it, and `oeis_terms`
         # saying literally what goes into the OEIS.
-        ev = {**evidence.header(self.oeis, f"{self.b}^k + m, k = 1..n",
-                                "m", m, settles),
+        ev = {**evidence.header(self.oeis,
+                                f"{self.fam['expr']}, "
+                                f"{self.fam['exp']} = 1..n",
+                                self.fam["term"], m, settles),
               "base": self.b,
               "run": int(run), "settles": settles,
               "values": {str(k): int(ref.value(m, k, self.b))
                          for k in range(1, run + 1)},
               "verification": legs,
-              "stopper": {"k": stop["k"], "value": int(stop["value"]),
+              "stopper": {self.fam["exp"]: stop["k"],
+                          "value": int(stop["value"]),
                           "factor": stop["factor"]},
               "certificates": certs,
               "least_claim": {"swept_from": M_START,
@@ -462,15 +467,16 @@ class Campaign:
             self.found[str(n)] = int(m)
         path = evidence.record(
             ev, EVID, f"{self.oeis}_a{settles[0]}_{m}.json",
-            ledger_path(self.b), key="m",
+            ledger_path(self.b), key=self.fam["term"],
             label="%s a(%s)" % (self.oeis, ",".join(map(str, settles))))
         self.discoveries += 1
         banner("DISCOVERY", [
             f"{self.oeis} a({settles[0]}) = {m:,}" if len(settles) == 1 else
             f"{self.oeis} a({settles[0]})..a({settles[-1]}) = {m:,}",
-            f"run {run}: m + {self.b}^k is prime for k = 1..{run}",
-            f"stopped by m + {self.b}^{stop['k']} = {stop['value']:,} "
-            f"= {stop['factor']}",
+            f"run {run}: {self.fam['expr']} is prime for "
+            f"{self.fam['exp']} = 1..{run}",
+            f"stopped at {self.fam['exp']} = {stop['k']}: "
+            f"{self.fam['expr']} = {stop['value']:,} = {stop['factor']}",
             f"verified 3 ways, {len(certs)} certificates, evidence {path}",
         ])
         old_n = self.eng.n
@@ -492,11 +498,13 @@ class Campaign:
         log("STAGE", device_report(self.eng.nbytes()))
         cfg = self.eng.config()
         log("STAGE",
-            f"sweeping the m line to {target:.4g}; {self.oeis} filter n = "
+            f"sweeping the {self.fam['term']} line to {target:.4g}; "
+            f"{self.oeis} filter n = "
             f"{self.filter_n()}; wheel W = {self.eng.W:,} "
             f"({self.eng.R:,} residues) x {cfg['ng']} bit planes to "
             f"{cfg['p2']}, leaving {100.0 * self.eng.density():.5f}% of the "
-            f"line as candidates; resume at m = {self.swept_m():,}")
+            f"line as candidates; resume at {self.fam['term']} = "
+            f"{self.swept_m():,}")
         # The one configuration fault score.py cannot see: the global tail
         # queue is sized from per_launch, and the frozen benchmark window is
         # a quarter of one launch, so a ceiling that binds here is invisible
@@ -512,10 +520,10 @@ class Campaign:
                 self.b, self.frontier(), self.frontier_m(), n_ahead=3).items()):
             log("STAGE", "  a(%d): %s" % (n, "  ".join(
                 "%s %.3g" % (q, v) for q, v in qs.items())))
-        log("STAGE", "'swept to' is the m below which EVERY value has been "
+        log("STAGE", "'swept to' is the %s below which EVERY value has been "
                      "tested -- it is the frontier, and it advances one "
                      "whole launch (%d periods, %.4g of line) at a time."
-                     % (self.eng.per_launch,
+                     % (self.fam["term"], self.eng.per_launch,
                         self.eng.per_launch * self.eng.W))
         self.hb.mark(self.swept_m())
         self.hb.start(self.status_line)
@@ -529,7 +537,8 @@ class Campaign:
                     break
                 if j1 * self.eng.W > cpu.k_ceil(self.filter_n(), self.b):
                     break
-                self.hb.doing(f"sieving m in [{self.swept_m():.4g}, "
+                self.hb.doing(f"sieving {self.fam['term']} in "
+                              f"[{self.swept_m():.4g}, "
                               f"{j1 * self.eng.W:.4g})")
                 for jn, surv in self.eng.sweep(self.j, j1):
                     for m in surv:
@@ -553,7 +562,8 @@ class Campaign:
             self.hb.stop()
         self.mark_boundary()
         self.save()
-        log("STAGE", f"campaign stopped at m = {self.swept_m():,} "
+        log("STAGE", f"campaign stopped at {self.fam['term']} = "
+                     f"{self.swept_m():,} "
                      f"({self.discoveries} find(s) this campaign)")
         return 0
 
@@ -566,9 +576,11 @@ class Campaign:
         # operator comes back to the wrong resume point.
         if self.save_boundary():
             return (f"checkpoint written at the last segment boundary: "
-                    f"m = {int(self._snapshot['m']):,} ({self.ckpt})")
+                    f"{self.fam['term']} = {int(self._snapshot['m']):,} "
+                    f"({self.ckpt})")
         return (f"{self.ckpt} is held open by another process, so THIS "
-                f"boundary (m = {int(self._snapshot['m']):,}) was not "
+                f"boundary ({self.fam['term']} = "
+                f"{int(self._snapshot['m']):,}) was not "
                 f"written; the run resumes from the last save that landed")
 
 
@@ -978,7 +990,8 @@ def _status(base):
         front = max(front, int(n))
     log("STATUS", "  ".join([
         f"{ref.FAMILIES[base]['oeis']}",
-        f"m = {int(st['m']):,}", f"filter n = {front + 1}",
+        f"{ref.FAMILIES[base]['term']} = {int(st['m']):,}",
+        f"filter n = {front + 1}",
         census_str(cen, CENSUS_FLOOR, front),
         f"finds {st.get('discoveries', 0)}",
         f"near {st.get('near', 0)}",
@@ -998,7 +1011,8 @@ def main(argv=None):
     ap.add_argument("--status", action="store_true",
                     help="read the checkpoint and say where the hunt is")
     ap.add_argument("--to", type=float, default=None,
-                    help="stop at this depth on the m line (default: the "
+                    help="stop at this depth on the term's line -- m for "
+                         "A130003, k for A110096 (default: the "
                          "engine ceiling, 3.317e24)")
     ap.add_argument("--stop-on-discovery", action="store_true",
                     help="checkpoint and exit once THIS RUN confirms a find "

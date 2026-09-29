@@ -8,8 +8,10 @@ counted in the checkpoint and shown in each 30-second `[STATUS]` line,
 never written here (CONVENTIONS.md, "The census is counted, not
 narrated").
 
-**Present: nothing yet.** No production sweep has been run. The engine and
-the full gate battery are green and the campaign is the owner's to start.
+**Present:** `A089761_a16_15737271507027492.json`,
+`A089761_a17_125811821444034258.json` and
+`A089761_a18_109927810420106024208.json` — a(16), a(17) and a(18)
+(RESULTS.md) — and the ledger holding the same three records.
 
 Because the conditions of A089761 nest, one `k` can settle several terms at
 once. A find is evidenced **once**, under the first term it settles, with a
@@ -19,13 +21,16 @@ once. A find is evidenced **once**, under the first term it settles, with a
 Each file is meant to be checkable by anyone with a bignum library and no
 trust in this repository. It carries:
 
+- `sequence`, `forms` (`k*i^2 + 1, i = 1..n`, A089761's own letters) and
+  `oeis_terms` — the header every record opens with; `oeis_terms` is
+  literally what to submit, `{"18": k}` reading "a(18) = k";
 - `k` and `run` — the claim, and how far the run reaches;
 - `values` — every `k·i²+1` for `i = 1..run`, written out in full, so the
   primality claims can be re-tested directly;
 - `certificates` — one per value. In this project's range these are
   deterministic Miller-Rabin results rather than probable-prime
-  assertions: the largest value below the enforced ceiling is `2.3×10²¹`,
-  under huntlib's `3.317×10²⁴` deterministic bound (gate G10);
+  assertions: the enforced ceiling, `k < (3.317×10²⁴ − 1)/n²`, keeps every
+  `k·i²+1` under huntlib's `3.317×10²⁴` deterministic bound (gate G10);
 - `stopper` — the value at `i = run+1`, which must be **composite**, with a
   factor exhibited. This is what bounds the claim to exactly `run` rather
   than more, and it is the one number a reader can check on a calculator;

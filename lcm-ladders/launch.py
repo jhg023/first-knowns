@@ -1,5 +1,5 @@
-"""The campaign for the lcm ladders -- least N with (N +- k)/k prime for
-every k = 1..n, hunted as N = lcm(1..n)*x.
+"""lcm ladders: least N with (N - k)/k prime, m with (m + k)/k prime, k = 1..n.
+Each term is hunted as lcm(1..n)*x.
 
     python launch.py --selftest            the full gate battery (must end ALL GREEN)
     python launch.py                       the hunt: indefinite, resumable (A078502)
@@ -753,7 +753,9 @@ class Campaign:
         self.adopt_floor = old_k if self.j * W < old_k else 0
         log("STAGE",
             f"ADOPTED a cursor written under {self._stored_key}: its "
-            f"coverage claim (every x below {old_k:,} swept at filter n = "
+            f"coverage claim (every "
+            f"{ref.FAMILIES[self.fam]['term']}/lcm(1..{self.filter_n()}) "
+            f"below {old_k:,} swept at filter n = "
             f"{self.filter_n()}) carries over, floored onto this engine's "
             f"period W = {W:,} -> period {self.j} (it was period {old_j} of "
             f"W = {int(self._stored_w):,}); its work cursor (u = {old_u}) "
@@ -824,7 +826,9 @@ class Campaign:
             self.passed.append(lab)
             nxt = lad.next_rung(k, self.frontier())
             log("RUNG", f"passed {lab}" +
-                (f" -- next: {nxt[0]} at {nxt[1]:.4g}" if nxt else ""))
+                (f" -- next: {nxt[0]} at "
+                 f"{ref.FAMILIES[self.fam]['term']}/lcm(1..{self.filter_n()})"
+                 f" = {nxt[1]:.4g}" if nxt else ""))
 
     # ------------------------------------------------------ proof crossing
     def proof_crossing(self):
@@ -842,18 +846,22 @@ class Campaign:
         if k >= pc:
             self._proof_logged = self.filter_n()
             log("MILESTONE",
-                f"past the proof crossing k_proof({self.filter_n()}, "
-                f"{self.oeis}) = {pc:.4g}: L({self.filter_n()})"
-                f"*x {self.s:+d} = N {self.s:+d}, the top value, now exceeds "
+                f"past the proof crossing for a({self.filter_n()}) of "
+                f"{self.oeis}, {ref.FAMILIES[self.fam]['term']}/lcm(1.."
+                f"{self.filter_n()}) = {pc:.4g} (lcml_search.k_proof): "
+                f"{ref.FAMILIES[self.fam]['term']} {self.s:+d}, the top "
+                f"value (k = 1), now exceeds "
                 f"the deterministic Miller-Rabin "
                 f"bound, so classification is a thirteen-base strong "
                 f"probable-prime chain from here (the census is counted and "
                 f"a NEAR is a health check either way) and a DISCOVERY is "
-                f"proved by BLS75 certificate on "
-                f"{'V - 1' if self.s > 0 else 'V + 1'} = N/i "
+                f"proved by BLS75 certificate on the value "
+                f"{'less' if self.s > 0 else 'plus'} one, "
+                f"{ref.FAMILIES[self.fam]['term']}/k "
                 f"({'Theorem 1' if self.s > 0 else 'Theorem 15, Lucas'}; "
-                f"certify_run); the ceiling is k < "
-                f"{cpu.k_ceil(self.filter_n(), self.fam):.4g}")
+                f"certify_run); the ceiling is "
+                f"{ref.FAMILIES[self.fam]['term']}/lcm(1..{self.filter_n()}) "
+                f"< {cpu.k_ceil(self.filter_n(), self.fam):.4g}")
 
     # ---------------------------------------------------------- checkpoint
     def state(self):
@@ -977,12 +985,14 @@ class Campaign:
         lo = self.boundary * self.eng.W
         seg = self.eng.seg_periods
         pct = min(100.0, max(0.0, 100.0 * (k - lo) / (seg * self.eng.W)))
-        parts = [f"swept to {self.swept_k():.6g}",
+        parts = [f"swept to {ref.FAMILIES[self.fam]['term']}/lcm(1.."
+                 f"{self.eng.n}) = {self.swept_k():.6g}",
                  f"periods [{self.boundary}, {self.boundary + seg}) "
                  f"[{lo:.5g}, {lo + seg * self.eng.W:.5g}) {pct:.0f}%",
                  f"{self.oeis} filter n = {self.filter_n()}"]
         if rate:
-            parts.append(f"{rate:.3g} k/s")
+            parts.append(f"{rate:.3g} {ref.FAMILIES[self.fam]['term']}"
+                         f"/lcm(1..{self.eng.n}) per s")
         parts.append(census_str(self.census, CENSUS_FLOOR, self.frontier()))
         parts.append(f"finds {self.discoveries}")
         parts.append(f"survivors {self.survivors:,}")
@@ -1023,8 +1033,10 @@ class Campaign:
         if k < self.adopt_floor:
             # line an ADOPTED cursor's engine already swept and counted
             if kind == "DISCOVERY":
-                log("ALARM", f"run {run} at x = {k:,} is a DISCOVERY below "
-                             f"x = {self.adopt_floor:,}, which the adopted "
+                log("ALARM", f"run {run} at "
+                             f"{ref.FAMILIES[self.fam]['term']}/lcm(1.."
+                             f"{self.eng.n}) = {k:,} is a DISCOVERY below "
+                             f"{self.adopt_floor:,}, which the adopted "
                              f"cursor's engine certified as swept: two "
                              f"engines disagree about covered line")
                 raise SystemExit(2)
@@ -1040,10 +1052,14 @@ class Campaign:
             # with the device idle, for a factor nobody reads
             ok, legs, _ = verify(N, run, self.fam, witness=False)
             if not ok:
-                log("ALARM", f"NEAR value N = {N:,} run {run} failed "
+                log("ALARM", f"NEAR value "
+                             f"{ref.FAMILIES[self.fam]['term']} = {N:,} run "
+                             f"{run} failed "
                              f"verification: {legs}")
                 raise SystemExit(2)
-            log("NEAR", f"run {run} at N = {N:,} (x = {k:,}; run-{run} "
+            log("NEAR", f"run {run} at {ref.FAMILIES[self.fam]['term']} = "
+                        f"{N:,} ({ref.FAMILIES[self.fam]['term']}/lcm(1.."
+                        f"{self.eng.n}) = {k:,}; run-{run} "
                         f"#{self.census[run]} of the campaign; verified) -- "
                         f"ONE condition short of a({frontier + 1})!")
             return False
@@ -1059,11 +1075,13 @@ class Campaign:
         # and clearing n + 1 needs L(n+1) | N as well as one more prime, so
         # it is a question about N and not about this filter's multipliers.
         # A078502's published a(13) = a(14) is exactly this.
-        self.hb.doing(f"verifying run-{run} x={x}")
+        self.hb.doing(f"verifying run-{run} "
+                      f"{ref.FAMILIES[self.fam]['term']}/lcm(1..{n})={x}")
         true_run = ref.run_length_N(self.fam, N, cap=n + 8)
         if true_run < run:
             log("ALARM", f"claimed a({frontier+1}) = {N} has run {true_run} "
-                         f"on N but {run} at filter {n}")
+                         f"on {ref.FAMILIES[self.fam]['term']} but {run} at "
+                         f"filter {n}")
             raise SystemExit(2)
         run = true_run
         ok, legs, stop = verify(N, run, self.fam)
@@ -1072,7 +1090,8 @@ class Campaign:
                          f"protocol: {legs}")
             raise SystemExit(2)
         settles = list(range(frontier + 1, run + 1))
-        self.hb.doing(f"certifying run-{run} N={N}")
+        self.hb.doing(f"certifying run-{run} "
+                      f"{ref.FAMILIES[self.fam]['term']}={N}")
         certs, unproved = certify_run(N, run, self.fam)
         routes = {}
         for c in certs.values():
@@ -1123,15 +1142,16 @@ class Campaign:
             label="%s a(%s)" % (self.oeis, ",".join(map(str, settles))))
         self.discoveries += 1
         proved = len(certs) - len(unproved)
-        stopline = (f"stopped by {stop['i']} not dividing N"
+        stopline = (f"stopped by {stop['i']} not dividing {term}"
                     if stop["value"] is None else
-                    f"stopped by N/{stop['i']} {self.s:+d} = "
+                    f"stopped by {term}/{stop['i']} {self.s:+d} = "
                     f"{stop['value']:,} = {stop['factor']} * ...")
         lines = [
             f"{self.oeis} a({settles[0]}) = {N:,}" if len(settles) == 1 else
             f"{self.oeis} a({settles[0]})..a({settles[-1]}) = {N:,}",
-            f"run {run}: (N {'+' if self.s > 0 else '-'} k)/k is prime for "
-            f"every k = 1..{run}   (N = {ref.L(run):,} * {N // ref.L(run):,})",
+            f"run {run}: ({term} {'+' if self.s > 0 else '-'} k)/k is prime "
+            f"for every k = 1..{run}   ({term} = {ref.L(run):,} * "
+            f"{N // ref.L(run):,})",
             stopline,
             f"verified 3 ways, {proved} of {len(certs)} certificates "
             f"re-verified ({', '.join(f'{r} x{c}' for r, c in sorted(routes.items()))}), "
@@ -1140,7 +1160,7 @@ class Campaign:
             lines.append(f"also settles {a['sequence']}({a['n']}) = "
                          f"{a['value']:,}")
         if unproved:
-            lines.append(f"UNPROVED at i = {unproved}: those values passed "
+            lines.append(f"UNPROVED at k = {unproved}: those values passed "
                          f"the Miller-Rabin chain and BPSW but no "
                          f"certificate landed within the bounded effort -- the find "
                          f"stands on the three legs; certify them by hand "
@@ -1173,8 +1193,9 @@ class Campaign:
         self.adopt_floor = 0           # a new line: no adopted overlap on it
         log("STAGE",
             f"filter follows the frontier: n = {old.n} -> {self.eng.n}, and "
-            f"with it the whole line -- L({old.n}) = {ref.L(old.n):,} becomes "
-            f"L({self.eng.n}) = {ref.L(self.eng.n):,}, the unit {old.unit} "
+            f"with it the whole line -- lcm(1..{old.n}) = {ref.L(old.n):,} "
+            f"becomes lcm(1..{self.eng.n}) = {ref.L(self.eng.n):,}, the unit "
+            f"{old.unit} "
             f"becomes {self.eng.unit}, the wheel "
             f"({old.p1},{old.p2},{old.p3}) becomes "
             f"({self.eng.p1},{self.eng.p2},{self.eng.p3}), the depth "
@@ -1183,8 +1204,10 @@ class Campaign:
             f"{self.eng.seg_periods} periods on the "
             f"{'WIDE' if self.eng.wide else 'narrow'} survivor record (was "
             f"{'wide' if old.wide else 'narrow'}; the engine chose it from "
-            f"the plan); the sweep restarts at x = "
-            f"{self.x_start():,} (N = {ref.term(self.eng.n, self.x_start()):,}"
+            f"the plan); the sweep restarts at "
+            f"{ref.FAMILIES[self.fam]['term']}/lcm(1..{self.eng.n}) = "
+            f"{self.x_start():,} ({ref.FAMILIES[self.fam]['term']} = "
+            f"{ref.term(self.eng.n, self.x_start()):,}"
             f", the term just found -- monotonicity, so nothing is skipped) "
             f"and the ladder now aims at a({self.filter_n()})")
         self.passed = [p for p in self.passed
@@ -1259,7 +1282,9 @@ class Campaign:
             want = max(1, math.ceil(m["need"] * POOL_MARGIN))
             inline = False
             how = (f"measured on {m['launches']} launches, {m['seconds']:.2f} "
-                   f"s of device at {m['rate']:.3g} k/s: {m['per_s']:,.0f} "
+                   f"s of device at {m['rate']:.3g} "
+                   f"{ref.FAMILIES[self.fam]['term']}/lcm(1..{self.eng.n}) "
+                   f"per s: {m['per_s']:,.0f} "
                    f"survivors/s x {1e6 * m['cost']:.1f} us = {m['need']:.2f} "
                    f"core-s per s, x{POOL_MARGIN:g} margin")
             cap = max(1, (os.cpu_count() or 2) - 1)
@@ -1350,7 +1375,8 @@ class Campaign:
         log("STAGE", device_report(self.eng.bytes_held()))
         cfg = self.eng.config()
         log("STAGE",
-            f"sweeping the k line to {target:.4g}; {self.oeis} "
+            f"sweeping the line of {ref.FAMILIES[self.fam]['term']}/lcm(1.."
+            f"{self.filter_n()}) to {target:.4g}; {self.oeis} "
             f"({ref.FAMILIES[self.fam]['forms']}) filter n = "
             f"{self.filter_n()}; wheel W = {self.eng.W:,} at unit "
             f"{self.eng.unit} ({self.eng.R:,} residues, {self.eng.R1} x "
@@ -1360,29 +1386,37 @@ class Campaign:
             f"{self.eng.launches_per_segment} launches of "
             f"{cfg['cand_per_launch']:.3g} candidates ({cfg['nu']} "
             f"third-level residues x {cfg['tchunk']} first-level); resume at "
-            f"period {self.j}, launch {self.u} (k = "
+            f"period {self.j}, launch {self.u} "
+            f"({ref.FAMILIES[self.fam]['term']}/lcm(1..{self.filter_n()}) = "
             f"{self.u_progress(self.j, self.u):,})")
         for n, qs in sorted(model.predictions(
                 self.fam, self.frontier(), self.frontier_k(),
                 n_ahead=3, ceiling=cpu.k_ceil(self.filter_n(), self.fam)).items()):
-            log("STAGE", "  a(%d): %s" % (n, "  ".join(
+            log("STAGE", "  a(%d)/lcm(1..n): %s" % (n, "  ".join(
                 "%s %.3g" % (q, v) for q, v in qs.items())))
         log("STAGE", "the heartbeat carries TWO numbers, and they are not "
-                     "the same claim: 'swept to' is the k below which EVERY "
-                     "value at or above K_START has been tested, and it "
+                     "the same claim: 'swept to' is the quotient of the term "
+                     "by lcm(1..n) below which EVERY "
+                     "value at or above the sweep's floor has been tested, "
+                     "and it "
                      "advances one whole wheel period (%.4g of line) at a "
-                     "time; 'period N .. X%%' is progress THROUGH the period "
-                     "being worked, whose candidates arrive out of k order, "
+                     "time; 'periods [...) ...%%' is progress THROUGH the "
+                     "period "
+                     "being worked, whose candidates arrive out of order, "
                      "so no part of it is clear until that reads 100%%."
                      % self.eng.W)
         log("STAGE", f"proofs: classification is a deterministic "
                      f"Miller-Rabin proof below the proof crossing "
-                     f"k_proof({self.filter_n()}, {self.oeis}) = "
-                     f"{self.proof_crossing():.4g} and a thirteen-base "
+                     f"{ref.FAMILIES[self.fam]['term']}/lcm(1.."
+                     f"{self.filter_n()}) = "
+                     f"{self.proof_crossing():.4g} (lcml_search.k_proof) and "
+                     f"a thirteen-base "
                      f"strong probable-prime chain above it; a DISCOVERY is proved "
                      f"by certificate either way (certify_run: BLS75 "
-                     f"{'Theorem 1 on N - 1' if self.s > 0 else 'Theorem 15 on N + 1'}"
-                     f" = m*k, k factored once, subproofs for factors past "
+                     f"{'Theorem 1 on the value less one' if self.s > 0 else 'Theorem 15 on the value plus one'}"
+                     f", {ref.FAMILIES[self.fam]['term']}/k = (lcm(1..n)/k) "
+                     f"* {ref.FAMILIES[self.fam]['term']}/lcm(1..n), the "
+                     f"quotient factored once, subproofs for factors past "
                      f"the bound), and the engine ceiling {target:.4g} is "
                      f"where a worst-case certificate was measured to cost "
                      f"seconds (huntlib.ceiling)")
@@ -1438,10 +1472,13 @@ class Campaign:
                 if found_now or time.time() - self._plog_t >= PERIOD_LOG_S:
                     log("STAGE",
                         f"periods [{j1 - self.eng.seg_periods}, {j1}) "
-                        f"complete: swept to {self.swept_k():,} "
+                        f"complete: swept to "
+                        f"{ref.FAMILIES[self.fam]['term']}/lcm(1.."
+                        f"{self.eng.n}) = {self.swept_k():,} "
                         f"(+{self.eng.seg_periods * self.eng.W:.4g} of "
                         f"line; {held} value{'' if held == 1 else 's'} at "
-                        f"run >= {CENSUS_FLOOR} classified in k order"
+                        f"run >= {CENSUS_FLOOR} classified in order of "
+                        f"{ref.FAMILIES[self.fam]['term']}"
                         + (f"; {self._plog_n} segments closed since the last "
                            f"such line" if self._plog_n > 1 else "") + ")")
                     self._plog_t, self._plog_n = time.time(), 0
@@ -1469,7 +1506,9 @@ class Campaign:
             if self.pool is not None:
                 self.pool.shutdown(wait=False, cancel_futures=True)
         landed = self.save()
-        log("STAGE", f"campaign stopped at k = {self.swept_k():,} "
+        log("STAGE", f"campaign stopped at "
+                     f"{ref.FAMILIES[self.fam]['term']}/lcm(1..{self.eng.n}) "
+                     f"= {self.swept_k():,} "
                      f"({self.discoveries} find(s) this campaign; checkpoint "
                      f"{'written' if landed else 'DEFERRED -- held open'})")
         return 0
@@ -1481,7 +1520,8 @@ class Campaign:
         if self.save_boundary():
             return (f"checkpoint written at the last classified launch: "
                     f"period {int(snap['j'])}, u = {int(snap['u'])}, swept "
-                    f"to k = {int(snap['k']):,} ({self.ckpt})")
+                    f"to {ref.FAMILIES[self.fam]['term']}/lcm(1.."
+                    f"{int(snap['n'])}) = {int(snap['k']):,} ({self.ckpt})")
         return (f"{self.ckpt} is held open by another process, so THIS "
                 f"boundary (period {int(snap['j'])}, u = {int(snap['u'])}) "
                 f"was not written; the run resumes from the last save that "
@@ -2729,7 +2769,8 @@ def _status(fam):
         front = max(front, int(n))
     log("STATUS", "  ".join([
         f"{fam}",
-        f"swept to k = {int(st['k']):,}",
+        f"swept to {ref.FAMILIES[fam]['term']}/lcm(1..{front + 1}) = "
+        f"{int(st['k']):,}",
         f"work cursor period {int(st['j'])} u = {int(st.get('u', 0))}",
         f"filter n = {front + 1}",
         census_str(cen, CENSUS_FLOOR, front),
@@ -2757,7 +2798,9 @@ def main(argv=None):
     ap.add_argument("--status", action="store_true",
                     help="read the checkpoint and say where the hunt is")
     ap.add_argument("--to", type=float, default=None,
-                    help="stop at this depth on the k line (default: the "
+                    help="stop at this depth in the quotient of the term by "
+                         "lcm(1..n): N/lcm(1..n) for A078502, m/lcm(1..n) "
+                         "for A074200 (default: the "
                          "engine ceiling, huntlib.ceiling.K_CEIL = 1e40 for "
                          "every family -- where a worst-case certificate per "
                          "discovery was measured to cost seconds)")
@@ -2802,7 +2845,9 @@ def main(argv=None):
     _POLICIES[args.family].refuse_mismatch(
         fresh=args.fresh,
         describe=lambda st: (f"period {st.get('j')}, u = {st.get('u')}, "
-                             f"swept to k = {st.get('k')}"))
+                             f"swept to "
+                             f"{ref.FAMILIES[args.family]['term']}/lcm(1..n)"
+                             f" = {st.get('k')}"))
     if args.fresh:
         for p in (ckpt_path(args.family), ckpt_path(args.family) + ".bak"):
             if os.path.exists(p):

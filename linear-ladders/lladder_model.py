@@ -283,10 +283,11 @@ def write_model_results(path=None):
     from lladder_search import k_ceil, k_proof
     path = path or os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "model_results.json")
-    out = {"model": "Bateman-Horn over f_m(k) = m*k + s for the multipliers "
-                    "m of each family at index n; w(q,n,F) = #distinct "
-                    "nonzero residues of the multipliers mod q, proved in "
-                    "lladder_reference and independent of the sign",
+    out = {"model": "Bateman-Horn over each family's own forms: r*k +- 1 "
+                    "(A088250, A088651), k*m +- 1 (A173750, A125838, "
+                    "A125839), (2k-1)*m +- 1 (A164325, A164326); w(q,n,F) = "
+                    "#distinct nonzero residues of the multipliers mod q, "
+                    "proved in lladder_reference and independent of the sign",
            "qmax": QMAX,
            "caveat": "the repo's first-occurrence models run late: the four "
                      "ladder projects before this one landed their scored "
@@ -308,7 +309,7 @@ def write_model_results(path=None):
                              "P_under_ceiling": p_by(fam, n, KNOWN[fam][top],
                                                      ceil)}
         out["families"][fam] = {
-            "forms": FAMILIES[fam]["forms"],
+            "forms": FAMILIES[fam]["oeis_forms"],
             "sign": sign(fam),
             "frontier": {"n": top, "k": KNOWN[fam][top],
                          "by": FAMILIES[fam]["frontier_by"]},
@@ -343,7 +344,8 @@ if __name__ == "__main__":
         for fam, d in out["families"].items():
             print("  %s (%s), frontier a(%d) = %d; validation mean E %.2f "
                   "over %d draws:"
-                  % (fam, d["forms"], d["frontier"]["n"], d["frontier"]["k"],
+                  % (fam, FAMILIES[fam]["oeis_forms"], d["frontier"]["n"],
+                     d["frontier"]["k"],
                      d["validation"]["mean_E"], d["validation"]["draws"]))
             for n, qs in sorted(d["predictions"].items(),
                                 key=lambda x: int(x[0])):

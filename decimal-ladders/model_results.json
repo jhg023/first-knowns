@@ -1,7 +1,7 @@
 {
- "model": "Bateman-Horn over f_j(x) = 10^j*x + 1, j in J(F, n) (1..n for A305740, 0..n for A153431); w(q,n,F) = #distinct(J mod ord_q(10)), proved in decl_reference",
+ "model": "Bateman-Horn over each entry's forms, 10^m*k + 1 for m = 1..n (A305740) and m*10^k + 1 for k = 0..n (A153431); w(q,n,F) = the number of distinct residues of the exponents mod ord_q(10), proved in decl_reference",
  "qmax": 200000,
- "units": "every depth is in x, the published term itself (A305740's k, A153431's m)",
+ "units": "every depth is in the published term itself (A305740's k, A153431's m)",
  "caveat": "the repo's first-occurrence models run late: the ladder projects before this one landed their scored finds at about 1.9-2.5x their medians while every census showed the intensity right to a percent or two. Read every depth below as a floor and budget 2-3x the median.",
  "families": {
   "A305740": {

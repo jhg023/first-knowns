@@ -383,15 +383,16 @@ def migrate_cursor(eng, apply=False):
     old_m, old_k = int(c["M"]), int(c["next_k"])
     new_m = int(eng.M)
     if old_m == new_m:
-        log("STAGE", "cursor already denominated in M=%d; nothing to do"
-                     % new_m)
+        log("STAGE", "cursor already denominated in this engine's wheel "
+                     "period (%d); nothing to do" % new_m)
         return c
     p_old = old_k * old_m
     new_k = p_old // new_m
-    log("STAGE", "cursor migration: period M %d -> %d (ratio %.6g)"
+    log("STAGE", "cursor migration: wheel period %d -> %d (ratio %.6g)"
                  % (old_m, new_m, new_m / old_m))
-    log("STAGE", "  from next_k=%d  (p = %.6e)" % (old_k, p_old))
-    log("STAGE", "  to   next_k=%d  (p = %.6e)" % (new_k, new_k * new_m))
+    log("STAGE", "  from period index %d  (p = %.6e)" % (old_k, p_old))
+    log("STAGE", "  to   period index %d  (p = %.6e)"
+                 % (new_k, new_k * new_m))
     log("STAGE", "  seam overlaps by %.4e of p-line (floor, never a gap)"
                  % (p_old - new_k * new_m))
     if not apply:
@@ -625,7 +626,7 @@ def hunt(args):
         if o is not None:
             target, pnow, logc = o
             haz = math.exp(logc) / math.log(max(pos, 3)) ** target * rate * 3600.0
-            odds = f"P(a{target} by now) {pnow:.0%} (+{haz:.1%}/h)  "
+            odds = f"P(a({target}) by now) {pnow:.0%} (+{haz:.1%}/h)  "
         if rate > 0:
             eta_s = (cap - pos) / rate
             eta = (f"ETA {eta_s/3600.0:.1f}h "
@@ -1016,9 +1017,9 @@ def status():
         with open(path) as f:
             c = json.load(f)
         print(f"key       : {c['key']}")
-        print(f"period M  : {c['M']}")
+        print(f"period    : {c['M']}  (the wheel's period on the p-line)")
         print(f"position  : p ~ {c['next_k']*c['M']:.4e}  "
-              f"(next_k = {c['next_k']:,})")
+              f"(period index {c['next_k']:,})")
         print(f"survivors : {c['survivors']}")
         print(f"best near : run {c['best_near']} at p = {c['best_near_p']}")
         cs = census_str(c.get("near_counts", {}), NEAR_FROM, top_settled(c))

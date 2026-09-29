@@ -800,16 +800,17 @@ class Campaign:
         if k >= pc:
             self._proof_logged = self.filter_n()
             log("MILESTONE",
-                f"past the proof crossing k_proof({self.filter_n()}, "
-                f"{self.oeis}) = {pc:.4g}: {self.filter_n()}!*x {self.s:+d}, "
+                f"past the proof crossing m = {pc:.4g} at filter "
+                f"n = {self.filter_n()} ({self.oeis}): "
+                f"{self.filter_n()}!*m {self.s:+d}, "
                 f"the top value, now exceeds the deterministic Miller-Rabin "
                 f"bound, so classification is a thirteen-base strong "
                 f"probable-prime chain from here (the census is counted and "
                 f"a NEAR is a health check either way) and a DISCOVERY is "
-                f"proved by BLS75 certificate on "
-                f"{'V - 1' if self.s > 0 else 'V + 1'} = k!*x "
+                f"proved by BLS75 certificate on the value "
+                f"{'less one' if self.s > 0 else 'plus one'}, k!*m "
                 f"({'Theorem 1' if self.s > 0 else 'Theorem 15, Lucas'}; "
-                f"certify_run); the ceiling is x < "
+                f"certify_run); the ceiling is m < "
                 f"{cpu.k_ceil(self.filter_n(), self.fam):.4g}")
 
     # ---------------------------------------------------------- checkpoint
@@ -1075,7 +1076,7 @@ class Campaign:
             lines.append(f"also settles {a['sequence']}({a['n']}) = "
                          f"{a['value']:,}")
         if unproved:
-            lines.append(f"UNPROVED at i = {unproved}: those values passed "
+            lines.append(f"UNPROVED at k = {unproved}: those values passed "
                          f"the Miller-Rabin chain and BPSW but no certificate "
                          f"landed within the bounded effort -- the find "
                          f"stands on the three legs; certify them by hand "
@@ -1117,7 +1118,7 @@ class Campaign:
         self.pending = []
         log("STAGE",
             f"filter follows the frontier: n = {old.n} -> {self.eng.n} on the "
-            f"same x line -- the wheel "
+            f"same line of m -- the wheel "
             f"({old.p1},{old.p2},{old.p3}) becomes "
             f"({self.eng.p1},{self.eng.p2},{self.eng.p3}), the depth "
             f"{old.q2} becomes {self.eng.q2}, the period {old.W:.4g} "
@@ -1126,8 +1127,8 @@ class Campaign:
             f"{'WIDE' if self.eng.wide else 'narrow'} survivor record "
             f"(was {'wide' if old.wide else 'narrow'}; the engine chose it "
             f"from the plan) and the unit stays {self.eng.unit}; "
-            f"the claim's floor is x = {self.x_start():,} (the term just "
-            f"found -- monotonicity) and the sweep resumes at x = "
+            f"the claim's floor is m = {self.x_start():,} (the term just "
+            f"found -- monotonicity) and the sweep resumes at m = "
             f"{self.j * self.eng.W:,}, the end of the line the old filter "
             f"classified (every survivor of it was run to n + 8, so nothing "
             f"below it can be a({self.filter_n()})); the ladder now aims at "
@@ -1206,7 +1207,7 @@ class Campaign:
             want = max(1, math.ceil(m["need"] * POOL_MARGIN))
             inline = False
             how = (f"measured on {m['launches']} launches, {m['seconds']:.2f} "
-                   f"s of device at {m['rate']:.3g} k/s: {m['per_s']:,.0f} "
+                   f"s of device at {m['rate']:.3g} {TERM}/s: {m['per_s']:,.0f} "
                    f"survivors/s x {1e6 * m['cost']:.1f} us = {m['need']:.2f} "
                    f"core-s per s, x{POOL_MARGIN:g} margin")
             cap = max(1, (os.cpu_count() or 2) - 1)
@@ -1297,7 +1298,7 @@ class Campaign:
         log("STAGE", device_report(self.eng.bytes_held()))
         cfg = self.eng.config()
         log("STAGE",
-            f"sweeping the x line to {target:.4g}; {self.oeis} "
+            f"sweeping m to {target:.4g}; {self.oeis} "
             f"({ref.FAMILIES[self.fam]['forms']}) filter n = "
             f"{self.filter_n()}; wheel W = {self.eng.W:,} at unit "
             f"{self.eng.unit} ({self.eng.R:,} residues, {self.eng.R1} x "
@@ -1307,7 +1308,7 @@ class Campaign:
             f"{self.eng.launches_per_segment} launches of "
             f"{cfg['cand_per_launch']:.3g} candidates ({cfg['nu']} "
             f"third-level residues x {cfg['tchunk']} first-level); resume at "
-            f"period {self.j}, launch {self.u} (k = "
+            f"period {self.j}, launch {self.u} (m = "
             f"{self.u_progress(self.j, self.u):,})")
         for n, qs in sorted(model.predictions(
                 self.fam, self.frontier(), self.frontier_k(),
@@ -1315,21 +1316,21 @@ class Campaign:
             log("STAGE", "  a(%d): %s" % (n, "  ".join(
                 "%s %.3g" % (q, v) for q, v in qs.items())))
         log("STAGE", "the heartbeat carries TWO numbers, and they are not "
-                     "the same claim: 'swept to' is the k below which EVERY "
-                     "value at or above K_START has been tested, and it "
+                     "the same claim: 'swept to' is the m below which EVERY "
+                     "m from the claim's floor up has been tested, and it "
                      "advances one whole wheel period (%.4g of line) at a "
                      "time; 'period N .. X%%' is progress THROUGH the period "
-                     "being worked, whose candidates arrive out of k order, "
+                     "being worked, whose candidates arrive out of m order, "
                      "so no part of it is clear until that reads 100%%."
                      % self.eng.W)
         log("STAGE", f"proofs: classification is a deterministic "
                      f"Miller-Rabin proof below the proof crossing "
-                     f"k_proof({self.filter_n()}, {self.oeis}) = "
-                     f"{self.proof_crossing():.4g} and a thirteen-base strong "
+                     f"m = {self.proof_crossing():.4g} at filter "
+                     f"n = {self.filter_n()} and a thirteen-base strong "
                      f"probable-prime chain above it; a DISCOVERY is proved "
                      f"by certificate either way (certify_run: BLS75 "
-                     f"{'Theorem 1 on N - 1' if self.s > 0 else 'Theorem 15 on N + 1'}"
-                     f" = k!*x, x factored once, subproofs for factors past "
+                     f"{'Theorem 1 on the value less one' if self.s > 0 else 'Theorem 15 on the value plus one'}"
+                     f", k!*m, m factored once, subproofs for factors past "
                      f"the bound), and the engine ceiling {target:.4g} is "
                      f"where a worst-case certificate was measured to cost "
                      f"seconds (huntlib.ceiling)")
@@ -1388,7 +1389,7 @@ class Campaign:
                         f"complete: swept to {self.swept_k():,} "
                         f"(+{self.eng.seg_periods * self.eng.W:.4g} of "
                         f"line; {held} value{'' if held == 1 else 's'} at "
-                        f"run >= {CENSUS_FLOOR} classified in k order"
+                        f"run >= {CENSUS_FLOOR} classified in m order"
                         + (f"; {self._plog_n} segments closed since the last "
                            f"such line" if self._plog_n > 1 else "") + ")")
                     self._plog_t, self._plog_n = time.time(), 0
@@ -2594,7 +2595,7 @@ def main(argv=None):
     ap.add_argument("--status", action="store_true",
                     help="read the checkpoint and say where the hunt is")
     ap.add_argument("--to", type=float, default=None,
-                    help="stop at this depth on the x line (default: the "
+                    help="stop once the sweep reaches this m (default: the "
                          "engine ceiling, huntlib.ceiling.K_CEIL = 1e40 for "
                          "every family -- where a worst-case certificate per "
                          "discovery was measured to cost seconds)")

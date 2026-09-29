@@ -1,5 +1,6 @@
-"""The campaign for the decimal ladders -- the least x with 10^j*x + 1 prime
-for every j in J(F, n).
+"""The decimal-ladders campaign: A305740 (10^m*k + 1), A153431 (m*10^k + 1).
+In the code's own notation: the least x with 10^j*x + 1 prime for every j
+in J(F, n).
 
     python launch.py --selftest            the full gate battery (must end ALL GREEN)
     python launch.py --family A305740      the hunt: indefinite, resumable
@@ -128,6 +129,16 @@ def term_letter(fam):
     surface a person reads uses it; the engines call the integer x and the
     checkpoint stores the cursor as "k", which is nobody's problem."""
     return ref.letter(fam)
+
+
+def form_less_one(fam, e=None):
+    """A value less one in the entry's own letters AND order (rule 5i):
+    10^e*k for A305740, m*10^e for A153431.  With no e, the exponent is the
+    entry's own letter -- the other of k and m."""
+    t = term_letter(fam)
+    if e is None:
+        e = "m" if t == "k" else "k"
+    return f"10^{e}*{t}" if t == "k" else f"{t}*10^{e}"
 
 
 PLAN_VERSION = "p1"               # bump when plan_for's answer changes
@@ -643,13 +654,15 @@ class Campaign:
         if k >= pc:
             self._proof_logged = self.filter_n()
             log("MILESTONE",
-                f"past the proof crossing k_proof({self.filter_n()}, "
-                f"{self.oeis}) = {pc:.4g}: 10^{self.filter_n()}*{self.TERM} + 1, "
+                f"past the proof crossing of {self.oeis} at filter n = "
+                f"{self.filter_n()}, {self.TERM} = {pc:.4g}: "
+                f"{form_less_one(self.fam, self.filter_n())} + 1, "
                 f"the top value, exceeds the deterministic Miller-Rabin bound, "
                 f"so classification is a thirteen-base strong probable-prime "
                 f"chain (the census is counted and a NEAR is a health check "
                 f"either way) and a DISCOVERY is proved by BLS75 Theorem 1 on "
-                f"V - 1 = 10^j*{self.TERM} (certify_run); the ceiling is "
+                f"each value less one, {form_less_one(self.fam)} "
+                f"(certify_run); the ceiling is "
                 f"{self.TERM} < {cpu.k_ceil(self.filter_n(), self.fam):.4g}")
 
     # ---------------------------------------------------------- checkpoint
@@ -876,8 +889,8 @@ class Campaign:
                                   "value": int(sibling_floor(self.fam, n)),
                                   "rests_on": f"A153431({n - 1}) = "
                                               f"{settled_term('A153431', n - 1)}",
-                                  "why": "an x below it with run >= n would "
-                                         "make 10x meet A153431's condition "
+                                  "why": "a k below it with run >= n would "
+                                         "make m = 10k meet A153431's condition "
                                          f"at index {n - 1} below that term"}}
                                  if sibling_floor(self.fam, n)
                                  > self.frontier_k() else {})},
@@ -890,8 +903,8 @@ class Campaign:
             label="%s a(%s)" % (self.oeis, ",".join(map(str, settles))))
         self.discoveries += 1
         proved = len(certs) - len(unproved)
-        stopline = (f"stopped by 10^{stop['exponent']}*{self.TERM} + 1 = "
-                    f"{stop['value']:,} = {stop['factor']} * ...")
+        stopline = (f"stopped by {form_less_one(self.fam, stop['exponent'])}"
+                    f" + 1 = {stop['value']:,} = {stop['factor']} * ...")
         lines = [
             f"{self.oeis} a({settles[0]}) = {x:,}" if len(settles) == 1 else
             f"{self.oeis} a({settles[0]})..a({settles[-1]}) = {x:,}",
@@ -2350,8 +2363,11 @@ def main(argv=None):
     ap.add_argument("--status", action="store_true",
                     help="read the checkpoint and say where the hunt is")
     ap.add_argument("--to", type=float, default=None,
-                    help="stop at this depth on the line (default: the "
-                         "engine ceiling, huntlib.ceiling.K_CEIL = 1e40)")
+                    help="stop once the sweep reaches this value of the term "
+                         "(" + ", ".join(f"{term_letter(f)} for {f}"
+                                         for f in ref.FAMILIES) +
+                         "; default: the engine ceiling, "
+                         "huntlib.ceiling.K_CEIL = 1e40)")
     ap.add_argument("--stop-on-discovery", action="store_true",
                     help="checkpoint and exit once THIS RUN confirms a find "
                          "(finds already in the checkpoint do not count)")

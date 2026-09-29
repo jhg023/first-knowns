@@ -337,12 +337,12 @@ def write_model_results(path=None):
     from fladder_search import forced_unit, k_ceil, k_proof
     path = path or os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "model_results.json")
-    out = {"model": "Bateman-Horn over f_k(x) = k!*x + s, k = 1..n; w(q,n) = "
+    out = {"model": "Bateman-Horn over k!*m -+ 1, k = 1..n; w(q,n) = "
                     "#distinct(1!..min(n,q-1)! mod q), proved in "
                     "fladder_reference and independent of the sign, so both "
                     "families share one singular series",
            "qmax": QMAX,
-           "units": "every depth is in x, which is the published term itself",
+           "units": "every depth is in m, the published term itself",
            "caveat": "the repo's first-occurrence models run late: the ladder "
                      "projects before this one landed their scored finds at "
                      "about 1.9-2.5x their medians while every census showed "

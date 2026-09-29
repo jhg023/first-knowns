@@ -3,7 +3,7 @@
  "model": "Bateman-Horn, numerically computed singular series",
  "qmax": 100000,
  "stated": "2026-08-20, before the first production sweep",
- "note": "Predictions are depths on the p-line for each open term. Each term is its own sweep from the floor: the differences P(n) differ, so no term's depth bounds another's.",
+ "note": "Predictions are depths on the p1-line for each open term. Each term is its own sweep from the floor: the differences prime(n)# differ, so no term's depth bounds another's.",
  "validation": [
   {
    "n": 7,

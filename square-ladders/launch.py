@@ -258,7 +258,7 @@ class Campaign:
             self.census_floor = self._resume_k
             log("STAGE",
                 f"cursor RE-DENOMINATED onto the v5 wheel: k = "
-                f"{self._resume_k:,} floors to period j = {self.j:,} "
+                f"{self._resume_k:,} floors to wheel period {self.j:,} "
                 f"(k = {self.j * self.eng.W:,}); "
                 f"{self._resume_k - self.j * self.eng.W:.4g} of line is "
                 f"re-swept as a cross-check and is NOT counted again")
@@ -551,11 +551,12 @@ class Campaign:
                      f"tested. It is the frontier, and it advances one whole "
                      f"wheel period ({self.eng.W:.4g} of line, about "
                      f"{self.eng.R3:,} launches) at a time.")
-        log("STAGE", "  'period N .. X%' progress THROUGH the period being "
-                     "worked on. The wheel emits its candidates in index "
-                     "order, not in k order, so they land scattered across "
-                     "the whole period and NO part of it is clear until "
-                     "that reads 100%. It is not a position on the k line.")
+        log("STAGE", "  'period <number> .. <percent>%' progress THROUGH the "
+                     "period being worked on. The wheel emits its candidates "
+                     "in index order, not in k order, so they land scattered "
+                     "across the whole period and NO part of it is clear "
+                     "until that reads 100%. It is not a position on the k "
+                     "line.")
         self.hb.mark(self.j * self.eng.W)
         self.hb.start(self.status_line)
         shutdown.on_interrupt(self._on_interrupt)

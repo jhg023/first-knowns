@@ -1,5 +1,5 @@
-"""The campaign for the clique ladders -- a(n) = least x > a(n-1) with
-x + a(i) + 1 prime for every i < n (plus one extra condition per family).
+"""The campaign for the clique ladders -- a(n) = least integer > a(n-1) with
+a(n) + a(i) + 1 prime for every i < n (plus one extra condition per family).
 
     python launch.py                       the hunt: indefinite, resumable (A093483)
     python launch.py --family A119752      any of the six families
@@ -695,7 +695,7 @@ class Campaign:
             banner("MILESTONE", [
                 f"{self.oeis} IS FINITE: at index {n} the conditions kill "
                 f"EVERY residue class mod {q}",
-                f"no x can satisfy them, so a({n - 1}) = "
+                f"no candidate for a({n}) can satisfy them, so a({n - 1}) = "
                 f"{ref.term(self.fam, n - 1):,} is the LAST term",
                 "this is a theorem about the sequence, not an engine fault: "
                 "check it by hand from clique_reference.forbidden_k_residues"])
@@ -781,16 +781,18 @@ class Campaign:
         if k >= pc:
             self._proof_logged = self.filter_n()
             log("MILESTONE",
-                f"past the proof crossing k_proof({self.filter_n()}, "
-                f"{self.oeis}) = {pc:.4g}: the largest value formed now "
+                f"past the proof crossing of {self.oeis} at filter n = "
+                f"{self.filter_n()}, {TERM} = {pc:.4g} (clique_search."
+                f"k_proof): the largest value formed now "
                 f"exceeds the deterministic Miller-Rabin "
                 f"bound, so classification is a thirteen-base strong "
                 f"probable-prime chain from here (the census is counted and "
                 f"a NEAR is a health check either way) and a DISCOVERY is "
                 f"proved value by value by huntlib.certificate.prove on "
-                f"V - 1 and V + 1, which have no structure here (rule 5h's "
+                f"each value less one and plus one, which have no structure "
+                f"here (rule 5h's "
                 f"exception: measured 12 of 12 to 1e40, re-measured by G10; "
-                f"certify_run); the ceiling is x < "
+                f"certify_run); the ceiling is {TERM} < "
                 f"{cpu.k_ceil(self.filter_n(), self.fam):.4g}")
 
     # ---------------------------------------------------------- checkpoint
@@ -918,7 +920,7 @@ class Campaign:
                  f"[{lo:.5g}, {lo + seg * self.eng.W:.5g}) {pct:.0f}%",
                  f"{self.oeis} filter n = {self.filter_n()}"]
         if rate:
-            parts.append(f"{rate:.3g} {TERM}/s")
+            parts.append(f"{rate:.3g} {TERM}-line/s")
         parts.append(census_str(self.census, CENSUS_FLOOR, self.frontier()))
         parts.append(f"finds {self.discoveries}")
         parts.append(f"survivors {self.survivors:,}")
@@ -964,10 +966,10 @@ class Campaign:
             ok, legs, _ = verify(k, run, self.fam, witness=False,
                                  n=self.eng.n)
             if not ok:
-                log("ALARM", f"NEAR value m = {k:,} run {run} failed "
+                log("ALARM", f"NEAR candidate {k:,} run {run} failed "
                              f"verification: {legs}")
                 raise SystemExit(2)
-            log("NEAR", f"run {run} at m = {k:,} (run-{run} "
+            log("NEAR", f"run {run} at the candidate {k:,} (run-{run} "
                         f"#{self.census[run]} of the campaign; verified) -- "
                         f"ONE condition short of a({frontier + 1})!")
             return False
@@ -1086,15 +1088,16 @@ class Campaign:
         self.pending = []
         log("STAGE",
             f"filter follows the frontier: n = {old.n} -> {self.eng.n} on the "
-            f"same x line -- one more condition, built from the term just "
+            f"same line of candidates -- one more condition, built from the "
+            f"term just "
             f"found; the wheel ({old.p1},{old.p2},{old.p3}) becomes "
-            f"({self.eng.p1},{self.eng.p2},{self.eng.p3}), the class x == "
-            f"{old.r0} (mod {old.unit}) becomes x == {self.eng.r0} (mod "
+            f"({self.eng.p1},{self.eng.p2},{self.eng.p3}), the forced class "
+            f"{old.r0} (mod {old.unit}) becomes {self.eng.r0} (mod "
             f"{self.eng.unit}), the depth {old.q2} becomes {self.eng.q2}, the "
             f"period {old.W:.4g} becomes {self.eng.W:.4g}, the segment "
             f"{old.seg_periods} -> {self.eng.seg_periods} periods on the "
             f"{'WIDE' if self.eng.wide else 'narrow'} survivor record; the "
-            f"sweep restarts at x = {self.x_start():,}, just above the find "
+            f"sweep restarts at {self.x_start():,}, just above the find "
             f"(the old filter never tested the new condition, so its sweep "
             f"past the find claims nothing); the ladder now aims at "
             f"a({self.filter_n()})")
@@ -1171,7 +1174,8 @@ class Campaign:
             want = max(1, math.ceil(m["need"] * POOL_MARGIN))
             inline = False
             how = (f"measured on {m['launches']} launches, {m['seconds']:.2f} "
-                   f"s of device at {m['rate']:.3g} k/s: {m['per_s']:,.0f} "
+                   f"s of device at {m['rate']:.3g} {TERM}-line/s: "
+                   f"{m['per_s']:,.0f} "
                    f"survivors/s x {1e6 * m['cost']:.1f} us = {m['need']:.2f} "
                    f"core-s per s, x{POOL_MARGIN:g} margin")
             cap = max(1, (os.cpu_count() or 2) - 1)
@@ -1262,7 +1266,7 @@ class Campaign:
         log("STAGE", device_report(self.eng.bytes_held()))
         cfg = self.eng.config()
         log("STAGE",
-            f"sweeping the x line to {target:.4g}; {self.oeis} "
+            f"sweeping the {TERM} line to {target:.4g}; {self.oeis} "
             f"({ref.FAMILIES[self.fam]['forms']}) filter n = "
             f"{self.filter_n()}; wheel W = {self.eng.W:,} at unit "
             f"{self.eng.unit} ({self.eng.R:,} residues, {self.eng.R1} x "
@@ -1272,7 +1276,7 @@ class Campaign:
             f"{self.eng.launches_per_segment} launches of "
             f"{cfg['cand_per_launch']:.3g} candidates ({cfg['nu']} "
             f"third-level residues x {cfg['tchunk']} first-level); resume at "
-            f"period {self.j}, launch {self.u} (k = "
+            f"period {self.j}, launch {self.u} ({TERM} = "
             f"{self.u_progress(self.j, self.u):,})")
         for n, qs in sorted(model.predictions(
                 self.fam, self.frontier(), self.frontier_k(),
@@ -1280,22 +1284,26 @@ class Campaign:
             log("STAGE", "  a(%d): %s" % (n, "  ".join(
                 "%s %.3g" % (q, v) for q, v in qs.items())))
         log("STAGE", "the heartbeat carries TWO numbers, and they are not "
-                     "the same claim: 'swept to' is the k below which EVERY "
-                     "value at or above K_START has been tested, and it "
+                     "the same claim: 'swept to' is the point on the a(n) "
+                     "line below which EVERY candidate above a(n-1) has "
+                     "been tested, and it "
                      "advances one whole wheel period (%.4g of line) at a "
                      "time; 'period N .. X%%' is progress THROUGH the period "
-                     "being worked, whose candidates arrive out of k order, "
+                     "being worked, whose candidates arrive out of numerical "
+                     "order, "
                      "so no part of it is clear until that reads 100%%."
                      % self.eng.W)
         log("STAGE", f"proofs: classification is a deterministic "
-                     f"Miller-Rabin proof below the proof crossing "
-                     f"k_proof({self.filter_n()}, {self.oeis}) = "
-                     f"{self.proof_crossing():.4g} and a thirteen-base strong "
+                     f"Miller-Rabin proof below the proof crossing of "
+                     f"{self.oeis} at filter n = {self.filter_n()}, {TERM} = "
+                     f"{self.proof_crossing():.4g} (clique_search.k_proof) "
+                     f"and a thirteen-base strong "
                      f"probable-prime chain above it; a DISCOVERY is proved "
                      f"value by value either way (certify_run: the "
                      f"deterministic test below the bound, "
-                     f"huntlib.certificate.prove on the unstructured V - 1 / "
-                     f"V + 1 above it), and the engine ceiling {target:.4g} "
+                     f"huntlib.certificate.prove on each unstructured value "
+                     f"less one / plus one above it), and the engine ceiling "
+                     f"{target:.4g} "
                      f"is where that was measured to succeed on 12 of 12 "
                      f"random primes (huntlib.ceiling.subproof_rate; G10)")
         self.check_proof_crossing(self.swept_k())
@@ -1360,7 +1368,8 @@ class Campaign:
                         f"complete: swept to {self.swept_k():,} "
                         f"(+{self.eng.seg_periods * self.eng.W:.4g} of "
                         f"line; {held} value{'' if held == 1 else 's'} at "
-                        f"run >= {CENSUS_FLOOR} classified in k order"
+                        f"run >= {CENSUS_FLOOR} classified in numerical "
+                        f"order"
                         + (f"; {self._plog_n} segments closed since the last "
                            f"such line" if self._plog_n > 1 else "") + ")")
                     self._plog_t, self._plog_n = time.time(), 0
@@ -2659,7 +2668,7 @@ def main(argv=None):
     ap.add_argument("--status", action="store_true",
                     help="read the checkpoint and say where the hunt is")
     ap.add_argument("--to", type=float, default=None,
-                    help="stop at this depth on the x line (default: the "
+                    help="stop at this depth on the a(n) line (default: the "
                          "engine ceiling, huntlib.ceiling.K_CEIL = 1e40 for "
                          "every family -- where certificates on these "
                          "unstructured values were measured to succeed)")

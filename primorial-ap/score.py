@@ -76,8 +76,8 @@ def main():
     if not fp_ok:
         return 1
     scoring.emit_score(rate, unit=1e6)
-    print(f"  (Mp/s of p-line, n = {BENCH_N}, sieve depth {BENCH_Q2}, "
-          f"{BENCH_SPAN:.3e} of line from p = {BENCH_BASE:.3e}, "
+    print(f"  (Mp1/s of p1-line, n = {BENCH_N}, sieve depth {BENCH_Q2}, "
+          f"{BENCH_SPAN:.3e} of line from p1 = {BENCH_BASE:.3e}, "
           f"fingerprint {FP_COUNT}/{FP_CHECKSUM})")
     return 0
 

@@ -239,8 +239,9 @@ def write_model_results(path=None):
     """model_results.json -- the predictions, stated BEFORE the run."""
     path = path or os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "model_results.json")
-    out = {"model": "Bateman-Horn over f_k(m) = m + b^k, k = 1..n; "
-                    "w(q,n,b) = min(n, ord_q(b)) (1 at q | b), proved in "
+    out = {"model": "Bateman-Horn over 4^k + m, k = 1..n (A130003) and "
+                    "k + 2^i, i = 1..n (A110096); w(q,n) = min(n, ord_q(4)) "
+                    "or min(n, ord_q(2)) (1 at q = 2), proved in "
                     "shiftladder_reference",
            "qmax": QMAX,
            "caveat": "the repo's first-occurrence models run late: 7 scored "
@@ -283,7 +284,7 @@ if __name__ == "__main__":
             print(("PASS " if ok else "FAIL ") + msg)
         out = write_model_results()
         for oeis, fam in sorted(out["families"].items()):
-            print("  %s (b = %d), frontier a(%d) = %d:"
+            print("  %s (base %d), frontier a(%d) = %d:"
                   % (oeis, fam["base"], fam["frontier"]["n"],
                      fam["frontier"]["m"]))
             for n, qs in sorted(fam["predictions"].items(), key=lambda x: int(x[0])):

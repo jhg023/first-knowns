@@ -1,7 +1,7 @@
 {
- "model": "Bateman-Horn over f_k(x) = (L(n)/k)*x + s, k = 1..n, with N = L(n)*x and L(n) = lcm(1..n); w(q,n) = floor(n/q^e) for q <= n and n for q > n, proved in lcml_reference and independent of the sign, so both families share one singular series",
+ "model": "Bateman-Horn over (N - k)/k (A078502) and (m + k)/k (A074200), k = 1..n, each written as (lcm(1..n)/k) times the quotient of the term by lcm(1..n), -+ 1; w(q,n) = floor(n/q^e) for q <= n and n for q > n, proved in lcml_reference and independent of the sign, so both families share one singular series",
  "qmax": 200000,
- "units": "every depth is in x at the stated filter; the published term is N = L(n)*x",
+ "units": "every depth is in the quotient of the term by lcm(1..n) at the stated filter (N/lcm(1..n) for A078502, m/lcm(1..n) for A074200); the published term is that quotient times lcm(1..n)",
  "caveat": "the repo's first-occurrence models run late: the ladder projects before this one landed their scored finds at about 1.9-2.5x their medians while every census showed the intensity right to a percent or two. Read every depth below as a floor and budget 2-3x the median.",
  "families": {
   "A078502": {

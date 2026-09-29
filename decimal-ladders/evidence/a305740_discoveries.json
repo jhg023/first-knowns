@@ -529,7 +529,7 @@
    "sibling_floor": {
     "value": 4300068765227462,
     "rests_on": "A153431(13) = 43000687652274618",
-    "why": "an x below it with run >= n would make 10x meet A153431's condition at index 13 below that term"
+    "why": "a k below it with run >= n would make m = 10k meet A153431's condition at index 13 below that term"
    }
   },
   "engine": "a305740-v1-p1-seg32-pbd224-cpl37w38",
@@ -904,7 +904,7 @@
    "sibling_floor": {
     "value": 594762951697529751,
     "rests_on": "A153431(14) = 5947629516975297508",
-    "why": "an x below it with run >= n would make 10x meet A153431's condition at index 14 below that term"
+    "why": "a k below it with run >= n would make m = 10k meet A153431's condition at index 14 below that term"
    }
   },
   "engine": "a305740-v1-p1-seg32-pbd224-cpl37w38",
@@ -1353,7 +1353,7 @@
    "sibling_floor": {
     "value": 74056070675659134790,
     "rests_on": "A153431(15) = 740560706756591347900",
-    "why": "an x below it with run >= n would make 10x meet A153431's condition at index 15 below that term"
+    "why": "a k below it with run >= n would make m = 10k meet A153431's condition at index 15 below that term"
    }
   },
   "engine": "a305740-v1-p1-seg32-pbd224-cpl37w38",
@@ -1846,7 +1846,7 @@
    "sibling_floor": {
     "value": 7699311781216114338744,
     "rests_on": "A153431(16) = 76993117812161143387438",
-    "why": "an x below it with run >= n would make 10x meet A153431's condition at index 16 below that term"
+    "why": "a k below it with run >= n would make m = 10k meet A153431's condition at index 16 below that term"
    }
   },
   "engine": "a305740-v1-p1-seg32-pbd224-cpl37w38",

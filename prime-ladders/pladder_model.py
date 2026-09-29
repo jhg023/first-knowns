@@ -249,10 +249,10 @@ def write_model_results(path=None):
     """model_results.json -- the predictions, stated BEFORE the run."""
     path = path or os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "model_results.json")
-    out = {"model": "Bateman-Horn over f_i(k) = prime(i)*k + s, i = 1..n; "
+    out = {"model": "Bateman-Horn over prime(i)*k +- 1, i = 1..n; "
                     "w(q,n) = #distinct residues of the first n primes mod "
                     "q (other than q), proved in pladder_reference and "
-                    "independent of s",
+                    "independent of the sign",
            "qmax": QMAX,
            "caveat": "the repo's first-occurrence models run late: 13 "
                      "scored finds across three ladder projects land at a "
@@ -295,7 +295,7 @@ if __name__ == "__main__":
             print(("PASS " if ok else "FAIL ") + msg)
         out = write_model_results()
         for oeis, fam in sorted(out["families"].items()):
-            print("  %s (s = %+d), frontier a(%d) = %d:"
+            print("  %s (sign %+d), frontier a(%d) = %d:"
                   % (oeis, fam["sign"], fam["frontier"]["n"],
                      fam["frontier"]["k"]))
             for n, qs in sorted(fam["predictions"].items(),

@@ -19,7 +19,11 @@ trust in this codebase. The shape:
 
 ```json
 {
+ "sequence": "A164926",
+ "forms": "x^2 + x + p, x = 0..n-1 (composite at x = n)",
  "p": 3744101869688673856367,
+ "oeis_terms": {"19": 3744101869688673856367},
+ "settles": [19],
  "run": 19,
  "values_prime_x": [0, 1, 2, ..., 18],
  "breaker_x": 19,
@@ -28,6 +32,14 @@ trust in this codebase. The shape:
 }
 ```
 
+- `sequence`, `forms`, `p`, `oeis_terms` -- the four fields every evidence
+  file in this repository opens with (CONVENTIONS.md "Naming in an
+  evidence file"), in A164926's own letters: the term is the prime p, the
+  polynomial's variable is x, and the index n is the length of the run.
+  `p` is the integer to submit and `oeis_terms` says where it goes:
+  `{"19": p}` reads "a(19) = p".
+- `settles`, `run` -- the index this p settles and its run: x^2 + x + p is
+  prime for exactly `run` consecutive x from 0, so `run` is that n.
 - `values_prime_x` -- the x for which x^2 + x + p is claimed prime (a
   run of exactly `run` consecutive primes from x = 0).
 - `breaker_x` / `breaker` / `breaker_factor` -- the value that ends the

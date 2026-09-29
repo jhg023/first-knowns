@@ -19,8 +19,13 @@ none of the rest is here, by rule.
 
 Each file carries, for one find:
 
-- `p`, `n`, and the exact `difference` P(n) = A002110(n);
-- all `n` `values` as exact integers;
+- `sequence`, `forms` (`p1 + (k-1)*prime(n)#, k = 1..n`, in the letters
+  of A053647's own program) and `oeis_terms` — the header every record
+  opens with; `oeis_terms` is literally what to submit, `{"16": p1}`
+  reading "a(16) = p₁";
+- `p1`, the term p₁ = a(n) (A053647's own program writes the progression
+  p[1], …, p[n]), `n`, and the exact `difference` prime(n)# = A002110(n);
+- all `n` `values` p₁ + (k−1)·prime(n)#, k = 1..n, as exact integers;
 - `legs` — the three independent confirmations and what each returned;
 - `proofs` — a primality proof for every value (`deterministic-mr` below
   3.317×10²⁴, otherwise a BLS75 certificate that `huntlib.certificate.verify`
@@ -29,6 +34,7 @@ Each file carries, for one find:
   deep — because a(n) asks for *at least* n values, and `values` lists the
   n the term requires;
 - `chain_breaker` and its factor witness, so the chain length is checkable
-  with one multiplication; the breaker sits at `depth`, not at `n`;
-- `swept_from` / `swept_to` and the engine `config`, which is what the
-  least-claim rests on.
+  with one multiplication; the breaker is p₁ + `depth`·prime(n)#, the
+  value just past the chain's true end, not p₁ + n·prime(n)#;
+- `swept_from` / `swept_to` (the contiguous range of p₁ swept) and the
+  engine `config`, which is what the least-claim rests on.

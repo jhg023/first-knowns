@@ -39,10 +39,15 @@ three.
 Each file is meant to be checkable by anyone with a bignum library and no
 trust in this repository. It carries:
 
+- `sequence`, `forms` (`k*prime(i) + 1, i = 1..n` for A084700,
+  `k*prime(i) - 1, i = 1..n` for A084701 — the entries' own letters) and
+  `oeis_terms` — the header every record opens with; `oeis_terms` is
+  literally what to submit, `{"18": k}` reading "a(18) = k";
 - `k`, `sign` and `run` — the claim, which family it belongs to, and how
   far the run reaches;
-- `values` — every `prime(i)·k + s` for `i = 1..run`, written out in full,
-  so the primality claims can be re-tested directly;
+- `values` — every value, `prime(i)·k + 1` in an A084700 file and
+  `prime(i)·k − 1` in an A084701 one, for `i = 1..run`, written out in
+  full, so the primality claims can be re-tested directly;
 - `certificates` — one per value, each **re-verified from scratch before
   it is written**. Under huntlib's deterministic Miller-Rabin bound
   (`3.317×10²⁴`) a certificate is that deterministic Miller-Rabin test itself
@@ -51,10 +56,10 @@ trust in this repository. It carries:
   largest A084701 value, `61·k − 1` of its `a(18)`, is `1.4×10²⁴`, under
   the bound. Past the bound an A084700 value carries a BLS75
   Theorem 1 certificate (`bls75-thm1`): the complete factorization of
-  `N − 1 = prime(i)·k` into primes each under the bound, and a witness
-  `a_p` per prime factor satisfying the two Pocklington conditions
-  (huntlib.certificate). The `a(18)` file is the first to need it: its
-  values from `i = 5` on exceed the bound, so it carries four
+  the value less one, `prime(i)·k`, into primes each under the bound, and
+  a witness `a_p` per prime factor satisfying the two Pocklington
+  conditions (huntlib.certificate). The `a(18)` file is the first to need
+  it: its values from `i = 5` on exceed the bound, so it carries four
   `deterministic-mr` certificates and fourteen `bls75-thm1` ones, all on
   the one factorization of `k`. `certificates_verified`, `unproved` and
   `proof_routes` in the file say whether every value was proved and by

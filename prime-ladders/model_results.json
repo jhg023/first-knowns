@@ -1,5 +1,5 @@
 {
- "model": "Bateman-Horn over f_i(k) = prime(i)*k + s, i = 1..n; w(q,n) = #distinct residues of the first n primes mod q (other than q), proved in pladder_reference and independent of s",
+ "model": "Bateman-Horn over prime(i)*k +- 1, i = 1..n; w(q,n) = #distinct residues of the first n primes mod q (other than q), proved in pladder_reference and independent of the sign",
  "qmax": 200000,
  "caveat": "the repo's first-occurrence models run late: 13 scored finds across three ladder projects land at a pooled optimism factor of 1.92x [1.12, 3.60] while every census showed the intensity right to a percent or two. Read every depth below as a floor and budget 2-3x the median.",
  "families": {

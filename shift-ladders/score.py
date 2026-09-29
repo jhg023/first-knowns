@@ -151,7 +151,8 @@ def main():
         # candidates, not residues: the bit-plane wheel keeps only d2 of the
         # flat table's residues, so R alone would overstate this by 100x
         cand = rate_m * eng.density()
-        print(f"benchmark {label}: {rate_m:.3e} m/s over "
+        print(f"benchmark {label}: {rate_m:.3e} "
+              f"{shiftladder_reference.FAMILIES[b]['term']}/s over "
               f"[{j0 * eng.W:.4e}, +{line:.4e}) "
               f"({cand:.3e} candidates/s, base {b}, filter "
               f"n={n}, wheel <={p1}+planes<={eng.p2} W={eng.W}, sieve {q2}, "

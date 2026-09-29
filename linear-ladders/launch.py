@@ -1,5 +1,5 @@
-"""The campaign for the linear ladders -- least k with m*k + s prime for
-every multiplier m of a family at index n.
+"""The campaign for the linear ladders -- the least term with multiplier*term
++- 1 prime for every multiplier of a family at index n.
 
     python launch.py --selftest            the full gate battery (must end ALL GREEN)
     python launch.py                       the hunt: indefinite, resumable (A088250)
@@ -676,16 +676,20 @@ class Campaign:
         if k >= pc:
             self._proof_logged = self.filter_n()
             log("MILESTONE",
-                f"past the proof crossing k_proof({self.filter_n()}, "
-                f"{self.oeis}) = {pc:.4g}: {ref.rung(self.fam, self.filter_n())}"
-                f"*k {self.s:+d} now exceeds the deterministic Miller-Rabin "
+                f"past the proof crossing at filter n = {self.filter_n()} of "
+                f"{self.oeis}, {ref.FAMILIES[self.fam]['term']} = {pc:.4g}: "
+                f"{ref.rung(self.fam, self.filter_n())}"
+                f"*{ref.FAMILIES[self.fam]['term']} {self.s:+d} now exceeds "
+                f"the deterministic Miller-Rabin "
                 f"bound, so classification is a thirteen-base strong "
                 f"probable-prime chain from here (the census is counted and "
                 f"a NEAR is a health check either way) and a DISCOVERY is "
                 f"proved by BLS75 certificate on "
-                f"{'N - 1' if self.s > 0 else 'N + 1'} = m*k "
+                f"{'N - 1' if self.s > 0 else 'N + 1'} = "
+                f"{ref.FAMILIES[self.fam]['oeis_forms'].split()[0]} "
                 f"({'Theorem 1' if self.s > 0 else 'Theorem 15, Lucas'}; "
-                f"certify_run); the ceiling is k < "
+                f"certify_run); the ceiling is "
+                f"{ref.FAMILIES[self.fam]['term']} < "
                 f"{cpu.k_ceil(self.filter_n(), self.fam):.4g}")
 
     # ---------------------------------------------------------- checkpoint
@@ -800,7 +804,7 @@ class Campaign:
                  f"[{lo:.5g}, {lo + seg * self.eng.W:.5g}) {pct:.0f}%",
                  f"{self.oeis} filter n = {self.filter_n()}"]
         if rate:
-            parts.append(f"{rate:.3g} k/s")
+            parts.append(f"{rate:.3g} {ref.FAMILIES[self.fam]['term']}/s")
         parts.append(census_str(self.census, CENSUS_FLOOR, self.frontier()))
         parts.append(f"finds {self.discoveries}")
         parts.append(f"survivors {self.survivors:,}")
@@ -845,10 +849,12 @@ class Campaign:
             self.near += 1
             ok, legs, _ = verify(k, run, self.fam)
             if not ok:
-                log("ALARM", f"NEAR value k = {k:,} run {run} failed "
+                log("ALARM", f"NEAR value {ref.FAMILIES[self.fam]['term']} = "
+                             f"{k:,} run {run} failed "
                              f"verification: {legs}")
                 raise SystemExit(2)
-            log("NEAR", f"run {run} at k = {k:,} (run-{run} "
+            log("NEAR", f"run {run} at {ref.FAMILIES[self.fam]['term']} = "
+                        f"{k:,} (run-{run} "
                         f"#{self.census[run]} of the campaign; verified) -- "
                         f"ONE condition short of a({frontier + 1})!")
             return False
@@ -857,14 +863,16 @@ class Campaign:
 
     def record_discovery(self, k, run):
         frontier = self.frontier()
-        self.hb.doing(f"verifying run-{run} k={k}")
+        self.hb.doing(f"verifying run-{run} "
+                      f"{ref.FAMILIES[self.fam]['term']}={k}")
         ok, legs, stop = verify(k, run, self.fam)
         if not ok:
             log("ALARM", f"claimed a({frontier+1}) = {k} failed the "
                          f"protocol: {legs}")
             raise SystemExit(2)
         settles = list(range(frontier + 1, run + 1))
-        self.hb.doing(f"certifying run-{run} k={k}")
+        self.hb.doing(f"certifying run-{run} "
+                      f"{ref.FAMILIES[self.fam]['term']}={k}")
         certs, unproved = certify_run(k, run, self.fam)
         routes = {}
         for c in certs.values():
@@ -916,9 +924,9 @@ class Campaign:
         lines = [
             f"{self.oeis} a({settles[0]}) = {k:,}" if len(settles) == 1 else
             f"{self.oeis} a({settles[0]})..a({settles[-1]}) = {k:,}",
-            f"run {run}: {ref.FAMILIES[self.fam]['forms'].split(',')[0]} is "
+            f"run {run}: {ref.FAMILIES[self.fam]['oeis_forms'].split(',')[0]} is "
             f"prime for every multiplier up to {ref.rung(self.fam, run)}",
-            f"stopped by {ref.rung(self.fam, stop['i'])}*k {self.s:+d} = "
+            f"stopped by {ref.rung(self.fam, stop['i'])}*{term} {self.s:+d} = "
             f"{stop['value']:,} = {stop['factor']} * ...",
             f"verified 3 ways, {proved} of {len(certs)} certificates "
             f"re-verified ({', '.join(f'{r} x{c}' for r, c in sorted(routes.items()))}), "
@@ -929,7 +937,8 @@ class Campaign:
                          + (f" (open at {a['open_at']})" if a.get("open_at")
                             else ""))
         if unproved:
-            lines.append(f"UNPROVED at i = {unproved}: those values passed "
+            lines.append(f"UNPROVED at the multiplier indices {unproved}: "
+                         f"those values passed "
                          f"the Miller-Rabin chain and BPSW but no certificate "
                          f"landed within the bounded effort -- the find "
                          f"stands on the three legs; certify them by hand "
@@ -1026,7 +1035,8 @@ class Campaign:
             want = max(1, math.ceil(m["need"] * POOL_MARGIN))
             inline = False
             how = (f"measured on {m['launches']} launches, {m['seconds']:.2f} "
-                   f"s of device at {m['rate']:.3g} k/s: {m['per_s']:,.0f} "
+                   f"s of device at {m['rate']:.3g} "
+                   f"{ref.FAMILIES[self.fam]['term']}/s: {m['per_s']:,.0f} "
                    f"survivors/s x {1e6 * m['cost']:.1f} us = {m['need']:.2f} "
                    f"core-s per s, x{POOL_MARGIN:g} margin")
             cap = max(1, (os.cpu_count() or 2) - 1)
@@ -1117,8 +1127,9 @@ class Campaign:
         log("STAGE", device_report(self.eng.bytes_held()))
         cfg = self.eng.config()
         log("STAGE",
-            f"sweeping the k line to {target:.4g}; {self.oeis} "
-            f"({ref.FAMILIES[self.fam]['forms']}) filter n = "
+            f"sweeping the {ref.FAMILIES[self.fam]['term']} line to "
+            f"{target:.4g}; {self.oeis} "
+            f"({ref.FAMILIES[self.fam]['oeis_forms']}) filter n = "
             f"{self.filter_n()}; wheel W = {self.eng.W:,} at unit "
             f"{self.eng.unit} ({self.eng.R:,} residues, {self.eng.R1} x "
             f"{self.eng.R2} x {self.eng.R3}, {100.0 * self.eng.density():.6f}% "
@@ -1127,7 +1138,8 @@ class Campaign:
             f"{self.eng.launches_per_segment} launches of "
             f"{cfg['cand_per_launch']:.3g} candidates ({cfg['nu']} "
             f"third-level residues x {cfg['tchunk']} first-level); resume at "
-            f"period {self.j}, launch {self.u} (k = "
+            f"period {self.j}, launch {self.u} "
+            f"({ref.FAMILIES[self.fam]['term']} = "
             f"{self.u_progress(self.j, self.u):,})")
         for n, qs in sorted(model.predictions(
                 self.fam, self.frontier(), self.frontier_k(),
@@ -1135,21 +1147,26 @@ class Campaign:
             log("STAGE", "  a(%d): %s" % (n, "  ".join(
                 "%s %.3g" % (q, v) for q, v in qs.items())))
         log("STAGE", "the heartbeat carries TWO numbers, and they are not "
-                     "the same claim: 'swept to' is the k below which EVERY "
-                     "value at or above K_START has been tested, and it "
+                     "the same claim: 'swept to' is the depth of the term "
+                     "below which EVERY candidate at or above K_START has "
+                     "been tested, and it "
                      "advances one whole wheel period (%.4g of line) at a "
                      "time; 'period N .. X%%' is progress THROUGH the period "
-                     "being worked, whose candidates arrive out of k order, "
+                     "being worked, whose candidates do not arrive in order "
+                     "of the term, "
                      "so no part of it is clear until that reads 100%%."
                      % self.eng.W)
         log("STAGE", f"proofs: classification is a deterministic "
-                     f"Miller-Rabin proof below the proof crossing "
-                     f"k_proof({self.filter_n()}, {self.oeis}) = "
+                     f"Miller-Rabin proof below the proof crossing at filter "
+                     f"n = {self.filter_n()} of {self.oeis}, "
+                     f"{ref.FAMILIES[self.fam]['term']} = "
                      f"{self.proof_crossing():.4g} and a thirteen-base strong "
                      f"probable-prime chain above it; a DISCOVERY is proved "
                      f"by certificate either way (certify_run: BLS75 "
                      f"{'Theorem 1 on N - 1' if self.s > 0 else 'Theorem 15 on N + 1'}"
-                     f" = m*k, k factored once, subproofs for factors past "
+                     f" = {ref.FAMILIES[self.fam]['oeis_forms'].split()[0]}, "
+                     f"{ref.FAMILIES[self.fam]['term']} factored once, "
+                     f"subproofs for factors past "
                      f"the bound), and the engine ceiling {target:.4g} is "
                      f"where a worst-case certificate was measured to cost "
                      f"seconds (huntlib.ceiling)")
@@ -1207,7 +1224,8 @@ class Campaign:
                         f"complete: swept to {self.swept_k():,} "
                         f"(+{self.eng.seg_periods * self.eng.W:.4g} of "
                         f"line; {held} value{'' if held == 1 else 's'} at "
-                        f"run >= {CENSUS_FLOOR} classified in k order"
+                        f"run >= {CENSUS_FLOOR} classified in order of "
+                        f"{ref.FAMILIES[self.fam]['term']}"
                         + (f"; {self._plog_n} segments closed since the last "
                            f"such line" if self._plog_n > 1 else "") + ")")
                     self._plog_t, self._plog_n = time.time(), 0
@@ -1235,7 +1253,8 @@ class Campaign:
             if self.pool is not None:
                 self.pool.shutdown(wait=False, cancel_futures=True)
         landed = self.save()
-        log("STAGE", f"campaign stopped at k = {self.swept_k():,} "
+        log("STAGE", f"campaign stopped at "
+                     f"{ref.FAMILIES[self.fam]['term']} = {self.swept_k():,} "
                      f"({self.discoveries} find(s) this campaign; checkpoint "
                      f"{'written' if landed else 'DEFERRED -- held open'})")
         return 0
@@ -1247,7 +1266,8 @@ class Campaign:
         if self.save_boundary():
             return (f"checkpoint written at the last classified launch: "
                     f"period {int(snap['j'])}, u = {int(snap['u'])}, swept "
-                    f"to k = {int(snap['k']):,} ({self.ckpt})")
+                    f"to {ref.FAMILIES[self.fam]['term']} = "
+                    f"{int(snap['k']):,} ({self.ckpt})")
         return (f"{self.ckpt} is held open by another process, so THIS "
                 f"boundary (period {int(snap['j'])}, u = {int(snap['u'])}) "
                 f"was not written; the run resumes from the last save that "
@@ -2143,7 +2163,7 @@ def _status(fam):
         front = max(front, int(n))
     log("STATUS", "  ".join([
         f"{fam}",
-        f"swept to k = {int(st['k']):,}",
+        f"swept to {ref.FAMILIES[fam]['term']} = {int(st['k']):,}",
         f"work cursor period {int(st['j'])} u = {int(st.get('u', 0))}",
         f"filter n = {front + 1}",
         census_str(cen, CENSUS_FLOOR, front),
@@ -2161,7 +2181,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--family", default="A088250",
                     help="which sequence to hunt: " +
-                         ", ".join(f"{f} ({ref.FAMILIES[f]['forms']})"
+                         ", ".join(f"{f} ({ref.FAMILIES[f]['oeis_forms']})"
                                    for f in ref.FAMILIES) +
                          "; A202778 and A202779 are aliases of A088250 and "
                          "A088651, whose exact-run versions they are "
@@ -2171,7 +2191,7 @@ def main(argv=None):
     ap.add_argument("--status", action="store_true",
                     help="read the checkpoint and say where the hunt is")
     ap.add_argument("--to", type=float, default=None,
-                    help="stop at this depth on the k line (default: the "
+                    help="stop at this depth on the term's line (default: the "
                          "engine ceiling, huntlib.ceiling.K_CEIL = 1e40 for "
                          "every family -- where a worst-case certificate per "
                          "discovery was measured to cost seconds)")
@@ -2216,7 +2236,8 @@ def main(argv=None):
     _POLICIES[args.family].refuse_mismatch(
         fresh=args.fresh,
         describe=lambda st: (f"period {st.get('j')}, u = {st.get('u')}, "
-                             f"swept to k = {st.get('k')}"))
+                             f"swept to {ref.FAMILIES[args.family]['term']} = "
+                             f"{st.get('k')}"))
     if args.fresh:
         for p in (ckpt_path(args.family), ckpt_path(args.family) + ".bak"):
             if os.path.exists(p):

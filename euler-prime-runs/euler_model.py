@@ -128,7 +128,7 @@ def main():
         print(("PASS " if good else "FAIL ") + msg)
         ok = ok and good
     pr = predictions(m)
-    print("\npredictions (E[hits <= P], P(at least one)):")
+    print("\npredictions per depth p (E[hits <= p], P(at least one)):")
     for n, row in pr.items():
         cells = "  ".join(f"{k}:{v[0]:.2f}/{v[1]:.2f}" if isinstance(v, tuple)
                           else f"{k} {v}" for k, v in row.items())
