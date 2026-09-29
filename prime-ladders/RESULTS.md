@@ -291,3 +291,11 @@ runs `n = 19` at `1.2×10¹⁹ k/s`, twice the `n = 18` rate
 
 The odds model's pre-run predictions are in [README.md](README.md#the-odds-model)
 and `model_results.json`.
+
+## The OEIS entries
+
+Nothing is submitted from inside the pipeline (CLAUDE.md rule 5); the owner
+submitted these. The 2026-09-29 export of A084700 lists `a(14)` through
+`a(18)`, and of A084701 `a(12)` through `a(18)`, all twelve equal to the
+integers in the evidence files, entered Sep 03 2026; both entries link this
+repository.

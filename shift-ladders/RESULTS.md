@@ -81,14 +81,19 @@ was `4,364×`. The certificates still read `deterministic-mr` throughout
 values (`4^k + m` on A130003, `k + 2^i` on A110096), the certificates and
 the factor witnesses are in [`evidence/`](evidence/).
 
-Nothing has been submitted anywhere. These are records; what happens to
-them is the owner's decision (CLAUDE.md rule 5).
+Nothing is submitted from inside the pipeline: these are records, and what
+happens to them is the owner's decision (CLAUDE.md rule 5). The owner has
+since submitted them — the 2026-09-29 export lists A130003's `a(19)`,
+`a(20)`, `a(21)` and A110096's `a(17)`, `a(18)`, `a(19)`, each equal to the
+integer in its evidence file, entered Sep 01 2026, and both entries link
+this repository.
 
 ## The frontier
 
 | | A130003 (base 4) | A110096 (base 2) |
 |---|---|---|
-| Last published term | `a(18) = 1,158,174,141,556,287` | `a(16) = 143,924,005,810,811,655` |
+| Last published term, before this project | `a(18) = 1,158,174,141,556,287` | `a(16) = 143,924,005,810,811,655` |
+| In the OEIS now | through `a(21)` (entered Sep 01 2026) | through `a(19)` (entered Sep 01 2026) |
 | Found by | Jens Kruse Andersen, **Jun 08 2007** | Bert Dobbelaere, Apr 24 2021 |
 | Searched-empty bound inherited | none — the frontier was the term itself | none |
 | **Found here** | `a(19)`, `a(20)`, `a(21)` | `a(17)`, `a(18)`, `a(19)` |
@@ -98,7 +103,7 @@ them is the owner's decision (CLAUDE.md rule 5).
 Neither entry carried a published bound of any kind, so the floor for each
 term was monotonicity alone — which is free, because the conditions nest:
 `a(n+1) ≥ a(n)`. The OEIS export was re-pulled on 2026-08-26 and both
-entries still end where they did: eighteen terms and sixteen.
+entries still ended where they did: eighteen terms and sixteen.
 
 Each of the old frontier terms stops at exactly one composite, and gate G1
 asserts both on every run:

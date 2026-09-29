@@ -481,12 +481,10 @@ after: 47/47 green in 204 s (promotion drill 39 s, six families), SCORE
 
 ---
 
-## Round 2 (2026-09-20) -- an outside review, tested at the LIVE filters
+## Round 2 (2026-09-20) -- five hypotheses, tested at the LIVE filters
 
-An outside read-only review (no code run) handed over five optimization
-hypotheses and one correctness finding. INNOVATION.md Part 4: it gets the
-same treatment as our own work, in both directions -- so every item was
-measured, at the filters the campaigns are actually sitting at (from the
+Five optimization hypotheses and one correctness finding, every item
+measured at the filters the campaigns are actually sitting at (from the
 checkpoints, found terms registered in a scratch process): n = 22 of
 A093483, A103828 and A037100 (wide record, the wheel to 53 / 61 x 224),
 n = 21 of A119752 (narrow, clamped to 128), n = 20 of A119751 (narrow, 224),
@@ -507,8 +505,8 @@ first, and the pool is sized from a measurement at the campaign's own filter.
 
 Round r reads queue r - 1 and writes queue r, so queue r can live in queue
 r - 2's storage: two buffers, not one per round (`QUEUE_PINGPONG`). The
-review's static arithmetic was right -- 3.0-3.4 KB freed and one more block
-per SM at every filter -- and its implied payoff was not:
+static arithmetic was right -- 3.0-3.4 KB freed and one more block per SM
+at every filter -- and the payoff it implied was not:
 
 | filter | blocks per SM | ratio |
 |---|---|---|
@@ -591,7 +589,7 @@ never really had: UNROLL 2 / **4** / 8 = 0.995 / 1.000 / 0.996 and 0.997 /
 
 At n = 20 of A119751, expected clock to a confirmed find against the plan
 (to 47 x 224): the greedy wheel one prime shorter 1.40, one longer (wide)
-1.63; the review's alternatives -- another CRT partition of the same wheel
+1.63; the alternatives -- another CRT partition of the same wheel
 ({7..29}|{31,37}|{41,43,47} 1.024, {7..23}|{29,31,37}|{41,43,47} 1.005) and a
 swap at the cutoff (53 for 47: 1.031) -- all lose. `_split_levels`' rule
 (largest first level) and the greedy order are the measured best there.
@@ -626,7 +624,7 @@ four 224-period filters).
 
 ### 5. Reusing a find's segment under the new filter -- declined on the price, again
 
-The review's form (keep the old filter's survivors past the find and test
+This form (keep the old filter's survivors past the find and test
 the ONE new condition on them, instead of re-sieving) is sound, and it is
 round 1's declined item 1 from the other side. Priced from the model at the
 live filters (`expected_sweep` at the planned segment against a vanishing

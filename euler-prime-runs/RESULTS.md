@@ -99,8 +99,9 @@ run 13/14/15/16 = 107/60/19/15. Not found: any run ≥ 19 (the model
 gave 18% odds within the cap; E = 0.20 was spent, so the a(19) search
 resumes from here with conditional median at ≈ 2.6×10²⁰).
 
-Planned next: one consolidated OEIS update (new terms + the new
-exhaustive search bound superseding the entry's 2009 comment).
+Planned then: one consolidated OEIS update (new terms + the new
+exhaustive search bound superseding the entry's 2009 comment). What the
+entry says now is under "The OEIS entry" at the end of this page.
 
 ## A164926(21) = 234,505,015,943,235,329,417 — settled
 
@@ -355,7 +356,20 @@ here at the realized end-to-end rate, so a(20) is reachable by this engine
 but is a multi-week run rather than an overnight one — and the first thing
 worth doing to it is not on the GPU (OPTIMIZATION_LOG.md § Phase 7).
 
-Planned next: one consolidated OEIS update — the new terms a(17), a(18),
+Planned then: one consolidated OEIS update — the new terms a(17), a(18),
 a(19), the a(21) settlement, and the exhaustive search bound superseding
 the entry's 2009 comment. That is a human decision and is not automated
 (CONVENTIONS.md: discoveries are records, not announcements).
+
+## The OEIS entry
+
+Checked against the 2026-09-29 export of A164926. The entry now lists
+a(17), a(18) and a(19), each equal to the integer in this project's
+evidence file. a(17) and a(18) are entered from Andrew R. Epstein
+(Aug 09 2026), with his comment that a(19) and a(20) both exceed
+1.8×10¹⁹; a(19) is entered from this project (Aug 18 2026), and the entry
+links this repository. a(21) = 234,505,015,943,235,329,417 remains the
+2009 comment crediting Waldvogel and Leikauf — it cannot enter the data
+while a(20) is unknown — and neither this project's settlement of it as
+the least run-21 prime nor the searched-empty bound a(20) > 3.744×10²¹ is
+in the entry.

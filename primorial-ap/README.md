@@ -29,6 +29,10 @@ its evidence file before publication; and all 51 of their values are
 deterministic Miller–Rabin bound. The exact integers, factor witnesses and
 verification records are in [RESULTS.md](RESULTS.md).
 
+**In the OEIS** (checked against the 2026-09-29 export): A053647 now lists
+a(16), a(17) and a(18), each equal to the integer in this project's
+evidence file, entered Aug 21 2026, and the entry links this repository.
+
 **Status: PAUSED — open to others.** The campaign stopped on the a(18)
 find and is left resumable at the floor of the **a(19)** sweep: model
 median 4.12×10¹⁷, about **23 days** on one 4090, and the first term whose

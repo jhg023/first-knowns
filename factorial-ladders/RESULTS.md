@@ -364,3 +364,12 @@ before the campaign is offered there).
 
 Where each campaign stands is read with `python launch.py --status` and
 `python launch.py --status --family A177014`, which touch nothing.
+
+## The OEIS entries
+
+Nothing is submitted from inside the pipeline (CLAUDE.md rule 5); the owner
+submitted these. The 2026-09-29 export of A177013 and of A177014 lists
+a(11) through a(18), all sixteen equal to the integers in the evidence
+files, entered Sep 18 2026, and both entries link this repository.
+A226935 still ends at a(10): its a(11)–a(18), in `also_settles` of the
+A177014 evidence files, are not yet entered.

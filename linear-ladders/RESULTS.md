@@ -923,3 +923,16 @@ draws are noisy over three orders of magnitude, exactly as the census
 says. That is the whole claim the odds model makes, and it is the reason
 the nine-hour probabilities above are worth acting on — and the reason
 each is a floor, not a schedule.
+
+## The OEIS entries
+
+Nothing is submitted from inside the pipeline (CLAUDE.md rule 5); the owner
+submitted these. The 2026-09-29 export lists all twenty-eight terms, each
+equal to the integer in its evidence file: A088250 `a(15)`–`a(18)`,
+A088651 `a(16)`–`a(18)` and A125838 `a(15)`–`a(19)` entered Sep 10 2026;
+A125839 `a(16)`–`a(20)`, A164325 `a(16)`–`a(18)`, A164326 `a(15)`–`a(18)`
+and A173750 `a(16)`–`a(19)` entered Sep 13 2026; every one of the seven
+entries links this repository. The derived entries still end where they
+did — A202778 at `a(14)`, A071576 at `a(14)`, A202779 at `a(15)` — so this
+project's `a(15)`–`a(18)`, `a(15)`–`a(18)` and `a(16)`–`a(18)` of them, in
+`also_settles` of the evidence files, are not yet entered.

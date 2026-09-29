@@ -347,3 +347,11 @@ before the run and stays as the record.
 Where each campaign stands is read with `python launch.py --status --family
 A305740` and `python launch.py --status --family A153431`, which touch
 nothing.
+
+## The OEIS entries
+
+None of the nine terms is entered yet: the 2026-09-29 export still ends
+A305740 at a(12) and A153431 at a(13). Nothing is submitted from inside the
+pipeline (CLAUDE.md rule 5); `oeis_terms` in each evidence file is what to
+submit, and A305740 a(16) = A153431 a(15)/10 is worth a comment on both
+entries when they are.

@@ -35,8 +35,11 @@ bound of 3.317×10²⁴, the primality of all 51 values is **proved**, not
 asserted probabilistically (gate `g10` pins the crossing; a(19) is where it
 goes away).
 
-These are **candidates for OEIS in the repository owner's hands, not
-submissions**: the pipeline records, humans decide (CLAUDE.md rule 5).
+The pipeline records and humans decide (CLAUDE.md rule 5): these were
+candidates in the repository owner's hands, and they are now in the OEIS.
+The 2026-09-29 export of A053647 lists a(16), a(17) and a(18), each equal
+to the integer in its evidence file, entered Aug 21 2026, and the entry
+links this repository.
 
 ## A053647(16) = 116,781,362,669,989
 

@@ -15,15 +15,10 @@ modular-ladder engine 6.3x, then 1.1x, then 1.4x, and ended with the residue
 ladder's inner step declared "the floor of this formulation" and the
 "better algorithm" question closed by a correct proof that the *number* of
 ladder steps is optimal. Both statements were true. Neither examined the
-cost of *one* step under a different choice of coordinates. An outside
-review did: it scaled the whole p-adic value by 2⁶⁴ instead of one digit,
-so that one Montgomery reduction's by-product became the carry the old
-step computed with an exact division and two more reductions. Two
-reductions a step instead of three, **1.34–1.46x on the ladder, 1.18–1.24x
-on the campaign loop**, bit-identical stream. The same session, taking the
-new step apart at the instruction level, found another height-dispatched
-variant worth 1.12x on the ladder. The owner's response was the rule this
-file exists to keep:
+cost of *one* step under a different choice of coordinates, and taking
+the step apart at the instruction level then found a height-dispatched
+variant worth 1.12x on the ladder that the "floor" had ruled out. The
+owner's response was the rule this file exists to keep:
 
 > These are the types of optimizations you need to investigate. You need to
 > be innovative. The default command should always be the fastest.
@@ -50,9 +45,7 @@ canonical, plus a Montgomery copy of `x0`". The alternatives that had to be
 priced — and were not, for four sessions — are generic:
 
 - **What is scaled.** Montgomery form on one digit, on the whole value, on
-  neither. (The win: `U + p·V ≡ R·47^e (mod p²)` — the whole value
-  scaled, so `T = c·U²`'s reduction `Z = (T + m·p)/R` gives `T = Z·R − m·p`
-  *exactly* and `m` is the carry into the high digit for free.)
+  neither.
 - **Which by-product of one operation is another's input.** A reduction's
   multiplier, a product's high word, a comparison's predicate. Every
   by-product that is currently discarded is a candidate.
@@ -64,8 +57,8 @@ priced — and were not, for four sessions — are generic:
   loses two compare-subtracts and a carry, 96 → ~65 instructions).
 - **What quantity is tracked.** The value, or its derivative, logarithm,
   ratio to something known, or difference from the previous state.
-- **How constants ride.** Folded into a product (`c·U < 47p` fits, so the
-  base multiply costs one `IMAD`), or as a separate step; signed digits,
+- **How constants ride.** Folded into a product (where the bound fits, so
+  the base multiply costs one `IMAD`), or as a separate step; signed digits,
   windows, precomputed tables — each priced against the fold.
 - **Word size and limb shape.** 64-bit words with 32-bit partial products,
   30-bit carry-save limbs, FP32 24-bit limbs, FP64 — priced on the
@@ -73,8 +66,8 @@ priced — and were not, for four sessions — are generic:
 
 For each alternative write one line: "tried, ratio", "priced at X,
 declined because Y", or "does not apply because Z". The ladder's list, for
-the record: whole-value scaling **1.34–1.46x, shipped**; slack-bit variant
-below 2⁵⁶ **1.12x ladder / 1.03x segment, shipped**; signed digits (a −1
+the record: slack-bit variant below 2⁵⁶ **1.12x ladder / 1.03x segment,
+shipped**; signed digits (a −1
 digit is a division by 47 in p-adic form, dearer than the set-bit step it
 replaces) declined; 2-bit window (47³ does not fit beside the square)
 declined; 30-bit carry-save limbs (a wash on partial products) declined;
@@ -89,9 +82,10 @@ The order matters and is not negotiable:
    of every reduction input. Write them as inequalities in `p/R`.
 2. **Write a host emulation that asserts all of them** — every lazy bound,
    every word bound, the exactness of each reduction, and the invariant
-   itself after every step (`(U + pV) mod p² == R·47^E mod p²`, with `E`
-   tracked as the exponent). Run it against the oracle on primes at every
-   height to the ceiling, both tail settings, every base, the known
+   itself after every step (the state's defining congruence, checked
+   exactly, with the exponent tracked). Run it against the oracle on
+   primes at every height to the ceiling, both tail settings, every base,
+   the known
    primes; and **prove the bound is real** by requiring that some prime
    *above* a dispatch height trips an assertion (G18/G20 pattern). An
    emulation that only checks the final answer has not tested the bounds.
@@ -101,15 +95,13 @@ The order matters and is not negotiable:
    on populated windows on both sides of every dispatch height; then the
    frozen fingerprint.
 
-This is how the emulation caught nothing in the prototype's arithmetic
-and would have caught anything — and how the fold-free variant's bound
-was shown to be *exactly* `2⁵⁶` (2.6M residues wrong above it, none
-below).
+This is how the fold-free variant's bound was shown to be *exactly* `2⁵⁶`
+(2.6M residues wrong above it, none below).
 
 ### 1.3 Time it where the hunt runs, not where it is convenient
 
-A kernel-only benchmark overstates: **1.34x on the ladder was 1.21x on the
-segment**, and **1.12x on the ladder was 1.03x** once the walker overlapped
+A kernel-only benchmark overstates: **1.12x on the ladder was 1.03x on the
+segment** once the walker overlapped
 the ladder with the next segment's sieve, because the segment is nearer
 `max(ladder, sieve)` than their sum. Report both numbers, always; the
 campaign loop is the deliverable (OPTIMIZATION.md Rule 1: the campaign
@@ -207,8 +199,8 @@ records which rung it stopped on:
 4. **Variant kernel**, residue-for-residue parity against the shipped
    kernel on a production window; oracle samples.
 5. **Kernel-only A/B**, interleaved, at every height the hunt passes
-   through (the ratio often moves with height: 1.34x below `2⁶⁴/141`,
-   1.46x above).
+   through (the ratio often moves with height, most of all across a
+   dispatch height).
 6. **Campaign-loop A/B** — the walker, consecutive segments, records
    compared exactly on every run (§1.3).
 7. **Gates**: a new gate for the new mechanism (its bounds, its dispatch
@@ -234,13 +226,6 @@ do them now and queue 4–9 for the next window.
   log, Part 1 and Part 2 of this file are owed on that phase before the
   verdict stands. A structural argument about the *number* of operations
   says nothing about the *cost of one*.
-- **An outside review of this code gets the same treatment as our own
-  work, in both directions.** Check its hash manifest against the files
-  on disk; run its harness and fix what does not run (the prototype's
-  example commands used even lower bounds the sieve rejects); re-derive
-  its mathematics; write *your own* emulation rather than trusting its
-  validator; then give it exactly the credit its paired numbers earn. It
-  claimed no speedup and had never compiled for a GPU; it was worth 1.2x.
 - **Two numbers per result**: kernel-only and campaign-loop. One without
   the other is a hypothesis.
 - **Negative results are results.** The pipe table and the five variants

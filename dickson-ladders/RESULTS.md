@@ -27,8 +27,11 @@ than merely examples. Prior published lower bounds — a(10) > 1.54665×10¹³
 and a(11) > 1.076691×10¹⁴ — are consistent: those finds sit 600× and
 4,000× above them. No bound had been published for a(12) or a(13).
 
-These are **candidates for OEIS in the repository owner's hands, not
-submissions**: the pipeline records, humans decide (CLAUDE.md rule 5).
+The pipeline records and humans decide (CLAUDE.md rule 5): these were
+candidates in the repository owner's hands, and they are now in the OEIS.
+The 2026-09-29 export of A247965 lists a(10) through a(13), each equal to
+the integer in its evidence file, entered Aug 20 2026, and the entry links
+this repository.
 
 ## A247965(10) = 9,328,409,578,841,430
 

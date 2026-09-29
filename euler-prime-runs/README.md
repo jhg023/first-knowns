@@ -20,6 +20,15 @@ a smaller run ≥ 19; **a(19) was found 2026-08-18** at 3.74×10²¹, after a
 sweep that had to run 2.1x past the model's median to reach it. Details
 in [RESULTS.md](RESULTS.md).
 
+**In the OEIS** (checked against the 2026-09-29 export): the entry now
+lists a(17), a(18) and a(19), with the values above. a(17) and a(18) are
+entered from Andrew R. Epstein (Aug 09 2026), alongside his comment that
+a(19) and a(20) exceed 1.8×10¹⁹; a(19) is entered from this project
+(Aug 18 2026), with a link to this repository. a(21) stays in the entry
+as the 2009 comment it was (Waldvogel and Leikauf) — it cannot enter the
+data before a(20) — and this project's bound, a(20) > 3.744×10²¹, is not
+in the entry.
+
 **Status: PAUSED — open to others.** The hunt halted 2026-08-18 on the
 a(19) find, under the stop-on-discovery convention, and has not been
 restarted. The sweep is contiguous from 0 to **3.744×10²¹**, so the one

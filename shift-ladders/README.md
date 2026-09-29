@@ -40,6 +40,11 @@ integers, all values, the certificates and the factor witnesses are in
 [`evidence/`](evidence/); the claims and the verification are in
 [RESULTS.md](RESULTS.md).
 
+**In the OEIS** (checked against the 2026-09-29 export): A130003 now lists
+`a(19)`, `a(20)` and `a(21)`, and A110096 `a(17)`, `a(18)` and `a(19)` —
+all six equal to the integers above and in the evidence files, entered
+Sep 01 2026, and both entries link this repository.
+
 **Status: PAUSED — open to others.** A130003 is paused at
 `m = 2.86×10²⁰` with `a(22)` open, A110096 at `k = 5.64×10²³` with `a(20)`
 open. The campaign that found `a(21)` sustained **`1.13×10¹⁵ m/s`** over
@@ -103,12 +108,13 @@ five separate places in A110096.
 |---|---|---|
 | Sequence | [A130003](https://oeis.org/A130003) (`nonn`, `hard`, `more`) | [A110096](https://oeis.org/A110096) (`nonn`, `more`) |
 | Base | 4 | 2 |
-| Published terms | `a(1)..a(18)` | `a(1)..a(16)` |
-| Frontier | `a(18) = 1,158,174,141,556,287` | `a(16) = 143,924,005,810,811,655` |
+| Published terms, before this project | `a(1)..a(18)` | `a(1)..a(16)` |
+| Frontier, before this project | `a(18) = 1,158,174,141,556,287` | `a(16) = 143,924,005,810,811,655` |
 | Found by | Jens Kruse Andersen, **Jun 08 2007** | Bert Dobbelaere, Apr 24 2021 |
 | Author | Farideh Firoozbakht, May 30 2007 | Joseph L. Pe, Sep 05 2005 |
 | Other link | Rivera, [Puzzle 403](http://www.primepuzzles.net/puzzles/puzz_403.htm) | Rivera Puzzle 379 cluster; A193109 |
 | **Found here** | `a(19)`, `a(20)`, `a(21)` | `a(17)`, `a(18)`, `a(19)` |
+| **In the OEIS now** | `a(1)..a(21)`, the three found here entered Sep 01 2026 | `a(1)..a(19)`, the three found here entered Sep 01 2026 |
 | **Open, and next** | `a(22)`, empty below `2.86×10²⁰` | `a(20)`, empty below `5.64×10²³`; only 13.4% of it is under the proof ceiling |
 | Upper bound | **none published, at any open n** | **none published, at any open n** |
 
@@ -121,13 +127,14 @@ of line. Both are conjecturally infinite for every `n` — the constellations
 find **confirms** the guiding conjecture and can never refute it.
 A110096's entry records that argument (Charles R Greathouse IV, Oct 2011).
 
-**A130003's frontier is the stale one, and it is stale by nineteen
-years.** Rivera's Puzzle 403 — the entry's only link — was re-read when
-this project was built: Andersen's table there ends on the same
-`a(18)`, and the only bound on the page is Bernardo Boncompagni's
-long-superseded `2.84×10¹¹`. Nothing anywhere was past it — and the OEIS
-export was re-pulled on 2026-08-26, after the sweep, with both entries
-still ending exactly where they did.
+**A130003's frontier was the stale one, stale by nineteen years.**
+Rivera's Puzzle 403 — the entry's only link then — was re-read when this
+project was built: Andersen's table there ends on the same `a(18)`, and
+the only bound on the page is Bernardo Boncompagni's long-superseded
+`2.84×10¹¹`. Nothing anywhere was past it — and the OEIS export was
+re-pulled on 2026-08-26, after the sweep, with both entries still ending
+exactly where they did. The 2026-09-29 export lists this project's six
+terms on the two entries, as above.
 
 ## The mathematics of the engine
 

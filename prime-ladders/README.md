@@ -13,14 +13,19 @@ conditions whose multipliers are the primes themselves — the shape of this
 repo's square ladders with `i²` replaced by `prime(i)`, and an engine that
 transfers almost unchanged. Thirteen terms of A084700 were published and
 the last of them, `a(13) = 161,082,438,032,880`, was found by Phil Carmody's
-GenSv siever in **March 2004**; A084701 has eleven, and its
+GenSv siever in **March 2004**; A084701 had eleven, and its
 `a(11) = 3,894,254,360,010` dates from **June 2003**. Neither frontier had
-moved in twenty-two years, and neither entry carries a bound of any kind at
-any open `n` — until this project's three campaigns, on 2026-09-02 and 03,
-found **`a(14)` through `a(18)` of A084700**, the last of them
+moved in twenty-two years, and neither entry carried a bound of any kind
+at any open `n` — until this project's three campaigns, on 2026-09-02 and
+03, found **`a(14)` through `a(18)` of A084700**, the last of them
 `a(18) = 416,266,897,501,398,851,227,320`, and **`a(12)` through `a(18)`
 of A084701**, the last of them `a(18) = 23,562,434,281,685,500,120,920`
 ([RESULTS.md](RESULTS.md)).
+
+**In the OEIS** (checked against the 2026-09-29 export): A084700 now lists
+`a(14)` through `a(18)` and A084701 `a(12)` through `a(18)`, all twelve
+equal to the integers in this project's evidence files, entered Sep 03
+2026, and both entries link this repository.
 
 **Status: PAUSED — open to others.** Paused on 2026-09-03 with A084700 at
 `k = 4.16×10²³`, filter `n = 19`, `a(19)` open and 22% likely under the
@@ -82,11 +87,11 @@ A084701's `a(14)` was open, so `a(14) = a(15)`.
 |---|---|---|
 | Sequence | [A084700](https://oeis.org/A084700) (`more`, `nonn`) | [A084701](https://oeis.org/A084701) (`more`, `nonn`) |
 | Sign | `+1` | `−1` |
-| Published terms | `a(1)..a(13)` | `a(1)..a(11)` |
-| Published frontier | `a(13) = 161,082,438,032,880` | `a(11) = 3,894,254,360,010` |
+| Published terms, before this project | `a(1)..a(13)` | `a(1)..a(11)` |
+| Published frontier, before this project | `a(13) = 161,082,438,032,880` | `a(11) = 3,894,254,360,010` |
 | Found by | Phil Carmody (GenSv), **Mar 08 2004** | Robert G. Wilson v and Don Reble, **Jun 15 2003** |
 | Author | Amarnath Murthy, Jun 08 2003 | Amarnath Murthy, Jun 08 2003 |
-| **This project's frontier** | **`a(18) = 416,266,897,501,398,851,227,320`** — `a(14)`–`a(18)`, 2026-09-02/03, verified, [RESULTS.md](RESULTS.md); not yet submitted | **`a(18) = 23,562,434,281,685,500,120,920`** — `a(12)`–`a(18)`, 2026-09-03, verified, [RESULTS.md](RESULTS.md); not yet submitted |
+| **This project's frontier** | **`a(18) = 416,266,897,501,398,851,227,320`** — `a(14)`–`a(18)`, 2026-09-02/03, verified, [RESULTS.md](RESULTS.md); in the OEIS since Sep 03 2026 | **`a(18) = 23,562,434,281,685,500,120,920`** — `a(12)`–`a(18)`, 2026-09-03, verified, [RESULTS.md](RESULTS.md); in the OEIS since Sep 03 2026 |
 | **Open, and next** | `a(19)` — 22% under the engine's ceiling | `a(19)` — the campaign swept to the family's ceiling, `4.95×10²²`, and `a(19)` is 99% likely above it |
 | Upper bound | **none published, at any open n** | **none published, at any open n** |
 

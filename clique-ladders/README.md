@@ -25,6 +25,14 @@ and on A119751 and A119752 since 2008. Paused with each family's next term
 open just above its last find — a(22) of A093483, A103828 and A037100, and
 a(21) of A119752, A119751 and A133761.
 
+**In the OEIS** (checked against the 2026-09-29 export): all 26 terms are
+entered in the six entries, each equal to the integer in this project's
+evidence file — A093483, A103828, A037100 and A119751 on Sep 24 2026,
+A119752 and A133761 on Sep 27 2026 — and every one of the six links this
+repository. The five derived entries are not yet extended: A180565 still
+ends at a(17), A115760 at a(18), A120403 and A113875 at a(14), and A128933
+at a(13), so their 22 terms here are not yet entered.
+
 ## The problem
 
 | entry | start, and the extra condition on a(n) | terms | frontier | last moved |

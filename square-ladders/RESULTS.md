@@ -41,14 +41,18 @@ certificates read `deterministic-mr` throughout (gate G10). The exact
 integers, all values `k*i^2+1`, the certificates and the factor witnesses
 are in [`evidence/`](evidence/).
 
-Nothing has been submitted anywhere. These are records; what happens to
-them is the owner's decision (CLAUDE.md rule 5).
+Nothing is submitted from inside the pipeline: these are records, and what
+happens to them is the owner's decision (CLAUDE.md rule 5). The owner has
+since submitted them — the 2026-09-29 export of A089761 lists `a(16)`,
+`a(17)` and `a(18)`, each equal to the integer in its evidence file,
+entered Sep 18 2026, and the entry links this repository.
 
 ## The frontier
 
 | | |
 |---|---|
-| Last published term | `a(15) = 861,066,640` |
+| Last published term, before this project | `a(15) = 861,066,640` |
+| In the OEIS now | `a(1)..a(18)` (the three found here, entered Sep 18 2026) |
 | Last term anyone *searched* for, before this | `a(11)`, Donovan Johnson, Sep 27 2008 — the same integer |
 | Searched-empty bound this project inherited | `a(16) > 1.4×10¹³`, Max Alekseyev |
 | **Found here** | `a(16)`, `a(17)`, `a(18)` — above |

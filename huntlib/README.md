@@ -55,8 +55,8 @@ right.
 Until this date `primes.mr_is_prime` ran the seven bases (2, 325, 9375,
 28178, 450775, 9780504, 1795265022) up to 3.317e24 and called the result
 deterministic. That set is proved only below 2^64; 3.317e24 is psi_13, the
-bound for the FIRST THIRTEEN PRIMES as bases (Sorenson & Webster 2017). An
-outside read-only review caught the mismatch. The test now dispatches: the
+bound for the FIRST THIRTEEN PRIMES as bases (Sorenson & Webster 2017). The
+test now dispatches: the
 seven bases below 2^64, the thirteen primes from there to psi_13, and
 `primes.gate_bases` (run inside `certificate.gate_certificates`, so in every
 project's battery) pins the joint with psi_12 and psi_13 as tripwires.

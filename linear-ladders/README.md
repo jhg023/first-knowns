@@ -10,7 +10,7 @@
 `r = 1..n`. It is a *linear ladder*: one unknown, `n` linear conditions
 whose multipliers are the consecutive integers — the prime ladders of this
 repo's prime-ladders project with the multipliers `prime(1..n)` replaced
-by `1..n`, and the same engine with one substitution. Fourteen terms are
+by `1..n`, and the same engine with one substitution. Fourteen terms were
 published and the last, `a(14) = 11,429,352,906,540,438,870`, was found
 by Giovanni Resta in **March 2017**; the entry carries no bound of any
 kind at any open `n`. Six siblings share the engine, each with its own
@@ -174,6 +174,15 @@ three filters in 78 minutes. The three legs that found nothing
 (A173750, A164325, A164326) each moved their bound by the few segments
 they swept.
 
+**In the OEIS** (checked against the 2026-09-29 export): all twenty-eight
+terms are entered, each equal to the integer in this project's evidence
+file — A088250 `a(15)`–`a(18)`, A088651 `a(16)`–`a(18)` and A125838
+`a(15)`–`a(19)` on Sep 10 2026, and A125839 `a(16)`–`a(20)`, A164325
+`a(16)`–`a(18)`, A164326 `a(15)`–`a(18)` and A173750 `a(16)`–`a(19)` on
+Sep 13 2026; every one of the seven entries links this repository. The
+derived entries are not yet extended: A202778 (`a(15)`–`a(18)`), A071576
+(`a(15)`–`a(18)`) and A202779 (`a(16)`–`a(18)`) still end where they did.
+
 **Status: PAUSED — open to others.** Twenty-eight new terms across all
 seven families, found and verified 2026-09-03/05 by sixteen campaign
 legs totalling about 44 hours of device, and a searched-empty bound on
@@ -204,7 +213,7 @@ non-decreasing and a single lucky integer can settle several terms at
 once — A088250's `a(7) = a(8) = 512,820`, A173750's
 `a(12) = a(13) = a(14)`, A164325's `a(13) = a(14)`.
 
-| family | forms | offset | published frontier | found by | opens at |
+| family | forms | offset | published frontier, before this project | found by | opens at |
 |---|---|---|---|---|---|
 | [A088250](https://oeis.org/A088250) | `r·k + 1`, `r = 1..n` | 1 | `a(14) = 11,429,352,906,540,438,870` | Giovanni Resta, Mar 31 2017 | `n = 15` |
 | [A173750](https://oeis.org/A173750) | `k·m + 1`, `k = 2..n` | 1 | `a(15) = 4,646,092,391,146,085,880` | Giovanni Resta, Mar 31 2017 | `n = 16` |

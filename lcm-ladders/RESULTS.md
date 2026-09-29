@@ -312,3 +312,14 @@ first** (CLAUDE.md rule 2). Where each campaign stands is read with
 `python launch.py --status` and `--status --family A074200`, which touch
 nothing; the cursor they print is the quotient of the term by lcm(1..n) at
 the current filter, and the term is lcm(1..n) times it.
+
+## The OEIS entries
+
+Nothing is submitted from inside the pipeline (CLAUDE.md rule 5); the owner
+submitted these. The 2026-09-29 export of A078502 lists a(15)–a(18) in its
+data and carries a b-file whose SHA-256 is that of this repository's
+`evidence/b078502.txt`, so its a(19) is this project's; A074200 lists
+a(15)–a(18). All nine equal the integers in the evidence files, entered
+Sep 19 2026, and both entries link this repository. A093554 and A093553
+still end at a(14): their a(15)–a(19) and a(15)–a(18), in `also_settles`
+of the evidence files, are not yet entered.

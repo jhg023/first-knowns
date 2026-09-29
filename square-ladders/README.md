@@ -8,7 +8,7 @@
 
 **A089761** asks for the least `k` such that `k·i² + 1` is prime for every
 `i = 1..n` — a Dickson ladder whose rungs are the squares. Fifteen terms
-are published, but the last **five of them are the same integer**: Donovan
+were published, but the last **five of them are the same integer**: Donovan
 Johnson searched for `a(11)` in 2008, found `k = 861,066,640`, and that one
 value cleared `i = 12, 13, 14, 15` for free. The run stops at a single
 composite, `861066640·16² + 1 = 220433059841 = 47 · 149 · 31476947`, and
@@ -24,6 +24,10 @@ bound `a(16) > 1.4×10¹³` — until this project found `a(16)`, `a(17)` and
 2008, and the first break in the five-term plateau. All three are
 **proved**, not probable-prime ([RESULTS.md](RESULTS.md), evidence in
 [`evidence/`](evidence/)).
+
+**In the OEIS** (checked against the 2026-09-29 export): A089761 now lists
+`a(16)`, `a(17)` and `a(18)`, each equal to the integer in this project's
+evidence file, entered Sep 18 2026, and the entry links this repository.
 
 `a(18)` is `5.96 × 2⁶⁴`, which is the point of the **v5** engine in one
 number: candidates are carried as `(k, off)` so the ceiling is the
@@ -49,11 +53,12 @@ and why the published list plateaus.
 | | |
 |---|---|
 | Sequence | [A089761](https://oeis.org/A089761) (`hard`, `more`, `nonn`) |
-| Published terms | `a(1)..a(15)` = 1, 1, 4, 22, 58, 58, 58, 54972, 68112, 4748632, 861066640 ×5 |
+| Published terms, before this project | `a(1)..a(15)` = 1, 1, 4, 22, 58, 58, 58, 54972, 68112, 4748632, 861066640 ×5 |
 | Last *searched* term, before this | `a(11)`, Donovan Johnson, Sep 27 2008 |
 | Frontier this project inherited | `a(16) > 1.4×10¹³` — Max Alekseyev, in the entry by 2017 |
-| Last edit of any kind | revision #14, Aug 14 2017 |
+| Last edit of any kind, before this project | revision #14, Aug 14 2017 |
 | **Found here** | `a(16) = 15,737,271,507,027,492`, `a(17) = 125,811,821,444,034,258`, `a(18) = 109,927,810,420,106,024,208` |
+| **In the OEIS now** | `a(1)..a(18)`: the three above entered Sep 18 2026 (2026-09-29 export) |
 | **Open, and next** | `a(19)`, searched-empty below `1.10×10²⁰` |
 | Upper bound | **none published, at any open n** |
 

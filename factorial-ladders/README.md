@@ -19,6 +19,12 @@ integers, each proved prime value by value — and with them a(11) through
 a(18) of A226935, twenty-four new terms in all**
 ([RESULTS.md](RESULTS.md)).
 
+**In the OEIS** (checked against the 2026-09-29 export): A177013 and
+A177014 now list a(11) through a(18), all sixteen equal to the integers in
+this project's evidence files, entered Sep 18 2026, and both entries link
+this repository. A226935 still ends at a(10), so its a(11)–a(18) are not
+yet entered.
+
 **Status: PAUSED — open to others** — A177013 stands at a(18) =
 1,639,203,889,936,938,872,760 with no run of 19 below m = 5.4098e21;
 A177014 at a(18) = 30,911,690,086,525,348,609,590 with none below

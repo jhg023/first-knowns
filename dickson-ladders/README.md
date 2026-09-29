@@ -23,6 +23,10 @@ Brillhart–Lehmer–Selfridge primality certificate for every one of its
 values, and each was re-verified from its evidence file before
 publication. Details in [RESULTS.md](RESULTS.md).
 
+**In the OEIS** (checked against the 2026-09-29 export): A247965 now lists
+a(10) through a(13), each equal to the integer in this project's evidence
+file, entered Aug 20 2026, and the entry links this repository.
+
 **Status: PAUSED — open to others** — a(10)–a(13) are found and verified,
 and the campaign is left resumable at k = 1.57×10²², aimed at **a(14)**,
 which sits inside the engine's reach at **98.6%** model odds (E = 4.28

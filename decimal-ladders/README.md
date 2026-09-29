@@ -28,7 +28,8 @@ proved prime by certificate** ([RESULTS.md](RESULTS.md)).
 A153431 at a(16) = 76,993,117,812,161,143,387,438 with no run of 17 below
 m = 7.7996e22, and its a(17) bounded above by 10·A305740(18) =
 1.7052e25. a(19) and a(17) are open; both campaigns resume from their
-checkpoints with no flags.
+checkpoints with no flags. None of the nine terms is in the OEIS yet: the
+2026-09-29 export still ends A305740 at a(12) and A153431 at a(13).
 
 ## The problem
 

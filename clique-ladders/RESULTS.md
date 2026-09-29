@@ -181,3 +181,16 @@ Owed before the next session: the finds into the oracle's `FOUND` and a
 frozen shape per family on the wide record at the live filter
 (OPTIMIZATION_LOG.md "Open, priced, unbuilt" 1a), and the model rerun on the
 real prefix for the open terms, whose table above is projection.
+
+## The OEIS entries
+
+Nothing is submitted from inside the pipeline (CLAUDE.md rule 5); the owner
+submitted these. The 2026-09-29 export lists all 26 terms, each equal to
+the integer in its evidence file: A093483 a(18)–a(21), A103828 and A037100
+a(19)–a(21), and A119751 a(15)–a(20) entered Sep 24 2026; A119752
+a(15)–a(20) and A133761 a(17)–a(20) entered Sep 27 2026; every one of the
+six entries links this repository. The five derived entries still end
+where they did — A180565 at a(17), A115760 at a(18), A120403 and A113875
+at a(14), A128933 at a(13) — so the 22 terms of theirs in the tables above
+are not yet entered (and A128933 still owes a(14)–a(18) from the
+literature first).

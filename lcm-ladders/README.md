@@ -8,8 +8,8 @@ A GPU hunt for the next terms of four OEIS sequences that ask the same
 question twice, with the sign flipped: **what is the smallest N with every
 (N − k)/k, k = 1..n, prime (A078502), and the smallest m with every
 (m + k)/k, k = 1..n, prime (A074200)?** All four frontiers were last moved
-between 2003 and 2004, by Jens Kruse Andersen; none carries a bound of any
-kind at any open index, and none has a b-file. The substitution that makes
+between 2003 and 2004, by Jens Kruse Andersen; none carried a bound of any
+kind at any open index, and none had a b-file. The substitution that makes
 them tractable is that the term must be a multiple of lcm(1..n), so the
 conditions become **(lcm(1..n)/k)·(N/lcm(1..n)) − 1 prime** and
 **(lcm(1..n)/k)·(m/lcm(1..n)) + 1 prime for k = 1..n** — one unknown (the
@@ -20,6 +20,14 @@ of A078502 and a(15) through a(18) of A074200, found and verified
 2026-09-06 and 2026-09-19 — nine terms on eight integers, each proved prime
 value by value — and with them a(15)–a(19) of A093554 and a(15)–a(18) of
 A093553: eighteen new terms in all** ([RESULTS.md](RESULTS.md)).
+
+**In the OEIS** (checked against the 2026-09-29 export): A078502 now lists
+a(15)–a(18) in its data and a(19) in its b-file — which is this
+repository's `evidence/b078502.txt`, byte for byte (the SHA-256 in the
+export matches) — and A074200 lists a(15)–a(18); all nine equal the
+integers in the evidence files, entered Sep 19 2026, and both entries link
+this repository. The derived entries A093554 and A093553 still end at
+a(14), so their a(15)–a(19) and a(15)–a(18) are not yet entered.
 
 **Status: PAUSED — open to others** — A078502 stands at a(18) = a(19) =
 52,270,101,840,951,834,355,676,160,000 with a(20) open and priced at about a
