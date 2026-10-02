@@ -1,0 +1,145 @@
+{
+ "sequence": "A083519",
+ "forms": "a(n)*a(i) + 2, i = 0..n-1",
+ "a(n)": 47785411179,
+ "oeis_terms": {
+  "11": 47785411179
+ },
+ "filter_n": 11,
+ "run": 11,
+ "settles": [
+  11
+ ],
+ "prefix": {
+  "0": 1,
+  "1": 3,
+  "2": 5,
+  "3": 9,
+  "4": 129,
+  "5": 1179,
+  "6": 21105,
+  "7": 96525,
+  "8": 419925,
+  "9": 13690959,
+  "10": 8403613179
+ },
+ "prefix_found_by_this_campaign": [],
+ "conditions": {
+  "0": "a(n) + 2",
+  "1": "3*a(n) + 2",
+  "2": "5*a(n) + 2",
+  "3": "9*a(n) + 2",
+  "4": "129*a(n) + 2",
+  "5": "1179*a(n) + 2",
+  "6": "21105*a(n) + 2",
+  "7": "96525*a(n) + 2",
+  "8": "419925*a(n) + 2",
+  "9": "13690959*a(n) + 2",
+  "10": "8403613179*a(n) + 2"
+ },
+ "values": {
+  "0": 47785411181,
+  "1": 143356233539,
+  "2": 238927055897,
+  "3": 430068700613,
+  "4": 6164318042093,
+  "5": 56338999780043,
+  "6": 1008511102932797,
+  "7": 4612486814052977,
+  "8": 20066288789341577,
+  "9": 654228105249830663,
+  "10": 401570111147778328043
+ },
+ "verification": {
+  "mr_chain": true,
+  "sympy_bpsw": true,
+  "resieve_other_wheel": true
+ },
+ "certificates": {
+  "0": {
+   "proof": "deterministic-mr",
+   "N": 47785411181,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "1": {
+   "proof": "deterministic-mr",
+   "N": 143356233539,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "2": {
+   "proof": "deterministic-mr",
+   "N": 238927055897,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "3": {
+   "proof": "deterministic-mr",
+   "N": 430068700613,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "4": {
+   "proof": "deterministic-mr",
+   "N": 6164318042093,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "5": {
+   "proof": "deterministic-mr",
+   "N": 56338999780043,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "6": {
+   "proof": "deterministic-mr",
+   "N": 1008511102932797,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "7": {
+   "proof": "deterministic-mr",
+   "N": 4612486814052977,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "8": {
+   "proof": "deterministic-mr",
+   "N": 20066288789341577,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "9": {
+   "proof": "deterministic-mr",
+   "N": 654228105249830663,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "10": {
+   "proof": "deterministic-mr",
+   "N": 401570111147778328043,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  }
+ },
+ "certificates_verified": true,
+ "unproved": [],
+ "proof_routes": {
+  "deterministic-mr": 11
+ },
+ "also_settles": [],
+ "least_claim": {
+  "swept_from": 8403613180,
+  "swept_to": 47785411179,
+  "floor": "a(10) = 8403613179: the definition requires a(n) > a(n-1)",
+  "filter": 11,
+  "wheel": 223092870,
+  "sieve_depth": 1048576,
+  "class": [
+   3,
+   6
+  ]
+ },
+ "engine": "a083519-v3-p2-seg32-pbd224-cpl37w37"
+}
