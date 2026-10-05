@@ -297,3 +297,43 @@ Engine v1 is therefore plus-two-cliques' v3 with its extraction batch
 and queue entry decided on this problem's compiled occupancy. One more
 round of the catalogue found nothing above the noise; the next lever is
 not a constant.
+
+---
+
+## The campaigns (2026-10-02 to 2026-10-05) — what the run measured
+
+No engine or planner change; this is the record of the defaults under a
+real campaign, read from the ledger timestamps and the checkpoints (the
+method: line from the previous find's segment end to the end of the find's
+segment, over the wall clock between the two ledger times).
+
+| filter | priced (BENCHMARKS.md) | campaign | ratio |
+|---|---|---|---|
+| A115785 n = 18 | 9.27e15 p/s | 9.2e15 | 0.99 |
+| A115785 n = 19 | 1.28e16 p/s | 1.29e16 | 1.01 |
+| A115786 n = 19 | 1.00e16 p/s | 9.8e15 | 0.98 |
+| A115786 n = 20 | 1.35e16 p/s | 1.32e16 | 0.98 |
+| A145743 n = 19 | 2.81e17 m/s | 3.5e17 | 1.25 (one segment) |
+| A145743 n = 20 | — | 6.3e17 m/s over 39.2 h | not priced |
+
+**Kept:** every default. The wall clock of the loop matched the device
+price at every filter swept whole, so no per-launch cost outside the
+kernel is hiding in the segment loop (OPTIMIZATION.md 2.14).
+
+**Gaps the run exposed, none fixed at the pause:**
+
+* *A filter the campaign reached was never priced.* The table stopped at
+  A145743's n = 19 because the model put a(19) at 22 minutes; a(20) then
+  took 39 h at a filter with no benchmark row and no swept constants.
+  Price one filter past where the model says the night ends: the model
+  runs late (mean E 1.62 over these fourteen finds).
+* *The stopped filters read fast on a launch count.* A115785's n = 20 and
+  A115786's n = 21 read 1.36e16 and 1.4e16 p/s from launches swept over
+  wall clock, against 1.11e16 priced. A fraction of a segment counted in
+  launches is not a line measurement; measure it paired, through the
+  engine API, before quoting either number.
+* *A rung label that may have outlived its ladder.* A145743's checkpoint
+  lists `a(21) Q1` as passed at a coverage cursor of 8.90e22, below the
+  1.84e23 the model gives from there. Not traced; the suspect is a label
+  logged against the ladder of the previous frontier and never cleared at
+  the promotion.

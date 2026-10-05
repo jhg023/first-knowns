@@ -18,6 +18,7 @@ each the planned configuration there, and three anchors.
 | date | engine / plan | SCORE | S115786 | S145743 | SCORE2L | SCORE1L | SCORE9 |
 |---|---|---|---|---|---|---|---|
 | 2026-10-02 | v1 (plus-two-cliques' engine v3, taken whole; the extraction batch and the queue entry decided on this problem's compiled occupancy, OPTIMIZATION_LOG.md round 1) / p1 | **2,223** | 2,564 | 11,154 | 773 | 1,407 | 9.40 |
+| 2026-10-05 | v1 / p1, unchanged: the reading at the pause, after the three campaigns; all six fingerprints reproduced | **2,086** | 2,399 | 10,382 | 732 | 1,318 | 8.82 |
 
 (in units of 10¹² line/s: SCORE is 2.22e15 p/s.) The three campaign
 shapes are a single launch or a few of them, hundredths of a second, so a
@@ -92,3 +93,28 @@ launch-bound and costs seconds, and the line rate is not a meaningful
 number. The host figures are what the pool is sized from at runtime
 (ceil(need × 2) workers, ramped): one or two workers everywhere here, a
 classification costing 10–20 µs.
+
+## The campaigns against this table (2026-10-02 to 2026-10-05)
+
+One campaign per family, no flags. A find is confirmed when its segment
+closes, so each rate is the line to the end of the find's segment over the
+leg's wall clock, the build, the pool's sizing and the verification
+included.
+
+| filter | priced above | the campaign | ratio |
+|---|---|---|---|
+| A115785 n = 18 | 9.27e15 p/s | 9.2e15 p/s over 8.15 h | 0.99 |
+| A115785 n = 19 | 1.28e16 p/s | 1.29e16 p/s over 4.25 h | 1.01 |
+| A115786 n = 19 | 1.00e16 p/s | 9.8e15 p/s over 5.04 h | 0.98 |
+| A115786 n = 20 | 1.35e16 p/s | 1.32e16 p/s over 4.14 h | 0.98 |
+| A145743 n = 19 | 2.81e17 m/s | 3.5e17 m/s over 18.5 min (one segment) | 1.25 |
+| A145743 n = 20 | not priced | 6.3e17 m/s over 39.2 h | — |
+
+The expected clocks were the model's and the terms did not keep to them
+(RESULTS.md, "The finds against the model"); the rates held. Not in the
+table above and owed before a resume (rule 5g): A145743 at n = 20 and
+n = 21, which this document never priced because a(19) was modelled at 22
+minutes; a frozen shape at each live filter (A115785 n = 20, A115786
+n = 21, A145743 n = 21); and a line-denominated measurement at the two
+filters the primorial campaigns were stopped in, which read 1.36e16 and
+1.4e16 p/s against 1.11e16 on a count of launches.

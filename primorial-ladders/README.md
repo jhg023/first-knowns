@@ -4,6 +4,12 @@
 > project was authored by **Claude (Anthropic's AI)** at the repository
 > owner's direction.
 
+**Fifteen new terms, found and verified 2026-10-02 to 2026-10-05:
+a(16)–a(19) of A115785, a(17)–a(20) of A115786 and a(14)–a(20) of A145743**
+— the first advance on the first two since 2006 and on the third since
+2008. The integers, their verification and the campaigns are in
+[RESULTS.md](RESULTS.md).
+
 A GPU hunt for the next terms of three **shift ladders** — one unknown and
 n conditions that differ by an additive constant. **A115785** asks for the
 smallest prime p such that p − prime(1)#, p − prime(2)#, …, p − prime(n)#
@@ -17,14 +23,22 @@ that all n numbers m + 4·k² for k = 1, 2, …, n are prime — Farideh
 Firoozbakht's (October 2008), its last two terms Donovan Johnson's of
 November 2008, a(13) = 91,450,844,347. It rides the same engine.
 
-**Status: ACTIVE** — built, gated and optimized 2026-10-02; no campaign
-has been run yet. Each family's open term is a(16) of A115785 (its line
-starts at 53# = 3.26×10¹⁹), a(17) of A115786 above a(16), and a(14) of
-A145743 above a(13).
+**Status: PAUSED — open to others** — nothing is running. One campaign
+per family ran between 2026-10-02 and 2026-10-05 and each was stopped
+inside the filter for its next term. The frontier stands at
+a(19) = 7,858,467,306,309,706,402,625,473 on A115785, with a(20) open above
+71# = 5.58×10²⁶ and nothing swept there yet;
+a(20) = 276,111,714,233,825,559,827 on A115786, with a(21) open and
+searched empty to p = 3.7447×10²⁰; and
+a(20) = 86,871,442,473,592,036,108,753 on A145743, with a(21) open and
+searched empty to m = 8.9034×10²². The model puts a(21) of A115786 and of
+A145743 at about a week each and a(20) of A115785 at months
+([RESULTS.md](RESULTS.md), "What is open now", which also lists what a
+resume owes first).
 
 ## The problem
 
-| entry | name (%N), verbatim | published terms | frontier | last moved |
+| entry | name (%N), verbatim | published terms | published frontier | last moved |
 |---|---|---|---|---|
 | [A115785](https://oeis.org/A115785) `more` | Smallest prime number p such that p - prime(1)#, p - prime(2)#, ..., p - prime(n)# are all prime, where prime(i)# is the primorial of the i-th prime (A002110(i)). | a(1)–a(15) | a(15) = 618,681,508,598,750,923 | Jens Kruse Andersen, Feb 2006 |
 | [A115786](https://oeis.org/A115786) `more` | Smallest prime number p such that p + 2#, p + 3#, ..., p + prime(n)# are all prime, where x# = A034386(x) is the primorial. | a(1)–a(16) | a(16) = 29,065,965,967,667 | Jens Kruse Andersen, Feb 2006 |
@@ -35,7 +49,10 @@ Curio for 313; A115785 is a subset of A006512 (the greater of twin primes)
 and A115786 of A001359 and A022004, as their comments say, but no entry is
 an affine map of either, so nothing rides for free. A145743's comment
 "There is no further term up to 5×10⁸" predates a(12) and a(13). None of
-the three carries a bound at its open index.
+the three carried a bound at its open index. Found here, and not yet
+entered in the OEIS (2026-10-05 export): a(16)–a(19) of A115785,
+a(17)–a(20) of A115786 and a(14)–a(20) of A145743, whose a(16) and a(17)
+are one integer.
 
 **Two kinds of line.** On A115786 and A145743 every condition of index n is
 a condition of index n + 1, so a(n+1) ≥ a(n), the sweep for a(n+1) starts
@@ -45,7 +62,7 @@ the condition p − prime(n)# prime puts a(n) above prime(n)# + 1, and every
 published term from a(13) on lies within 2% of its own primorial
 (a(15) − 47# = 3.8×10¹⁵ against 47# = 6.1×10¹⁷). **Each index of A115785 is
 its own short line from prime(n)#**, prime(n+1) times further out than the
-last, and a find says nothing about the next: a(16) is hunted above 53# =
+last, and a find says nothing about the next: a(16) was found above 53# =
 3.26×10¹⁹, a(17) above 59# = 1.92×10²¹, a(19) above 67# = 7.86×10²⁴ and
 a(26), the last index under this project's ceiling, above 101# =
 2.3×10³⁸. Every one of those lines is past 2⁶⁴.
@@ -129,9 +146,9 @@ wheels, first levels of eight million residues on both records, windows
 just above 23#, 41#, 43#, 53#, 71# and 101#, past the proof crossing and
 hard against the 10⁴⁰ ceiling.
 
-**Measured where the campaign will spend its days, then re-swept.** Nsight
-Compute on one sieve launch at A115785's n = 19 (the filter whose a(19)
-is days away; [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md), round 1): the
+**Measured where the campaign was expected to spend its days, then
+re-swept.** Nsight Compute on one sieve launch at A115785's n = 19 (the
+filter whose a(19) was priced at days; [OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md), round 1): the
 sieve kernel is 96% of the device; the window sieve and extraction are 75%
 of its samples; the ALU pipe runs at 76% and the LSU at 77%, issue slots
 66% busy, seven blocks per SM for shared memory where the registers allow
@@ -203,7 +220,8 @@ disagree: A115785's terms come **2.4×** later than its intensity says
 (mean 0.47 over seven). Read A115785's medians as floors and budget
 2–3× them, which is also the repository's record on first occurrences.
 
-**What it predicts** (`model_results.json`; A115785's depths given as the
+**What it predicted** (`model_results.json`, written before the run and
+kept as the record; A115785's depths given as the
 offset above prime(n)#, which is where the whole search happens):
 
 | A115785 | above | Q1 | median | Q3 | P90 |
@@ -233,6 +251,30 @@ a(19) 37 min, a(20) 12 h, a(21) 14 days; A145743 a(14)–a(17) seconds,
 a(18) a minute, a(19) 22 min. Every one of those is a floor, and A115785's
 by 2.4× — budget a week for its a(19).
 
+**How the finds scored.** Fourteen draws (A145743's a(17) came with its
+a(16) and was not searched for), each E taken from the floor its sweep
+started at:
+
+| | A115785 a(16)–a(19) | A115786 a(17)–a(20) | A145743 a(14)–a(16), a(18)–a(20) |
+|---|---|---|---|
+| E | 1.57, 0.21, 4.23, 0.08 | 0.03, 0.60, 4.97, 0.21 | 0.30, 0.83, 3.81, 0.27, 1.26, 4.34 |
+| mean | 1.52 | 1.45 | 1.80 |
+
+They sum to 22.72, a mean of 1.62 at P = 0.980 under Gamma(14, 1): late,
+as the published terms were, and by about the same factor in all three
+families — the split the published draws showed (A115785 2.4× late,
+A115786 early) did not persist. Four draws landed at the 98th–99th
+percentile and one at the 8th: a(18) of A115785 took 8.15 h against the
+1.9 h above, a(19) of A115786 5 h against 37 min, a(20) of A145743 came at
+sixteen times its median after 39 h, and a(19) of A115785, budgeted at a
+week, came in 4.25 h. The filters swept whole ran at 0.98–1.01× the
+rates above on the primorial entries. The open terms from where the
+cursors stand: a(20) of A115785 median 4.32×10²² above 71# (45 days at the
+benchmark rate), a(21) of A115786 median 6.74×10²¹ (6.6 days), a(21) of
+A145743 median 3.59×10²³ (5.0 days at the rate its last filter held) —
+each of them optimistic by the 1.5–2× above. The per-term table, the
+campaign rates and the probabilities are in [RESULTS.md](RESULTS.md).
+
 ## Running it
 
 Requires an NVIDIA GPU with CuPy, plus numpy and sympy.
@@ -259,10 +301,15 @@ python launch.py --family A145743
 ```
 
 Each family keeps its own checkpoint under its own config key, and no
-campaign will read another's cursor. A fresh A115785 campaign opens at
+campaign will read another's cursor. With the paused campaigns'
+checkpoints in place each command resumes at its open term (a(20), a(21),
+a(21)); the checkpoints are runtime state and are not in the repository.
+Without them a fresh A115785 campaign opens at
 53# + 2 with the filter n = 16, covers its exception zone on the host, and
 sweeps; each find moves it to the next primorial. The other two open just
-above their last published term and carry the line across each find. The
+above their last published term and carry the line across each find — so a
+fresh clone re-derives the fifteen terms first, about 63 hours, until they
+are entered in the oracle's `FOUND` ([RESULTS.md](RESULTS.md)). The
 hunt is indefinite by default, resumable, checkpointed every segment, and
 stops cleanly on Ctrl+C with exit 130. `--to` caps the depth,
 `--stop-on-discovery` exits once **this run** confirms a find, `--workers`
