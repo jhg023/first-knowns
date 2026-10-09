@@ -50,7 +50,10 @@ shapes name their index, and an index's form list never changes.  When a
 campaign is resumed at an index with no shape, add one (and log it).
 
 Frozen 2026-10-08 on engine v1 (primorial-runs' engine v2 taken whole) and
-planner p1, after G9 passed on populated windows (OPTIMIZATION_LOG.md).
+planner p1, after G9 passed on populated windows (OPTIMIZATION_LOG.md);
+reproduced the same day by engine v2 (the fallback out of line, the queue
+margin re-ranked on the compiled footprint: a faster kernel, the same
+stream).
 """
 
 import pathlib as _pathlib

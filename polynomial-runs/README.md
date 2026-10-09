@@ -142,7 +142,17 @@ a bigger block amortises more of it — the planner's width table was
 re-measured here (a 256-period window reads 1.118 over the inherited 160
 at n = 18, and the (16, 2) block shape 1.047 over (8, 2) at the day-long
 n = 21), the planner now considers the engine's full 256 periods, and the
-depth constants, the sieve depth and the launch budget re-swept flat. The parity gate (G9) pins GPU against CPU bit for bit on
+depth constants, the sieve depth and the launch budget re-swept flat.
+**What round 2 changed — engine v2** ([OPTIMIZATION_LOG.md](OPTIMIZATION_LOG.md)):
+Nsight Compute on this regime's kernel at the day-long filters found the
+three pipes it is bound by within 5% of each other at 70–74%, a warp
+stalled on instruction fetch about once per issued instruction (the
+queue-overflow fallback, never executed, inlined and unrolled at fifty-odd
+sites to seven tenths of the kernel's code and threaded through the hot
+path), and a block per SM left behind by a queue margin ranked before the
+queue entry was decided. The fallback now sits behind a call and the
+margin is re-ranked on the compiled footprint: 1.05–1.06 at the day-long
+filters, the survivor stream identical. The parity gate (G9) pins GPU against CPU bit for bit on
 populated windows: every family, both classes, one- to three-level and
 subset wheels, first levels past the planner's memory budget, the first
 period clipped at the engine floor, windows past 2⁶⁴ and past the
@@ -215,12 +225,12 @@ one sweep settles the indices in whatever order their first occurrences
 lie on the line.
 
 **The clocks, from the engine API** (BENCHMARKS.md has the per-filter
-table and what is still owed; the campaign itself has not run). A165234
-runs 2.6×10¹⁷ p/s at n = 18 and 1.18×10¹⁸ p/s at n = 21 on the full wheel
-to 53, A347537 6.0×10¹⁷ p/s at n = 19; at those rates the medians above
-are: A165234 a(16)–a(19) within minutes, a(20) under two hours, a(21)
-about three days (the expected clock to a CONFIRMED find, which weighs the
-tail of the distribution, is 7.7 days); A230663 the same to a(20), a(21)
+table and what is still owed; the campaign itself has not run). On engine
+v2 A165234 runs 2.7×10¹⁷ p/s at n = 18 and 1.26×10¹⁸ p/s at n = 21 on the
+full wheel to 53, A347537 6.1×10¹⁷ p/s at n = 19; at those rates the
+medians above are: A165234 a(16)–a(19) within minutes, a(20) about two
+hours, a(21) under three days (the expected clock to a CONFIRMED find,
+which weighs the tail of the distribution, is 7.2 days); A230663 the same to a(20), a(21)
 about a day and a half; A092120 a(16)–a(18) within an hour, a(20) about
 three days; A347537 a(17)–a(19) within minutes, a(20) under two hours,
 a(21) about two and a half days. Budget 1.5–2× on each.

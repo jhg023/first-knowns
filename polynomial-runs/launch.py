@@ -181,13 +181,19 @@ RUN_EXACT_CAP = 64                # "no cap": no run here comes near it
 # human (_families_stay_apart).
 PLAN_WASTE_MAX = 1.5
 
-ENGINE_VERSION = "v1"
+ENGINE_VERSION = "v2"
 #   v1 (2026-10-08): primorial-runs' engine v2 and planner p1, taken whole
 #   -- the window sieve with every window prime on a quad table, the lazy
 #   narrow rounds, the folded wide rounds, the generated tail rounds, the
 #   extraction batch and the queue entry decided on the compiled occupancy.
 #   The kernel never sees a form, only the residues each prime kills.
-PREVIOUS_ENGINES = ()
+#   v2 (2026-10-08): the queue-overflow fallback out of line
+#   (poly_gpu.FALLBACK_COLD) and the queue margin re-ranked on the compiled
+#   footprint (poly_gpu.QCAP_BY_OCCUPANCY), from the Nsight Compute profile
+#   of round 2: the same stream (every fingerprint reproduced), 1.05-1.06
+#   at the day-long filters.  A v1 cursor is ACCEPTED: the line and its
+#   units are unchanged.
+PREVIOUS_ENGINES = ("v1",)
 WORKERS_DEFAULT = 2
 POOL_MARGIN = 2.0
 CAL_MIN_SURVIVORS = 500

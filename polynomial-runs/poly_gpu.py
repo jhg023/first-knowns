@@ -1319,6 +1319,25 @@ def _occupancy(kernel, tpb):
             "blocks_per_sm": blocks}
 
 
+def _reg_blocks(regs, tpb):
+    """The blocks per SM the REGISTER FILE allows a kernel of `regs`
+    registers a thread at `tpb` threads a block: warps are allocated
+    registers in units of 256, so a 72-register warp takes 2,304 of the
+    SM's 65,536 and 28 warps fit, seven blocks of four (72 -> 7, 74 -> 6,
+    66 -> 7 on this device); the SM's warp limit caps it."""
+    import cupy as cp
+    try:
+        a = cp.cuda.Device().attributes
+        per_sm = int(a["MaxRegistersPerMultiprocessor"])
+        warps_sm = int(a["MaxThreadsPerMultiProcessor"]) // 32
+    except Exception:                       # noqa: BLE001
+        per_sm, warps_sm = 65536, 48
+    warps_blk = max(1, -(-int(tpb) // 32))
+    per_warp = -(-int(regs) * 32 // 256) * 256
+    warps = min(per_sm // max(per_warp, 1), warps_sm)
+    return max(0, warps // warps_blk)
+
+
 def _set_carveout(kernel, pct):
     """Pin the kernel's preferred shared/L1 carveout (percent shared)."""
     import cupy as cp
@@ -1812,6 +1831,40 @@ WINDOW_QUAD_KEEP = False
 # ballot and its branch cost more than the loop control they replace, and
 # the predicated push lengthens the common path.  Kept as the A/B arm.
 EXTRACT_ONEBIT = False
+# THE QUEUE-OVERFLOW FALLBACK IS OUT OF LINE (FALLBACK_COLD; engine v2 of
+# this project).  A survivor whose in-block queue is full runs its whole
+# tail on the spot through `tail_survives` -- the tail rounds' test,
+# unrolled four primes deep, about 450 instructions -- and the sieve kernel
+# has fifty-odd such sites: one per live word of the extraction batch, one
+# per item slot of every in-block round, one in the push.  Inlined, those
+# copies were some 21,500 of the kernel's 30,160 SASS instructions (8,608
+# with them out of line), never executed, threaded through the hot path,
+# and the profile read a warp stalled on
+# instruction fetch once per issued instruction (Nsight Compute, round 2:
+# `no_instruction` 0.98-1.55 of the 8.8 warp-cycles per issue).  As a
+# plain loop behind a CALL (`tail_survives_cold`) the same test compiles
+# to one copy; the stream is identical and the fallback stays exact.
+# Paired at the day-long filters, 72 registers and six blocks either way:
+# 1.034 at A165234 n = 21, 1.035 at A092120 n = 20, 1.057 at A347537 n = 21.
+# The code was not the whole of it: the same plain loop still INLINED read
+# 0.992, and the fallbacks compiled out entirely (an ablation, 59
+# registers) 1.028 -- the inlined cold path also shaped the hot path's
+# allocation.  False restores the inlined copies (the A/B arm).
+FALLBACK_COLD = True
+# THE QUEUE MARGIN IS RE-RANKED ON THE COMPILED FOOTPRINT
+# (QCAP_BY_OCCUPANCY).  The sigma ladder is ranked before the kernel is
+# compiled, on the analytic footprint with the u32 entry; the split entry
+# is chosen afterwards, on the compiled occupancy, and the ladder was never
+# asked again -- so at every wide campaign filter of this project the
+# kernel sat at 13,928 bytes and six blocks per SM where the registers
+# allow seven and 13,605 bytes reach them.  With the kernel compiled the
+# non-queue bytes are exact; the ladder is re-run on the real entry size,
+# and the roomiest margin that predicts a block more is compiled and kept
+# if it gains one.  Seven blocks for six, the same stream: 1.015 at
+# A165234 n = 21 on the inherited kernel, 1.015-1.018 on top of
+# FALLBACK_COLD there and at A092120 n = 20; at A347537 n = 21 the
+# registers bind at six and nothing moves.
+QCAP_BY_OCCUPANCY = True
 # THE FIRST TAIL ROUNDS ARE GENERATED, WITH THEIR PRIMES AS LITERALS
 # (TAIL_LITERAL).  A tail round's test is generic -- the prime, its 64-bit
 # magic, its period row and its mask all loaded, ~43 instructions and three
@@ -2015,6 +2068,7 @@ _SRC4 = r"""
 #define NG   %(ng)d
 #define NG4  %(ng4)d
 #define UNROLL %(unroll)d
+#define TAIL_FALLBACK %(fallback)s
 #define NG2 %(ng2)d
 #define RWIN %(rwin)d
 #define PATSH %(patsh)d
@@ -2148,6 +2202,27 @@ __device__ __forceinline__ bool tail_survives(
         if (kill) return false;
     }
     for (; i < np_; ++i) {
+        unsigned int kill = 0u;
+        TEST(i, kill)
+        if (kill) return false;
+    }
+    return true;
+}
+
+/* THE OVERFLOW FALLBACK, OUT OF LINE (FALLBACK_COLD): the same test as
+   tail_survives, as a plain loop behind a CALL.  Inlined and unrolled it
+   was ~450 instructions at each of the sieve kernel's fifty-odd fallback
+   sites -- seven tenths of the kernel's code, never executed, threaded
+   through the hot path (Nsight Compute, round 2).  The tail kernels keep
+   the inlined test: there it IS the hot path. */
+__device__ __noinline__ bool tail_survives_cold(
+        const unsigned long long offp, const unsigned int jj, const int np_,
+        const int from,
+        const uint4* __restrict__ pk, const unsigned int* __restrict__ pmask,
+        const uint4* __restrict__ pres, const unsigned int* __restrict__ jb)
+{
+#pragma unroll 1
+    for (int i = from; i < np_; ++i) {
         unsigned int kill = 0u;
         TEST(i, kill)
         if (kill) return false;
@@ -2428,7 +2503,7 @@ extern "C" __global__ void sieve(
                         offp += (unsigned long long)W1C * M_OF(e1.y, dd);
 #endif
                         offp = WITHJ(offp, j);
-                        if (tail_survives(offp, j, np_, LITN, pk, pmask,
+                        if (TAIL_FALLBACK(offp, j, np_, LITN, pk, pmask,
                                           pres, jb))
                             EMIT(offp, j)
                     }
@@ -2497,7 +2572,7 @@ extern "C" __global__ void sieve(
                         offp += (unsigned long long)W1C * M_OF(e1.y, dd);
 #endif
                         offp = WITHJ(offp, j);
-                        if (tail_survives(offp, j, np_, LITN, pk, pmask,
+                        if (TAIL_FALLBACK(offp, j, np_, LITN, pk, pmask,
                                           pres, jb))
                             EMIT(offp, j)
                     }
@@ -2527,7 +2602,7 @@ extern "C" __global__ void sieve(
                          q3j[p] = (unsigned char)jj;
 #endif
         }
-        else if (tail_survives(offp, jj, np_, K2, pk, pmask, pres, jb))
+        else if (TAIL_FALLBACK(offp, jj, np_, K2, pk, pmask, pres, jb))
             EMIT(offp, jj)
     }
 }
@@ -3398,7 +3473,7 @@ class GpuEngine:
                         if (p < Q{r}CAP) {{ QCOPY(qi{r}, qj{r}, p, qi{r-1}, qj{r-1}, _z, qi); }}
                         else {{
                             const unsigned long long oz = WITHJ(offp_of(qi, t_lo, res1x, d2), JOF(qi));
-                            if (tail_survives(oz, JOF(qi), np_, {kend}, pk, pmask, pres, jb))
+                            if (TAIL_FALLBACK(oz, JOF(qi), np_, {kend}, pk, pmask, pres, jb))
                                 EMIT(oz, JOF(qi))
                         }}
                         ++p;
@@ -3430,7 +3505,8 @@ class GpuEngine:
                    self.pre_table, self.nrow, self.periodic, self.fold,
                    tuple(self.tail_lit), TAIL_PACK_MAX,
                    tuple(sorted(self._quad.items())), MASK_HOIST,
-                   tuple(sorted(self._qread.items())), EXTRACT_ONEBIT)
+                   tuple(sorted(self._qread.items())), EXTRACT_ONEBIT,
+                   FALLBACK_COLD)
             gparams = ("" if self.wide and not self.fold else
                        "".join(f",\n        const unsigned long long g2p{i}"
                                for i in range(len(self.gdesc2))))
@@ -3457,6 +3533,8 @@ class GpuEngine:
                     "nrow": self.nrow, "ng8c": self._ng8,
                     "mhoist": 1 if MASK_HOIST else 0,
                     "onebit": 1 if EXTRACT_ONEBIT else 0,
+                    "fallback": ("tail_survives_cold" if FALLBACK_COLD
+                                 else "tail_survives"),
                     "nedecl": ("    __shared__ __align__(16) unsigned short "
                                f"ne16[SPB][{max(8, ((ng + 7) // 8) * 8)}];"
                                if self.nepack else
@@ -3607,6 +3685,41 @@ class GpuEngine:
                 _compile()
                 if self.occupancy["blocks_per_sm"] < actual:
                     _take(first)
+                    _compile()
+        # THE QUEUE MARGIN, RE-RANKED ON THE COMPILED FOOTPRINT
+        # (QCAP_BY_OCCUPANCY; the module constant says why).  The ladder
+        # above was ranked on the analytic footprint with the entry size of
+        # that moment; the entry may have changed since, and the compiled
+        # footprint is now known exactly, so the non-queue bytes are read
+        # off it and the ladder re-run on the real entry size with no slack.
+        # The ROOMIEST margin that predicts a block more is compiled, and
+        # kept only if the compiled occupancy confirms it.
+        actual = self.occupancy["blocks_per_sm"]
+        if (QCAP_BY_OCCUPANCY and ranked is not None and 0 < actual
+                < _reg_blocks(self.occupancy["num_regs"], tpb)):
+            # (only where the registers allow a block more than the
+            # kernel reached: where they bind, no margin can buy one, and
+            # a compile that cannot gain is not spent)
+            qbytes = 4 if self.qword else 3          # _caps reads this
+            nonq_actual = (self.occupancy["smem_bytes"]
+                           - _held(self.qcaps) * qbytes)
+            prev = ((actual, self.qcap_sigma_used), self.qcaps,
+                    self.qcap_sigma_used, self.smem_predicted,
+                    self.blocks_predicted)
+            best = None
+            for sig in QCAP_SIGMA_LADDER:
+                if sig > qcap_sigma or sig >= self.qcap_sigma_used:
+                    continue
+                caps = _caps(sig)
+                tot = nonq_actual + _held(caps) * qbytes
+                blocks = per_sm // (tot + SMEM_BLOCK_RESERVE)
+                if blocks > actual and (best is None or sig > best[2]):
+                    best = ((blocks, sig), caps, sig, tot, blocks)
+            if best is not None:
+                _take(best)
+                _compile()
+                if self.occupancy["blocks_per_sm"] <= actual:
+                    _take(prev)
                     _compile()
 
     def tail_packs(self, r):
