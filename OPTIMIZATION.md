@@ -610,6 +610,7 @@ crashing.
 | compacting the rare-and-deep final stage | ~0 by analysis | it is 24% of a phase and 109 steps deep, so it looks like the tail |
 | shared memory for lookup tables | worse at every block size | tables are small and L2-resident already |
 | larger thread blocks (512, 1024) | worse | more parallelism per block "should" help |
+| packing a SUBWHEEL's survivors into the window by RANK (7·11·13 keep 2·4·4 = 32 of 1001, so a prime's shift is whole words and the funnel shifts go; and an extra wheel prime at the same coverage unit) | **0.72-0.78x of the window stage** without the extra prime, **0.31x** with it (polynomial-runs round 5, built on the device in seven variants) | the 8 funnel shifts a prime were the largest item of the window body. But the pattern's period grows R-fold in WORDS, so the periodic read (2.8 loads for 8 words) is lost and every word is loaded -- 1.43x the data-pipe wavefronts on a pipe at 64% -- and the tables grow R-fold: 43-87 KB at R = 32 (one block per SM for six), and past shared memory the moment the extra prime needs R >= 768 to fill a warp, where 3.5 bytes a candidate meet the L2's 5 TB/s |
 
 The first four are the instructive ones: each was priced with a
 five-minute experiment (compile a variant with the suspect work deleted and
@@ -761,6 +762,82 @@ raising base 4's `per_launch` 1024 → 2048, paired over 10 rounds,
 **1.025× [0.986, 1.118]** for +174 MiB — an interval straddling 1, declined
 under the load rule. The measured optimum, 4096 at 1.07×, sits past the
 tail queue's ceiling and is not a regime to ship a campaign in.
+
+### 2.15 Enumerate what the period cannot hold: the classes of a partially forced prime
+
+**Recognise it when:** the wheel sits at its period bound (`W' < 2^63`
+here, the within-period offset of the wide record), the next prime up is
+worth its usual `q/(q−w)`, and the SMALLEST primes in the wheel leave the
+term only a few residue classes each — `w(q)` close to `q`. The wheel to 59
+had been declined twice in `polynomial-runs` on the period bound alone.
+
+**The idea.** A class-space engine already leaves the FORCED primes out of
+its period: it sweeps `t` with `term = r0 + U·t` for the one class the
+forced unit `U` leaves, and the period `W'` is the product of the wheel
+primes without `U`'s. Nothing in that arithmetic needs the unit to be
+forced. A prime that leaves several classes can be moved outside the period
+exactly the same way, provided the campaign sweeps EVERY class it leaves —
+the class list becomes the coverage claim in place of the unit. Each class
+is its own sweep with its own tables (the kill sets carried through
+`t = (killed − r0)·U^-1 mod q`, as for the forced unit), and the period loses the
+factor of those primes, which is room for the next prime up.
+
+**The measured case** (polynomial-runs, A347537 at n = 21, 2026-10-13; its
+`OPTIMIZATION_LOG.md` round 3 has the method and the checks): 5 leaves the
+term three classes and 7 two, so with 2, 3, 5 and 7 outside the period the
+term is in one of six classes mod 210, the wheel {11..59} has `W' =
+9.16e18 < 2^63` where 59#/6 did not fit, and the planner's own split
+machinery admits it. The classes mod 5 and 7 are exactly the residues the
+old wheel kept, so the whole gain is the new prime: candidates per unit of
+line × 40/59. Paired and interleaved against the plan, with an A/A arm:
+**1.306 [1.295, 1.311]** on the device at 256 periods (1.475 from the
+candidates × 0.88 from a window of 32 primes for 29 — 2.8's second price,
+every time), 1.10 at 128 periods, 0.81 at 64. The kernel did not change:
+one compiled module serves all six classes, each a 507 MB table set.
+
+**The price is the segment, and it is the whole decision.** The coverage
+unit is a window of `pb` periods over every residue of every class, so it
+grows by (new unit / old unit) × (new period / old period) — 35 × 59/35 =
+**59x** here (8.3e21 → 4.9e23 of line, 1 hour → 49 hours of device for the
+six classes together) — and a find is confirmed only when its window closes
+in every class. Price it with the model's expected clock to a CONFIRMED
+find, conditional on the term being past the cursor (the planner's
+objective), and separately with the over-swept line credited to the next
+filter where a promotion carries the classified line. At the cursor the
+hunt stood at, the strict clock read 1.03 (an expected 27 hours of
+over-sweep against a five-day remaining search), the carried-line clock
+~1.26, and the next term, with a search of months, 1.30. So the lever is
+worth its device ratio on a long hunt and nothing on a short one, and the
+same six-class option must lose at every opening filter — which an
+objective that prices the segment gives for free. **The owner's rule
+(CLAUDE.md 5j, 2026-10-13): over-sweep is not bought unless its expected
+hours are a small fraction of the hours the rate saves on the remaining
+search to that term.** So the disposition is per term, not per engine: 27 h
+against 1.3 days on a(21) from the cursor is a decline; 25 h against 44
+days on a(22) (2%) is admissible, and it is the owner's call to take it.
+
+**The recipe.** (1) For each small wheel prime list the classes it leaves;
+the product over the primes moved out is the class count `C`. (2) Check the
+new period fits the bound and that the split machinery admits it (`R1`,
+`R2`, `R3`, `W1`, `W2`). (3) The candidate ratio is `(q' − w(q'))/q'` for the
+prime admitted and nothing else — the enumerated classes are free. (4)
+Parity: the union of the `C` class engines == the dense CPU sieve on a
+small wheel of the SAME absolute period; the production wheel checked
+G13/G14-style and end to end on values the live campaign already
+classified (locate each to its `(t, s, u)` and run that one launch). (5)
+Time it paired; then price the segment as above before deciding. (6)
+Shipping is a launcher version: the class as a campaign dimension, the
+cursor ADOPTED (floored) across the change, `C` table sets or a table swap
+per class per window, gates for the partial unit, a frozen shape at the
+live filter.
+
+**Where else it applies.** The other three polynomial-runs families (the
+same six classes mod 210, candidates × 0.63–0.64, unmeasured). The
+primorial regime (primorial-runs, primorial-ladders) has the same period
+block but weak kill sets: 5 and 7 leave 4 and 6 classes (24 sweeps for a
+smaller `(q − w)/q`), so price the segment first. Not where the candidate
+prime kills little (decimal-ladders' 5) and not where the record already
+reaches the wheel wanted (plus-two-cliques' wheel to 59, lcm-ladders' 61).
 
 ---
 

@@ -376,6 +376,26 @@ each README stays.
    q, a wheel period W, a killed set K, BLS75's F and R) may stay unless it
    collides with an entry's letter.
 
+5j. **OVER-SWEEP IS NOT BOUGHT UNLESS IT IS SMALL AGAINST WHAT IT BUYS
+   (owner directive 2026-10-13, every project).** A coarser coverage unit
+   -- a longer wheel period, a wider window, residue classes enumerated
+   outside the period -- confirms a find only when the whole unit holding
+   it closes, so the campaign sweeps past the find for up to one unit and
+   the owner waits for it. Before taking any configuration whose coverage
+   unit is longer than the one running, price the EXPECTED over-sweep
+   (about half a unit, in hours, at the new rate, from the odds model
+   conditional on the cursor) against the hours the higher rate saves over
+   the remaining expected search to that term, and take it only when the
+   first is a small fraction of the second; a wash or a gain measured in
+   the same hours it delays is a decline. The planner's objective (the
+   expected clock to a CONFIRMED find) already charges the over-sweep; this
+   rule is the threshold on top of it, and it is the owner's. The case that
+   wrote it: polynomial-runs' six-class wheel to 59 is 1.31x on the device
+   and makes the coverage unit 59x longer, 27 h of expected over-sweep
+   against 1.3 days saved on A347537's a(21) from the cursor -- DECLINED
+   there; 25 h against 44 days on a(22) -- admissible there, as a priced
+   option for the owner (OPTIMIZATION.md 2.15, the project's log round 3).
+
 6. **New projects** copy the skeleton, import huntlib for
    infrastructure, keep all mathematics in-project, and add a row to the
    top-level README's project table **in alphabetical order of the project

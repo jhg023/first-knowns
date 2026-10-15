@@ -489,3 +489,628 @@ hours (rule 0a); re-sweep BIT_SURV and K2_SURV4 on the v2 kernel (both
 were flat over a factor of three on v1 in round 1, and the kernel's
 instruction stream is the same); or Nsight at the 128-period filters
 (minutes, not days).
+
+## Round 3 (2026-10-13) — the wheel to 59 through SIX CLASSES mod 210: 1.31x on the device at A347537 n = 21, measured; the segment is the price; NOT shipped
+
+Method, as rounds 1 and 2: a scratch harness through the engine API (not
+committed), every arm built at the campaign's own constants, warmed, then
+the SAME launches timed on every arm, every round every arm back to back in
+alternating order, the device synchronised, the survivor count and xor of
+each arm's launches compared on every run (identical on every run below),
+a second copy of the default built as an A/A arm, medians over rounds 1..
+with [min, max]. Rates are p-line per second at p ~ 2.95e23, where the
+campaign stands (coverage cursor 2.921e23 at the time of writing).
+
+### The lever the record was hiding
+
+The wheel to 59 was declined in rounds 1 and 2 on the period bound: the
+product of the levels must stay under 2^63, the full wheel to 53 in the
+class 1 (mod 6) already has W' = 5.43e18, and 59#/6 = 3.2e20 is far past
+it. The bound is on the PERIOD of the class-space wheel, and the class-space
+wheel leaves the forced primes 2 and 3 OUT of that period (the device sweeps
+t with p = 1 + 6t). Nothing in the arithmetic requires a prime left out of
+the period to be FORCED. A prime that leaves several classes can be left
+out just the same -- if the campaign sweeps every class it leaves. On
+A347537, at every filter from n = 6 up, 5 leaves p three classes (2, 3, 4)
+and 7 two (1, 2), so with 2, 3, 5 and 7 all outside the period the term
+lies in one of SIX classes modulo 210,
+
+    p = 37, 43, 79, 127, 163 or 169 (mod 210),
+
+the device sweeps t with p = r0 + 210 t for each of the six r0, and the
+period no longer carries the factor 35. The wheel {11..59} then has
+W' = 9,156,001,667,401,012,567 < 2^63 (the wheel to 53 times 59/35), and
+the engine's own planner (`wheel_candidates(21, A347537, 210)`) finds its
+split under the second first-level budget:
+
+    (11, 13, 17, 19, 23, 43, 47) × (29, 31, 37) × (41, 53, 59)
+    4,209,408 × 4,845 × 34,320 = 6.999e14 residues per class
+    W1 = 2,147,003,287 < 2^32,  W2 = 4,264,549,441 < 2^32
+
+What it buys, exactly. The six classes modulo 210 ARE the residues the old
+wheel kept at 5 and 7, so moving those primes outside the period changes
+nothing in the candidates; the whole change is 59 inside the wheel, which
+kills 19 of its 59 residues at n = 21 (w(59) = 19) and keeps 40. Candidates
+per unit of the p-line fall by exactly 40/59: 3.2217e-6 (one class mod 6 on
+the wheel to 53) -> 2.1842e-6 (six classes mod 210 on the wheel to 59),
+0.678. The ratio does not depend on how many classes 5 and 7 leave; the
+class count is what the segment pays (below).
+
+What the engine needs for it: nothing in the kernel. `killed_residues`
+already carries every kill set through t = (killed - r0) * 210^-1 (mod q) for
+any r0 and any squarefree unit, the primes of the unit kill no t, and the
+kernel source does not depend on r0 at all (the kill sets reach the device
+as tables -- the window patterns, the round tables, the tail masks and the
+generated tail's tables -- and the inline masks as scalar parameters), so
+ONE compiled module serves all six classes. The one refusal is
+`assert_unit`, which is right to refuse: a unit is a coverage claim, and
+with a partial unit the claim is made by the CALLER, which must sweep every
+class. The harness admitted unit 210 with an explicit class; a launcher
+version would make the class list the claim.
+
+### Correctness, checked the way the gates check a production wheel
+
+All on the harness, before any timing:
+
+* the six classes are the same at n = 6, 10, 17, 20, 21, 22 and 25;
+  a(17)..a(20) of this project each lie in one of them, and so do all
+  4,315 census values held in the live checkpoint's pending list (702 /
+  682 / 748 / 730 / 706 / 747 per class);
+* G17-style, the same absolute periods, two arithmetics: the unit-6
+  wheel {5,7,11,13,17} × {19,23} × {29} and the union of the six unit-210
+  class engines on {11,13,17} × {19,23} × {29} (the same W =
+  6,469,693,230) return the IDENTICAL stream -- at n = 10 with the sieve
+  to 32768 (143 survivors over two periods; 40 window primes, 168 round
+  primes, 12 tail rounds, so the whole per-candidate route runs in class
+  space), at n = 21 with the sieve to 64 (40,856 survivors over four
+  periods at p ~ 3e23: the live kill sets) and at n = 17 to 512 (326
+  survivors); a 300-sample of each passes the CPU engine's one-at-a-time
+  test;
+* G9-style, the six classes == the dense CPU sieve, which knows nothing
+  of classes: n = 21 over [1e15, +3e8) (505 survivors) and n = 17 over
+  [a(17) - 1e8, +2e8) (1,007 survivors, a(17) among them); and each of
+  a(17)..a(20) is the one survivor of its class engine over [p - 1, p + 1)
+  at its own filter;
+* the production wheel: each class's three levels have exactly
+  prod(q - w(q)) residues, W1 and W2 under 2^32 with W1 W2 = W', and
+  3,000 sampled CRT recombinations per class give values p = r0 + 210 t
+  that survive every prime to 59 (direct divisibility of all 21 forms);
+  the G14 window chain (x0 table, per-block offset, borrow, pattern word,
+  through the quad/pairs layout) says killed exactly when the value is on
+  3,840 sampled bits at two launch bases, one past 1e25; and END TO END:
+  three census values the live campaign classified (runs 13, 13 and 14 at
+  p ~ 2.99-3.00e23, in three different classes) were each located to their
+  (t, s, u) index and period, and the ONE launch of the six-class engine
+  that covers that index (launch 1,177,871 / 109,115 / 310,341 of the
+  window's 1,338,480) returned each of them among its 612-686 survivors.
+
+### Measured, paired and interleaved
+
+The plan (unit 6, {5..17,23,29,41} × {19,31,37} × {43,47,53}, sieve 2^15,
+256 periods, wide, (16, 2), 76 registers, 6 blocks per SM) against the
+six-class engine on {11..59} (the split above, sieve 2^15 -- the same depth
+the planner derives for it -- wide, (16, 2), 76 registers, 6 blocks per SM,
+32 window primes for 29, 507 MB of tables per class of which 256 MB is x0)
+at three window widths; 25 launches × 7 rounds; a class engine's line
+divided by SIX, because six classes must sweep it:
+
+| arm | ms / launch | candidates / s | p / s | ratio | survivors / launch |
+|---|---|---|---|---|---|
+| the plan | 19.93 | 6.90e12 | 2.140e18 | 1.000 | 415 |
+| the plan again (A/A) | 19.94 | 6.89e12 | 2.139e18 | 1.001 [0.991, 1.010] | 415 |
+| **six classes, 256 periods** | 22.61 | 6.08e12 | **2.781e18** | **1.306 [1.295, 1.311]** | 641 |
+| six classes, 128 periods (70 regs, 7 blocks) | 26.69 | 5.15e12 | 2.357e18 | 1.102 [1.090, 1.115] | 649 |
+| six classes, 64 periods (82 regs, 5 blocks) | 36.26 | 3.79e12 | 1.735e18 | 0.811 [0.809, 0.820] | 622 |
+
+and, in a second sweep of four rounds, the classes 37, 169, 79 and 127 at
+256 periods each against the plan: 1.318 / 1.310 / 1.310 / 1.315
+(22.57-22.63 ms a launch; the classes are interchangeable, as they must
+be: the same counts, the same survival, one kernel). The 1.306 decomposes
+as 1.475 (40/59 fewer candidates per unit of line) × 0.88 (the candidate
+rate: 32 window primes for 29, 59 having left the window for weaker
+primes -- OPTIMIZATION.md 2.8's second price of a wheel prime, as in every
+wheel change here). Survivors per unit of line are unchanged (the sieve
+depth is), so the host sees 1.31x the survivors a second, 28,000 for
+21,000: about 0.3 of a core either way.
+
+### The price is the segment, and it decides the question
+
+A window of 256 periods is 4.922e23 of p (8.343e21 on the plan: 59x), it is
+49 hours of device for the six classes together, and a find is only known to
+be the least once its window closes in EVERY class. Priced with the model
+(`poly_model.expected`, conditional on a(21) above the cursor 2.921e23: the
+model puts P(found by now) at 0.54, the conditional median at 8.35e23, the
+expected remaining line at 1.01e24), each design sweeping whole segments
+from the cursor at its measured rate, the clock to a CONFIRMED find being
+the sum over segments of the segment's time times P(a(21) at or past its
+start):
+
+| design | segment | E[clock to a confirmed a(21)] | ratio | of which over-sweep |
+|---|---|---|---|---|
+| the plan | 8.34e21 (1.1 h) | 5.49 d | 1.000 | 0.5 h |
+| six classes, 256 periods | 4.92e23 (48.9 h) | 5.34 d | 1.029 | 27.5 h |
+| six classes, 128 periods | 2.46e23 (29.0 h) | 5.61 d | 0.980 | 15.4 h |
+| six classes, 64 periods | 1.23e23 (19.7 h) | 7.17 d | 0.766 | 10.2 h |
+| a(22) from a carried line of 5e23 (illustrative; conditional median 1.57e25): the plan | | 194 d | 1.000 | 0.5 h |
+| a(22), six classes, 256 periods | | 150 d | 1.297 | 24.7 h |
+
+Two readings of the a(21) row, and both are true. On the planner's own
+objective -- the clock to a CONFIRMED find -- the six classes are a wash for
+a(21) from where the campaign stands: the expected 27 hours of over-sweep
+eat the 1.31x. But this is round 1's "planner's premise" item again: a
+promotion CARRIES the classified line, so the over-swept line is a(22)'s
+line swept at a(21)'s rate, and its net cost is only the rate gap between
+the two filters (1.15x on this engine's own table, A092120 n = 20 -> 21), a
+tenth of the 27 hours -- which makes the six classes about 1.26x to a(21)
+counted that way, and 1.30x on a(22) and every term after it, where a
+49-hour window is 1% of the search. The lever is worth 1.30 on the hunt the
+campaign will spend its next months in, and nothing on the one it is in
+today.
+
+**Disposition (the owner's rule, CLAUDE.md 5j, stated on this result):
+over-sweep is not bought unless its expected hours are a small fraction of
+the hours the rate saves on the remaining search to the term in question.
+For a(21) from the cursor that is 27 h against 1.3 days -- DECLINED: the
+campaign stays on the unit-6 plan for a(21). For a(22) it is 25 h against 44
+days (2%) -- admissible, and the six-class plan is the priced option for
+the a(22) hunt, to be taken at the owner's word once a(21) has landed and
+the launcher work below is done.** Nothing here moves the current campaign.
+
+### Not shipped, and what shipping takes
+
+A launcher version (v3) and a planner version (p2); the engine needs no
+change beyond letting a caller name the class list in place of a forced
+unit:
+
+* the class list becomes a dimension of the campaign: for each window, the
+  six classes in turn (or six engines interleaved), the work cursor
+  (period, class, launch), the coverage cursor advancing only when the
+  last class closes the window; `[STATUS]` and `--status` say which class
+  of six the window is in, and the heartbeat's rate is six classes' line
+  over six classes' time;
+* the unit-6 cursor is ADOPTED, never accepted: the covered p re-denominated
+  onto the new period by floor (2.921e23 -> period 151 of W = 1.923e21,
+  2.903e23; 1.8e21 re-swept, 0.4% of a window) through
+  `checkpoint.CursorPolicy(adopt=...)`, the census floor set under the
+  overlap, a DISCOVERY inside it an alarm (the free cross-check between the
+  two wheels), the pending list carried;
+* the plan's objective learns the class count: the segment it prices is
+  the window's line and the device time is six classes' -- and the
+  six-class option must LOSE at every opening (a 49-hour window against a
+  search of seconds), which the objective as written gives for free;
+* the tables: six engines are 3.0 GB of device memory, or one engine whose
+  class tables (x0, res1x, the pattern, round and tail tables: ~300 MB) are
+  swapped once per class per window, every eight hours;
+* the gates: G9 in class space with a PARTIAL unit (the six classes against
+  the dense sieve, as the harness did), G13/G14/G20 at the six-class plan, a
+  resume drill across a class boundary, `event_kind` unchanged, the
+  acceptance test off the first `[STATUS]` lines, and a frozen shape at the
+  live filter (none exists at n = 21 today);
+* the other three families get the same six classes mod 210 (A165234:
+  p = 1, 4 mod 5 and 1, 2, 4 mod 7; A230663: 3, 4 and 1, 5, 6; A092120: 2, 3
+  and 1, 2, 4), their plans sit at the same bound and the wheel to 59 fits
+  the same way, with MORE to gain -- candidates × 0.644 / 0.644 / 0.627 at
+  n = 21 (w(59) = 21, 21, 22) -- unmeasured on the device.
+
+### Priced and declined
+
+* **59 and 61 together** in the classes mod 210: W' = 5.59e20, past 2^63.
+  **11 outside the period too** (24 classes mod 2310) with 59 and 61: W' =
+  5.08e19, past it as well. The bound admits exactly {11..59}; a wheel past
+  59 is the two-limb offset of rounds 1-2, still ~2.5x on a quarter of the
+  kernel.
+* **64-period windows**: 0.81 on the device and 0.77 on the clock. The
+  window can be narrowed to shorten the segment, and the rate goes first.
+* **Sweeping the six classes to shorten the over-sweep** by any launch
+  order: none exists -- coverage is contiguous only at the end of a whole
+  window of all classes, whichever order the launches run in.
+
+## Round 4 (2026-10-14) — doubly-focused enumeration BUILT ON THE DEVICE and measured against the plan at A347537 n = 21: 0.069 of the engine at its best configuration; the per-candidate test is the price, and it is structural; DECLINED
+
+The question was whether doubly-focused enumeration (Bernstein; Wooding
+and Williams, ANTS 2006; Sorenson, arXiv:1001.3316 §4) — the wheel
+extended past 53 WITHOUT lengthening the coverage unit, the candidates of
+[L, L + H) enumerated as p = L + Mm·u − Mp·v over two coprime moduli with
+0 ≤ Mm·u − Mp·v < H — can beat the window sieve at the campaign's own
+coverage unit, H = 256 periods of the plan's wheel = 8.343e21. It was
+built on the GPU, verified three ways, and timed paired and interleaved
+against the plan engine on the live unit (period 11779, p = 3.8387e23).
+**It cannot: the best configuration measured 0.069 of the plan, and an
+instruction accounting backed by Nsight Compute puts the ceiling of the
+approach, under every assumption in its favour, below half the plan.**
+Scratch harness only, not committed (rule 9); the method is here.
+
+### What was built
+
+Three CuPy raw kernels, on the two-axis representation above (Mp carries 2
+and 3; the u axis is restricted mod every prime of Mp, the v axis mod every
+prime of Mm; every other prime to q2 = 32768 is tested per candidate):
+
+* **gen**: the sorted survivors of each axis in a range, enumerated as
+  c = r + P·i over a small sub-wheel P (2·3·5·11 on u, 7·13 on v: 12 and 8
+  residues) with the side's remaining primes applied as 32-bit kill
+  patterns per word of i (a q-word table per residue and prime); two
+  passes (count, prefix-sum, write) so the lists come out SORTED with no
+  sort — a launch of 2e6 v's needs 2e6 u's over the sliding u-range;
+* **join**: a warp per run of v's; per v the exact u-interval (a double
+  estimate corrected by 128-bit compares of Mm·u against Mp·v and H), the
+  pack constants Cq(v) = (L − Mp·v) mod Q lane-parallel into shared memory,
+  then the lanes take the u's of the interval and sieve p through the
+  stage-1 packs — pairs of primes with Q < 2^16 (89·97 … 163·167) then
+  singles to 400, each a 64-bit Barrett reduction of u by Q, one
+  multiply-add with Cq(v), a 32-bit reduction and a Q-bit mask in shared
+  memory — with per-lane early exit and a ballot-driven refill of dead
+  lanes from the u stream (staged through a 64-entry ring per warp,
+  coalesced loads issued one stage ahead, in the `join2` variant), the
+  survivors buffered per warp and flushed with one global atomic per 32;
+* **stage2**: the stage-1 survivors (2.85e-3 of the candidates) tested
+  through packs of three primes under 2^31 to 32768 with per-prime masks
+  in a global bitmap, early exit, one atomic per warp.
+
+The output is (u, v) pairs; the host rebuilds p in Python integers. Stage
+costs on the live unit at the through-83 partition (2·3·5·11·19·41·43·53·
+59·61·73·79 against 7·13·17·23·29·31·37·47·67·71·83, Mp = 1.216e16, Mm =
+2.196e16): 297 candidates per v, 3.51 stage-1 tests per candidate, 29
+stage-2 tests per stage-1 survivor; gen 3% of the time, join 77%, stage 2
+20%.
+
+### Correctness, before any timing
+
+* P1, a dense reference: moduli through 37 (so the v axis is small enough
+  to run whole), [1e23 + 12345, +1e9): the join's RAW output == the CPU
+  engine's dense sieve through 37, 23,666 values, identical sorted lists;
+  stage 1 (packs 41..400) on +1e10 == the CPU sieve through 400, 6
+  values; stage 2 to 2000 == the CPU sieve, both empty. Every value's v
+  reconstructs inside [0, Mm).
+* P2, the production moduli at FULL depth against the OTHER arithmetic:
+  on [3.8387e23, +3.35e18) (256 periods of a wheel-to-43 engine), the DFE
+  over v < Mm/1000 returned 43 survivors at q2 = 32768 and the GPU
+  engine's survivors of that window with the same v filter are the same
+  43; a 200-sample passes the CPU engine's one-at-a-time test, and the
+  engine's other survivors all have v ≥ Mm/1000.
+* The staged-ring variant first dropped 12% of the candidates (its ring
+  was carried across v's while the next v starts ~300 entries behind the
+  consumer); fixed by restarting the ring at every v, re-verified on P1.
+
+### Measured, paired and interleaved
+
+The plan engine (unit 6, {5..17,23,29,41} × {19,31,37} × {43,47,53}, sieve
+2^15, 256 periods, wide, 76 registers, 6 blocks/SM) timed over 25 of its
+launches of the live segment (the exact line of each launch summed, not
+launches × a nominal count), the DFE over a v-range sized to ~0.25 s
+(its line is H × the v's processed over |S_v|, exactly), a second plan
+engine as the A/A arm, every round every arm back to back in rotating
+order, 5 rounds (3 on the last three rows), medians with [min, max]:
+
+| DFE arm (depth, variant) | cand/v | tests per cand | tests per warp-iteration | DFE p/s | plan p/s | ratio | A/A |
+|---|---|---|---|---|---|---|---|
+| 83, `join` (refill from global, an atomic a survivor) | 297 | 3.51 | 17.8 | 1.11e17 | 2.01e18 | **0.055** [0.050, 0.055] | 1.007 |
+| 83, `join2` (staged ring) | 297 | 3.51 | 17.8 | 9.6e16 | 1.96e18 | 0.049 [0.047, 0.052] | 1.023 |
+| 83, `join2`, pairs only to 131 | 297 | 3.96 | 18.2 | 9.6e16 | 1.99e18 | 0.048 [0.048, 0.053] | 1.028 |
+| 83, `join2` + survivors buffered per warp | 297 | 3.51 | 17.8 | 8.0e16 | 2.01e18 | 0.040 [0.039, 0.040] | 1.012 |
+| 83, the same, 128 v's per warp | 297 | 3.51 | 17.8 | 7.1e16 | 1.87e18 | 0.038 [0.038, 0.039] | 1.046 |
+| **79**, balanced partition (Mp 2.22e15, Mm 1.45e15) | 2,191 | 3.30 | 28.8 | 1.28e17 | 1.86e18 | **0.069** [0.068, 0.070] | 1.014 |
+| 89, balanced partition (Mm 1.29e17) | 19 | 3.74 | 3.8 | 1.6e16 | 1.87e18 | 0.009 [0.008, 0.009] | 1.011 |
+
+Three hypotheses about the join's slowness were each tried and each
+read as a null (the refill's global load on the critical path: the ring
+bought nothing; an atomic a survivor serialised at the L2: buffering
+bought nothing; the mask footprint and occupancy: pairs to 131 bought
+nothing). **Nsight Compute on `join2`** (depth 83, the second chunk, `--set
+full`): 21.4 ms at the tool's clock, issue slots **54.6% busy**, IPC 2.2,
+72 registers, no local-memory spills, 33.6 KB of static shared memory
+(2 blocks per SM by shared memory, 3 by registers), theoretical occupancy
+33%, achieved 32%, 3.85 active warps per scheduler with 0.81 eligible,
+no eligible warp on 45% of cycles, 7.0 warp-cycles per issued instruction,
+L1 hit 96%, memory throughput 28%. So the kernel is not stalled on
+anything in particular; it is **issuing, at half the SM, about 100
+warp-instructions per loop iteration** — the two ballots, the refill, the
+pack record from shared, the 64-bit Barrett step on u, the multiply-add,
+the 32-bit step, the mask gather, the counters and the branches — and an
+iteration serves 18 tests (29 at depth 79, where the lanes stay full).
+
+### The accounting, and why it is structural
+
+Warp-instructions per unit of the p-line, from the measurements: the
+plan engine issues at 67% (round 2's profile) for 6.5e12 wheel positions
+a second, 0.13 warp-instructions a position, 4.2e-7 per unit of line.
+The DFE at depth 79 spends 97 warp-instructions an iteration for 28.8
+tests and 3.30 tests a candidate — 11 a candidate — at 4.4e-7 candidates
+per unit of line: 4.9e-6, **11.6x the engine's**, which at 55% issue
+against 67% is the measured 14x (0.069).
+
+The structure behind it. The engine's window body tests one prime on 256
+positions in 17 warp-instructions — 0.066 per position-prime — because
+the positions are an arithmetic progression and a prime's kills are a
+periodic bit pattern. Doubly-focused enumeration is exactly the choice to
+give that up: a window of N positions with step s needs s = H/N, so at
+the campaign's H a 256-period window forces the wheel to W' = 5.4e18, and
+any modulus past it (here 83# = 2.67e32) makes the "windows" shorter than
+one position and the survivors structureless, so every remaining prime is
+a per-candidate test. The gain is 9.5x fewer candidates and 3.5 tests in
+place of 24 window primes, 65x; the loss is ≥ one warp-instruction per
+test against 0.066 — measured 6 per test (92x), and at the floor of this
+arithmetic (the 64-bit reduction of u alone is ~16 thread-instructions;
+~30 a test, every lane productive) 0.94 per test, 14x. **Even at that
+floor, at 100% issue, the DFE is ~2x slower than the plan engine as it
+stands.** Per-u residue tables in place of the reduction move the cost
+onto the LSU, which the engine's own profile has at 79%; that is not a
+route to parity either.
+
+### Priced and declined
+
+* **The cross-v candidate stream** (lanes refilled from the next v's
+  interval so a warp never idles at the end of one): worth up to 8x at
+  depth 89 (3.8 of 32 lanes) and nothing at depth 79 (28.8 of 32), so it
+  lifts the deep partitions to the shallow one's 0.07 and no further.
+* **Triples with Q-bit tables in L2** (0.9-3.4 MB a pack): ~2.1 tests a
+  candidate for 3.5 — ≤ 1.7x, and a random L2 sector per test at a rate
+  the L2 bandwidth would bind on.
+* **Deeper moduli** (through 97: 0.0675 of the plan's candidates, 0.64 of
+  depth 83's): needs the cross-v stream first, then ≤ 1.5x.
+* **A sorted full-axis join** (both axes enumerated whole, as four
+  half-wheel tables, in place of the per-v interval): the same
+  per-candidate sieve; the enumeration is the cheap part in either
+  formulation (gen was 3% here).
+* All of it compounded, ≤ 0.2; the issue-rate ceiling above, ≤ 0.45.
+
+**Disposition: DECLINED.** Doubly-focused enumeration keeps the coverage
+unit and loses the window; on this GPU the window is worth more than the
+wheel it fences in. The lever for a wheel past 53 remains round 3's six
+classes mod 210 with the wheel to 59 — 1.31x on the device, paid in
+segment length, priced for a(22) under rule 5j. No code, plan, constant
+or campaign was changed in this round.
+
+## Round 5 (2026-10-14) — the RANKED-SUBWHEEL window layout BUILT ON THE DEVICE and measured against the plan at A347537 n = 21: the window stage alone at 0.72-0.78 of the engine's; what it loses is the periodic read; with 59 moved into the wheel it is bound by the L2 at 0.31; DECLINED
+
+The question was whether the window's per-prime work gets cheaper when
+consecutive bits mean something else. Today a lane's window is 256
+consecutive PERIODS of one wheel residue, and a prime's kills are a bit
+pattern of period q read at an arbitrary bit offset — the 8 funnel shifts
+a prime that round 2's profile counted as the largest single item of the
+body (29.5% of the window region's executed instructions, 22% of the
+kernel's). The alternative: take a few small wheel primes out of the CRT
+enumeration into a SUBWHEEL M whose kept counts multiply to a multiple of 32 — 7·11·13 at n = 21 keeps 2·4·4 =
+R = 32 of M = 1001 — and let a window hold the subwheel's SURVIVORS in
+rank order: for the class t = t_lo + D·j of the outer wheel D = W'/M, the
+kept j are those with (a + j) mod M in the kept set S (a = t_lo·D^-1 mod
+M), and rank/select (rho, sigma) pack them. A prime q then kills rank z iff
+T_q[z + R·h_q], T_q periodic in R·q BITS of rank, h_q the class's phase —
+so the shift is R·h_q/32 = K·h_q whole WORDS (K = R/32) and the lane's
+words are ANDed unshifted. The same construction admits an extra prime in
+the outer wheel (59: D = 59·W'/M) WITHOUT lengthening the coverage unit —
+the class's ranks inside [L, L + 256 W') are an interval, ⌊256 M / 59⌋
+candidates or one more — which would buy round 3's 40/59 at round 1's
+segment: the one formulation seen here that answers rule 5j directly,
+and the reason it was built. (A rank-packed window is a known device in
+sieving; the question was this kernel.) It was built on the GPU in seven
+variants, verified exactly, and timed paired and interleaved against the
+plan engine on the live segment (period 11779). **The window stage ALONE,
+in its best configuration, runs at 1.11 of the engine's WHOLE pipeline —
+window, extraction, in-block rounds and tail — per unit of line, which is
+0.72-0.78 of the engine's window stage; the extra prime's variants, whose
+tables cannot live in shared memory, sit at 0.31, exactly where 3.5 bytes
+a candidate meet the L2's bandwidth.** Scratch harness only, not committed
+(rule 9); the method is here.
+
+### What was built
+
+One CuPy raw kernel, parameterised: ONE WARP PER CLASS (an outer-wheel
+residue, enumerated as two CRT levels [5,17,19,23,29,31,37] × [41,43,47,53]
+(+59), 5.49e6 × 5.97e5 = 3.28e12 classes a segment; the engine's 1.05e14
+residues / 32), the class's bitmap of 256·R/E bits held across the warp —
+lane i the words i + 32c (LW = 1), the pair at 2i + 64c (LW = 2) or the
+quad at 4i + 128c (LW = 4) — so every warp load is 32 consecutive words:
+one wavefront, no bank conflicts, no alignment trick beyond storing the
+table LW times shifted by a word. Tables padded past their period so no
+read wraps (q + 32·WPL + K words a prime). Phases lane-parallel (lane qi
+reduces the class's t_lo mod q_i and forms h_i; one shuffle a prime
+broadcasts it), the per-class setup ~60 instructions against 29 × 8 word
+loads. The extraction mirrors the engine's: popcount, a five-shuffle warp
+prefix, the per-survivor ffs loop and one shared store a survivor into a
+per-warp ring (XOR-consumed at the end so the stores stay; a running xor
+of every entry is the fingerprint), or in VERIFY mode a global record of
+(class, rank) the host rebuilds the integer from. With E = 1 the class's
+8192 ranks tile the segments exactly (a is the same in every segment, so
+each class's coverage is a fixed shift of under 32 candidates — less than a
+period of W' — contiguous across segments); with E = 59 the rank interval
+is computed per class and masked per word.
+
+| variant | subwheel | R | E | window primes | words / lane | load | tables | home |
+|---|---|---|---|---|---|---|---|---|
+| V1 | 7·11·13 | 32 | — | 29 | 8 | LDS.32 | 43 KB | shared |
+| V2 | 7·11·13 | 32 | — | 29 | 8 | LDG.32 | 43 KB | global (L1) |
+| V3 | 7·11·13 | 32 | — | 29 | 8 | LDS.64, 2 copies | 87 KB | shared |
+| V4 | 7·11·13 | 32 | — | 29 | 8 | LDG.128, 4 copies | 174 KB | global |
+| V5 | 7·11·13·43 | 768 | 59 | 28 | 4 | LDG.32 | 353 KB | global (L2) |
+| V6 | 7·11·13·17·41 | 4,992 | 59 | 28 | 22 | LDG.32 | 2.3 MB | global (L2) |
+| V7 | 7·11·13·43 | 768 | 59 | 28 | 4 | LDG.128, 4 copies | 1.4 MB | global (L2) |
+
+Correctness, before any timing, every variant: the device's survivors ==
+a host reference (the same ranks, numpy modular arithmetic prime by prime)
+on 108 classes scattered over the index space and on a contiguous range of
+300 through the kernel's own class loop and blocks (V1-V4: 2,947 and 8,019
+survivors; V5, V7: 1,722 and 4,759; V6: 11,326 and 31,360 — 0.326% of the
+candidates, the engine's BIT_SURV); 300 device survivors and ~299 device
+non-survivors per variant re-tested against the x-space kill sets
+(`killed_residues(q, 21, A347537, 1)`, {2, 3} ∪ the wheel ∪ 59 ∪ the window)
+in Python integers, 0 failures; every candidate of a sampled class in its
+class and kept by the subwheel; the timed kernel's count == the verify
+kernel's; the fingerprint identical on every round below.
+
+### Measured, paired and interleaved
+
+The plan engine (unit 6, {5..17,23,29,41} × {19,31,37} × {43,47,53}, sieve
+2^15, 256 periods, wide, 76 registers, 6 blocks per SM = 24 warps) timed
+over 24 of its launches of the live segment (the exact line of each
+launch summed), a second copy as the A/A arm, each transposed variant over
+a fixed class range sized to ~0.5 s (its line = classes × H / classes per
+segment), every round every arm back to back in rotating order, medians
+over rounds 1.. with [min, max]. Candidate rates are per unit of line:
+the E = 59 variants generate 40/59 of the plan's candidates, so their p/s
+is what counts. Rates in p-line per second.
+
+| arm | warps / SM | regs | cand / s | p / s | ratio to the plan |
+|---|---|---|---|---|---|
+| the plan (window + extraction + rounds + tail) | 24 | 76 | 6.94e12 | 2.07e18 | 1.000 |
+| the plan again (A/A) | 24 | 76 | 6.89e12 | 2.05e18 | 0.988 [0.972, 1.001] |
+| V1, LDS.32, unroll 4, 1024 threads | 32 | 31 | 4.92e12 | 1.53e18 | 0.741 [0.734, 0.763] |
+| V1, fully unrolled, 512 threads | 16 | 114 | 4.80e12 | 1.49e18 | 0.717 [0.682, 0.720] |
+| V2, LDG.32 from L1, unroll 4, 1024 | 32 | 31 | 4.76e12 | 1.48e18 | 0.715 [0.705, 0.718] |
+| V3, LDS.64 pairs, unroll 1, 512 | 16 | 39 | 5.43e12 | 1.68e18 | 0.813 [0.809, 0.814] |
+| V3, LDS.64 pairs, unroll 1, 1024 | 32 | 39 | 6.63e12 | 2.06e18 | 0.994-1.034 (two sweeps) |
+| V3, LDS.64 pairs, unroll 2, 1024 | 32 | 40 | 6.98e12 | 2.17e18 | 1.062 [1.061, 1.063] |
+| **V3, LDS.64 pairs, unroll 4, 1024** | 32 | 40 | 7.34e12 | 2.28e18 | **1.106 [1.096, 1.121]**; a second copy 1.113 [1.091, 1.127] |
+| V3, unroll 4, 1024, **the window body alone** (no push loop, no ring) | 32 | 40 | 8.22e12 | 2.55e18 | **1.232 [1.225, 1.304]** |
+| V4, LDG.128 four copies (174 KB, past the L1) | 16 | 128 | 3.41e12 | 1.06e18 | 0.510 [0.508, 0.512] |
+| V5, 59 outer, R = 768, LDG.32 | 16 | 128 | 1.42e12 | 6.51e17 | 0.310 [0.309, 0.311] |
+| V5, unroll 4 | 16 | 128 | 1.50e12 | 6.87e17 | 0.327 [0.326, 0.328] |
+| V5, 64 registers forced (96 B of spills) | 32 | 64 | 1.16e12 | 5.31e17 | 0.253 [0.252, 0.254] |
+| V6, 59 outer, R = 4,992, LDG.32 | 16 | 128 | 1.39e12 | 6.36e17 | 0.303 [0.300, 0.303] |
+| V7, 59 outer, R = 768, LDG.128 | 16 | 128 | 1.22e12 | 5.57e17 | 0.265 [0.264, 0.267] |
+
+Reading the table. The ratios are the transposed WINDOW STAGE against the
+engine's WHOLE pipeline. Round 2's SASS profile at this filter puts the
+engine's window and extraction at 75% of the sieve kernel's instructions
+and 69% of its stall samples, and the sieve kernel at 94% of the device:
+0.65-0.70 of the engine's time per unit of line. So the best transposed
+stage, at 1.11 of the pipeline, spends 0.90 of the engine's time doing what
+the engine does in 0.65-0.70 — **1.29-1.39x slower on the stage it
+replaces** — and the window BODY alone, with the extraction removed
+entirely, spends 0.81: still 1.16-1.25x slower. The two LDS.64 arms built
+from the same source differ by 0.7% (the harness's own A/A); the engine's
+A/A read 0.988. The E = 1 layout buys nothing but the layout — the same
+candidates, the same 29 primes, the same survivor stream — so the stage
+would have to be faster than the engine's to pay at all.
+
+### The accounting, and why it is structural
+
+**The periodic read is what the layout loses.** The engine's pattern for a
+prime q has period q BITS, so a 256-period window needs only ⌈q/32⌉ + 1
+words loaded and derives the rest by the same funnel shift (WINDOW_PERIODIC,
+WINDOW_READ_MIN): 2.8 LDS.64 a prime per lane-window, 5.6 data-pipe
+wavefronts per prime per warp of 8192 candidates (round 2's profile: the
+loads at their ideal wavefront count, the L1 data pipe at 64%). The ranked
+pattern has period R·q bits = K·q WORDS — 32x longer at R = 32 — so no word
+of a window is derivable from another and all eight are loaded: the
+coalesced LDS.64 pair read is 256 B a warp-instruction, two wavefronts, four
+instructions a prime: **8 wavefronts for 5.6, 1.43x on the pipe the
+engine already has at 64%**, against the 8 funnel shifts saved on an ALU
+pipe at 74%. The measured 1.29-1.39x on the stage is that ratio. The
+single-word read (V1, V2) pays 8 LSU issues a prime for the engine's 2.8
+and lands at 0.72-0.74, issue-bound; the quad read (V4) halves the issues
+but its four copies are 174 KB, past the L1, and lands at 0.51.
+
+**The tables grow R-fold, and shared memory is where the window lives.**
+The engine's 29 patterns are 4.5 KB. The ranked tables are R·q bits a prime
+plus a window of padding: 43 KB plain and 87 KB as pairs at R = 32 — the
+whole SM's shared memory for one block of 32 warps where the engine runs
+six — and R = 32 is the smallest subwheel that packs a word at all (7, 11,
+13 keep 2, 4, 4). The extra prime needs R ≥ 768 to fill a warp's loads
+(classes of 256·R/59 bits: 3,332 at R = 768, five words a lane at R = 32,
+which cannot coalesce): 353 KB at R = 768, 2.3 MB at R = 4,992, L2-resident
+only. Every layout reads 3.5 bytes a candidate from its tables (28-29 bits),
+so at the engine's candidate rate the E = 59 variants would draw 16 TB/s
+from a 5 TB/s L2 — and they measure 1.4e12 candidates a second, which is
+5 TB/s: **the L2's bandwidth, to the digit**. The one way to serve those
+tables from shared memory is to stage them a prime at a time with many
+classes' accumulators held in registers, priced below.
+
+### Priced and declined
+
+* **The staged-table design for E = 59** (one prime's table at a time in
+  shared memory — up to 38 KB at R = 768 — the block's 256-512 classes'
+  accumulators in registers, 4-8 words a class a lane): the staging alone is
+  600 wavefront-operations a prime per block, 1.2-2.3 per class-prime on
+  top of the 4 the class reads, against the engine's 5.6 per 8192
+  candidates — ~5.2-6.3 per 3,332: parity on the data pipe at best, at 16
+  warps per SM, before the 40/59 is spent on anything, and a new kernel
+  structure. Not built.
+* **Lane per class with the extra prime at R = 32** (139-bit classes, five
+  words a lane, a four-copy table of 60 KB in shared, the engine's own
+  gathered reads): 2 LDS.128 a prime per lane are 8 wavefronts a
+  warp-instruction pair for 139 candidates where the engine pays 5.6 for
+  256 — 2.6x per candidate, 1.8x per unit of line after the 40/59. Dead
+  on the data pipe; not built.
+* **Quads at R = 32 without the extra prime**: 174 KB (V4), or 118 KB with
+  per-chunk base updates — neither fits the 100 KB of shared memory, and from
+  the L1 it measured 0.51.
+* **A shallower ranked window** (the first 20 primes, so four copies fit in
+  75 KB of shared): the nine primes dropped (149-199) pass 3.1x the
+  survivors into the rounds — 24% of the kernel becoming ~75% — for a load
+  width worth ≤ 1.3x on the body.
+* **The subwheel 5·7·11·13 (R = 96)**: tables 3x bigger again; 52 KB plain
+  with the tighter padding, 104 KB as pairs. Past the budget.
+
+**Disposition: DECLINED.** The ranked layout removes the funnel shifts and
+loses the periodic read, and on this kernel the read is worth more than
+the shifts — 1.43x on the data pipe against ~0.5x on the ALU — so the
+window stage is 1.3x slower with nothing bought, and the extra prime it
+was built to admit at the campaign's own segment puts its tables where the
+L2 binds at 0.31. The lever for a wheel past 53 remains round 3's six
+classes mod 210 — 1.31x on the device, paid in segment length, priced for
+a(22) under rule 5j. No code, plan, constant or campaign was changed in
+this round; no battery was run (no engine file changed).
+
+## The campaigns (2026-10-08 to 2026-10-15) — what the run measured
+
+No engine or planner change; this is the record of the defaults under a
+real campaign, one per family, no flags, engine v2 and planner p1, read
+from the ledger timestamps and the checkpoints (the method: line from the
+filter's first boundary to the end of the find's segment, over the wall
+clock between the two ledger times; for a campaign that was not running
+for part of a leg, the checkpoint's own clock, and for a stopped filter the
+launches it swept as that fraction of the segment's line).
+
+| filter | priced (BENCHMARKS.md) | campaign | ratio |
+|---|---|---|---|
+| A165234 n = 19 | 4.50e17 p/s | 4.61e17 | 1.02 |
+| A165234 n = 20 then 22 | 9.46e17, 1.51e18 p/s | 10.08 h on the campaign's clock for 10.23 h priced | 1.01 (5.5 segments) |
+| A230663 n = 19 | 3.34e17 p/s | 3.44e17 | 1.03 |
+| A092120 n = 18 | 4.48e17 p/s | 4.57e17 | 1.02 |
+| A092120 n = 20 | 1.24e18 p/s | 1.27e18 | 1.02 (54% of one segment) |
+| A347537 n = 19 | 6.07e17 p/s | 6.03e17 | 0.99 |
+| A347537 n = 20 | 1.42e18 p/s | 1.44e18 | 1.01 |
+| A347537 n = 21 | 1.97e18 p/s | 2.03e18 on the campaign's clock | 1.03 (65 segments, 74.3 h) |
+
+**Kept:** every default. The loop's wall clock matched the device price at
+every filter swept whole, so the two things rounds 1 and 2 left unmeasured
+because an agent does not start a campaign — the segment loop's own cost
+per unit of line (OPTIMIZATION.md 2.14) and the substance of rule 5g's
+no-flags acceptance test — are measured now, and both read clean. The
+first `[STATUS]` lines themselves were not kept.
+
+**The model was right.** E over the nineteen finds sums to 18.60 (mean
+0.98, P = 0.49 under Gamma(19, 1)): neither the lateness of most families
+here nor primorial-runs' earliness. BENCHMARKS.md's "budget 1.5–2×" was
+not needed; every term the price table put inside a day landed inside a
+day, and A347537's a(21), priced at 1.4 days to its median from the bottom,
+took 3.1 days at 2.3 medians.
+
+**The live filters, priced at the pause.** Round 1's table ends at n = 21,
+and two campaigns promoted past it: A165234 n = 22 reads 1.51×10¹⁸ p/s
+(1.18× its n = 21 at the same p) and A347537 n = 22 3.42×10¹⁸ (1.69×), each
+three alternated rounds of 1.5 s through the engine API against the n = 21
+engine (BENCHMARKS.md). The larger jump on A347537 comes with a shallower
+sieve in its n = 22 plan (2^14 where n = 21 planned 2^15) and twice the
+survivors a second; it was not taken apart further.
+
+**Gaps the run exposed, none fixed at the pause:**
+
+* *The README's model tables had drifted from `model_results.json`.* The
+  prediction tables for A165234, A230663 and A092120 carried figures from
+  an earlier run of the model (A230663's a(17) stated below its a(16)),
+  while the file and BENCHMARKS.md's clocks carried the committed model's.
+  The finds were scored on the file; the README now carries it.
+* *The campaign shapes are frozen at the published openings.* With the
+  finds in hand the four campaign shapes (n = 16, 16, 16, 17) are no
+  longer any campaign's opening; a shape at each live filter is owed
+  (rule 5g), and the finds into the oracle's `FOUND` move the drill filters
+  with them.
+* *The wheel A/B was repeated nowhere past A165234 n = 21*, and every
+  live filter plans that same full wheel to 53 (BENCHMARKS.md, "What is
+  still owed").
+* *For the two a(22) hunts, round 3's six classes mod 210* are the priced
+  option under rule 5j — weeks of remaining search, where a 49-hour segment
+  is a few percent — and they need launcher v3; they are unmeasured at
+  n = 22, where the plan's own sieve depth already moved.

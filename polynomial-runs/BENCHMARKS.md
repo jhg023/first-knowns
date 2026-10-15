@@ -20,6 +20,7 @@ index, each the planned configuration there, and three anchors.
 | 2026-10-08 | v1 (primorial-runs' engine v2, taken whole) / p1, first reading, 160-period campaign shapes | **64,817** | 52,972 | 137,567 | 197,601 | 56,599 | 9,579 | 53.4 |
 | 2026-10-08 | v1 / p1 with round 1's width table and block-shape rows; the four campaign shapes re-frozen at 256 periods (OPTIMIZATION_LOG.md round 1); all seven fingerprints reproduced | **71,565** | 56,185 | 127,450 | 206,673 | 53,205 | 9,792 | 51.2 |
 | 2026-10-08 | **v2** / p1: the queue-overflow fallback out of line and the queue margin re-ranked on the compiled footprint, from the Nsight Compute profile (OPTIMIZATION_LOG.md round 2); all seven fingerprints reproduced | **71,289** | 51,448 | 122,113 | 195,971 | 57,622 | 9,115 | 42.1 |
+| 2026-10-15 | v2 / p1, unchanged: the battery at the pause, after the campaigns (RESULTS.md); all seven fingerprints reproduced | **69,871** | 22,781 | 125,207 | 214,295 | 29,677 | 8,985 | 48.5 |
 
 The four campaign shapes are a single launch each, so a reading is mostly
 launch overhead and moves between runs; the fingerprints do not move at
@@ -77,6 +78,7 @@ is clamped to 183 live periods, and 128 in place of 96 at A347537 n = 19).
 | A165234 n = 19 | {5..29},{31,37,41},{43,47} | 2^15 | 128 | narrow |
 | A165234 n = 20 | {5..23,37},{29,31,41},{43,47,53} | 2^15 | 256 | wide |
 | A165234 n = 21 | {5..23,37},{29,31,41},{43,47,53} | 2^14 | 256 | wide |
+| A165234 n = 22 (live at the pause) | {5..23,37},{29,31,41},{43,47,53} | 2^14 | 256 | wide |
 | A230663 n = 16 | {5..23},{29,31},{37} | 2^15 | 256 | narrow |
 | A230663 n = 17 | {5..23},{29,31},{37,41} | 2^16 | 256 | narrow |
 | A230663 n = 18 | {5..23},{29,31,37},{41,43} | 2^16 | 256 | narrow |
@@ -93,6 +95,7 @@ is clamped to 183 live periods, and 128 in place of 96 at A347537 n = 19).
 | A347537 n = 19 | {5..29},{31,37,43},{47,53} | 2^16 | 128 | narrow |
 | A347537 n = 20 | {5..19,29,53},{23,31,37},{41,43,47} | 2^15 | 256 | wide |
 | A347537 n = 21 | {5..17,23,29,41},{19,31,37},{43,47,53} | 2^15 | 256 | wide |
+| A347537 n = 22 (live at the pause) | {5..17,23,37,41},{19,29,31},{43,47,53} | 2^14 | 256 | wide |
 
 ## Every opening, and the filters after it, priced
 
@@ -152,6 +155,31 @@ day-long filters read 1.02–1.07 of round 1's readings, the rest within the
 at A165234 n = 21 and A092120 n = 20, 1.06 at A347537 n = 21, with an A/A
 arm alongside) are the measurement of the change.
 
+## The campaigns against these prices, and the live filters at the pause
+
+The four campaigns of 2026-10-08 to 10-15 ran with no flags. Read from the
+ledger timestamps and the checkpoints (RESULTS.md, "The campaigns against
+their benchmarks", has the table and the method), **every filter they swept
+whole for more than two minutes ran at 0.99–1.03× its device price above**
+on the campaign's own clock: A165234 n = 19 1.02, n = 20 and 22 together
+1.01; A230663 n = 19 1.03; A092120 n = 18 1.02, and n = 20 1.02 over the
+54% of a segment it swept; A347537 n = 19 0.99, n = 20 1.01, and n = 21
+1.03 over 65 segments and 74 hours (2.03×10¹⁸ p/s against 1.97). The
+segment loop adds nothing the kernel does not, and the pool never bound.
+
+Two of the filters the campaigns stopped in had never been priced, because
+round 1's table ends at n = 21. Read on 2026-10-15 through the engine API,
+the planned engine at each family's cursor, warmed, three rounds of 1.5 s
+of launches alternated with the n = 21 engine at the same p:
+
+| filter | device, p/s | against n = 21 at the same p | survivors/s |
+|---|---|---|---|
+| A165234 n = 22 | 1.51e18 | 1.18 [1.17, 1.18] (n = 21 read 1.28e18, priced 1.26e18) | 20,600 |
+| A347537 n = 22 | 3.42e18 | 1.69 [1.67, 1.71] (n = 21 read 2.03e18, priced 1.97e18) | 42,200 |
+
+One-second readings, not a frozen shape: a fingerprinted shape at each live
+filter is still owed (below).
+
 ## What rounds 1 and 2 measured, and what is still owed (rule 5g)
 
 Measured on 2026-10-08 through the engine API (OPTIMIZATION_LOG.md rounds
@@ -164,16 +192,19 @@ A347537 n = 21 before and after engine v2, and the two levers it found
 A092120 n = 20 and A347537 n = 21. The per-filter price table is the
 section above.
 
-Still owed before a campaign's rate is read as a measurement:
+Still owed before a resumed campaign is offered (the acceptance test's
+substance — every filter at its price, the pool not binding — was read off
+the four campaigns above; their first `[STATUS]` lines were not kept):
 
 * a paired A/B of the planner's wheel against its neighbours at the OTHER
-  day-long filters (A230663 n = 21, A092120 n = 20–21, A347537 n = 21) —
-  every one of them plans the same full wheel to 53 at 256 periods on the
-  wide record that A165234 n = 21 does, and the planner's own model puts
-  the wheel to 47 at 1.3–1.5x the clock there, so the measurement at
-  A165234 n = 21 is expected to carry, but it has not been repeated;
-* the no-flags acceptance test, read off the first `[STATUS]` lines of
-  each family's campaign.
+  day-long filters (A230663 n = 21, A092120 n = 20–21, A347537 n = 21) and
+  now at the live n = 22 filters — every one of them plans the same full
+  wheel to 53 at 256 periods on the wide record that A165234 n = 21 does,
+  and the planner's own model puts the wheel to 47 at 1.3–1.5x the clock
+  there, so the measurement at A165234 n = 21 is expected to carry, but it
+  has not been repeated;
+* a frozen, fingerprinted shape at each live filter: A165234 n = 22,
+  A230663 n = 21, A092120 n = 20, A347537 n = 22.
 
 The same engine measured 2.8×10¹⁷ m/s at n = 19 and 6.3×10¹⁷ m/s at n = 20
 on primorial-ladders' A145743 (m + 4k², the same kill-set regime); here

@@ -604,7 +604,11 @@ Three consequences, all of them load-bearing:
    wheel because the target's modelled median sat inside the first block;
    at the next term the same period was 0.13% of the remaining hunt and the
    same wheel was worth 3.5x. Re-price a rejection like that rather than
-   inheriting it.
+   inheriting it. **And the owner's threshold (2026-10-13, CLAUDE.md
+   5j): over-sweep is not bought unless its expected hours are a small
+   fraction of the hours the coarser unit saves on the remaining search to
+   the term in question** — 25 h against 44 days is admissible, 27 h
+   against 1.3 days is a decline, however good the device ratio.
 
 ### Re-denominating a cursor across a wheel change
 

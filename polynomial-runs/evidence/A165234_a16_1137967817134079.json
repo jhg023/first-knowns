@@ -1,0 +1,190 @@
+{
+ "sequence": "A165234",
+ "forms": "2x^2 + p prime for x = 0..n-1, composite for x = n (p prime)",
+ "p": 1137967817134079,
+ "oeis_terms": {
+  "16": 1137967817134079
+ },
+ "filter_n": 16,
+ "run": 15,
+ "settles": [
+  16
+ ],
+ "satisfies": "2x^2 + p prime for x = 0..15, composite at x = 16",
+ "conditions": {
+  "0": "p prime",
+  "1": "2x^2 + p at x = 1",
+  "2": "2x^2 + p at x = 2",
+  "3": "2x^2 + p at x = 3",
+  "4": "2x^2 + p at x = 4",
+  "5": "2x^2 + p at x = 5",
+  "6": "2x^2 + p at x = 6",
+  "7": "2x^2 + p at x = 7",
+  "8": "2x^2 + p at x = 8",
+  "9": "2x^2 + p at x = 9",
+  "10": "2x^2 + p at x = 10",
+  "11": "2x^2 + p at x = 11",
+  "12": "2x^2 + p at x = 12",
+  "13": "2x^2 + p at x = 13",
+  "14": "2x^2 + p at x = 14",
+  "15": "2x^2 + p at x = 15"
+ },
+ "values": {
+  "0": 1137967817134079,
+  "1": 1137967817134081,
+  "2": 1137967817134087,
+  "3": 1137967817134097,
+  "4": 1137967817134111,
+  "5": 1137967817134129,
+  "6": 1137967817134151,
+  "7": 1137967817134177,
+  "8": 1137967817134207,
+  "9": 1137967817134241,
+  "10": 1137967817134279,
+  "11": 1137967817134321,
+  "12": 1137967817134367,
+  "13": 1137967817134417,
+  "14": 1137967817134471,
+  "15": 1137967817134529
+ },
+ "verification": {
+  "mr_chain": true,
+  "domain": true,
+  "sympy_bpsw": true,
+  "resieve_other_wheel": true,
+  "stopper_composite": true
+ },
+ "stopper": {
+  "x": 16,
+  "condition": "2x^2 + p at x = 16",
+  "value": 1137967817134591,
+  "why": "composite",
+  "factor": 541
+ },
+ "certificates": {
+  "0": {
+   "proof": "deterministic-mr",
+   "N": 1137967817134079,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "1": {
+   "proof": "deterministic-mr",
+   "N": 1137967817134081,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "2": {
+   "proof": "deterministic-mr",
+   "N": 1137967817134087,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "3": {
+   "proof": "deterministic-mr",
+   "N": 1137967817134097,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "4": {
+   "proof": "deterministic-mr",
+   "N": 1137967817134111,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "5": {
+   "proof": "deterministic-mr",
+   "N": 1137967817134129,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "6": {
+   "proof": "deterministic-mr",
+   "N": 1137967817134151,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "7": {
+   "proof": "deterministic-mr",
+   "N": 1137967817134177,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "8": {
+   "proof": "deterministic-mr",
+   "N": 1137967817134207,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "9": {
+   "proof": "deterministic-mr",
+   "N": 1137967817134241,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "10": {
+   "proof": "deterministic-mr",
+   "N": 1137967817134279,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "11": {
+   "proof": "deterministic-mr",
+   "N": 1137967817134321,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "12": {
+   "proof": "deterministic-mr",
+   "N": 1137967817134367,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "13": {
+   "proof": "deterministic-mr",
+   "N": 1137967817134417,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "14": {
+   "proof": "deterministic-mr",
+   "N": 1137967817134471,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  },
+  "15": {
+   "proof": "deterministic-mr",
+   "N": 1137967817134529,
+   "bound": 3317044064679887385961981,
+   "note": "Miller-Rabin is deterministic below the bound: the 7-base set under 2^64, the first 13 prime bases from 2^64 to psi_13 (Sorenson-Webster 2017)"
+  }
+ },
+ "certificates_verified": true,
+ "unproved": [],
+ "proof_routes": {
+  "deterministic-mr": 16
+ },
+ "also_settles": [],
+ "derived_bound": null,
+ "least_claim": {
+  "claim": "no prime below p = 1137967817134079 has a run of exactly 15: 2x^2 + p prime for x = 0..15, composite at x = 16",
+  "basis": "every prime from the bottom of the line to p with a run of at least the filter's was read to its exact run, at filters <= 16 throughout",
+  "swept_from": 2,
+  "campaign_started_at": 2,
+  "swept_to": 1137967817134079,
+  "floor": "2: every index's line starts at the bottom, the sequence is not monotone",
+  "carried": null,
+  "exception_zone": [
+   2,
+   32768
+  ],
+  "filter": 16,
+  "wheel": 7420738134810,
+  "sieve_depth": 32768,
+  "class": [
+   5,
+   6
+  ]
+ },
+ "engine": "a165234-v2-p1-seg32-pbd224-cpl37w37"
+}

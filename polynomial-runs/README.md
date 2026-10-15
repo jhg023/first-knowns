@@ -16,15 +16,23 @@ The entries' frontiers are Daniel Suteu's of December 2024 (A165234,
 A230663), Jens Kruse Andersen's of October 2008 (A092120) and Bert
 Dobbelaere's of May 2026 (A347537).
 
-**Status: ACTIVE** — built 2026-10-08, no campaign run yet. The frontiers
-stand at a(15) = 17,762,917,045,631 on A165234 (a(16) open; the entry also
-states a(29) = 29), a(15) = 19 on A230663 (a(16) open; a(39) = 43 stated),
-a(15) = 409,333 on A092120 (a(16) open; a(19) = 163 stated) and
-a(16) = 1,500,599,554,819 on A347537 (a(17) open). The model puts a(16)
-through a(20) of A165234 inside two hours of sweeping from the bottom of
-the line and a(21) at about two days; A230663 and A347537 the same shape;
-A092120 a(16)–a(18) inside the first hour and a(20) at about three days
-([RESULTS.md](RESULTS.md), "What is open now").
+**Nineteen new terms, found and verified 2026-10-08 to 2026-10-15:
+a(16)–a(21) of A165234, a(16)–a(20) of A230663, a(16)–a(18) of A092120 and
+a(17)–a(21) of A347537** — the first advance on A092120 since 2008, on
+A165234 and A230663 since 2024, and on A347537 since May 2026. The largest
+is A347537's a(21) = 545,605,440,824,324,681,493,499. The integers, their
+verification and the campaigns are in [RESULTS.md](RESULTS.md).
+
+**Status: PAUSED — open to others** — nothing is running. One campaign per
+family ran between 2026-10-08 and 2026-10-15, 89 hours on the campaigns'
+clocks, and each was stopped by the owner inside the filter for its next
+term. Every open index is searched empty to p = 4.2236×10²² on A165234
+(a(22) open), 1.5907×10²¹ on A230663 (a(21) open), 2.6625×10²⁰ on A092120
+(a(20) open) and 5.5072×10²³ on A347537 (a(22) open). The model puts
+A230663's a(21) and A092120's a(20) at about two and a half days each from
+those cursors, and the two a(22)s at 91 and 52 days
+([RESULTS.md](RESULTS.md), "What is open now", which also lists what a
+resume owes first).
 
 ## The problem
 
@@ -34,6 +42,11 @@ A092120 a(16)–a(18) inside the first hour and a(20) at about three days
 | [A230663](https://oeis.org/A230663) `more` | Least prime p such that x^2 + 3*x + p produces primes for x = 0..n-1 but not x = n. | a(1)–a(15), and a(39) = 43 in a comment | a(15) = 19 (a(14) = 11,613,197,109,589) | Daniel Suteu, Dec 22 2024 |
 | [A092120](https://oeis.org/A092120) | a(n) is the first term p in a sequence of primes such that p+4m^2 is prime for m = 0 to n, but composite for m = n+1; a(n) = -1 if no such prime exists. | a(0)–a(15), and a(19) = 163 in a comment | a(15) = 409,333 (a(14) = 604,490,757,900,187) | Jens Kruse Andersen, Oct 24 2008 |
 | [A347537](https://oeis.org/A347537) `more` | a(n) is the smallest prime p such that the polynomial k^4 + k^3 + k^2 + k + p yields primes for k = 0..n-1, but not for k = n. | a(1)–a(16) | a(16) = 1,500,599,554,819 (a(15) = 699,669,742,107,967) | Bert Dobbelaere, May 12 2026 |
+
+Found here, and not yet entered in the OEIS (2026-10-15 export):
+a(16)–a(21) of A165234, a(16)–a(20) of A230663, a(16)–a(18) of A092120 —
+which brings the comment's a(19) = 163 into an unbroken run of known
+terms — and a(17)–a(21) of A347537.
 
 **The run is exact, so the sequences are not monotone.** Call the *run*
 of a prime p the number of shifts from the first whose value is prime:
@@ -65,20 +78,25 @@ when y² + y + (p − 2) is prime for y = 1..n. Hence
 A230663(n) ≤ A164926(n+1) + 2 — an upper bound at every open index of
 A230663 whose successor is known on A164926:
 
-| A230663 | bound, from A164926 | the model's P(a(n) at or below it) |
-|---|---|---|
-| a(16) | ≤ 348,284,517,256,411,909 | 0.999 |
-| a(17) | ≤ 8,461,068,614,861,832,373 | 0.98 |
-| a(18) | ≤ 3,744,101,869,688,673,856,369 | 0.998 |
-| a(20) | ≤ 234,505,015,943,235,329,419 | 0.14 |
+| A230663 | bound, from A164926 | the model's P(a(n) at or below it) | found |
+|---|---|---|---|
+| a(16) | ≤ 348,284,517,256,411,909 | 0.9999 | 57,204,849,284,656,039 |
+| a(17) | ≤ 8,461,068,614,861,832,373 | 0.9999 | 97,079,155,423,260,379 |
+| a(18) | ≤ 3,744,101,869,688,673,856,369 | 1.000 | 15,197,452,440,079,259,719 |
+| a(20) | ≤ 234,505,015,943,235,329,419 | 0.12 | **the bound itself** |
 
-(`model_results.json` carries the exact figures.) And in the other
+(`model_results.json` carries the exact figures, written before the run.)
+a(20) came at its bound: the prime A164926(21) + 2 was always a candidate,
+and the sweep proved no smaller one. And in the other
 direction A164926(n+1) ≥ A230663(n) − 2 for every n, with equality when
 A230663(n) − 2 is prime: **a find of A230663(n) whose p − 2 is prime
 settles A164926(n+1) = p − 2**, which the launcher records in the
 evidence as `also_settles` after checking it from the bare definition; a
 find whose p − 2 is composite proves A164926(n+1) > p − 2. Both are
 gated (G1d). A164926's a(20) is open above 3.744×10²¹ (euler-prime-runs).
+Of the five finds only a(20)'s p − 2 is prime, and it is A164926's known
+a(21); the other four bound A164926 below what is already known, so
+nothing new rode on this hunt.
 
 **Which number goes in the OEIS.** Every name gives the term the letter
 p. An evidence file carries the integer under that letter, `forms` reads
@@ -198,42 +216,51 @@ came very early). Elsewhere in this repository first occurrences have run
 1.2–2.5× past their medians, and primorial-runs' came early (mean 0.70);
 read the whole quantile row.
 
+**Scored on the run.** The nineteen finds are nineteen more draws: E sums
+to 18.60, **a mean of 0.98**, at P = 0.49 under Gamma(19, 1) — neither late
+nor early — with per-family means of 0.64, 1.72, 1.04 and 0.61 and the
+usual Exp(1) scatter, from A165234's a(21) at the 4th percentile of its row
+to A230663's a(16) at the 96th ([RESULTS.md](RESULTS.md), "The finds
+against the model").
+
 **What it predicts** (`model_results.json`, written before any run; every
-depth is the term p itself, from the bottom of the line):
+depth is the term p itself, from the bottom of the line), and what came:
 
-| A165234 | median | P90 | | A230663 | median | P90 |
-|---|---|---|---|---|---|---|
-| a(16) | 3.68e15 | 4.73e16 | | a(16) | 2.56e15 | 2.82e16 |
-| a(17) | 1.01e17 | 1.29e18 | | a(17) | 1.14e15 | 4.74e17 |
-| a(18) | 3.19e18 | 3.97e19 | | a(18) | 3.08e18 | 3.00e19 |
-| a(19) | 1.41e20 | 1.44e21 | | a(19) | 7.60e19 | 8.79e20 |
-| a(20) | 4.95e21 | 4.93e22 | | a(20) | 3.58e21 | 3.27e22 |
-| a(21) | 2.19e23 | 1.93e24 | | a(21) | 6.40e22 | 9.69e23 |
+| A165234 | median | P90 | found | | A230663 | median | P90 | found |
+|---|---|---|---|---|---|---|---|---|
+| a(16) | 6.12e15 | 5.39e16 | 1.14e15 | | a(16) | 3.31e15 | 3.02e16 | 5.72e16 |
+| a(17) | 1.79e17 | 1.50e18 | 6.43e17 | | a(17) | 9.57e16 | 8.24e17 | 9.71e16 |
+| a(18) | 5.79e18 | 4.62e19 | 5.52e16 | | a(18) | 3.98e18 | 3.22e19 | 1.52e19 |
+| a(19) | 2.09e20 | 1.60e21 | 5.35e20 | | a(19) | 1.30e20 | 1.01e21 | 1.57e21 |
+| a(20) | 7.40e21 | 5.49e22 | 1.06e22 | | a(20) | 4.70e21 | 3.53e22 | 2.35e20 |
+| a(21) | 2.89e23 | 2.08e24 | 1.72e21 | | a(21) | 1.67e23 | 1.22e24 | open |
 
-| A092120 | median | P90 | | A347537 | median | P90 |
-|---|---|---|---|---|---|---|
-| a(16) | 1.51e17 | 1.43e18 | | a(17) | 1.37e17 | 1.16e18 |
-| a(17) | 5.02e18 | 4.44e19 | | a(18) | 3.96e18 | 3.21e19 |
-| a(18) | 1.90e20 | 1.56e21 | | a(19) | 1.45e20 | 1.13e21 |
-| a(20) | 2.73e23 | 2.05e24 | | a(20) | 6.31e21 | 4.71e22 |
-| a(21) | 1.08e25 | 7.81e25 | | a(21) | 2.39e23 | 1.73e24 |
+| A092120 | median | P90 | found | | A347537 | median | P90 | found |
+|---|---|---|---|---|---|---|---|---|
+| a(16) | 1.79e17 | 1.50e18 | 1.22e17 | | a(17) | 1.37e17 | 1.16e18 | 1.71e17 |
+| a(17) | 5.79e18 | 4.62e19 | 2.92e19 | | a(18) | 3.97e18 | 3.21e19 | 5.55e17 |
+| a(18) | 2.09e20 | 1.60e21 | 2.63e20 | | a(19) | 1.45e20 | 1.13e21 | 2.12e19 |
+| a(20) | 2.89e23 | 2.08e24 | open | | a(20) | 6.32e21 | 4.71e22 | 5.51e21 |
+| a(21) | 1.12e25 | 7.90e25 | open | | a(21) | 2.39e23 | 1.73e24 | 5.46e23 |
 
-A230663's a(17) is predicted *below* its a(16): the seventeenth form adds
-no new kill at any prime under 37 (x(x + 3) takes the same value at x and
-at −x − 3), so its singular series jumps. The rows are not a schedule:
-one sweep settles the indices in whatever order their first occurrences
-lie on the line.
+A165234's row n + 1 and A092120's row n agree to the figures shown: for
+odd q, multiplication by 2 is a bijection, so {2x² : x = 0..n} and
+{4m² : m = 0..n} kill the same number of residues of every prime, and the
+two families' singular series are equal. (Until the pause these tables
+carried figures from an earlier run of the model that did not match
+`model_results.json`; they now carry the file's, which BENCHMARKS.md's
+clocks always used.) The rows are not a schedule: one sweep settles the
+indices in whatever order their first occurrences lie on the line, and
+two of the four campaigns found an index before the one below it.
 
-**The clocks, from the engine API** (BENCHMARKS.md has the per-filter
-table and what is still owed; the campaign itself has not run). On engine
-v2 A165234 runs 2.7×10¹⁷ p/s at n = 18 and 1.26×10¹⁸ p/s at n = 21 on the
-full wheel to 53, A347537 6.1×10¹⁷ p/s at n = 19; at those rates the
-medians above are: A165234 a(16)–a(19) within minutes, a(20) about two
-hours, a(21) under three days (the expected clock to a CONFIRMED find,
-which weighs the tail of the distribution, is 7.2 days); A230663 the same to a(20), a(21)
-about a day and a half; A092120 a(16)–a(18) within an hour, a(20) about
-three days; A347537 a(17)–a(19) within minutes, a(20) under two hours,
-a(21) about two and a half days. Budget 1.5–2× on each.
+**The clocks, against the campaigns.** Every filter a campaign swept whole
+for more than two minutes ran at 0.99–1.03× the rate BENCHMARKS.md priced
+for it, from 4.6×10¹⁷ p/s at A165234's n = 19 to 2.03×10¹⁸ p/s for the 74
+hours of A347537's n = 21 ([RESULTS.md](RESULTS.md), "The campaigns against
+their benchmarks"). Everything up to a(20) on every family took minutes to
+hours; the one long leg was A347537's a(21), at 2.3 medians. The filters
+the campaigns stopped in run 9.2×10¹⁷ p/s (A230663 n = 21) to 3.42×10¹⁸ p/s
+(A347537 n = 22).
 
 ## Running it
 
@@ -262,7 +289,11 @@ python launch.py --family A347537
 ```
 
 Each family keeps its own checkpoint under its own config key, and no
-campaign will read another's cursor. A fresh campaign opens at the bottom
+campaign will read another's cursor. With the 2026-10 checkpoints in place
+each command resumes its family at the cursor RESULTS.md gives; the
+checkpoints are runtime files and not in the repository, and until the
+finds are moved into the oracle's `FOUND` a fresh clone starts over. A
+fresh campaign opens at the bottom
 of its line with the filter at its lowest open index (16, 16, 16 and 17),
 classifies the exception zone on the host, and sweeps. A find at the
 filter's own index moves the filter to the next open index and carries
