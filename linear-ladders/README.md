@@ -6,6 +6,11 @@
 > here will be machine-verified and human-reviewed. That audit trail is
 > deliberate and it stays.
 
+**Independent mathematical review:** Codex (OpenAI) maintains static
+analysis and implementation proposals in [codex-reviews/](codex-reviews/README.md).
+These reports follow the repository's [review workflow](../CODEX_REVIEWS.md);
+Claude's original implementation and historical records retain their authorship.
+
 **A088250** asks for the least `k` such that `r·k + 1` is prime for every
 `r = 1..n`. It is a *linear ladder*: one unknown, `n` linear conditions
 whose multipliers are the consecutive integers — the prime ladders of this

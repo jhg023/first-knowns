@@ -4,11 +4,16 @@ Guidance for AI agents (and humans) working in this repository.
 
 ## What this repo is
 
-Published, verified results from GPU hunts for open problems in
-computational number theory, plus the machinery that produced them.
-Every line of code here was authored by Claude at the repository owner's
-direction; keep that audit trail honest — the disclaimer at the top of
-each README stays.
+Published, verified results from computational mathematics hunts and
+exact computations — accelerated by CPUs, GPUs or both — for open
+problems in number theory and combinatorics, plus the machinery that
+produced them. The repository is developed with Claude and with ChatGPT
+through Codex, at the repository owner's direction, and the audit trail
+of who authored what stays honest: every line of code here was authored
+by Claude, and since 2026-10-20 the independent mathematical review
+reports and their workflow documentation are Codex's (CODEX_REVIEWS.md).
+The disclaimer at the top of each README names the contributions to that
+project and stays.
 
 ## Rules
 
@@ -58,7 +63,11 @@ each README stays.
 
 1. **Read `CONVENTIONS.md` before touching any project.** The five-file
    skeleton (oracle / CPU engine / GPU engine / launcher / score) and
-   the gate discipline are binding.
+   the gate discipline are binding. A project is CPU-only, GPU or
+   hybrid and says which: in a CPU-only project the production engine is
+   `*_search.py` and `*_gpu.py` is an explicitly unsupported, import-safe
+   stub (CONVENTIONS.md "Backends"); dependencies are per backend, never
+   universal.
 2. **Gates green before and after every change — for the ACTIVE project
    only.** Run `python score.py` in the project being worked on (the
    ACTIVE row of the top-level README's project table says which — read
@@ -83,10 +92,16 @@ each README stays.
    there FIRST**, before any new work — that is where a shared change is
    proved on that project, and it is a checklist item of resuming.
    The one exception: the owner asks for it.
-3. **Never let the two engine implementations converge.** The CPU engine
-   uses plain `%`; the GPU engine uses Barrett arithmetic. One must
-   never call the other; parity gates depend on their independence.
-   One engine hunts; the CPU engine only ever appears in gates.
+3. **Never let the two independent implementations converge.** In a GPU
+   project the CPU engine uses plain `%` and the GPU engine Barrett
+   arithmetic; one must never call the other; parity gates depend on
+   their independence; one engine hunts and the CPU engine only ever
+   appears in gates. In a CPU-only project the pair is the
+   original-definition oracle and the optimized engine: the oracle never
+   calls the engine's canonicalization, arithmetic-generation, support or
+   tail helpers, the engine never calls the oracle for a count, and the
+   engine's own alternative exact routes (fallback decompositions,
+   literal recursion) pin every optimized category besides.
 
    **Superseded engine versions do NOT stay in the tree.** They are in
    git history, which is where an engine nobody runs belongs; carrying a
@@ -107,6 +122,15 @@ each README stays.
    - **Measure the phase split first.** The one time this was skipped,
      work was aimed at a stale comment naming the wrong bottleneck (it
      said 80% cold; it was 83% hot). Two minutes of timers beat it.
+   - **Then profile the dominant kernel with Nsight Compute** (`ncu`; it is
+     installed) on a scratch harness, never a campaign — what the kernel is
+     bound by and the SASS census of the phase that carries it.
+     OPTIMIZATION.md Rule 1a has the commands and the ways it misleads.
+     That is for GPU code. **CPU code gets Rule 1b instead**: the phase
+     split by category with timers on the same inputs, representation
+     and allocation measurements (set against bitset, build costs),
+     process, IPC and durability costs measured in the end-to-end shape,
+     peak memory, and a worker-count sweep with its parallel efficiency.
    - **Interleave every A/B and re-check the fingerprint on every run.**
      Ambient GPU load swings absolute rates ~30%, and sequential sweeps
      invent cliffs that are not there. The ratio is the stable quantity.
@@ -120,10 +144,82 @@ each README stays.
      whole range (OPTIMIZATION.md §2.7).
    - **Price what you decline, and record the failures.** The rejects are
      what stop the next agent re-running a dead end.
-4. **Oracles stay slow and boring.** sympy only. No optimization, ever.
+3b. **OPTIMIZE THE FILTERS THAT RUN FOR DAYS, NOT THE ONES THAT CLOSE IN
+   MINUTES (owner directive 2026-10-16, every project).** A campaign's
+   wall clock is spent at its long filters. A filter whose term lands in
+   minutes or hours repays no optimization; one whose term is days or
+   weeks away repays every percent (5% at a 19-day filter is most of a
+   day; 50% at a 44-second one is fifteen seconds). So:
+   - **Name the target before measuring anything.** Per family, the
+     filter carrying the campaign's expected clock, from the odds model's
+     quantiles at the measured rate there (the README's clock column) --
+     the first filter whose median clock is a day or more, and where
+     several are, each weighted by its clock. Write it at the head of the
+     round in the log.
+   - **Every optimization measurement is made THERE**, with that filter's
+     PLANNED engine (its own window, record width, wheel and sieve depth)
+     at a height inside its search: the phase split, the Nsight Compute
+     profile, the A/Bs, the constant sweeps and the termination table. A
+     ratio measured at a minutes-long filter is a hypothesis for the
+     day-long one, and it ships when it reproduces there. Every number in
+     a log names its filter.
+   - **The SCORE shape sits at the day-long filter**, so that optimizing
+     under the score optimizes the hunt. A project whose headline shape is
+     a minutes-long opening adds a frozen shape at the day-long filter and
+     moves the headline there, with the paired ratio in BENCHMARKS.md.
+   - **Short filters keep rule 5g's obligations, as a CHECK**: no cliff,
+     the pool not binding, the acceptance test run. Per-filter constants
+     still come from the per-filter table, so a short filter loses nothing
+     a table can save it; where a structural choice cannot be made per
+     filter, the day-long filter decides, and the minutes it costs the
+     short one are priced and logged.
+   The case that wrote it: power-ladders (2026-10-15) ran all four of its
+   optimization rounds, its Nsight Compute profile, its termination table
+   and its SCORE shape at the opening filters -- A229626 n = 10, a median
+   clock of 44 seconds, with A229627 n = 9 (5 seconds) and A229902 n = 10
+   (95 seconds) alongside -- while its campaigns' clock sits at A229626
+   a(12) (19 days median), A229902 a(12) (35 days) and the a(11)s of
+   A229627 and A229630 (2-3 days): filters with a 256-period window
+   rather than 128, a wide record at A229626 n = 12 and an eighth of the
+   host load, configurations whose rates were measured and whose phase
+   split nobody has. See OPTIMIZATION.md Rule 0a.
+3c. **CODEX REVIEWS ARE ALWAYS STATIC AND MATHEMATICAL (owner directive
+   2026-10-20).** Codex identifies missed search-space reductions,
+   equivalent formulations, stronger bounds, and algorithmic ways to
+   avoid redundant work — in the sieves of the prime hunts and equally
+   in the CPU algorithms and exact aggregation identities of a counting
+   project. Reports live in each project's `codex-reviews/`
+   directory; CODEX_REVIEWS.md defines the process and the handoff.
+   Codex may also author a complete pre-implementation design and
+   research package for a new project; it is
+   recorded there as a design, attributed and dated, with a disposition
+   table for its proposals — and it is not a review of code that did not
+   yet exist.
+   Codex never uses the GPU for a review, even when idle, and does not
+   import or execute engines, oracles, models, launchers, self-tests,
+   benchmarks, or profilers. The implementation measurement rules above
+   do not require runtime work during this static phase. Documentation-only
+   review changes do not require a SCORE or gate run.
+
+   Claude reads the report and rechecks its assumptions before a later
+   implementation. Keep the dated analysis attributable to Codex; record
+   implementation attempts and measurements in OPTIMIZATION_LOG.md and
+   BENCHMARKS.md, and link them from the local review index. A proposed
+   mathematical improvement is not a measured speedup or permission to
+   start a campaign. No report replaces independent verification.
+4. **Oracles stay slow and boring.** sympy only for primality; plain
+   Python integers and sets for an exact count. No optimization, ever,
+   and never a call into the engine's helpers.
 5. **Discoveries are records, not announcements.** The pipeline writes
    evidence JSONs; humans decide what happens next. Never auto-submit
-   to OEIS or anywhere else.
+   to OEIS or anywhere else. Rules 5a and 5b below describe a search; a
+   **counting project** has no census, no near miss and no rungs: its
+   heartbeat carries the work units closed and the committed sum
+   labelled PARTIAL, a term is a discovery only when its whole partition
+   closes, a published term recomputed by the production machinery is a
+   validation record (never read from the frozen table), and an
+   incomplete target is reported as partial and never promoted
+   (CONVENTIONS.md "The exact-count protocol").
 5a. **A discovery is a first occurrence, logged once; the census is
    counted, not narrated.** The launcher's frontier promotes itself at
    runtime when a longer run is verified and is stored in the checkpoint
@@ -179,7 +275,11 @@ each README stays.
    A 913x engine sitting in a configuration 25x off its own optimum is
    the failure mode this rule exists to prevent.
 
-5d. **A crash must cost one segment, not the campaign.** Checkpoints are
+5d. **A crash must cost one work unit, not the campaign** — one segment of
+   a sieve; one uncommitted quantum of a count, whose receipts land
+   before the checkpoint that references them and whose unreferenced
+   receipts never count (CONVENTIONS.md, the resumable-partition
+   guarantee). Checkpoints are
    `fsync`ed before the atomic replace and keep a `.bak` (a rename is
    atomic for the directory entry, not for the data -- a process or
    machine that stops in that window leaves a right-sized file of NUL,
@@ -219,9 +319,11 @@ each README stays.
 
 5e. **Ctrl+C is a normal exit, not a crash.** Every program in this repo
    -- launchers, `score.py`, gate scripts, the oracle -- ends on an
-   interrupt with a checkpoint at the LAST SEGMENT BOUNDARY (never the
-   live cursor: counters are per candidate, so a mid-segment save
-   double-counts the census when the segment is redone), one `[STAGE]`
+   interrupt with a checkpoint at the LAST COMMITTED WORK UNIT: the last
+   segment boundary of a sieve (never the live cursor: counters are per
+   candidate, so a mid-segment save double-counts the census when the
+   segment is redone), the last durable commit of a count (staged
+   quanta are discarded and redone, never harvested mid-call), one `[STAGE]`
    line, exit code 130, and **no traceback -- ever**. `huntlib.shutdown`
    is the only place a `KeyboardInterrupt` is caught: `graceful(main)`
    wraps the entry point, `on_interrupt(cb)` registers what to save, pool
@@ -293,7 +395,12 @@ each README stays.
    `[STATUS]` lines that the pool is not binding, the rate is the
    benchmark's for that filter, and `next` names the right rung.
 
-5h. **THE CEILING IS HIGH BY DEFAULT, AND IT COMES FROM `huntlib.ceiling`.**
+5h. **THE CEILING IS HIGH BY DEFAULT, AND IT COMES FROM `huntlib.ceiling`
+   -- AND AN EXACT ARBITRARY-PRECISION COUNTER HAS NO CEILING AT ALL.** A
+   counting project over Python integers is given no fixed-width limit
+   and no certificate ceiling, drops no branch for outgrowing a word, and
+   may carry a fixed-width fast path only with checked promotion
+   (CONVENTIONS.md "Numeric hygiene"). For the prime hunts:
    The deterministic Miller-Rabin bound (3.317e24) is where a CLASSIFICATION
    stops being a proof; it is NOT where a hunt stops. A discovery is proved
    by CERTIFICATE on its own structure -- `huntlib.certificate` has BLS75
@@ -404,13 +511,24 @@ each README stays.
    CONVENTIONS.md "The top-level README's project table"). Only projects
    with verified results get published here.
 
-   Checklist when adding a project (all binding):
+   Checklist when adding a project (all binding; the items about
+   primality, certificates, ceilings, census, rungs and odds describe a
+   search, and a counting project satisfies the exact-count items at the
+   end of the list in their place):
    - [ ] five-file skeleton per CONVENTIONS.md; huntlib for
-         infrastructure only; oracle stays sympy-pure
+         infrastructure only; oracle stays sympy-pure (or pure Python
+         integers and sets for a count) and never calls the engine
+   - [ ] the backend stated (CPU-only, GPU, hybrid) with its own
+         requirements; a CPU-only project's `*_gpu.py` an import-safe
+         unsupported stub with a gate proving it
    - [ ] README/RESULTS/BENCHMARKS/OPTIMIZATION_LOG following the
          Documentation template section of CONVENTIONS.md EXACTLY
          (disclaimer first, then headline, status, problem, engine,
          model, usage, trust)
+   - [ ] `codex-reviews/README.md` links to CODEX_REVIEWS.md and says
+         "Not yet reviewed" until a real static mathematical review is
+         written; completed reports have stable finding IDs and a
+         disposition index linking subsequent implementation evidence
    - [ ] status word (ACTIVE / COMPLETE / PAUSED — open to others)
          identical in the project README and the top-level table row,
          and that row's status cell in the fixed three-slot shape —
@@ -440,6 +558,9 @@ each README stays.
          RESULTS.md; the selftest builds the writer's header for every
          family and runs `evidence.gate_names` on the project's own
          `evidence/` (CONVENTIONS.md "Naming in an evidence file")
+   - [ ] the day-long filter of each family named (rule 3b), the SCORE
+         shape frozen there, and every optimization round measured there
+         rather than at the opening the project was built at
    - [ ] campaign configuration priced the way 5c says (device s and
          host core-s per unit of line swept, per candidate setting), not just a
          fast kernel
@@ -506,6 +627,18 @@ each README stays.
          usernames, local paths, emails, OS details)
    - [ ] full gate battery green and benchmark fingerprint reproduced
          in the published copy before the first push
+   - [ ] **exact-count projects** (CONVENTIONS.md "The exact-count
+         protocol"): the disjoint-partition proof beside the code; the
+         oracle parity on whole families and category vectors; every
+         optimized route pinned to an exact fallback; an immutable
+         digested manifest regenerated on every open; the resumable
+         quantum invariant with planted ledger faults rejected and the
+         commit protocol crash-drilled at every point; an independent
+         re-sum of the saved per-unit vector; known terms recomputed into
+         validation records before a new term may start; a deterministic
+         workload model in `model_results.json`; benchmark expectations
+         established independently of the engine, reported as tasks per
+         second; no ceiling of any kind on the arithmetic
 7. ASCII-only log output (legacy console code pages exist); LF line
    endings in the repo; no references to unpublished work and no
    personal or machine-specific information anywhere in the repo.
@@ -519,8 +652,13 @@ each README stays.
    one-line `python -c` with simple quoting is fine.
 
 9. **A project directory holds ONLY what the hunt needs.** The five
-   files, the four documents, `model_results.json`, `evidence/` -- and
-   nothing else. Every harness an agent writes -- an A/B sweep, a
+   files, the four main documents, `model_results.json`, `evidence/`
+   (with `evidence/validation/` for a counting project's known-term
+   records), and the Markdown-only `codex-reviews/` directory defined in
+   CODEX_REVIEWS.md -- and nothing else; a counting campaign's manifests,
+   receipts and checkpoints live under an ignored `.runtime/`. Review reports are an explicit
+   part of the skeleton; they do not admit executable prototypes or
+   harnesses. Every harness an agent writes -- an A/B sweep, a
    certificate-cost timer, a model query that says which family to run
    tonight, a one-off verification script -- is written to the session
    SCRATCHPAD, never into the project, and is not committed. What
@@ -531,7 +669,8 @@ each README stays.
    tree with stray scripts in it stops being the answer to "what runs if
    someone starts this from zero" (OPTIMIZATION.md rule 0). Before
    committing, `git status` must show only the skeleton, the documents
-   and evidence; anything else gets deleted, not explained.
+   (including Codex review reports and indexes) and evidence; anything
+   else gets deleted, not explained.
 
 ## Quick commands (run them in the ACTIVE project only -- Rule 2)
 

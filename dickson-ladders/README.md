@@ -5,6 +5,11 @@
 > this documentation — was authored by **Claude (Anthropic's AI)** at my
 > direction.
 
+> **Independent mathematical review:** [Codex review reports and finding
+> dispositions](codex-reviews/README.md) are authored by Codex (OpenAI).
+> The reviews and this navigation note supplement the Claude-authored
+> project documentation above.
+
 The hunt for new terms of [OEIS A247965](https://oeis.org/A247965): the
 least k such that **m·k² + 1 is prime for every m = 1, 2, …, n**. The
 sequence is `nonn,hard,more`; its last computational advance before this

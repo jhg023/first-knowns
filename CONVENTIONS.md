@@ -9,11 +9,20 @@ understood one project can audit all of them.
 
 | file | role |
 |------|------|
-| `*_reference.py` | **The oracle.** A slow, obviously-correct implementation using only trusted library primitives (sympy). Holds the frozen table of known values from the literature. Never optimized, never clever. Gates G1/G2 live here: the oracle must reproduce every frozen known from scratch. |
-| `*_search.py` | **The CPU engine.** An independent fast implementation (numpy). Gated against the oracle on windows where both can run (survivor sets must match exactly), and required to re-derive known values end-to-end. |
-| `*_gpu.py` | **The GPU engine.** CuPy RawKernel(s) implementing the same mathematics a third time. Never trusted alone: a parity gate pins its output stream bit-for-bit against the CPU engine on *populated* windows at multiple heights (an empty-vs-empty comparison is vacuous and does not count), including the numeric-ceiling zone. The GPU proposes; the host verifies. |
-| `launch.py` | **The campaign.** Checkpointed (atomic writes, config-keyed cursors, resume redoes at most one segment), canary-alarmed (the stream must rediscover designated known values in-flight or halt), with a discovery protocol (below), timestamped dopamine logging, graceful Ctrl+C — and **indefinite by default**: it runs until the last rung (the enforced ceiling), never stopping on its own before that (below). |
-| `score.py` | **The un-gameable benchmark.** Prints `SCORE` (end-to-end Mitems/s on a frozen workload) only if every gate is green AND the run reproduces a frozen work fingerprint — exact result count + checksum. An engine that skips work or breaks correctness scores 0. Optimize under the score, never around it. |
+| `*_reference.py` | **The oracle.** A slow, obviously-correct implementation of the original definition using only trusted primitives — sympy for primality; plain Python integers and sets for an exact combinatorial count. Holds the frozen table of known values from the literature. Never optimized, never clever, never calling the engine's helpers. Gates G1/G2 live here: the oracle must reproduce every frozen known it can reach from scratch (and say which it cannot). |
+| `*_search.py` | **The CPU engine.** An independent fast implementation. In a GPU project (numpy) it is gated against the oracle on windows where both can run (survivor sets must match exactly) and required to re-derive known values end-to-end, and it appears in production only as the fallback. In a **CPU-only project it IS the production engine**: gated against the oracle on every case the oracle can enumerate (whole families, not just totals), category by category against alternative exact decompositions, and required to re-derive known values end-to-end. |
+| `*_gpu.py` | **The GPU engine.** CuPy RawKernel(s) implementing the same mathematics a third time. Never trusted alone: a parity gate pins its output stream bit-for-bit against the CPU engine on *populated* windows at multiple heights (an empty-vs-empty comparison is vacuous and does not count), including the numeric-ceiling zone. The GPU proposes; the host verifies. **In a CPU-only project this file is an explicitly unsupported stub**: import-safe without CUDA, `available()` false, every entry point raising rather than quietly running the CPU engine under a GPU label; a gate proves that, and no GPU parity is invented for it. |
+| `launch.py` | **The campaign.** Checkpointed (atomic writes, config-keyed cursors, resume redoes at most one work unit), canary-alarmed (a search stream must rediscover designated known values in-flight; a counting campaign must reach designated nodes and close them with the count other machinery established — or halt), with a discovery protocol or an exact-count protocol (below), timestamped dopamine logging, graceful Ctrl+C — and **indefinite by default**: a search runs until the last rung (the enforced ceiling); a count runs term after term until told to stop; neither stops on its own before that (below). |
+| `score.py` | **The un-gameable benchmark.** Prints `SCORE` (an end-to-end rate on a frozen workload, in the project's own unit: Mitems/s of line for a sieve, completed frozen tasks/s for an exact count — never "sets represented per second") only if every gate is green AND the run reproduces a frozen work fingerprint — exact result count + checksum, or the exact ordered result vector — whose expectations were established independently of the engine being scored. An engine that skips work or breaks correctness scores 0. Optimize under the score, never around it. |
+
+**Backends (owner directive 2026-10-21).** A project is CPU-only, GPU-
+accelerated, or hybrid, and says which in its README. The five roles are
+the same in every case; what changes is which file holds the production
+engine (`*_gpu.py` for a GPU project, `*_search.py` for a CPU-only one)
+and which pair of implementations the parity discipline pins. The
+requirements are per backend, never universal: CUDA, CuPy, NVIDIA
+hardware, NumPy and SymPy are what a prime hunt needs, and a project that
+needs none of them must not import them to look like one.
 
 **Who starts a campaign (repo-wide).** `launch.py`, run as a hunt, is the
 **owner's command and nobody else's** — see CLAUDE.md rule 0a. Automation
@@ -29,9 +38,25 @@ Plus documentation: `README.md` (problem, mathematics, model, usage),
 (score ledger), `OPTIMIZATION_LOG.md` (every attempt → measurement →
 kept/rejected, including the failures).
 
+**Independent mathematical review (owner directive 2026-10-20).**
+Each new project also includes `codex-reviews/README.md`; existing
+projects gain the directory as they are reviewed. Codex writes dated,
+always-static mathematical and algorithmic analyses there for Claude to
+implement later. **Codex does not use the GPU or execute project code
+for these reviews.** The required analysis, report template, disposition
+ledger, and reusable invocation are in
+[CODEX_REVIEWS.md](CODEX_REVIEWS.md). Reports are explicitly attributed to
+Codex and do not constitute implementation, measurements, or discovery
+evidence. Documentation-only reviews do not run correctness gates.
+
 **And nothing else (repo-wide, binding; CLAUDE.md rule 9).** A project
-directory is the five files, the four documents, `model_results.json`
-and `evidence/`. Harnesses — A/B sweeps, timing scripts, model queries,
+directory is the five files, the four main documents, `model_results.json`,
+`evidence/` (with `evidence/validation/` for a counting project's
+known-term records), and the Markdown-only `codex-reviews/` directory. A
+counting campaign's operational artifacts — manifests, receipt batches,
+checkpoints — live under an ignored `.runtime/` directory, which is
+operational state, not a public surface.
+Harnesses — A/B sweeps, timing scripts, model queries,
 one-off verifiers — live in the session scratchpad and are never
 committed; their *measurements* go into `OPTIMIZATION_LOG.md` with
 enough of the method to rewrite them. A script nobody will run again
@@ -67,16 +92,30 @@ production one.
   work. That is where every shared change made while it slept gets proved
   on it, and it is the first item of picking the project back up.
 - **Two independent implementations of the hot path**, never one calling
-  the other, pinned by parity gates on populated windows.
+  the other, pinned by parity gates on populated windows — the CPU and
+  GPU engines of a prime hunt; the original-definition oracle and the
+  optimized counter of an exact count, pinned on every family the oracle
+  can enumerate and, where the oracle cannot reach, by alternative exact
+  decompositions of the same quantity (a different tail depth, the
+  root-subset fallback against the aggregated kernel, literal recursion
+  against the formula).
 - **Canaries**: production streams must organically rediscover known
   values placed in their path (and the launcher preludes with dedicated
-  rediscovery mini-hunts). A stream that cannot find what is known is
-  not allowed to report what is unknown.
+  rediscovery mini-hunts); a counting campaign forces its workers to
+  reach specified production nodes whose exact counts were established
+  by different machinery and compares. A stream that cannot find what is
+  known is not allowed to report what is unknown.
 - **Planted drills**: the comparator is itself tested with deliberately
   corrupted data (it must catch the plant), and the discovery protocol
   is tested with a fake claim (it must reject) and with a genuine known
-  (it must accept) — both directions, every selftest.
-- **Resume drill**: a split stream must equal the unsplit stream.
+  (it must accept) — both directions, every selftest. A counting
+  project's ledger validator is likewise fed planted faults (a node
+  closed twice, a corrupted count, a dropped node, a wrong child list, a
+  stale lease) and must reject every one.
+- **Resume drill**: a split run must equal the unsplit run — the
+  survivor stream of a sieve; the per-task count vector of an exact
+  count, which must also be identical across worker counts, quantum
+  sizes and tail depths.
 
 ## The discovery protocol
 
@@ -136,6 +175,40 @@ function per project (`event_kind`), and each selftest drills it: beyond
 the frontier → DISCOVERY, one short → NEAR, below → CENSUS, under the
 floor → nothing.
 
+### The exact-count protocol (binding for counting projects)
+
+A counting project computes a term exactly or not at all; there is no
+early find, no near miss and no census. What replaces the three
+confirmations above is **three separate obligations, each recorded on
+its own evidence**, because none of them implies another:
+
+1. **Algorithm correctness.** The optimized counter equals the
+   original-definition oracle on every family the oracle can enumerate
+   (whole families, not only their sizes, and their category vectors);
+   every optimized route equals its exact fallback category by category;
+   known terms are *recomputed* by the production machinery, never read
+   from the frozen table — a published term recomputed end to end is a
+   **validation record** (`evidence/validation/`), and a new-term campaign
+   may not start without the configured ones.
+2. **Partition coverage.** The manifest of work units is immutable,
+   digested and regenerated byte-for-byte on every open; a term is final
+   only when every unit has exactly one accounted result and no
+   unresolved frontier remains. The disjointness proof of the partition
+   lives beside the code.
+3. **Exact aggregation.** The per-unit result vector is re-summed
+   independently from what was saved; the receipt chain of accepted work
+   verifies from genesis; the required canaries were seen and matched.
+
+**A checksum proves neither coverage nor the algorithm; a second run in
+a different worker order tests the scheduler, not the mathematics.** A
+count is labelled "independently reproduced" only when a genuinely
+separate full computation is recorded; otherwise its record says
+precisely which tests and replays support it. A partial count is
+reported as PARTIAL wherever it appears and is never promoted: a
+resource-limited run checkpoints an incomplete target and stops. A
+discovery is the first complete count of an open term, evidenced once,
+never announced, never submitted.
+
 ### Naming in an evidence file (binding for every project)
 
 **An evidence file is read by the person who types the term into the
@@ -165,6 +238,12 @@ four fields, built by `huntlib.evidence.header` and nothing else:
    it equals field 3; `settles` lists the same indices. What a find settles
    in a *derived* entry goes in `also_settles` as `{sequence, n, value}`
    with the derived entry's own integer (A226935 is A177014 **plus one**).
+
+An entry whose name gives the term no letter at all — a counting
+sequence ("the number of subsets ... of cardinality n") — carries the
+integer under `a(n)`, which is the one name the entry does give it, with
+`oeis_terms` saying which n; the index letter of the name (`n`) is the
+only other letter such a record may use.
 
 An engine whose sweep variable is *not* the published term (lcm-ladders
 sweeps x and publishes A078502's N = lcm(1..n)·x, and A074200's m the same
@@ -231,7 +310,19 @@ clock by default (`--heartbeat`), and that line carries the census counts
 per run length from the floor to the frontier in the shared format
 produced by `huntlib.hlog.census_str` (`census 7:280 8:71 9:28 10:8`) —
 the one place a human reads how many run-7s, run-8s, run-9s the campaign
-has met. `--status` prints the same counts from the checkpoint.
+has met. `--status` prints the same counts from the checkpoint. A
+counting campaign's line carries instead the work units closed of the
+manifest's total, the unresolved frontier, the committed sum **labelled
+PARTIAL**, the pending (staged, not yet durable) work, the committed
+core-hours and the checkpoint age — and never a completion percentage
+made by dividing the partial sum by a guessed term. What it MAY carry,
+beside the unscaled PARTIAL sum, is a share of the WORK from a measured
+workload model, named on the line (the per-task vector of the
+nearest completed term, each task's share of that count as its share of
+this term's time, checked at a(12) against a(11) to within a tenth), and
+its rate is in the counted unit per second — never in tasks, which are
+not equal: a counting campaign's tasks-per-hour halves along the manifest
+while nothing slows.
 
 The heartbeat is emitted by **`huntlib.hlog.Heartbeat` on its own timer
 thread — never from inside the segment loop.** A launcher that only
@@ -264,7 +355,11 @@ term) with the ceiling appended — logs a `[RUNG]` line as each is passed
 ("passed rung 5/17: a(11) median (7.18e16) — next: a(11) Q3 at 1.88e17"),
 persists the passed rungs in the checkpoint, and shows the next rung with
 its ETA in every `[STATUS]`. Rungs are for reading progress off the log,
-not for stopping.
+not for stopping. A counting campaign has no rungs and no odds: its
+ladder is the sequence of terms, it closes one term's partition and
+continues to the next unless `--target`, `--through-n` or
+`--stop-on-discovery` says otherwise, and an ETA appears only when a
+workload model supports it, with its uncertainty.
 
 **A rung retires with its term.** A rung is a prediction of where a term
 should appear, so the moment that term is *found* its unreached quartiles
@@ -298,7 +393,10 @@ same way it is built to a correctness protocol. The procedure, in order:
    term's own letter: k-line for A089761, p-line for A164926),
    at the configuration the campaign will actually run — not at the
    benchmark's. Everything below needs those two numbers and nothing else
-   substitutes for them.
+   substitutes for them. A CPU-only project has one side: core-seconds
+   per work unit, and the parallel efficiency of the pool measured by a
+   worker-count sweep of the end-to-end pipeline (commit and durability
+   costs included), from which the default pool is chosen.
 
    **And measure WALL CLOCK per unit alongside them, in the segment
    loop.** Device + host is what the pipeline costs; wall clock is what
@@ -379,7 +477,10 @@ must get the fastest correct campaign the engine can run at that opening;
    in the launcher's docstring; it is the test plan for everything
    below.
 2. **Price each one, paired.** A frozen benchmark shape at each family's
-   opening filter and at the live filter; and for every filter in
+   opening filter and at the live filter, with the SCORE headline at the
+   filter that runs for days (CLAUDE.md 3b: that is the filter every
+   optimization round is measured at; the openings are checked here, not
+   optimized); and for every filter in
    between, a paired, interleaved measurement of the campaign's own
    constants against the alternatives (OPTIMIZATION.md rules). A
    constant swept at one filter is re-swept one filter later, because
@@ -435,6 +536,22 @@ absent: `load` falls back to the `.bak`, and failing that raises
 checkpoint" demand opposite responses — start, and stop — and conflating
 them silently restarts a sweep that has already covered ground. Drill all
 of it in the selftest against a real right-sized-NUL file.
+
+A counting campaign adds the **resumable-partition guarantee** on top:
+every work unit's durable state is (subtotal, unresolved frontier,
+sequence number, digest) with the invariant that the subtotal plus the
+exact counts of the frontier nodes equals the unit's whole count; a
+worker returns only complete transitions (a node closed by a complete
+exact evaluation, or expanded into all its children) and the whole
+frontier; the parent validates each returned quantum against its lease
+and replays the ledger on its own copy, writes an immutable receipt batch
+(fsynced, content-named, chained to the previous head), then the
+checkpoint that references it, and only then releases the lease. A
+receipt not referenced by a valid checkpoint is an orphan and never
+counts; a checkpoint recovered from its `.bak` makes the receipts past
+its head orphans too. Drill the commit protocol interrupted at every
+point (before the receipt, after it, before the checkpoint replacement,
+after it) and require the identical per-unit vector on resume.
 
 **The stop-on-discovery convention (repo-wide).** Every launcher
 accepts `--stop-on-discovery`: once the discovery protocol confirms a
@@ -676,13 +793,16 @@ for days and a human decides when they end, so the interrupt path is a
 this repository — launchers, `score.py`, the gate scripts, the oracle —
 ends on an interrupt with all four of:
 
-- **a checkpoint at the last SEGMENT BOUNDARY.** Never the live cursor:
-  counters are updated per candidate, so writing a part-classified segment
-  persists census that the redone segment counts a second time. Keep a
-  copy of the state as of the last fully classified segment (`mark_boundary`
-  at the segment boundary, after a filter switch, after the prelude) and
-  write *that*. An interrupted run then costs exactly the segment in
-  flight — the same guarantee as a crash (rule 5d), and no double count.
+- **a checkpoint at the last COMMITTED WORK UNIT.** For a sieve, the last
+  segment boundary and never the live cursor: counters are updated per
+  candidate, so writing a part-classified segment persists census that
+  the redone segment counts a second time. Keep a copy of the state as of
+  the last fully classified segment (`mark_boundary` at the segment
+  boundary, after a filter switch, after the prelude) and write *that*.
+  For a counting campaign, the last durable commit: staged quanta that
+  have not reached disk are discarded (never harvested mid-call) and
+  redone. An interrupted run then costs exactly the unit in flight — the
+  same guarantee as a crash (rule 5d), and no double count.
 
   **Every field of the checkpoint is committed where the cursor is
   committed — at the boundary, never at exit.** The snapshot is what
@@ -741,6 +861,14 @@ quantiles must scatter — a model whose knowns all sit at quantile ~0 or
 ~1 is wrong and may not be used to plan. Predictions (median locations,
 probability-by-depth) are stated in the README *before* the run, and the
 finds are scored against them after.
+
+**A counting project ships a deterministic workload and runtime model
+instead** (`model_results.json`): the exact number of work units per
+term, the measured cost per unit at each configuration (with the sample
+that measured it and its spread), their product as a projection with its
+uncertainty, and the committed core-seconds of any campaign that has
+run. It predicts cost, never a find — the count is certain — and it is
+not permitted to invent a probability of discovery.
 
 ### The model is EXPENSIVE, and the segment loop may not call it (binding)
 
@@ -811,6 +939,15 @@ as an enforced constant, not an assumption. Parity-gate at the ceiling.
 Raising a ceiling is a new engine version: new gates, new fingerprint,
 log entry.
 
+**An exact arbitrary-precision computation has no ceiling, and must not
+be given one.** A counter over Python integers is not bounded by a
+machine word or by a primality-certificate cost; no fixed-width limit and
+no certificate ceiling may be imposed on it, and no eligible branch may be
+dropped because a value outgrew a word. An optional fixed-width fast path
+is allowed only with explicit overflow checks on every operation,
+promotion to exact integers before any loss, independent boundary tests,
+and a measured complete-work gain.
+
 **The ceiling on the term is high by default, and it is measured
 (repo-wide, binding; CLAUDE.md 5h).** The deterministic Miller–Rabin bound,
 3.317×10²⁴, is where a *classification* stops being a proof — the census
@@ -856,10 +993,13 @@ has read one project can navigate all of them.
 
 **`README.md`** — sections in this order:
 
-1. *Authorship disclaimer* (blockquote, first thing on the page): all
-   code authored by Claude at the repository owner's direction.
-2. *One-paragraph headline*: what is being hunted, and the standing
-   result if there is one.
+1. *Authorship disclaimer* (blockquote, first thing on the page): who
+   authored what, at the repository owner's direction — the code by
+   Claude, and, where ChatGPT through Codex contributed the design, the
+   research or a review, that contribution named in the same block with
+   its date and where it is kept.
+2. *One-paragraph headline*: what is being hunted or counted, and the
+   standing result if there is one.
 3. *Status line*: one of
    - `Status: ACTIVE` — the hunt is running; expect updates.
    - `Status: COMPLETE` — the stated range is exhausted; results final.
@@ -868,8 +1008,10 @@ has read one project can navigate all of them.
 4. *The problem* — definition, history, why it is open, prior frontier
    with attribution.
 5. *The mathematics of the engine* — how the search actually works.
-6. *The odds model* — predictions stated BEFORE the run, validation
-   evidence, and (once results exist) how the finds scored against it.
+6. *The model* — for a search, the odds model: predictions stated BEFORE
+   the run, validation evidence, and (once results exist) how the finds
+   scored against it; for an exact count, the deterministic workload and
+   runtime model with its measured inputs and its uncertainty.
 7. *Running it* — exact commands and requirements.
 8. *Trust* — pointer to this file plus anything project-specific.
 

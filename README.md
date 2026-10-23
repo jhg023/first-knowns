@@ -1,22 +1,60 @@
 # first-knowns
 
-> **Authorship disclaimer:** None of the code in this repository was written
-> by me. Every line of it — the engines, the CUDA kernels, the verification
-> machinery, the documentation, including this README — was authored by
-> **Claude (Anthropic's AI)**, working at my direction. My contributions are
-> the goals, the hardware, and the decisions between runs.
+> **Authorship and roles:** This project is developed with **Claude
+> (Anthropic)** and **ChatGPT (OpenAI), through Codex**, working at my
+> direction. None of the code was written by me. I set the goals, provide
+> the hardware, and decide which campaigns to run.
+>
+> - **Claude designs and implements the hunts:** algorithms, Python
+>   engines, CUDA kernels, verification machinery, and project
+>   documentation. Claude optimizes the code and performs authorized
+>   correctness checks and benchmarks. The existing hunt implementations
+>   and original documentation were authored by Claude.
+> - **ChatGPT, through Codex, independently reviews the mathematics:**
+>   missed search-space reductions, equivalent formulations, stronger
+>   bounds, and algorithmic ways to avoid repeated work. These reviews
+>   are always static: no GPU use or execution of project code. Codex
+>   writes the analysis reports and review-workflow documentation;
+>   Claude implements and validates selected proposals.
 
-GPU-accelerated hunts for open computational problems in number theory —
-new terms of long-stale OEIS sequences, first-known objects, and the
-paranoid verification machinery that makes the results trustworthy.
+Computational mathematics hunts and exact computations, accelerated by
+CPUs, GPUs or both — new terms of long-stale OEIS sequences, first-known
+objects, exact counts of combinatorial families, and the paranoid
+verification machinery that makes the results trustworthy.
 
-Everything here runs on one consumer GPU (an RTX 4090) and one principle:
+Everything here runs on one desktop — a consumer GPU (an RTX 4090) for
+the prime hunts, its CPU cores for the exact counts — and one principle:
 **an engine is only as good as the independent checks that police it.**
-Every hunt in this repo ships with a slow trustworthy oracle, two
-independent engine implementations pinned bit-for-bit against each other,
-canary rediscoveries of known values that must fire before production is
-trusted, and a multi-way verification protocol that every discovery must
-survive before it is recorded.
+Every project in this repo ships with a slow trustworthy oracle that
+implements the original definition, an independent fast implementation
+pinned against it (a CPU and a GPU engine bit-for-bit on populated windows
+for the prime hunts; the literal oracle and the optimized counter, family
+by family and category by category, for an exact count), canaries —
+known values a production stream must rediscover, or specified nodes a
+counting campaign must reach and close with the expected count — that
+must fire before production is trusted, and a verification protocol that
+every result must survive before it is recorded.
+
+## Independent mathematical reviews
+
+[**CODEX_REVIEWS.md**](CODEX_REVIEWS.md) is the entry point for the
+ChatGPT/Codex-to-Claude review workflow, including the report index and a reusable
+request for reviewing a newly added project. **Codex reviews are always
+static and never use the GPU.** They identify missed mathematical and
+algorithmic optimizations; Claude implements and validates selected
+proposals in a later task.
+
+Reports and finding dispositions live in each reviewed project's
+`codex-reviews/` directory. Use the
+[central review index](CODEX_REVIEWS.md#review-index) to find a project's
+report and implementation status. Reviews of multiple projects proceed
+one project at a time, with all reviewers focused on that project before
+moving to the next.
+
+The initial review inventory was completed on **2026-10-20** for all
+**17 populated hunt projects**. Each report records its source snapshot,
+proofs, limitations, and implementation proposals; the local finding
+ledger distinguishes proposals from later implemented and validated work.
 
 ## Projects
 
@@ -31,6 +69,7 @@ survive before it is recorded.
 | [linear-ladders](linear-ladders/) | [A088250](https://oeis.org/A088250) and six siblings ([A173750](https://oeis.org/A173750), [A125838](https://oeis.org/A125838), [A125839](https://oeis.org/A125839), [A164325](https://oeis.org/A164325), [A164326](https://oeis.org/A164326), [A088651](https://oeis.org/A088651)): the least k such that r·k ± 1 is prime for every r = 1..n (A088250, A088651), and the least m such that k·m ± 1 is prime for every k = 2..n (A173750, A125838) or k = 3..n (A125839), or (2k − 1)·m ± 1 for every k = 1..n (A164325, A164326) — linear ladders, whose consecutive multipliers force divisibility by every prime up to n + 1 | **PAUSED — open to others** — twenty-eight terms found & verified 2026-09-03/05 across all seven families, the first advance on any since 2017 and the first bounds of any kind at an open index, with A202778, A071576 and A202779 settled alongside. Paused with each family's term swept to between 4.3×10²⁴ and 2.1×10²⁶ and its next term open above that bound, about 10% likely under a night's sweep. |
 | [plus-two-cliques](plus-two-cliques/) | [A083518](https://oeis.org/A083518) and [A083519](https://oeis.org/A083519): beginning with 3 (A083518) or with 1 (A083519), a(i)·a(j) + 2 is prime for all i ≠ j, each term the least integer above the one before — the product cliques with the constant two, so the conditions for the next term do not exist until this one does, and every term from the fourth is 3 (mod 6) | **PAUSED — open to others** — a(14) through a(19) of A083518 and a(11) through a(18) of A083519 found & verified 2026-10-02, the first advance on either since 2004 and 2008. Paused just above each last find, with a(20) of A083518 and a(19) of A083519 open. |
 | [polynomial-runs](polynomial-runs/) | [A165234](https://oeis.org/A165234), [A230663](https://oeis.org/A230663), [A092120](https://oeis.org/A092120) and [A347537](https://oeis.org/A347537): the least prime p such that 2x² + p is prime for x = 0..n−1 and composite for x = n (A165234), and the same with x² + 3x + p (A230663), with p + 4m² for m = 0..n and composite at m = n+1 (A092120), and with k⁴ + k³ + k² + k + p (A347537) — exact-run polynomial ladders, the siblings of euler-prime-runs' A164926, whose strong wheel makes the hunt pay for line rather than candidates | **PAUSED — open to others** — a(16) through a(21) of A165234, a(16) through a(20) of A230663, a(16) through a(18) of A092120 and a(17) through a(21) of A347537 found & verified 2026-10-08 to 10-15, the first advance on A092120 since 2008, on A165234 and A230663 since 2024 and on A347537 since May 2026. Paused at p = 4.22×10²² on A165234 with a(22) open, p = 1.59×10²¹ on A230663 with a(21) open, p = 2.66×10²⁰ on A092120 with a(20) open, and p = 5.51×10²³ on A347537 with a(22) open. |
+| [power-ladders](power-ladders/) | [A229626](https://oeis.org/A229626), [A229627](https://oeis.org/A229627), [A229630](https://oeis.org/A229630) and [A229902](https://oeis.org/A229902): the smallest m such that 2·m^k − 1 is prime for k = 1..n (A229626), the smallest prime q such that 2·q^k − 1 is prime for k = 1..n (A229627), the smallest semiprime m such that 2·m^k − 1 is prime for k = 1..n (A229630), and the smallest m such that 19·m^k + 1 is prime for k = 1..n (A229902) — power ladders, whose survivors are Fermat-tested on the device | **PAUSED — open to others** — a(10) and a(11) of A229626, and a(9) through a(11) of A229627, A229630 and A229902 found & verified 2026-10-15 to 10-23, the first advance on A229630 since 2013 and on the other three since January 2023, with A229902's a(9) its listed a(8) repeated. Paused at m = 2.70×10¹⁹ on A229626, q = 2.86×10²¹ on A229627, m = 7.32×10²⁰ on A229630 and m = 2.43×10²⁰ on A229902, each with a(12) open. |
 | [prime-ladders](prime-ladders/) | [A084700](https://oeis.org/A084700) and [A084701](https://oeis.org/A084701): the least k such that k·prime(i) ± 1 is prime for every i = 1..n — prime ladders, whose rungs are the primes themselves and whose small-prime wheel collapses to forced divisibility | **PAUSED — open to others** — a(14) through a(18) of A084700 and a(12) through a(18) of A084701 found & verified 2026-09-02/03, the first advance on either since 2004 and 2003. Paused at k = 4.16×10²³ on A084700 with a(19) open, 22% likely under the engine's proof ceiling, and at A084701's own ceiling, k = 4.95×10²², with its a(19) open above it. |
 | [primorial-ap](primorial-ap/) | [A053647](https://oeis.org/A053647): the first term of the first arithmetic progression of n primes whose common difference is the n-th primorial — the smallest difference such a progression can have | **PAUSED — open to others** — a(16), a(17) and a(18) found & verified 2026-08-20/21, the first advance since 2009 and the first values of any kind on an open term of this sequence. Paused at the floor of the a(19) sweep. |
 | [primorial-ladders](primorial-ladders/) | [A115785](https://oeis.org/A115785) and [A115786](https://oeis.org/A115786) (with [A145743](https://oeis.org/A145743) riding the engine): the smallest prime p such that p − prime(k)# is prime for every k = 1..n (A115785), the smallest prime p such that p + prime(k)# is prime for every k = 1..n (A115786), and the smallest composite number m such that m + 4·k² is prime for every k = 1..n (A145743) — shift ladders whose constants are the primorials, so the small primes are nearly blind and each index of A115785 is its own short line from prime(n)# | **PAUSED — open to others** — a(16) through a(19) of A115785, a(17) through a(20) of A115786 and a(14) through a(20) of A145743 found & verified 2026-10-02/05, the first advance on the first two since 2006 and on the third since 2008. Paused at the floor of the a(20) sweep on A115785, at p = 3.74×10²⁰ on A115786 with a(21) open, and at m = 8.90×10²² on A145743 with a(21) open. |
@@ -43,7 +82,8 @@ Project documentation follows a fixed template (see
 [CONVENTIONS.md](CONVENTIONS.md) § Documentation template): every
 project README opens with the authorship disclaimer, then headline,
 status (`ACTIVE` / `COMPLETE` / `PAUSED — open to others`), problem,
-engine mathematics, odds model, usage, and trust; verified finds live
+engine mathematics, the model (an odds model for a search, a deterministic
+workload model for an exact count), usage, and trust; verified finds live
 in each project's RESULTS.md with evidence files alongside. The status
 column above is deliberately three things — the status word, what was
 found and when, and where the cursor sits — because a table is read
@@ -59,10 +99,12 @@ published.
 
 The projects share a skeleton and a library:
 
-- [`CONVENTIONS.md`](CONVENTIONS.md) — the project template every hunt
-  follows: oracle / CPU engine / GPU engine / checkpointed launcher /
-  fingerprinted benchmark, the gate discipline, the discovery protocol,
-  how a run stops, and how a hunt is sized so that a machine running one
+- [`CONVENTIONS.md`](CONVENTIONS.md) — the project template every
+  project follows: oracle / CPU engine / GPU engine (an explicitly
+  unsupported stub in a CPU-only project) / checkpointed launcher /
+  fingerprinted benchmark, the gate discipline, the discovery protocol
+  of a search and the exact-count protocol of a counting project, how a
+  run stops, and how a campaign is sized so that a machine running one
   for days stays usable for everything else.
 - [`OPTIMIZATION.md`](OPTIMIZATION.md) — how to make a hunt fast without
   making it wrong: the measurement process (measure the phase split
@@ -76,6 +118,9 @@ The projects share a skeleton and a library:
   cannot: the representation hunt and the instruction-level pass every inner
   loop gets before its verdict is written; the experiment ladder; the rule
   that the default command is the fastest engine
+- [`CODEX_REVIEWS.md`](CODEX_REVIEWS.md) — the independent, always-static
+  mathematical review process: project reports in `codex-reviews/`,
+  explicit proofs and assumptions, and implementation handoffs to Claude.
 - [`huntlib/`](huntlib/) — the shared code: deterministic Miller-Rabin and
   BLS75 primality certificates (the N−1 routes and the N+1 Lucas route,
   with subproofs for factors past the deterministic bound), **the
@@ -87,9 +132,10 @@ The projects share a skeleton and a library:
   heartbeat, the ramped classification pool, frontier and census
   bookkeeping, the progress ladder, first-occurrence evidence files,
   graceful shutdown, the un-gameable SCORE runner — and the repo-wide
-  selftest drills every project owes. A project directory holds only the
-  hunt (CLAUDE.md rule 9): harnesses stay in the scratchpad and their
-  measurements go in the log.
+  selftest drills every project owes. A project directory holds the hunt
+  and its specified documentation, including `codex-reviews/` (CLAUDE.md
+  rule 9): harnesses stay in the scratchpad and their measurements go in
+  the log.
 
 ## Reproducing results
 
@@ -101,27 +147,38 @@ python launch.py               # the hunt (checkpointed, resumable)
 python score.py                # correctness gates x benchmark
 ```
 
-Requirements: Python 3.12+, numpy, sympy, and CuPy with a CUDA GPU
-(every engine also has a slower CPU fallback: `--engine cpu`).
+Requirements are per backend, stated in each project's README: the prime
+hunts need Python 3.12+, numpy, sympy, and CuPy with a CUDA GPU (every
+GPU engine also has a slower CPU fallback: `--engine cpu`). Nothing is a
+universal requirement.
 
 **Every program here stops cleanly on Ctrl+C.** These campaigns run for
 days and a human decides when they end, so the interrupt is a supported
-exit: the launcher checkpoints **at the last fully classified segment**
-(never mid-segment — the counters are per candidate and would double-count
-on resume), logs one `[STAGE]` line saying where it stopped, and exits
-`130`. No program in this repository prints a stack trace on Ctrl+C,
-including when a second Ctrl+C arrives while the checkpoint is being
-written — the shutdown goes deaf until the file is on disk. Resuming
-redoes at most the segment that was in flight. See
+exit: the launcher checkpoints **at its last committed work unit** — the
+last fully classified segment of a sieve (never mid-segment: the counters
+are per candidate and would double-count on resume), the last durable
+commit of a counting campaign (staged quanta that have not reached disk
+are discarded and redone) — logs one `[STAGE]` line saying where it
+stopped, and exits `130`. No program in this repository prints a stack
+trace on Ctrl+C, including when a second Ctrl+C arrives while the
+checkpoint is being written — the shutdown goes deaf until the file is on
+disk. Resuming redoes at most the unit that was in flight. See
 [CONVENTIONS.md](CONVENTIONS.md) § Stopping a run.
 
 ## Verification philosophy
 
-A result you cannot re-verify is not a result. Every discovery file in
-this repo (`*/evidence/`) contains the exact integers plus a factor
-witness for the claim-breaking composite, so anyone can confirm the find
-with a few lines of any bignum system — no trust in this codebase
-required.
+A result you cannot re-verify is not a result. Every discovery file of a
+prime hunt in this repo (`*/evidence/`) contains the exact integers plus
+a factor witness for the claim-breaking composite, so anyone can confirm
+the find with a few lines of any bignum system — no trust in this codebase
+required. An exact count has no witness of that kind: its record carries
+the exact integer, the manifest digest of the partition, the receipt-chain
+head, the per-task vector digest and the canary results, and states which
+of the three obligations — algorithm correctness, partition coverage,
+exact aggregation — support it and by what evidence; a count is labelled
+"independently reproduced" only when a genuinely separate full
+computation has been recorded. A checksum, or the same program run in a
+different worker order, is neither.
 
 **Evidence is for first occurrences only.** A hunt meets many values
 that are *not* new terms — run-7s and run-8s in a hunt for a(11), run-17s
@@ -132,5 +189,10 @@ its checkpoint and prints it in every 30-second `[STATUS]` line
 single `[NEAR]` line; anything shorter gets no line and no file. What you
 will find in `evidence/` is one JSON per verified discovery and the
 ledger — plus, where an OEIS editor has asked for one, the entry's b-file
-built from those JSONs (`lcm-ladders/evidence/b078502.txt`). The full rule is in
-[CONVENTIONS.md](CONVENTIONS.md) § The discovery protocol.
+built from those JSONs (`lcm-ladders/evidence/b078502.txt`). A counting
+project additionally keeps its known-term reproduction records under
+`evidence/validation/`: a published term recomputed end to end by the
+production machinery is a validation record, never a discovery, and a
+new-term campaign may not start without them. The full rules are in
+[CONVENTIONS.md](CONVENTIONS.md) § The discovery protocol and § The
+exact-count protocol.

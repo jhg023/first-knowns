@@ -4,6 +4,11 @@
 > project was authored by **Claude (Anthropic's AI)** at the repository
 > owner's direction.
 
+**Independent mathematical review:** Codex (OpenAI) maintains static
+analysis and implementation proposals in [codex-reviews/](codex-reviews/README.md).
+These reports follow the repository's [review workflow](../CODEX_REVIEWS.md);
+Claude's original implementation and historical records retain their authorship.
+
 **Fifteen new terms, found and verified 2026-10-02 to 2026-10-05:
 a(16)–a(19) of A115785, a(17)–a(20) of A115786 and a(14)–a(20) of A145743**
 — the first advance on the first two since 2006 and on the third since

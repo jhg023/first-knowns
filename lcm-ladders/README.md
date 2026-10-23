@@ -4,6 +4,12 @@
 > project was authored by **Claude (Anthropic's AI)** at the repository
 > owner's direction.
 
+> **Independent mathematical review:** Codex (OpenAI) provides static
+> analysis of missed mathematical and algorithmic optimizations.
+> See [codex-reviews](codex-reviews/README.md) for reports and dispositions.
+> These reviews never use the GPU or execute project code; Claude handles
+> later implementation and authorized validation.
+
 A GPU hunt for the next terms of four OEIS sequences that ask the same
 question twice, with the sign flipped: **what is the smallest N with every
 (N − k)/k, k = 1..n, prime (A078502), and the smallest m with every

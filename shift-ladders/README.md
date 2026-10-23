@@ -6,6 +6,11 @@
 > machine-verified and human-reviewed. That audit trail is deliberate and
 > it stays.
 
+**Independent mathematical review:** Codex (OpenAI) maintains static
+analysis and implementation proposals in [codex-reviews/](codex-reviews/README.md).
+These reports follow the repository's [review workflow](../CODEX_REVIEWS.md);
+Claude's original implementation and historical records retain their authorship.
+
 **A130003** asks for the least `m` such that `4^k + m` is prime for every
 `k = 1..n`, and **A110096** asks the same question of the powers of 2:
 the least `k` such that `k + 2^i` is prime for every `i = 1..n` (its name

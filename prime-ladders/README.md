@@ -6,6 +6,11 @@
 > here will be machine-verified and human-reviewed. That audit trail is
 > deliberate and it stays.
 
+**Independent mathematical review:** Codex (OpenAI) maintains static
+analysis and implementation proposals in [codex-reviews/](codex-reviews/README.md).
+These reports follow the repository's [review workflow](../CODEX_REVIEWS.md);
+Claude's original implementation and historical records retain their authorship.
+
 **A084700** asks for the least `k` such that `prime(i)·k + 1` is prime for
 every `i = 1..n`, and **A084701** asks the same question of
 `prime(i)·k − 1`. They are *prime ladders*: one unknown, `n` linear

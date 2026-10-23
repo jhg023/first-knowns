@@ -4,6 +4,11 @@
 > by me. Every line — engines, CUDA kernel, verification machinery, and
 > this documentation — was authored by **Claude (Anthropic's AI)** at my
 > direction.
+>
+> **Independent review addition, 2026-10-20:** Codex (OpenAI) authors the
+> static mathematical reports in [codex-reviews/](codex-reviews/README.md)
+> and this navigation note. Their proposals are separate from the
+> implementation and its measured optimization history.
 
 The hunt for new terms of [OEIS A164926](https://oeis.org/A164926): the
 least prime p such that Euler's polynomial form **x² + x + p** is prime

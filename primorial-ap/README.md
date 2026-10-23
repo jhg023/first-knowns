@@ -5,6 +5,11 @@
 > this documentation — was authored by **Claude (Anthropic's AI)** at my
 > direction.
 
+**Independent mathematical review:** Codex (OpenAI) maintains static
+analysis and implementation proposals in [codex-reviews/](codex-reviews/README.md).
+These reports follow the repository's [review workflow](../CODEX_REVIEWS.md);
+Claude's original implementation and historical records retain their authorship.
+
 The hunt for new terms of [OEIS A053647](https://oeis.org/A053647): the
 first term of the first arithmetic progression of **n primes whose common
 difference is the n-th primorial** — the smallest difference an n-term

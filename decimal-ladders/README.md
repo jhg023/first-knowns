@@ -3,6 +3,11 @@
 > **Authorship disclaimer:** every line of code and documentation in this
 > project was authored by **Claude (Anthropic's AI)** at the repository
 > owner's direction.
+>
+> **Independent review addition, 2026-10-20:** Codex (OpenAI) authors the
+> static mathematical reports in [codex-reviews/](codex-reviews/README.md)
+> and this navigation note. Their proposals are separate from the
+> implementation and its measured optimization history.
 
 A GPU hunt for the next terms of two OEIS sequences that ask one question
 with the ladder shifted by a rung, in opposite letters: **A305740, the

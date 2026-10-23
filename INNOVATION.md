@@ -115,6 +115,14 @@ loop is the one nobody times).
 an instruction-count *model*. The real numbers were different, and the
 difference is where the experiments come from.
 
+*(This part is written for CUDA kernels. A CPU engine gets the same
+pass at the level its interpreter exposes: the representation of the
+leaf operation — a Python set built per call against a generator tested
+against a frozen set, a bitset against a dict — its allocation count,
+and the per-call constant, each a variant timed on the same inputs with
+the result checked and the negatives logged; OPTIMIZATION.md Rule 1b
+lists the instruments.)*
+
 ### 2.1 Get the real SASS
 
 NVRTC → `ptxas` → `nvdisasm`, with the `nvidia-cuda-nvcc` and
@@ -126,6 +134,10 @@ python -c "..."   # nvrtc.compileProgram(-arch=compute_89) -> getPTX
 ptxas -arch=sm_89 -O3 k.ptx -o k.cubin
 nvdisasm -c k.cubin > k.sass
 ```
+
+Or, with the execution counts and stall samples attached to every
+instruction, from Nsight Compute's source page (`--page source
+--print-source sass --csv`; OPTIMIZATION.md Rule 1a).
 
 Then, per basic block of the hot loop (labels `.L_x_N` in the dump),
 count opcodes *by full name*. For the v6 ladder's clear-bit step (59

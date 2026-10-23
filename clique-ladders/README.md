@@ -4,6 +4,11 @@
 > project was authored by **Claude (Anthropic's AI)** at the repository
 > owner's direction.
 
+> **Independent mathematical review:** [Codex review reports and finding
+> dispositions](codex-reviews/README.md) are authored by Codex (OpenAI).
+> The reviews and this navigation note supplement the Claude-authored
+> project documentation above.
+
 A GPU hunt for the next terms of six OEIS sequences that are one object seen
 from six starting points: **join two integers when their sum plus one is
 prime, and grow the clique greedily** — a(n) is the least integer above

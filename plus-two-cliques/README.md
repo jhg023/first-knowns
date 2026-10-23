@@ -4,6 +4,11 @@
 > project was authored by **Claude (Anthropic's AI)** at the repository
 > owner's direction.
 
+**Independent mathematical review:** Codex (OpenAI) maintains static
+analysis and implementation proposals in [codex-reviews/](codex-reviews/README.md).
+These reports follow the repository's [review workflow](../CODEX_REVIEWS.md);
+Claude's original implementation and historical records retain their authorship.
+
 A GPU hunt for the next terms of two OEIS sequences that are one object seen
 twice: **join two integers when their product plus two is prime, and grow
 the clique greedily** — a(n) is the least integer above a(n−1) for which

@@ -1,7 +1,9 @@
 # huntlib
 
 > **Authorship disclaimer:** None of this code was written by me — it was
-> entirely authored by **Claude (Anthropic's AI)** at my direction.
+> entirely authored by **Claude (Anthropic's AI)** at my direction. The
+> repository as a whole is developed with Claude and with ChatGPT through
+> Codex (see the top-level README); huntlib itself is Claude's.
 
 The shared library behind every hunt in this repository. Projects add
 the repo root to `sys.path` and import:
@@ -37,7 +39,12 @@ from huntlib import evidence, frontier, pool, scoring, shutdown, drills
 Design rule: huntlib holds only what is genuinely identical across
 projects. Kernels, wheels, and problem mathematics stay in each project —
 a reader auditing a hunt should find all of its *mathematics* in one
-directory, and only *infrastructure* here.
+directory, and only *infrastructure* here. The modules are loaded lazily
+(`huntlib.__getattr__`), so a CPU-only project that imports `checkpoint`,
+`shutdown`, `hlog`, `evidence`, `pool` and `drills` pulls in no NumPy,
+SymPy or CUDA machinery: `primes`, `certificate`, `ceiling`, `gpu`,
+`rungs`' model readers and `scoring` are the prime hunts' tools and are
+imported only by the projects that need them.
 
 Two deliberate exceptions to sharing. Each project's `*_reference.py`
 oracle does **not** use huntlib's Miller–Rabin — oracles stick to sympy so

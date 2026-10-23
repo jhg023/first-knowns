@@ -1,12 +1,23 @@
 # OPTIMIZATION — how to make a hunt fast without making it wrong
 
-> **Authorship disclaimer:** As with every project here, this document and
-> all the code it describes were authored by **Claude (Anthropic's AI)** at
-> the repository owner's direction.
+> **Authorship disclaimer:** This document and all the code it describes
+> were authored by **Claude (Anthropic's AI)** at the repository owner's
+> direction; the repository as a whole is developed with Claude and with
+> ChatGPT through Codex (see README.md).
+>
+> The review-workflow note below was added by Codex on 2026-10-20.
 
-Every project in this repository is a search whose value depends on two
-things at once: it has to be **fast** (or the frontier never moves) and it
-has to be **right** (or the frontier is a fiction). Those pull against each
+**Static mathematical review precedes implementation when requested.**
+[CODEX_REVIEWS.md](CODEX_REVIEWS.md) defines Codex's independent review
+role and the `codex-reviews/` reports. Codex never uses the GPU or runs
+project code for a review. The profiling, A/B, and gate requirements in
+this document govern Claude's later implementation and validation, not
+the creation of a static report. A proved search-space reduction and an
+unmeasured runtime hypothesis must remain distinguishable.
+
+Every project in this repository is a search or an exact computation whose
+value depends on two things at once: it has to be **fast** (or the frontier
+never moves) and it has to be **right** (or the frontier is a fiction). Those pull against each
 other, and the whole point of the gate discipline in
 [CONVENTIONS.md](CONVENTIONS.md) is to let you push hard on speed without
 being able to quietly break correctness.
@@ -46,6 +57,11 @@ re-sweeps of constants that had just been declared optimal.
 > representation hunt and the instruction-level pass — have been run on
 > it: an earlier engine carried that verdict through four sessions with 1.2x
 > still in the step.
+>
+> **And all of it is done at the filter that runs for days**
+> ([Rule 0a](#rule-0a-optimize-the-filter-that-runs-for-days-not-the-one-that-closes-in-minutes)),
+> never at the opening that closes in minutes: that is where the campaign's
+> clock is, and the opening's phase split is a different engine's.
 
 ---
 
@@ -86,6 +102,76 @@ engine, check what its gates were carrying and re-point that coverage
 somewhere before it goes; if a gate's only purpose was comparing old to new,
 it retires with the engine, and the docs should say so rather than leaving a
 gate number dangling.
+
+### Rule 0a: optimize the filter that runs for days, not the one that closes in minutes
+
+*(Owner directive 2026-10-16, every project; CLAUDE.md rule 3b.)*
+
+A campaign is a sequence of filters, and its clock is not spread evenly
+over them: the odds model puts the openings' terms minutes away and the
+later ones days or weeks away. What an optimization buys the campaign is
+the clock it takes off each filter, `clock(filter) × (1 − 1/speedup)`,
+summed — so the filters that run for days carry essentially all of it. At
+power-ladders' clocks, 5% on A229626 n = 12 (a 19-day median) is ~22 hours;
+50% on A229626 n = 10 (44 seconds) is 15 seconds.
+
+The opening is nevertheless where optimization keeps landing, for reasons
+that have nothing to do with the hunt: it is where the cursor sits when a
+project is built, it is the filter rule 5g puts a frozen shape at first,
+it is fast to measure and short enough for a quick A/B, and it is the
+filter the first phase split happened to be taken at. None of those make
+it the filter that matters, and **its phase split is not the long filter's
+phase split**. A later filter is a different configuration — a longer
+window, a wider record, a deeper wheel or sieve, a different survivor
+density and a different host load — and the phases move with it.
+
+So, in order:
+
+1. **Name the target.** Per family, the filter carrying the campaign's
+   expected clock: the odds model's quantiles divided by the measured rate
+   at that filter (the README's clock column), taking the first filter
+   whose median clock is a day or more, and weighting by clock where
+   several are. Write it at the head of the round in the log.
+2. **Measure there, and only there.** Every phase split (Rule 1), Nsight
+   Compute profile (Rule 1a), A/B (Rule 3), constant sweep and termination
+   table (Part 3) is taken with that filter's PLANNED engine at a height
+   inside its search — the model's Q1 or the cursor, never its floor if
+   the floor is a different regime. The engine API takes any start, so
+   this costs a scratch harness exactly as the opening does, inside rule
+   0's five minutes, and never a campaign (CLAUDE.md 0a).
+3. **A ratio from a short filter is a hypothesis.** It may suggest what
+   to try; it ships when it reproduces at the day-long filter. Every
+   number in a log names the filter it was measured at.
+4. **The SCORE shape sits at the day-long filter**, so that "optimize
+   under the score" optimizes the hunt. The openings keep their frozen
+   shapes for rule 5g; the headline is the long filter. Moving an existing
+   project's headline there is a shape change, logged with the paired
+   ratio in BENCHMARKS.md (§2.13: the owner has made that decision for
+   this case).
+5. **Price options in the long filter's hours.** A priced, unbuilt lever
+   (Rule 5b) states what it is worth at the day-long filter in hours
+   saved on that term's expected search, because that is the unit the
+   owner decides in.
+
+The short filters are not abandoned: rule 5g still requires the default to
+be correct and free of cliffs there, the pool not to bind and the
+acceptance test to be run. That is a check, not a target. Per-filter
+constants come from the per-filter table, so a short filter loses nothing
+a table can save it; where a structural choice cannot be made per filter,
+the day-long filter decides and the minutes it costs the short one are
+priced and logged.
+
+**The case that wrote it:** power-ladders (2026-10-15) ran rounds 0 to 3,
+its Nsight Compute profile and its termination table at A229626 n = 10 —
+median clock 44 seconds — with A229627 n = 9 (5 seconds) and A229902
+n = 10 (95 seconds) alongside, and froze its SCORE shape there. Its
+campaigns' clock is at A229626 a(12) (19 days median, P90 95), A229902
+a(12) (35 days, P90 168) and the a(11)s of A229627 and A229630 (2.3 and
+2.7 days): a 256-period window rather than 128, a wide record at A229626
+n = 12, an eighth of the opening's host load. Those filters' rates were
+measured (the project's 5g table); their phase split never was, so the
+termination table that project published describes a filter its campaign
+leaves in under a minute.
 
 ### Rule 1: measure the split before you optimize anything
 
@@ -154,6 +240,103 @@ Three of the four were worth 1.06x–1.13x each and two moved in the direction
 opposite to the obvious guess. Individually they look like rounding error;
 together they are **1.3x**, and every one of them is pure loss if nobody
 re-sweeps. Any constant tuned before a structural change is stale after it.
+
+### Rule 1a: profile the dominant kernel with Nsight Compute — it is installed
+
+The phase split (Rule 1) says WHICH kernel; Nsight Compute (`ncu`, 2025.4
+on this machine — `ncu.bat` in its install directory on Windows) says what
+that kernel is bound by, instruction by instruction, and it is the
+measurement every recent round here started from. Four projects used it
+before this section existed, each with its procedure written only in its
+own log: plus-two-cliques round 3 (the LSU data pipe at 87% of peak, five
+blocks a SM for want of 54 bytes of shared memory), primorial-ladders round
+1 (the window and extraction 75% of samples, ~12.5 instructions per
+prime-window against a floor of 7.5), polynomial-runs round 2 (seven tenths
+of the sieve kernel's code was a never-executed fallback inlined through the
+hot path: a warp stalled on instruction fetch once per issued instruction —
+moved out of line, 1.05–1.06x), and power-ladders round 2 (the window at
+97.8% of the LSU's issue peak; the tail kernel healthy at IPC 2.75).
+
+**Profile a harness, never a campaign** (CLAUDE.md 0a, and Rule 0's five
+minutes). The target is twenty lines in the scratchpad that build the
+PLANNED engine of the filter in question and run a handful of launches:
+
+    ncu --kernel-name sieve --launch-skip 2 --launch-count 1 --set full \
+        -f --export rep  python target.py <repo> <family> <n> 4
+
+`--launch-skip` passes the warm-up launches (the first compiles and fills
+the caches); `--launch-count 1` profiles one; `--set full` replays that
+launch ~45 times to collect every section, so keep the profiled kernel to
+tens of milliseconds and the whole run inside the cap. `--kernel-name
+regex:tailround` selects a family of generated kernels. Check `nvidia-smi`
+first: a profile on a GPU that is running the owner's hunt measures the
+hunt, and steals its time.
+
+**Read it three ways:**
+
+1. `ncu --import rep.ncu-rep --page details` — Speed of Light (which unit
+   is near its peak), occupancy and what limits it (registers, shared
+   memory, warps), the warp-stall reasons, the memory tables (bank
+   conflicts, sectors per request).
+2. `--page raw --csv` — every metric by name, for the ones the summary
+   rounds away: `sm__inst_executed_pipe_lsu` (LSU issue against its peak),
+   `l1tex__data_pipe_lsu_wavefronts_mem_shared` (the shared-memory DATA
+   pipe), `smsp__sass_inst_executed_op_shared_ld`, and the
+   `smsp__pcsamp_warps_issue_stalled_*` family (MIO throttle = the LSU
+   instruction queue is full).
+3. `--page source --print-source sass --csv` — per-instruction stall
+   samples and execution counts. NVRTC kernels carry no line info, so this
+   is SASS only: split it at every `BAR.SYNC` (the phases of a block-
+   structured kernel fall between barriers) and count each segment's
+   opcodes by FULL name (`LDS` vs `LDS.64` vs `LDS.128` — the width is the
+   finding). That census is what showed power-ladders' window reading its
+   table a 32-bit word at a time, five loads a prime, because the pairs
+   table did not fit.
+
+**What it will tell you wrong, and how to catch it:**
+
+* **A unit near 100% names a candidate bound, not a proven one.** Attack
+  it from two directions before believing it (§2.12). power-ladders cut
+  the window's shared loads 40% (aligned 64-bit reads: LSU issue 97.8% →
+  66.6%) and the rate did not move (0.97–1.0): the selects it added took
+  the bound to the ALU and the issue slots, at twelve warps a SM. The
+  profile of the CHANGED kernel is what said so.
+* **The "Est. Speedup" hints are heuristics.** "Uncoalesced global loads,
+  41%" on a gather that hits L1 98% of the time is not 41% of anything;
+  measure the ablation (§3.3).
+* **A profiled launch is slower than a real one** (clocks are locked and
+  the launch is replayed), so compare variants under ncu with each other,
+  never with a wall clock; the rate claim is still a paired A/B (Rule 3).
+* **The first profile after a kernel change pays the compile** (NVRTC
+  into CuPy's cache) — budget for it against the five-minute cap.
+
+### Rule 1b: profile CPU code with timers on the same inputs — there is no `ncu` for the interpreter
+
+Rule 1a is for GPU kernels. A CPU engine — an exact counter in Python,
+a host classification pool — gets the same discipline with different
+instruments, and the instruments are cheap:
+
+- **the phase split by category**, with timers around every category
+  and route on the SAME chosen inputs, so routes are compared paired;
+- **representation and allocation measurements** — set against bitset,
+  bytearray fill against big-integer construction, cache against no
+  cache — each a variant timed on the same inputs with the count
+  checked, exactly as a variant kernel is;
+- **the end-to-end shape**, which is where process spawn, IPC, ledger
+  validation, receipt and checkpoint writes with fsync live; they are
+  invisible to an in-process benchmark;
+- **peak memory**, measured, not estimated, when a structure scales with
+  the universe (a bitset universe over root subsets grows with
+  choose(q, r));
+- **a worker-count sweep** of the end-to-end pipeline, interleaved, with
+  the committed core-seconds beside the wall clock so the parallel
+  efficiency is a number and the default pool is chosen from it under
+  CONVENTIONS.md "Sizing a hunt".
+
+What it will tell you wrong: a per-call time on a sample of nodes is not
+a campaign rate — the per-node cost varies several-fold with the frontier
+size within one depth, and a seeded sample over-represents wide branches;
+state the sample and its spread with every projection.
 
 ### Rule 2: build a cost model, then let it be wrong
 
@@ -839,6 +1022,54 @@ smaller `(q − w)/q`), so price the segment first. Not where the candidate
 prime kills little (decimal-ladders' 5) and not where the record already
 reaches the wheel wanted (plus-two-cliques' wheel to 59, lcm-ladders' 61).
 
+### 2.16 A fallback priced as rare must be guarded by the MEAN
+
+**Recognise it when:** a queue or buffer is sized from an analytic
+survival with a margin, overflow takes a slow path that is "harmless
+because it is rare", and the engine is moved to a problem whose survival
+curve is different. The margin was set on the old curve; on the new one the
+MEAN load can sit past the cap, and then the slow path is the kernel.
+
+**The measured cases** (power-ladders, round 0 and round 1). The window
+sieve's shared queue was sized for a strong sieve that leaves 0.35% of a
+tile; the power ladders' weak kill sets (one residue per condition) left
+2.7% — 3,500 survivors against 1,920 slots — and every block tested the
+whole tail per candidate in the fallback: **9 s a launch, 17x slow**. Its
+global tail queue, capped at 2²⁸ entries, held exactly its expected load at
+two openings and 40% past it at a third, where the launch time swung 2x
+between identical launches with which warps met a full queue: **2.33x**
+once guarded. The tell, both times, is variance: a deterministic kernel
+whose time varies between identical launches is meeting a capacity.
+
+**The fix is a guard, not a margin**: compare the cap with the expected
+load where the configuration is chosen, and change the configuration
+(smaller tiles; fewer residues per launch) until the mean fits with room
+(STARVE_GUARD, Q3_GUARD). A margin is a guess about variance; a guard is a
+statement about the mean, and it travels to the next regime.
+
+### 2.17 Move the classification onto the device when the host cannot follow
+
+**Recognise it when:** the survivors of the best sieve the device can run
+still arrive faster than the host can classify them — by orders of
+magnitude, not by a pool's worth — and the first values each survivor is
+classified on are small enough for a few-limb modular exponentiation.
+
+power-ladders' ten conditions, each killing about one residue per prime,
+leave 10⁻⁵ of the candidates past a sieve to 2²⁰ (and 10⁻⁷ past 2³²: the
+survival falls only as a power of 1/ln of the depth), millions of values a
+second at ~20 µs each in Python. But 2·m − 1 is a two-limb number at every
+frontier the hunt will see. So the device Fermat-tests each survivor's
+leading conditions (base 2, multi-limb Montgomery, one kernel per condition
+over the previous one's compacted queue, the limb count compiled per
+condition), and only values whose leading SIX conditions pass reach the
+host: 1–4 thousand a second. What makes it safe is one-sidedness — a failed
+Fermat test is a proof of compositeness, so the stage can drop nothing that
+should have reached the host, and the host re-reads every run anyway (its
+gate pins the arithmetic to Python's `pow` and the stream to the CPU sieve
+filtered by a CPU Fermat chain). What it buys besides the host: **the sieve
+depth becomes a device decision**, priced by what a tail prime saves in
+Fermat work against what its test costs — 2¹³ ran 1.26x 2¹⁶ there.
+
 ---
 
 ## Part 3 — The termination test
@@ -846,6 +1077,10 @@ reaches the wheel wanted (plus-two-cliques' wheel to 59, lcm-ladders' 61).
 You are finished optimizing when you can produce this table, **not** when
 you run out of ideas. Anything less and the honest report is "I have not
 finished searching", with what remains unexamined.
+
+The table is taken at the filter that runs for days (Rule 0a), and its
+heading names that filter. A table taken at an opening that closes in
+minutes is not a termination test for the campaign.
 
 ### 3.1 Every phase is accounted for
 
@@ -988,12 +1223,19 @@ Design, before writing the engine:
       enforced as a constant
 - [ ] the largest wheel whose offset table fits at **every** parameter the
       gates will run, not just the production one (§2.8)
-- [ ] frozen benchmark shape + work fingerprint from the first gated engine
+- [ ] frozen benchmark shape + work fingerprint from the first gated engine,
+      the SCORE shape at the filter that runs for days (Rule 0a)
 - [ ] previous engine versions retained as parity references
 
 Then, in this order:
 
+- [ ] name each family's day-long filter from the model's clocks; every
+      measurement below is made there, with its planned engine (Rule 0a)
 - [ ] measure the phase split; confirm the phases sum to wall-clock (Rule 1)
+- [ ] profile the dominant kernel with Nsight Compute (Rule 1a): what it is
+      bound by, and the SASS census of the phase that carries it — or,
+      for CPU code, the category timers, representation variants,
+      end-to-end shape, memory and worker sweep of Rule 1b
 - [ ] cost-model the dominant phase; compute mean vs warp-max exit depth
       (Rule 2, §2.2)
 - [ ] can the inner loop be inverted to process a block per step? (§2.1)

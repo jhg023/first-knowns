@@ -5,6 +5,11 @@
 > engines and this document are all machine-written; the results below are
 > machine-verified and human-reviewed. That audit trail is deliberate and
 > it stays.
+>
+> **Independent review addition, 2026-10-20:** Codex (OpenAI) authors the
+> static mathematical reports in [codex-reviews/](codex-reviews/README.md)
+> and this navigation note. Their proposals are separate from the
+> implementation and its measured optimization history.
 
 **A089761** asks for the least `k` such that `k·i² + 1` is prime for every
 `i = 1..n` — a Dickson ladder whose rungs are the squares. Fifteen terms

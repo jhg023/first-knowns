@@ -4,6 +4,11 @@
 > project was authored by **Claude (Anthropic's AI)** at the repository
 > owner's direction.
 
+**Independent mathematical review:** Codex (OpenAI) maintains static
+analysis and implementation proposals in [codex-reviews/](codex-reviews/README.md).
+These reports follow the repository's [review workflow](../CODEX_REVIEWS.md);
+Claude's original implementation and historical records retain their authorship.
+
 A GPU hunt for the next terms of three **exact-run shift ladders** — one
 unknown prime p and a list of additive shifts built from the primorials.
 **A257466** asks for the smallest prime p such that p + pps(1), p + pps(2),

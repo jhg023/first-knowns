@@ -4,6 +4,11 @@
 > project was authored by **Claude (Anthropic's AI)** at the repository
 > owner's direction.
 
+**Independent mathematical review:** Codex (OpenAI) maintains static
+analysis and implementation proposals in [codex-reviews/](codex-reviews/README.md).
+These reports follow the repository's [review workflow](../CODEX_REVIEWS.md);
+Claude's original implementation and historical records retain their authorship.
+
 A GPU hunt for the next terms of four **exact-run polynomial ladders** —
 one unknown prime p and a list of additive shifts that are the values of a
 polynomial. **A165234** asks for the least prime p such that 2x² + p is
