@@ -636,11 +636,13 @@ measured, for whoever resumes:
   line against 9.2×10¹⁸, with the unpipelined first launch, the promotion
   and a(11)'s certificates inside the clock); A072942's five openings each
   in seconds of line.
-* **The certificate route left nine values unproved** at n = 66, 78 and
-  88 (Φ₁₁, Φ₂₂, Φ₃₃, Φ₆₆; Φ₃₉; Φ₁₁, Φ₂₂, Φ₄₄, Φ₈₈), as README.md said it
-  might: the 67-digit Φ₅(x) and Φ₁₀(x) outside those runs did not factor
-  in huntlib's budget. A certificate-cost item (Codex CYL-003), not a rate
-  item; RESULTS.md names the values.
+* **The certificate route left nine values without a certificate** at
+  n = 66, 78 and 88 (Φ₁₁, Φ₂₂, Φ₃₃, Φ₆₆; Φ₃₉; Φ₁₁, Φ₂₂, Φ₄₄, Φ₈₈), as
+  README.md said it might: the 67-digit Φ₅(x) and Φ₁₀(x) outside those
+  runs did not factor in huntlib's budget. All nine were proved prime by
+  FLINT's APR-CL on 2026-10-25 (RESULTS.md: 0.1 s at 168 digits to 24.7 s
+  at 670), which settles the terms and leaves a checkable certificate as a
+  certificate-cost item (Codex CYL-003), not a rate item.
 * **The coverage unit at A070737 n = 13** is one segment of 160 periods,
   4.9×10²³ of line — 7.7 h at 1.79×10¹⁹ x/s, so an expected over-sweep of
   about 4 h on a ten-day median search (1.6%, inside CLAUDE.md 5j).
@@ -651,7 +653,8 @@ measured, for whoever resumes:
   against a median of three).
 * **Owed to a resumer, in order:** the two batteries first (CLAUDE.md rule
   2); the `Q3_MAX` re-sweep on the measured wheels (round 2's last
-  paragraph); the nine hand certificates or the CYL-003 route; and, if
+  paragraph); a checkable certificate for the nine APR-CL-proved values
+  (the CYL-003 route) if the evidence is to carry one; and, if
   a(13) of A070737 is the target, a phase split under a live n = 13
   segment — the SCORE shape sits at that filter, but no campaign segment of
   it has closed yet.

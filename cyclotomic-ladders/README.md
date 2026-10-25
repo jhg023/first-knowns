@@ -29,9 +29,9 @@ n = 99 in an a-file, had ten open indices below 100 — 48, 60, 66, 72, 78,
 80, 84, 88, 90, 96 — the question marks of that a-file. **Standing result
 ([RESULTS.md](RESULTS.md)): a(11) and a(12) of A070737 — and so a(11) and
 a(12) of A233512 — and a(48), a(60), a(66), a(78), a(80) and a(88) of
-A072942, found and verified 2026-10-23 to 10-25**, every value proved by
-certificate except nine at a(66), a(78) and a(88) that stand as strong
-probable primes awaiting a hand certificate.
+A072942, found and verified 2026-10-23 to 10-25**, every value certified
+except nine at a(66), a(78) and a(88), which were proved prime by APR-CL on
+2026-10-25 and carry no certificate in the evidence (RESULTS.md).
 
 **Status: PAUSED — open to others** — built and optimized 2026-10-23/24,
 hunted by the owner 2026-10-23 to 10-25, paused 2026-10-25 with eight
@@ -276,9 +276,10 @@ re-verified before they are written. What is this project's:
   settling two indices) leaves the second index of A233512 open. Its
   records carry the integer under x, the letter its own comment and
   example lines use (its name gives none).
-* **Nine values of three A072942 finds are UNPROVED** (RESULTS.md): each
-  find stands on the three legs and its evidence names the values, strong
-  probable primes of 168–670 digits whose BLS75 certificate needs a
-  cyclotomic value outside the run factored (Φ₅(x) and Φ₁₀(x), 67 digits,
-  at n = 66 and 88); the owner certifies them by hand, or a later session
-  builds Codex's CYL-003 route.
+* **Nine values of three A072942 finds carry no certificate** (RESULTS.md):
+  their BLS75 route needs a cyclotomic value outside the run factored
+  (Φ₅(x) and Φ₁₀(x), 67 digits, at n = 66 and 88), so the evidence lists
+  them under `unproved` and the finds stand on the three legs. Each was
+  proved prime by FLINT's APR-CL on 2026-10-25 (0.1–25 s at 168–670
+  digits) — a deterministic proof, not a file a reader can re-check; a
+  checkable certificate is Codex's CYL-003 route or ECPP.

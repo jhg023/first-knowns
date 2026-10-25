@@ -47,24 +47,32 @@ README.md describes (x's own factorization times the run's own proved
 values, whose proofs ride along as subproofs). The largest value proved is
 Φ₈₀(x) at a(80), 625 digits.
 
-**Nine values are UNPROVED**, as README.md said they might be: at a(66)
-the values Φ₁₁ and Φ₂₂ (168 digits each), Φ₃₃ and Φ₆₆ (335 digits); at
-a(78) Φ₃₉ (386 digits); at a(88) Φ₁₁ and Φ₂₂ (168 digits), Φ₄₄ (335 digits)
-and Φ₈₈ (670 digits). Each passed the Miller–Rabin chain and sympy's BPSW
-test (the harness repeated the latter), so each is a strong probable prime;
-what is missing is a certificate. Φ₁₁(x) − 1 = x·Φ₂(x)·Φ₅(x)·Φ₁₀(x) and
-Φ₂₂(x) − 1 = x·Φ₁(x)·Φ₅(x)·Φ₁₀(x); at n = 66 and n = 88 the indices 5 and
-10 do not divide n, so Φ₅(x) and Φ₁₀(x) — 67 digits each — are outside the
-run and must be factored to reach a BLS75 bound, and huntlib's bounded rho
-and ECM did not do it; each other unproved value's N − 1 shape likewise
-needs a value outside the run factored (or Φ₁₁'s proof as a subproof),
-which the bounded search did not reach. The find stands on the three legs
-(CONVENTIONS.md's protocol) and each file's `unproved` list names the
-values the owner certifies by hand — an ECPP proof of a 168–670-digit
-prime is routine — or that a later session proves by Codex's CYL-003 route
-(the run's own factors tried first) or by factoring the two 67-digit
-cofactors. The other five A072942 finds and both A070737 finds are proved
-in full.
+**Nine values carry no certificate, and were proved prime by APR-CL on
+2026-10-25.** README.md said the certificate route might fall short here,
+and it did: at a(66) the values Φ₁₁ and Φ₂₂ (168 digits each), Φ₃₃ and Φ₆₆
+(335 digits); at a(78) Φ₃₉ (386 digits); at a(88) Φ₁₁ and Φ₂₂ (168 digits),
+Φ₄₄ (335 digits) and Φ₈₈ (670 digits). Φ₁₁(x) − 1 = x·Φ₂(x)·Φ₅(x)·Φ₁₀(x)
+and Φ₂₂(x) − 1 = x·Φ₁(x)·Φ₅(x)·Φ₁₀(x); at n = 66 and n = 88 the indices 5
+and 10 do not divide n, so Φ₅(x) and Φ₁₀(x) — 67 digits each — are outside
+the run and must be factored to reach a BLS75 bound, and huntlib's bounded
+rho and ECM did not do it; each other value's N − 1 shape likewise needs a
+value outside the run factored (or Φ₁₁'s proof as a subproof), which the
+bounded search did not reach. The campaign therefore recorded the three
+finds on the three legs (the Miller–Rabin chain, sympy's BPSW, the
+re-sieve) with those values listed under `unproved`, as CONVENTIONS.md's
+protocol says. On 2026-10-25 each of the nine was proved prime by FLINT's
+`fmpz_is_prime` (python-flint 0.9.0; the FLINT documentation: "returns 1
+if n is prime and 0 otherwise, with a proof" — Pocklington and Morrison
+with partial factoring, then APR-CL): 0.1 s for each 168-digit value,
+1.5–2.1 s for the 335-digit ones, 2.5 s for Φ₃₉ and 24.7 s for the
+670-digit Φ₈₈. That is a deterministic proof on the standing of the
+library's correctness, as PARI's `isprime` is, and not a certificate a
+reader can re-check from the file; so the evidence records keep those
+values under `unproved`, which in this directory means "without a
+certificate", and a checkable certificate (ECPP, or Codex's CYL-003 route
+with the run's own factors tried first) remains the open item if the
+evidence is ever to carry one. The other five A072942 finds and both
+A070737 finds are certified in full.
 
 Every file also carries the three-way verification (huntlib's Miller–Rabin
 chain, sympy's BPSW, a re-sieve by the CPU engine on another wheel) and a
@@ -96,11 +104,11 @@ nothing until the segment closes and is swept again on resume).
 a(n) is the least x such that the cyclotomic polynomial values Phi(d,x)
 are prime for all d dividing n.
 
-| n | a(n) = x | found | values | plan | proved | x factored |
+| n | a(n) = x | found | values | plan | certified | x factored |
 |---|---|---|---|---|---|---|
-| 66 | 54,204,720,840,327,330 | 10-24 00:00:45 | 8 | p2 | 4 of 8 (Φ₁₁, Φ₂₂, Φ₃₃, Φ₆₆ unproved) | 2 · 3² · 5 · 7 · 13 · 17 · 23 · 67 · 163 · 1,549,937 |
-| 78 | 11,777,724,230,620,068 | 10-24 00:03:17 | 8 | p2 | 7 of 8 (Φ₃₉ unproved) | 2² · 3³ · 7 · 79 · 24,379 · 8,089,033 |
-| 88 | 55,385,037,774,343,260 | 10-24 00:05:49 | 8 | p2 | 4 of 8 (Φ₁₁, Φ₂₂, Φ₄₄, Φ₈₈ unproved) | 2² · 3² · 5 · 17 · 23 · 47 · 61 · 89 · 3,084,079 |
+| 66 | 54,204,720,840,327,330 | 10-24 00:00:45 | 8 | p2 | 4 of 8 (Φ₁₁, Φ₂₂, Φ₃₃, Φ₆₆ by APR-CL, below) | 2 · 3² · 5 · 7 · 13 · 17 · 23 · 67 · 163 · 1,549,937 |
+| 78 | 11,777,724,230,620,068 | 10-24 00:03:17 | 8 | p2 | 7 of 8 (Φ₃₉ by APR-CL, below) | 2² · 3³ · 7 · 79 · 24,379 · 8,089,033 |
+| 88 | 55,385,037,774,343,260 | 10-24 00:05:49 | 8 | p2 | 4 of 8 (Φ₁₁, Φ₂₂, Φ₄₄, Φ₈₈ by APR-CL, below) | 2² · 3² · 5 · 17 · 23 · 47 · 61 · 89 · 3,084,079 |
 | 48 | 951,632,152,101,389,850 | 10-24 00:06:09 | 10 | p2 | all | 2 · 3 · 5² · 7 · 13 · 17 · 29 · 31² · 41 · 3,589,073 |
 | 80 | 32,914,062,820,751,552,550 | 10-24 00:07:30 | 10 | p2 | all | 2 · 3² · 5² · 11 · 17 · 41 · 4,297 · 9,649 · 230,089 |
 | 60 | 66,868,504,406,704,117,216,919,820 | 10-25 09:13:50 | 12 | p3 | all | 2² · 3 · 5 · 7⁴ · 11 · 13 · 31 · 61 · 1,716,526,976,383,969 |
@@ -229,6 +237,7 @@ reproduced, `launch.py --selftest` 57/57).
   a(84) (6.7 days), a(96) (9.5 days) and a(90) (11 days). `python launch.py
   --family A072942` takes them in that order; `--index` names one.
 * **Owed before or on resuming:** `python launch.py --selftest` and `python
-  score.py` first (CLAUDE.md rule 2); the nine hand certificates above, or
-  Codex's CYL-003 route built; the `Q3_MAX` re-sweep on the measured wheels
+  score.py` first (CLAUDE.md rule 2); a checkable certificate for the nine
+  APR-CL-proved values (ECPP, or Codex's CYL-003 route) if the evidence is
+  to carry one; the `Q3_MAX` re-sweep on the measured wheels
   (OPTIMIZATION_LOG.md round 2).
