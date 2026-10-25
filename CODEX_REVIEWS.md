@@ -119,6 +119,7 @@ to the project skeleton, not an exception for miscellaneous files.
 | Project | Local index | Initial report | Review scope |
 |---|---|---|---|
 | clique-ladders | [Findings and disposition](clique-ladders/codex-reviews/README.md) | [2026-10-20](clique-ladders/codex-reviews/2026-10-20-static-review.md) | Six primary families and five derived entries; admissibility theorem, coverage and reuse limits |
+| cyclotomic-ladders | [Findings and disposition](cyclotomic-ladders/codex-reviews/README.md) | [2026-10-23](cyclotomic-ladders/codex-reviews/2026-10-23-static-review.md) | Both cyclotomic families and A233512; divisor floors, subgroup residue tables, certificates, proof/coverage safeguards; [2026-10-24 long-index follow-up](cyclotomic-ladders/codex-reviews/2026-10-24-long-index-followup.md) adds explicit wheel exchanges and completion costs; [additional filter-pipeline review](cyclotomic-ladders/codex-reviews/2026-10-24-filter-pipeline-followup.md) covers sparse sieve-prime selection and interleaved Fermat rejection |
 | decimal-ladders | [Findings and disposition](decimal-ladders/codex-reviews/README.md) | [2026-10-20](decimal-ladders/codex-reviews/2026-10-20-static-review.md) | A305740 and A153431; cross-family least-term pruning |
 | dickson-ladders | [Findings and disposition](dickson-ladders/codex-reviews/README.md) | [2026-10-20](dickson-ladders/codex-reviews/2026-10-20-static-review.md) | A247965; shared fold patterns, quadratic root capacities and model-tail correction |
 | euler-prime-runs | [Findings and disposition](euler-prime-runs/codex-reviews/README.md) | [2026-10-20](euler-prime-runs/codex-reviews/2026-10-20-static-review.md) | A164926; shifted-polynomial reduction and necessary filters |
@@ -147,6 +148,19 @@ was inspected where it supports those hunts; it is not a separate search
 family. `prime-power-sums/` was empty at review time, so there was no
 algorithm or evidence to assess. Once it or another new project is
 populated, use the request below and add its report to this index.
+
+**Added 2026-10-23:** cyclotomic-ladders has its initial static mathematical
+review, finding ledger, and Claude validation plan. This is a documentation-only
+review; no implementation or runtime validation was performed.
+
+**Follow-up 2026-10-24:** cyclotomic-ladders' long-index review uses the
+engine-v2 record and saved n = 60 progress to price stronger wheel-prime
+substitutions and bounded-interval enumeration. Candidate-density gains
+are not measured speedups. The review left the owner's active hunt and
+all project code unchanged; its local index links the report and plan.
+A second follow-up that day adds sparse later-prime selection and exact
+sieve/Fermat reordering experiments, with quantitative limits on shared
+catalogs and other proposed speedups. These proposals are also unmeasured.
 
 ## Starting a review of a new or changed project
 
