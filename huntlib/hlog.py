@@ -112,6 +112,24 @@ class Heartbeat:
     def doing(self, what):
         self._doing, self._doing_t = str(what), time.time()
 
+    def scope(self, what):
+        """A context manager: `doing(what)` for its body, then the previous
+        label and its start time put back -- so a step inside a segment can
+        name itself to the heartbeat without erasing the segment's own
+        label (huntlib.hostcost wraps every per-item host step in one)."""
+        hb = self
+
+        class _Scope:
+            def __enter__(self):
+                self.prev = (hb._doing, hb._doing_t)
+                hb.doing(what)
+                return hb
+
+            def __exit__(self, *exc):
+                hb._doing, hb._doing_t = self.prev
+                return False
+        return _Scope()
+
     # ---- read by line_fn
     def pos(self):
         return self._samples[-1][1] if self._samples else None

@@ -907,6 +907,72 @@ does not scale with the work** — two configurations differing by four
 orders of magnitude in line swept agreed to 1% on an absolute 32 ms, and
 that is what named the suspect class before it named the suspect.
 
+### A rare host path is priced by its rate, and announced when it runs (binding)
+
+The host side of a segment loop handles survivors one at a time, and almost
+every one is cheap. **The cost that matters is the tail**: a fallback that
+takes minutes, inside the loop, reached once in a few hundred windows, *is*
+the campaign's rate — and nothing a project normally measures can see it. A
+benchmark never classifies; a gate checks correctness, not time; a
+wall/device measurement of the loop over a few dozen windows is an average,
+and the windows it happened to measure can hold none of the rare items.
+
+hl-records (2026-11-11) is the case. Its host classifies each survivor's
+constant C into census bins with rigorous intervals, refined through prime
+tiers only as far as the decision needs. A survivor that its last tier
+(primes to 2^20) could not separate from a bin edge fell through to a
+30-digit analytic evaluation — of that k and, needlessly, of the record —
+about four minutes each at k = 1.3·10^10 and forty at 10^12. Survivors
+within 2.4·10⁻⁶ of the census floor arrive about once in 450 windows, and
+the first engine-v3 run met two of them in its first forty windows: it
+spent ~90% of its first hour in the fallback while every `[STATUS]` line said
+"sweeping from k = …". The same day, a 30-window measurement of the loop
+had read 1.057 of device time, and a density argument had put the rate at
+one window in 700. Counted over 900 windows, the old tiers sent about seven
+times the device time to the fallback; deeper tiers with a sharper tail
+bound send about 0.2% (hl-records OPTIMIZATION_LOG.md 2.13).
+
+What every project owes:
+
+1. **Name every host path whose single run can cost more than a few
+   windows of device time** — an exact fallback, a deep refinement, a
+   verification, a certificate, a factorization — and **price it by its
+   COUNTED rate × its cost, at the day-long heights**, before the first
+   campaign and after any change that moves either. Count the rate: run the
+   cheap classifier over the survivors of at least a thousand windows with
+   the fallback stubbed out, and count how often it would be taken. Write
+   one `huntlib.hostcost.price_line` per path into the log. Never infer the
+   rate from a short loop measurement or a density argument; both were off
+   here by more than ten times. **A path over 1% of device time is a bug in
+   the classifier**, not a cost of the hunt.
+2. **Refine cheaply before you fall back.** Space the tiers of a rigorous
+   computation so that each costs no more than a few windows and is
+   reached by a small fraction of what reaches the tier before it; the
+   expensive exact route is the last resort. Never recompute what a find
+   has already paid for (the record's value is in the checkpoint).
+3. **A rigorous floating-point interval states an allowance that is true
+   for the number of operations it covers** — an allowance that grows with
+   them, or an arrangement whose error does not (an exactly rounded sum of
+   small terms, `math.fsum`, instead of a product multiplied out) — and a
+   bound on a tail is taken over what the tail actually ranges over (the
+   primes, not every integer prime to 6). hl-records' fixed allowance of
+   10⁻¹¹ could be exceeded by its own 82,025 multiplications, and its tail
+   bound was five times looser than the primes allow.
+4. **Every per-item host step runs inside `huntlib.hostcost.HostCost.item(label)`.**
+   The heartbeat then names the item while it runs (`classifying k = … for
+   240s`, not the segment's label); a step over the threshold gets one
+   `[WARN]` with its label, its duration and the slow paths it took
+   (`hc.path(name)`); a step that is slow by design (a discovery's
+   verification) says so with `hc.expect(reason)`; and `[STATUS]` carries
+   `hc.status()` — the slowest step of the run and the named paths taken.
+   The selftest runs `huntlib.hostcost.drill()` and a launcher drill that
+   slows one survivor and checks that the warning names it.
+
+The device-side analogue is OPTIMIZATION.md 2.16 (a fallback priced as rare
+must be guarded by the mean); this is the same failure on the host, where
+it is worse, because a host fallback is usually an exact computation with
+no upper bound on its cost.
+
 ## Logging taxonomy
 
 `[STAGE]` phases; `[STATUS]` the 30-second **wall-clock** heartbeat

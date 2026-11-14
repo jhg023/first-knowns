@@ -1,0 +1,60 @@
+{
+ "sequence": "A331940",
+ "forms": "x^2 + x + k",
+ "k": 11410046357,
+ "oeis_terms": {
+  "30": 11410046357
+ },
+ "index": 30,
+ "settles": [
+  30
+ ],
+ "C": "9.328963776429486263794142280993831",
+ "C_table": "9.32896",
+ "C_error_bound": "9.33e-33",
+ "margin_over_previous": "0.00348155",
+ "previous_record": {
+  "k": 5384581877,
+  "C_interval": [
+   "9.325482226431642",
+   "9.325482226433643"
+  ]
+ },
+ "verification": "3-way",
+ "leg1_engine": {
+  "h": 11971,
+  "fundamental_d": -45640185427,
+  "conductor": {},
+  "h_fundamental": 11971,
+  "C_interval": [
+   "9.328960810594522",
+   "9.328966742024594"
+  ],
+  "primes_to": 1048576,
+  "tail_bound": 3.178938641397919e-07,
+  "exceeds_record": true
+ },
+ "leg2_analytic": {
+  "C": "9.328963776429486263794142280993831",
+  "error_bound": "9.33e-33",
+  "digits": 34,
+  "afe_terms": 1185310,
+  "h_fundamental_analytic": 11971,
+  "distance_from_integer": "1.21e-41",
+  "inside_leg1_interval": true
+ },
+ "leg3_class_number": {
+  "h_enumerated": 11971,
+  "method": "direct enumeration of the reduced primitive forms of discriminant 1 - 4k",
+  "T_recount_alternate_alignment": 35913
+ },
+ "least_claim": {
+  "swept_from_k": 1,
+  "swept_to_k": 11410046357,
+  "basis": "every odd k below this one was taken in order by the engine and either dropped by the survivor rule (a proved lower bound of its class number -- from the class group, or the counted class number itself -- puts C <= the floor, itself <= the standing record) or classified exactly on the host from its counted class number and found not to exceed the standing record; even k has C = 0",
+  "conditional_on": "nothing (no GRH; Gauss's three-squares theorem, the class number formula, composition of forms and genus theory)",
+  "canaries": "a(1)..a(11) rediscovered in order by this campaign",
+  "engine": "A331940|engine=v2-classgroup-three-squares|floor=7.5|rule=p251"
+ },
+ "found_utc": "2026-11-12T00:44:50Z"
+}

@@ -1070,6 +1070,38 @@ filtered by a CPU Fermat chain). What it buys besides the host: **the sieve
 depth becomes a device decision**, priced by what a tail prime saves in
 Fermat work against what its test costs — 2¹³ ran 1.26x 2¹⁶ there.
 
+### 2.18 Price the host's rare path by its counted rate
+
+**Recognise it when:** the heartbeat's rate decays smoothly for minutes
+while the device is idle, the stall report names the segment rather than a
+step, and when the segment finally closes the host's share of wall clock
+jumps to most of it — one window's classification took the stall. The
+device was fine; one survivor in hundreds took the host's exact fallback.
+
+**The measured case** (hl-records, 2026-11-11). The host classifies each
+survivor's C into census bins by rigorous intervals refined through prime
+tiers; past the last tier (2^20) only a 30-digit analytic evaluation could
+decide, at four minutes (k = 10^10) to forty (10^12) — run twice, for the
+survivor and for the record whose 34 digits were already in the
+checkpoint. Survivors within 2.4·10⁻⁶ of the census floor arrive about once
+in 450 windows; the first engine-v3 run met two in its first forty windows
+and ran at about 1% of its engine. **The fix was arithmetic, not
+scheduling**: a tail bound over the primes (the prime zeta value P(2) less
+the partial sum, about 1/(P ln P), five times tighter than 1/(3P)), the
+truncated product as an exactly rounded sum of logarithms (its rounding
+then no longer grows with the primes), vectorised tiers to 2^28 (0.08 s to
+5 s each), and the record's C read back instead of recomputed. Counted over
+900 windows, the fallback's share fell from ~7x the device time to ~0.2%,
+and the first tier now settles 94% of survivors instead of 87% — the host's
+own share fell from 14% to 6% of device time at the cursor's height.
+
+**What to do:** CONVENTIONS.md "A rare host path is priced by its rate" —
+count each fallback's rate over ≥ 1,000 windows' survivors with it stubbed
+out, multiply by its cost, keep it under 1% of device time, and run every
+per-item host step inside `huntlib.hostcost.HostCost.item(label)` so the
+next one is named the moment it happens. 2.16 is the same failure on the
+device.
+
 ---
 
 ## Part 3 — The termination test

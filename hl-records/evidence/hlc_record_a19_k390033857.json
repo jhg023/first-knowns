@@ -1,0 +1,60 @@
+{
+ "sequence": "A331940",
+ "forms": "x^2 + x + k",
+ "k": 390033857,
+ "oeis_terms": {
+  "19": 390033857
+ },
+ "index": 19,
+ "settles": [
+  19
+ ],
+ "C": "8.720151253915930701357242771200737",
+ "C_table": "8.72015",
+ "C_error_bound": "8.72e-33",
+ "margin_over_previous": "0.10290505",
+ "previous_record": {
+  "k": 246576371,
+  "C_interval": [
+   "8.617246203882821",
+   "8.617246203884822"
+  ]
+ },
+ "verification": "3-way",
+ "leg1_engine": {
+  "h": 2368,
+  "fundamental_d": -1560135427,
+  "conductor": {},
+  "h_fundamental": 2368,
+  "C_interval": [
+   "8.720148482979686",
+   "8.72015402732187"
+  ],
+  "primes_to": 1048576,
+  "tail_bound": 3.178938641397919e-07,
+  "exceeds_record": true
+ },
+ "leg2_analytic": {
+  "C": "8.720151253915930701357242771200737",
+  "error_bound": "8.72e-33",
+  "digits": 34,
+  "afe_terms": 219150,
+  "h_fundamental_analytic": 2368,
+  "distance_from_integer": "1.19e-42",
+  "inside_leg1_interval": true
+ },
+ "leg3_class_number": {
+  "h_enumerated": 2368,
+  "method": "direct enumeration of the reduced primitive forms of discriminant 1 - 4k",
+  "T_recount_alternate_alignment": 7104
+ },
+ "least_claim": {
+  "swept_from_k": 1,
+  "swept_to_k": 390033857,
+  "basis": "every odd k below this one was taken in order by the engine and either dropped by the survivor rule (a proved lower bound of its class number -- from the class group, or the counted class number itself -- puts C <= the floor, itself <= the standing record) or classified exactly on the host from its counted class number and found not to exceed the standing record; even k has C = 0",
+  "conditional_on": "nothing (no GRH; Gauss's three-squares theorem, the class number formula, composition of forms and genus theory)",
+  "canaries": "a(1)..a(11) rediscovered in order by this campaign",
+  "engine": "A331940|engine=v2-classgroup-three-squares|floor=7.5|rule=p251"
+ },
+ "found_utc": "2026-11-11T23:54:17Z"
+}

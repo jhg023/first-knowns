@@ -18,6 +18,7 @@ benchmark. The pieces that are identical across projects live here:
     huntlib.scoring     gates x fingerprinted-benchmark score runner
     huntlib.shutdown    graceful Ctrl+C: checkpoint, one line, no traceback
     huntlib.drills      the repo-wide selftest drills every project owes
+    huntlib.hostcost    per-item host cost: the slow tail announced, priced
 
 Projects import it by adding the repo root to sys.path:
 
@@ -40,8 +41,8 @@ from importlib import import_module
 # libraries or SymPy's proof machinery. Keep the same public module names,
 # loading each only when it is requested (including attribute-style access).
 __all__ = ['ceiling', 'certificate', 'checkpoint', 'drills', 'evidence',
-           'frontier', 'gpu', 'hlog', 'pool', 'primes', 'rungs', 'scoring',
-           'shutdown']
+           'frontier', 'gpu', 'hlog', 'hostcost', 'pool', 'primes', 'rungs',
+           'scoring', 'shutdown']
 
 
 def __getattr__(name):

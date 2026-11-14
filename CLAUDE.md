@@ -503,6 +503,34 @@ project and stays.
    there; 25 h against 44 days on a(22) -- admissible there, as a priced
    option for the owner (OPTIMIZATION.md 2.15, the project's log round 3).
 
+5k. **A RARE HOST PATH IS PRICED BY ITS RATE, AND ANNOUNCED WHEN IT RUNS
+   (2026-11-11, every project).** The segment loop's cost is its TAIL: a
+   host fallback that takes minutes, reached once in a few hundred windows,
+   is the campaign's rate, and no benchmark (it never classifies), gate (it
+   never times) or short loop measurement (an average over windows that may
+   hold none) can see it. hl-records' first engine-v3 run spent ~90% of its
+   first hour in a 30-digit analytic fallback, reached by survivors within
+   2.4e-6 of a census bin edge, while its heartbeat said "sweeping"; a
+   30-window loop measurement the same day had read 1.057. So:
+   - every host path whose single run can cost more than a few windows of
+     device time is priced by its COUNTED rate (the cheap classifier over
+     >= 1,000 windows' survivors, the fallback stubbed out) x its cost, at
+     the day-long heights, one `huntlib.hostcost.price_line` per path in
+     the log; **over 1% of device time is a bug**;
+   - refine cheaply before falling back (rigorous tiers, each reached by a
+     small fraction of the one before), and never recompute what a find
+     already paid for;
+   - a rigorous floating-point interval's rounding allowance is true for
+     the operations it covers (it grows with them, or they are arranged so
+     it need not: `math.fsum` of small terms), and a tail bound ranges over
+     what the tail ranges over;
+   - every per-item host step runs inside
+     `huntlib.hostcost.HostCost.item(label)`, so the heartbeat names it, a
+     slow one gets a `[WARN]` with its label, and `[STATUS]` carries the
+     slowest step.
+   See CONVENTIONS.md "A rare host path is priced by its rate" and
+   OPTIMIZATION.md 2.18.
+
 6. **New projects** copy the skeleton, import huntlib for
    infrastructure, keep all mathematics in-project, and add a row to the
    top-level README's project table **in alphabetical order of the project
@@ -616,6 +644,15 @@ project and stays.
          for the signature -- a per-launch cost that does not scale with
          the work. CONVENTIONS.md "The model is EXPENSIVE",
          OPTIMIZATION.md 2.14
+   - [ ] **every host path whose single run can cost more than a few
+         windows is priced by its COUNTED rate x cost** at the day-long
+         heights (>= 1,000 windows' survivors, the fallback stubbed out;
+         `huntlib.hostcost.price_line` in the log) and is under 1% of
+         device time; every per-item host step runs inside
+         `huntlib.hostcost.HostCost.item(label)` with `hc.status()` in
+         `[STATUS]`; `hostcost.drill()` and a slowed-survivor launcher
+         drill in the selftest (rule 5k; CONVENTIONS.md "A rare host path
+         is priced by its rate")
    - [ ] a 30-second WALL-CLOCK `[STATUS]` heartbeat on its own thread
          (huntlib.hlog.Heartbeat: mark() at segment boundaries, doing()
          around long steps, checkpoint saves from the main loop only)
