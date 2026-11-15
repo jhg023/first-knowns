@@ -1,3 +1,6 @@
+# A072942: Table of n, a(n) for n = 1..99, with question marks at the unknown entries (72, 84, 90, 96).
+# All entries are Don Reble's (Feb 2014) except a(48), a(60), a(66), a(78), a(80) and a(88),
+# found by Jacob Glickman, Oct 25 2026.
 1 3
 2 4
 3 3
