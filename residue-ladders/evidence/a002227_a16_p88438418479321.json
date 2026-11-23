@@ -1,0 +1,71 @@
+{
+ "sequence": "A002227",
+ "forms": "first n primes (p_1=2, ..., p_n) are 7th power residues mod p",
+ "p": 88438418479321,
+ "oeis_terms": {
+  "14": 88438418479321,
+  "15": 88438418479321,
+  "16": 88438418479321
+ },
+ "index": 16,
+ "settles": [
+  14,
+  15,
+  16
+ ],
+ "run": 16,
+ "power": 7,
+ "verification": "3-way",
+ "leg1_engine": "device stream (sieve, 4^j == 1 mod p, run by Montgomery powers); p proved prime by deterministic Miller-Rabin; run re-read with plain integer arithmetic",
+ "leg2_independent": "sympy isprime; the oracle's run; an explicit root for each of the first 16 primes, the symbol of the next, and a Lucas certificate for p, each checked",
+ "leg3_rederivation": "device re-sweep of 2879 candidates ending past p at another alignment with a 64-prime sieve: p is first of run >= 14; CPU engine = device on the 16384 candidates around p at floor 1 (171 primes)",
+ "roots": {
+  "2": 28327391443913,
+  "3": 52116965796732,
+  "5": 77203493799968,
+  "7": 79676643472487,
+  "11": 3024948543629,
+  "13": 76078512589551,
+  "17": 54147813938336,
+  "19": 48318321678929,
+  "23": 66642296007402,
+  "29": 12972764437245,
+  "31": 35678736291909,
+  "37": 5210745065254,
+  "41": 50973201245455,
+  "43": 12065278064064,
+  "47": 41775691190142,
+  "53": 61408809039175
+ },
+ "roots_note": "x with x^7 == q (mod p) for each of the first 16 primes q",
+ "stopper": {
+  "i": 17,
+  "prime": 59,
+  "symbol": 1490844074133,
+  "note": "59^((p-1)/7) mod p; not 1, so 59 is not a residue"
+ },
+ "primality": {
+  "deterministic_miller_rabin": true,
+  "lucas": {
+   "p_minus_1": {
+    "2": 3,
+    "3": 1,
+    "5": 1,
+    "7": 1,
+    "13": 1,
+    "5417": 1,
+    "1495063": 1
+   },
+   "primitive_root": 67
+  }
+ },
+ "least_claim": {
+  "swept_from_p": 15,
+  "swept_to_p": 88438418479321,
+  "basis": "every integer 2*7*j + 1 below p -- which includes every prime of which the power divides p - 1 -- was taken in order by this campaign from j = 1: dropped as composite on a small prime factor or on 2^((N-1)/7) != 1 (mod N), or as a prime of which 2 is not a residue by the same test, or read to its run, which was below 14",
+  "conditional_on": "nothing (Euler's criterion; Fermat's little theorem for the compositeness test)",
+  "canaries": "a(1)..a(12) rediscovered in order by this campaign",
+  "engine": "A002227|line=2*7*j+1|census-depth=4"
+ },
+ "found_utc": "2026-11-22T01:25:13Z"
+}

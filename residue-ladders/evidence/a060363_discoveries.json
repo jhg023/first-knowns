@@ -1,0 +1,249 @@
+[
+ {
+  "sequence": "A060363",
+  "forms": "first n primes (p_1=2, ..., p_n) are 13th power residues mod p",
+  "p": 4502169075457,
+  "oeis_terms": {
+   "9": 4502169075457
+  },
+  "index": 9,
+  "settles": [
+   9
+  ],
+  "run": 9,
+  "power": 13,
+  "verification": "3-way",
+  "leg1_engine": "device stream (sieve, 4^j == 1 mod p, run by Montgomery powers); p proved prime by deterministic Miller-Rabin; run re-read with plain integer arithmetic",
+  "leg2_independent": "sympy isprime; the oracle's run; an explicit root for each of the first 9 primes, the symbol of the next, and a Lucas certificate for p, each checked",
+  "leg3_rederivation": "device re-sweep of 2879 candidates ending past p at another alignment with a 64-prime sieve: p is first of run >= 9; CPU engine = device on the 16384 candidates around p at floor 1 (84 primes)",
+  "roots": {
+   "2": 2991211264247,
+   "3": 4207578777215,
+   "5": 4209365861175,
+   "7": 1904331511199,
+   "11": 2802987415382,
+   "13": 3948761171909,
+   "17": 3819758223082,
+   "19": 3535311733421,
+   "23": 928834030773
+  },
+  "roots_note": "x with x^13 == q (mod p) for each of the first 9 primes q",
+  "stopper": {
+   "i": 10,
+   "prime": 29,
+   "symbol": 617299184172,
+   "note": "29^((p-1)/13) mod p; not 1, so 29 is not a residue"
+  },
+  "primality": {
+   "deterministic_miller_rabin": true,
+   "lucas": {
+    "p_minus_1": {
+     "2": 8,
+     "3": 2,
+     "13": 1,
+     "150312803": 1
+    },
+    "primitive_root": 29
+   }
+  },
+  "least_claim": {
+   "swept_from_p": 27,
+   "swept_to_p": 4502169075457,
+   "basis": "every integer 2*13*j + 1 below p -- which includes every prime of which the power divides p - 1 -- was taken in order by this campaign from j = 1: dropped as composite on a small prime factor or on 2^((N-1)/13) != 1 (mod N), or as a prime of which 2 is not a residue by the same test, or read to its run, which was below 9",
+   "conditional_on": "nothing (Euler's criterion; Fermat's little theorem for the compositeness test)",
+   "canaries": "a(1)..a(8) rediscovered in order by this campaign",
+   "engine": "A060363|line=2*13*j+1|census-depth=3"
+  },
+  "found_utc": "2026-11-22T01:28:19Z",
+  "label": "DISCOVERY",
+  "t": 1795310902.6855347
+ },
+ {
+  "sequence": "A060363",
+  "forms": "first n primes (p_1=2, ..., p_n) are 13th power residues mod p",
+  "p": 14272424321923,
+  "oeis_terms": {
+   "10": 14272424321923
+  },
+  "index": 10,
+  "settles": [
+   10
+  ],
+  "run": 10,
+  "power": 13,
+  "verification": "3-way",
+  "leg1_engine": "device stream (sieve, 4^j == 1 mod p, run by Montgomery powers); p proved prime by deterministic Miller-Rabin; run re-read with plain integer arithmetic",
+  "leg2_independent": "sympy isprime; the oracle's run; an explicit root for each of the first 10 primes, the symbol of the next, and a Lucas certificate for p, each checked",
+  "leg3_rederivation": "device re-sweep of 2879 candidates ending past p at another alignment with a 64-prime sieve: p is first of run >= 10; CPU engine = device on the 16384 candidates around p at floor 1 (108 primes)",
+  "roots": {
+   "2": 4257875153432,
+   "3": 11030913766921,
+   "5": 5390735535217,
+   "7": 13364597860894,
+   "11": 10857391636384,
+   "13": 5772507573162,
+   "17": 5523800550486,
+   "19": 1543828308227,
+   "23": 6513598503808,
+   "29": 8036007364505
+  },
+  "roots_note": "x with x^13 == q (mod p) for each of the first 10 primes q",
+  "stopper": {
+   "i": 11,
+   "prime": 31,
+   "symbol": 8104727188776,
+   "note": "31^((p-1)/13) mod p; not 1, so 31 is not a residue"
+  },
+  "primality": {
+   "deterministic_miller_rabin": true,
+   "lucas": {
+    "p_minus_1": {
+     "2": 1,
+     "3": 2,
+     "13": 1,
+     "197": 1,
+     "309610489": 1
+    },
+    "primitive_root": 31
+   }
+  },
+  "least_claim": {
+   "swept_from_p": 27,
+   "swept_to_p": 14272424321923,
+   "basis": "every integer 2*13*j + 1 below p -- which includes every prime of which the power divides p - 1 -- was taken in order by this campaign from j = 1: dropped as composite on a small prime factor or on 2^((N-1)/13) != 1 (mod N), or as a prime of which 2 is not a residue by the same test, or read to its run, which was below 10",
+   "conditional_on": "nothing (Euler's criterion; Fermat's little theorem for the compositeness test)",
+   "canaries": "a(1)..a(8) rediscovered in order by this campaign",
+   "engine": "A060363|line=2*13*j+1|census-depth=3"
+  },
+  "found_utc": "2026-11-22T01:28:23Z",
+  "label": "DISCOVERY",
+  "t": 1795310905.7926438
+ },
+ {
+  "sequence": "A060363",
+  "forms": "first n primes (p_1=2, ..., p_n) are 13th power residues mod p",
+  "p": 494048446485491,
+  "oeis_terms": {
+   "11": 494048446485491
+  },
+  "index": 11,
+  "settles": [
+   11
+  ],
+  "run": 11,
+  "power": 13,
+  "verification": "3-way",
+  "leg1_engine": "device stream (sieve, 4^j == 1 mod p, run by Montgomery powers); p proved prime by deterministic Miller-Rabin; run re-read with plain integer arithmetic",
+  "leg2_independent": "sympy isprime; the oracle's run; an explicit root for each of the first 11 primes, the symbol of the next, and a Lucas certificate for p, each checked",
+  "leg3_rederivation": "device re-sweep of 2879 candidates ending past p at another alignment with a 64-prime sieve: p is first of run >= 11; CPU engine = device on the 16384 candidates around p at floor 1 (70 primes)",
+  "roots": {
+   "2": 286981801272854,
+   "3": 123990989149659,
+   "5": 290836947214985,
+   "7": 209690289079518,
+   "11": 296226188637543,
+   "13": 417168738992016,
+   "17": 130204789902461,
+   "19": 455536286699546,
+   "23": 313211457215169,
+   "29": 420085559610199,
+   "31": 482649044678085
+  },
+  "roots_note": "x with x^13 == q (mod p) for each of the first 11 primes q",
+  "stopper": {
+   "i": 12,
+   "prime": 37,
+   "symbol": 311512900514801,
+   "note": "37^((p-1)/13) mod p; not 1, so 37 is not a residue"
+  },
+  "primality": {
+   "deterministic_miller_rabin": true,
+   "lucas": {
+    "p_minus_1": {
+     "2": 1,
+     "5": 1,
+     "13": 1,
+     "461": 1,
+     "28697": 1,
+     "287269": 1
+    },
+    "primitive_root": 43
+   }
+  },
+  "least_claim": {
+   "swept_from_p": 27,
+   "swept_to_p": 494048446485491,
+   "basis": "every integer 2*13*j + 1 below p -- which includes every prime of which the power divides p - 1 -- was taken in order by this campaign from j = 1: dropped as composite on a small prime factor or on 2^((N-1)/13) != 1 (mod N), or as a prime of which 2 is not a residue by the same test, or read to its run, which was below 11",
+   "conditional_on": "nothing (Euler's criterion; Fermat's little theorem for the compositeness test)",
+   "canaries": "a(1)..a(8) rediscovered in order by this campaign",
+   "engine": "A060363|line=2*13*j+1|census-depth=3"
+  },
+  "found_utc": "2026-11-22T01:32:13Z",
+  "label": "DISCOVERY",
+  "t": 1795311136.001006
+ },
+ {
+  "sequence": "A060363",
+  "forms": "first n primes (p_1=2, ..., p_n) are 13th power residues mod p",
+  "p": 14088806484746579,
+  "oeis_terms": {
+   "12": 14088806484746579
+  },
+  "index": 12,
+  "settles": [
+   12
+  ],
+  "run": 12,
+  "power": 13,
+  "verification": "3-way",
+  "leg1_engine": "device stream (sieve, 4^j == 1 mod p, run by Montgomery powers); p proved prime by deterministic Miller-Rabin; run re-read with plain integer arithmetic",
+  "leg2_independent": "sympy isprime; the oracle's run; an explicit root for each of the first 12 primes, the symbol of the next, and a Lucas certificate for p, each checked",
+  "leg3_rederivation": "device re-sweep of 2879 candidates ending past p at another alignment with a 64-prime sieve: p is first of run >= 12; CPU engine = device on the 16384 candidates around p at floor 1 (73 primes)",
+  "roots": {
+   "2": 13593297920809227,
+   "3": 12098862834079556,
+   "5": 10393745689418342,
+   "7": 759402949356867,
+   "11": 7024814086052970,
+   "13": 2115662318556114,
+   "17": 6694629531531696,
+   "19": 2888743076146701,
+   "23": 3080482486503356,
+   "29": 3471518238305821,
+   "31": 5374478963394918,
+   "37": 10107741833187090
+  },
+  "roots_note": "x with x^13 == q (mod p) for each of the first 12 primes q",
+  "stopper": {
+   "i": 13,
+   "prime": 41,
+   "symbol": 12115775533794116,
+   "note": "41^((p-1)/13) mod p; not 1, so 41 is not a residue"
+  },
+  "primality": {
+   "deterministic_miller_rabin": true,
+   "lucas": {
+    "p_minus_1": {
+     "2": 1,
+     "13": 1,
+     "59": 1,
+     "661": 1,
+     "108223": 1,
+     "128389": 1
+    },
+    "primitive_root": 41
+   }
+  },
+  "least_claim": {
+   "swept_from_p": 27,
+   "swept_to_p": 14088806484746579,
+   "basis": "every integer 2*13*j + 1 below p -- which includes every prime of which the power divides p - 1 -- was taken in order by this campaign from j = 1: dropped as composite on a small prime factor or on 2^((N-1)/13) != 1 (mod N), or as a prime of which 2 is not a residue by the same test, or read to its run, which was below 12",
+   "conditional_on": "nothing (Euler's criterion; Fermat's little theorem for the compositeness test)",
+   "canaries": "a(1)..a(8) rediscovered in order by this campaign",
+   "engine": "A060363|line=2*13*j+1|census-depth=3"
+  },
+  "found_utc": "2026-11-22T03:28:11Z",
+  "label": "DISCOVERY",
+  "t": 1795318093.784124
+ }
+]

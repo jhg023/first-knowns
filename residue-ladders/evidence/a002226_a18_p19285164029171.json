@@ -1,0 +1,68 @@
+{
+ "sequence": "A002226",
+ "forms": "first n primes (p_1=2, ..., p_n) are quintic residues mod p",
+ "p": 19285164029171,
+ "oeis_terms": {
+  "18": 19285164029171
+ },
+ "index": 18,
+ "settles": [
+  18
+ ],
+ "run": 18,
+ "power": 5,
+ "verification": "3-way",
+ "leg1_engine": "device stream (sieve, 4^j == 1 mod p, run by Montgomery powers); p proved prime by deterministic Miller-Rabin; run re-read with plain integer arithmetic",
+ "leg2_independent": "sympy isprime; the oracle's run; an explicit root for each of the first 18 primes, the symbol of the next, and a Lucas certificate for p, each checked",
+ "leg3_rederivation": "device re-sweep of 2879 candidates ending past p at another alignment with a 64-prime sieve: p is first of run >= 18; CPU engine = device on the 16384 candidates around p at floor 1 (260 primes)",
+ "roots": {
+  "2": 19123628937866,
+  "3": 4364646601687,
+  "5": 7942825937533,
+  "7": 4196150126921,
+  "11": 17366434895331,
+  "13": 882713276530,
+  "17": 13980469137747,
+  "19": 5637262490105,
+  "23": 6030588743453,
+  "29": 2901511392795,
+  "31": 17294742361750,
+  "37": 1222532225941,
+  "41": 365647604013,
+  "43": 3099342240650,
+  "47": 17495637165738,
+  "53": 16767735364235,
+  "59": 4665271996265,
+  "61": 17426755462553
+ },
+ "roots_note": "x with x^5 == q (mod p) for each of the first 18 primes q",
+ "stopper": {
+  "i": 19,
+  "prime": 67,
+  "symbol": 767685354407,
+  "note": "67^((p-1)/5) mod p; not 1, so 67 is not a residue"
+ },
+ "primality": {
+  "deterministic_miller_rabin": true,
+  "lucas": {
+   "p_minus_1": {
+    "2": 1,
+    "5": 1,
+    "13": 1,
+    "41": 1,
+    "997": 1,
+    "3629117": 1
+   },
+   "primitive_root": 73
+  }
+ },
+ "least_claim": {
+  "swept_from_p": 11,
+  "swept_to_p": 19285164029171,
+  "basis": "every integer 2*5*j + 1 below p -- which includes every prime of which the power divides p - 1 -- was taken in order by this campaign from j = 1: dropped as composite on a small prime factor or on 2^((N-1)/5) != 1 (mod N), or as a prime of which 2 is not a residue by the same test, or read to its run, which was below 18",
+  "conditional_on": "nothing (Euler's criterion; Fermat's little theorem for the compositeness test)",
+  "canaries": "a(1)..a(15) rediscovered in order by this campaign",
+  "engine": "A002226|line=2*5*j+1|census-depth=5"
+ },
+ "found_utc": "2026-11-22T00:18:12Z"
+}

@@ -1,0 +1,59 @@
+{
+ "sequence": "A060363",
+ "forms": "first n primes (p_1=2, ..., p_n) are 13th power residues mod p",
+ "p": 14272424321923,
+ "oeis_terms": {
+  "10": 14272424321923
+ },
+ "index": 10,
+ "settles": [
+  10
+ ],
+ "run": 10,
+ "power": 13,
+ "verification": "3-way",
+ "leg1_engine": "device stream (sieve, 4^j == 1 mod p, run by Montgomery powers); p proved prime by deterministic Miller-Rabin; run re-read with plain integer arithmetic",
+ "leg2_independent": "sympy isprime; the oracle's run; an explicit root for each of the first 10 primes, the symbol of the next, and a Lucas certificate for p, each checked",
+ "leg3_rederivation": "device re-sweep of 2879 candidates ending past p at another alignment with a 64-prime sieve: p is first of run >= 10; CPU engine = device on the 16384 candidates around p at floor 1 (108 primes)",
+ "roots": {
+  "2": 4257875153432,
+  "3": 11030913766921,
+  "5": 5390735535217,
+  "7": 13364597860894,
+  "11": 10857391636384,
+  "13": 5772507573162,
+  "17": 5523800550486,
+  "19": 1543828308227,
+  "23": 6513598503808,
+  "29": 8036007364505
+ },
+ "roots_note": "x with x^13 == q (mod p) for each of the first 10 primes q",
+ "stopper": {
+  "i": 11,
+  "prime": 31,
+  "symbol": 8104727188776,
+  "note": "31^((p-1)/13) mod p; not 1, so 31 is not a residue"
+ },
+ "primality": {
+  "deterministic_miller_rabin": true,
+  "lucas": {
+   "p_minus_1": {
+    "2": 1,
+    "3": 2,
+    "13": 1,
+    "197": 1,
+    "309610489": 1
+   },
+   "primitive_root": 31
+  }
+ },
+ "least_claim": {
+  "swept_from_p": 27,
+  "swept_to_p": 14272424321923,
+  "basis": "every integer 2*13*j + 1 below p -- which includes every prime of which the power divides p - 1 -- was taken in order by this campaign from j = 1: dropped as composite on a small prime factor or on 2^((N-1)/13) != 1 (mod N), or as a prime of which 2 is not a residue by the same test, or read to its run, which was below 10",
+  "conditional_on": "nothing (Euler's criterion; Fermat's little theorem for the compositeness test)",
+  "canaries": "a(1)..a(8) rediscovered in order by this campaign",
+  "engine": "A060363|line=2*13*j+1|census-depth=3"
+ },
+ "found_utc": "2026-11-22T01:28:23Z"
+}

@@ -1,0 +1,61 @@
+{
+ "sequence": "A060363",
+ "forms": "first n primes (p_1=2, ..., p_n) are 13th power residues mod p",
+ "p": 494048446485491,
+ "oeis_terms": {
+  "11": 494048446485491
+ },
+ "index": 11,
+ "settles": [
+  11
+ ],
+ "run": 11,
+ "power": 13,
+ "verification": "3-way",
+ "leg1_engine": "device stream (sieve, 4^j == 1 mod p, run by Montgomery powers); p proved prime by deterministic Miller-Rabin; run re-read with plain integer arithmetic",
+ "leg2_independent": "sympy isprime; the oracle's run; an explicit root for each of the first 11 primes, the symbol of the next, and a Lucas certificate for p, each checked",
+ "leg3_rederivation": "device re-sweep of 2879 candidates ending past p at another alignment with a 64-prime sieve: p is first of run >= 11; CPU engine = device on the 16384 candidates around p at floor 1 (70 primes)",
+ "roots": {
+  "2": 286981801272854,
+  "3": 123990989149659,
+  "5": 290836947214985,
+  "7": 209690289079518,
+  "11": 296226188637543,
+  "13": 417168738992016,
+  "17": 130204789902461,
+  "19": 455536286699546,
+  "23": 313211457215169,
+  "29": 420085559610199,
+  "31": 482649044678085
+ },
+ "roots_note": "x with x^13 == q (mod p) for each of the first 11 primes q",
+ "stopper": {
+  "i": 12,
+  "prime": 37,
+  "symbol": 311512900514801,
+  "note": "37^((p-1)/13) mod p; not 1, so 37 is not a residue"
+ },
+ "primality": {
+  "deterministic_miller_rabin": true,
+  "lucas": {
+   "p_minus_1": {
+    "2": 1,
+    "5": 1,
+    "13": 1,
+    "461": 1,
+    "28697": 1,
+    "287269": 1
+   },
+   "primitive_root": 43
+  }
+ },
+ "least_claim": {
+  "swept_from_p": 27,
+  "swept_to_p": 494048446485491,
+  "basis": "every integer 2*13*j + 1 below p -- which includes every prime of which the power divides p - 1 -- was taken in order by this campaign from j = 1: dropped as composite on a small prime factor or on 2^((N-1)/13) != 1 (mod N), or as a prime of which 2 is not a residue by the same test, or read to its run, which was below 11",
+  "conditional_on": "nothing (Euler's criterion; Fermat's little theorem for the compositeness test)",
+  "canaries": "a(1)..a(8) rediscovered in order by this campaign",
+  "engine": "A060363|line=2*13*j+1|census-depth=3"
+ },
+ "found_utc": "2026-11-22T01:32:13Z"
+}

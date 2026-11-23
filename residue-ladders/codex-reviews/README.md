@@ -1,0 +1,34 @@
+# Codex reviews — residue-ladders
+
+These are Codex-authored static mathematical and algorithmic analyses for
+Claude's later implementation work. Follow the repository's
+[Codex review workflow](../../CODEX_REVIEWS.md). The implementation and
+historical project records retain their Claude attribution.
+
+**Static review completed 2026-11-21.** The review covers all five OEIS
+families, the search mathematics, campaign coverage, discovery verification,
+checkpointing, forecasts and benchmark evidence.
+
+| Document | Snapshot / purpose | State |
+|---|---|---|
+| [2026-11-21 static mathematical review](2026-11-21-static-review.md) | Engine v1 before the first campaign. Untracked project in a dirty worktree at `064f0f6`. The report records file hashes. | Complete |
+
+Dispositions, by Claude, 2026-11-21 (engine v2, the launcher and the model
+of the same day). Every claim of the report that a disposition rests on was
+rechecked against the source or by measurement first; the measurements are
+in the [optimization record](../OPTIMIZATION_LOG.md) and the
+[benchmark ledger](../BENCHMARKS.md).
+
+| ID / report | Finding | Disposition | Basis / implementation evidence |
+|---|---|---|---|
+| [RSL-001](2026-11-21-static-review.md#rsl-001-complete-the-exact-requested-interval) | Process the exact inclusive limit and the final partial word | **Implemented** | Confirmed in the source. `--to` is an exact integer and inclusive; a window classifies exactly its indices; the last partial word below 2^63 is swept by a launch moved back to end on the last candidate, in the launcher and in the engine's `raw_window`; a find's confirmation windows are clipped to the line. Gate P0 (the tail against the CPU engine) and the exact-interval drill (every tail length 0 to 63, every family). [Log: the launcher after the review](../OPTIMIZATION_LOG.md#the-launcher-and-the-model-after-the-codex-review) |
+| [RSL-002](2026-11-21-static-review.md#rsl-002-commit-discovery-evidence-after-the-segment-passes-its-checks) | Publish a least-prime claim after the segment passes its checks | **Implemented** in the launcher; the ledger's read fallback in `huntlib` **left for the owner** | Confirmed. A find is confirmed where it is met and published at the segment boundary, after the canary and parity checks; a ledger that already gives an index to another prime halts the run. Publication drill. The shared `huntlib.evidence.record` still rebuilds a ledger it cannot parse from empty: a repository-wide file, not changed from one project. |
+| [RSL-003](2026-11-21-static-review.md#rsl-003-keep-the-interrupt-checkpoint-callback-registered-through-shutdown) | Save the latest completed boundary on Ctrl+C | **Implemented** in the launcher; the backup-only recovery in `huntlib` **left for the owner** | Confirmed: the `finally` removed the callback before `shutdown.graceful` ran it. It now stays registered while an interrupt unwinds. Interrupt drill (the file held the first boundary, the callback writes the third, the resumed run equals the uninterrupted one). `huntlib.checkpoint.load` still reads a missing live file with a `.bak` beside it as no checkpoint — a window of one rename per save, repository-wide, priced in the log. hl-records' launcher has the same `finally` and was not touched (PAUSED). |
+| [RSL-004](2026-11-21-static-review.md#rsl-004-treat-a-full-40-base-prefix-as-a-lower-bound) | Extend saturated runs on the host and certify the actual stopper | **Implemented as a halt, not an extension** | Confirmed (`witnesses` indexes past the list). A prime whose run fills the cap now halts the campaign before anything is settled on it; the primitive-root search of the Lucas certificate is no longer cut at 10,000. Extending the three implementations past 40 primes was declined: the expectation of such a prime below 2^63 is under 10^-10 over the whole line. A composite does reach the cap — a Carmichael number sits in a frozen benchmark window — and the host drops it. Saturated-run drill. |
+| [RSL-005](2026-11-21-static-review.md#rsl-005-shorten-the-base-2-power-on-all-five-lines) | Shorten the first modular power and share the launch quotient where constant | **Inverse power implemented** (engine v2); **shared quotient declined** | The identity was rechecked and the raw pass stream is identical on every candidate, composites included (gate P7; 2,800 paired launches in the round). 47 squarings for 52 at the quintic day-long height: 1.092 alone, 1.42 to 1.58 with the round's other changes. The quotient reads 0.997 and 0.998: the first test no longer takes a remainder at all, and the run kernels are 11% of a launch. [Log round 3](../OPTIMIZATION_LOG.md#round-3--the-codex-review-rsl-005-and-what-it-opened) |
+| [RSL-006](2026-11-21-static-review.md#rsl-006-build-a-bounded-quintic-residue-sieve-in-four-coordinates) | Generate quintic candidates in a bounded cyclotomic coefficient box | **Verified and prototyped; engine not built** | The construction is right: at small height it yields exactly the qualifying primes, and a reduced region gives one generator per prime. A GPU prototype of a pattern sieve along lines reproduces the integer engine on 717 of 717 primes below 2^42 and 5,270 of 5,270 at 8.5·10^16, and sweeps the shell from 8.5·10^16 to 1.7·10^17 at 8.6·10^13 p/s — **146 times** engine v2. A production engine, its gates and its campaign unit (a shell of norms) are a project of their own and the owner's decision. [Log round 4](../OPTIMIZATION_LOG.md#round-4--rsl-006-a-sieve-in-the-cyclotomic-field-prototyped) |
+| [RSL-007](2026-11-21-static-review.md#rsl-007-condition-forecasts-on-the-known-empty-intervals) | Condition forecasts on published empty intervals and calibrate the fitted rate test | **Implemented** | Confirmed: the old forecast put 5.8% (A002227) and 0.5% (A060363) on intervals the entries state empty. Forecasts and live odds start at `residue_model.origin`; the fit counts the two empty intervals; gate M1 judges the fitted rate against a simulated null of fitted exponentials, where it is marginal (p = 0.05), not the comfortable pass the fixed-distribution cutoff gave. `model_results.json` reissued (no campaign had run). |
+| [RSL-008](2026-11-21-static-review.md#rsl-008-bind-each-benchmark-run-length-to-its-own-prime) | Bind benchmark primes to run lengths and distinguish gated scores | **Fingerprint and labels implemented**; drills in `score.py` **declined** | The collision is real and is planted in gate P6. Every survivor is now one word binding its run to its prime; the ten shapes were re-frozen with the survivors shown identical to v1's. `--bench-only` prints RATE, never SCORE. The campaign drills stay in `launch.py --selftest` (CLAUDE.md rule 2 runs both; the repository's convention for every project). |
+
+Implementation dispositions belong here, with links to the later
+[optimization record](../OPTIMIZATION_LOG.md) and [benchmark evidence](../BENCHMARKS.md).

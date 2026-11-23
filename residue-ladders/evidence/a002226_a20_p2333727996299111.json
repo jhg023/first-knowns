@@ -1,0 +1,69 @@
+{
+ "sequence": "A002226",
+ "forms": "first n primes (p_1=2, ..., p_n) are quintic residues mod p",
+ "p": 2333727996299111,
+ "oeis_terms": {
+  "19": 2333727996299111,
+  "20": 2333727996299111
+ },
+ "index": 20,
+ "settles": [
+  19,
+  20
+ ],
+ "run": 20,
+ "power": 5,
+ "verification": "3-way",
+ "leg1_engine": "device stream (sieve, 4^j == 1 mod p, run by Montgomery powers); p proved prime by deterministic Miller-Rabin; run re-read with plain integer arithmetic",
+ "leg2_independent": "sympy isprime; the oracle's run; an explicit root for each of the first 20 primes, the symbol of the next, and a Lucas certificate for p, each checked",
+ "leg3_rederivation": "device re-sweep of 2879 candidates ending past p at another alignment with a 64-prime sieve: p is first of run >= 19; CPU engine = device on the 16384 candidates around p at floor 1 (253 primes)",
+ "roots": {
+  "2": 2318049686113559,
+  "3": 1134494115567141,
+  "5": 1186390810095381,
+  "7": 637843938952968,
+  "11": 426714645724086,
+  "13": 1790027584540242,
+  "17": 1142427421720062,
+  "19": 1298886731096984,
+  "23": 526264167510290,
+  "29": 43151998893361,
+  "31": 1997897177603366,
+  "37": 918691460309542,
+  "41": 2301633235129468,
+  "43": 981082893256437,
+  "47": 1792970791463491,
+  "53": 2308467291550985,
+  "59": 135545176746265,
+  "61": 1396731671788718,
+  "67": 1784179457433232,
+  "71": 422784859609670
+ },
+ "roots_note": "x with x^5 == q (mod p) for each of the first 20 primes q",
+ "stopper": {
+  "i": 21,
+  "prime": 73,
+  "symbol": 56272397644735,
+  "note": "73^((p-1)/5) mod p; not 1, so 73 is not a residue"
+ },
+ "primality": {
+  "deterministic_miller_rabin": true,
+  "lucas": {
+   "p_minus_1": {
+    "2": 1,
+    "5": 1,
+    "233372799629911": 1
+   },
+   "primitive_root": 83
+  }
+ },
+ "least_claim": {
+  "swept_from_p": 11,
+  "swept_to_p": 2333727996299111,
+  "basis": "every integer 2*5*j + 1 below p -- which includes every prime of which the power divides p - 1 -- was taken in order by this campaign from j = 1: dropped as composite on a small prime factor or on 2^((N-1)/5) != 1 (mod N), or as a prime of which 2 is not a residue by the same test, or read to its run, which was below 19",
+  "conditional_on": "nothing (Euler's criterion; Fermat's little theorem for the compositeness test)",
+  "canaries": "a(1)..a(15) rediscovered in order by this campaign",
+  "engine": "A002226|line=2*5*j+1|census-depth=5"
+ },
+ "found_utc": "2026-11-22T01:18:28Z"
+}

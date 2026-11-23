@@ -1,0 +1,59 @@
+{
+ "sequence": "A060364",
+ "forms": "first n primes (p_1=2, ..., p_n) are 17th power residues mod p",
+ "p": 129355619456629,
+ "oeis_terms": {
+  "10": 129355619456629
+ },
+ "index": 10,
+ "settles": [
+  10
+ ],
+ "run": 10,
+ "power": 17,
+ "verification": "3-way",
+ "leg1_engine": "device stream (sieve, 4^j == 1 mod p, run by Montgomery powers); p proved prime by deterministic Miller-Rabin; run re-read with plain integer arithmetic",
+ "leg2_independent": "sympy isprime; the oracle's run; an explicit root for each of the first 10 primes, the symbol of the next, and a Lucas certificate for p, each checked",
+ "leg3_rederivation": "device re-sweep of 2879 candidates ending past p at another alignment with a 64-prime sieve: p is first of run >= 10; CPU engine = device on the 16384 candidates around p at floor 1 (66 primes)",
+ "roots": {
+  "2": 20632802923309,
+  "3": 116714470116451,
+  "5": 115242681872144,
+  "7": 99493772922403,
+  "11": 36186739104695,
+  "13": 35280512694935,
+  "17": 52617082573008,
+  "19": 114869650896722,
+  "23": 44569173674419,
+  "29": 97253368339296
+ },
+ "roots_note": "x with x^17 == q (mod p) for each of the first 10 primes q",
+ "stopper": {
+  "i": 11,
+  "prime": 31,
+  "symbol": 17334015231611,
+  "note": "31^((p-1)/17) mod p; not 1, so 31 is not a residue"
+ },
+ "primality": {
+  "deterministic_miller_rabin": true,
+  "lucas": {
+   "p_minus_1": {
+    "2": 2,
+    "3": 3,
+    "17": 1,
+    "13487": 1,
+    "5223929": 1
+   },
+   "primitive_root": 31
+  }
+ },
+ "least_claim": {
+  "swept_from_p": 35,
+  "swept_to_p": 129355619456629,
+  "basis": "every integer 2*17*j + 1 below p -- which includes every prime of which the power divides p - 1 -- was taken in order by this campaign from j = 1: dropped as composite on a small prime factor or on 2^((N-1)/17) != 1 (mod N), or as a prime of which 2 is not a residue by the same test, or read to its run, which was below 10",
+  "conditional_on": "nothing (Euler's criterion; Fermat's little theorem for the compositeness test)",
+  "canaries": "a(1)..a(9) rediscovered in order by this campaign",
+  "engine": "A060364|line=2*17*j+1|census-depth=3"
+ },
+ "found_utc": "2026-11-22T04:34:37Z"
+}
